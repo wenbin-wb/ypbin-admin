@@ -1,0 +1,123 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ypbin-admin
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root123456}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      password: ${REDIS_PASSWORD:}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    encoding: UTF-8
+
+# Sa-Token 配置
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 2592000          # 固定有效期 30 天
+  active-timeout: 1800      # 活跃超时 30 分钟
+  auto-renew: true          # 活跃用户自动续期
+  is-read-cookie: false     # 不从 cookie 读 token
+  is-print: false
+
+# ypbin-starter 配置
+ypbin:
+  web:
+    repeatable-read:
+      enabled: true           # 启用签名模块需读取请求体，必须开启
+    cors:
+      enabled: true
+      allowed-origin-patterns: ["http://localhost:*"]
+    xss:
+      enabled: true
+      excludes: ["/webhook/**"]
+  security:
+    interceptor: true
+    excludes:               # 放行路径（无需登录）
+      - /auth/login
+      - /auth/sms/send
+      - /auth/sms/login
+      - /auth/social/authorize/**
+      - /auth/social/callback/**
+      - /auth/social/platforms
+      - /captcha
+      - /captcha/verify
+      - /error
+  tenant:
+    enabled: true
+    column: tenant_id
+    ignore-tables:          # 不做租户隔离的全局表
+      - sys_menu
+      - sys_tenant
+      - sys_user_role
+      - sys_role_menu
+      - sys_dict
+      - sys_dict_item
+      - sys_config
+      - sys_user_password_history
+      - sys_log
+      - sys_client
+      - sys_user_post
+      - sys_role_dept
+      - sys_file
+      - sys_notice
+      - sys_job
+      - sys_job_log
+      - sys_app
+      - sys_user_social
+  sign:
+    enabled: true              # 开启接口签名
+    mode: ANNOTATION           # 仅 @ApiSign 标注的接口校验签名
+  data-permission:
+    enabled: true
+  async:
+    enabled: true
+  sse:
+    enabled: true
+  sensitive-words:
+    replacement: '*'            # 敏感词替换字符
+  i18n:
+    enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
+  api-crypto:
+    key: ypbin-admin-secret     # 接口加解密 AES 密钥（生产换掉）
+  observability:
+    enabled: true
+    request-id-header: X-Request-Id
+    mdc-key: requestId
+  api-doc:
+    enabled: true
+    title: ypbin-admin API
+    description: 企业级后台管理系统接口文档
+    version: 1.0.0
+    contact:
+      name: wenbin
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{requestId:-}]"
+  level:
+    cn.ypbin.admin: debug
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized

@@ -1,0 +1,37 @@
+# Maven
+target/
+.flattened-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# IDE - Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# IDE - VS Code
+.vscode/
+
+# 日志与临时文件
+*.log
+*.tmp
+_run*.log
+
+# 环境变量文件（含真实密钥，不提交；模板 .env.example 可提交）
+.env
+.env.local
+*.env
+!.env.example
+
+# 操作系统
+.DS_Store
+Thumbs.db

@@ -1,0 +1,50 @@
+/*
+ * Copyright (c) 2026-present ypbin-admin authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ */
+package cn.ypbin.admin.system.model.resp;
+
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import java.util.List;
+import lombok.Data;
+
+/**
+ * 当前登录用户信息。
+ *
+ * @author wenbin
+ * @since 2026-08-01
+ */
+@Data
+public class UserInfoResp {
+
+    /** 用户 ID（前端 userId） */
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long userId;
+
+    /** 登录账号 */
+    private String username;
+
+    /** 真实姓名/显示名（前端 realName） */
+    private String realName;
+
+    /** 头像 */
+    private String avatar;
+
+    /** 用户描述 */
+    private String desc;
+
+    /** 首页地址 */
+    private String homePath;
+
+    /** 角色码集合（前端权限指令/路由用） */
+    private List<String> roles;
+
+    /** 权限码集合 */
+    private List<String> permissions;
+}
