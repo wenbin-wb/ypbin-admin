@@ -76,6 +76,8 @@ ypbin:
       - sys_job_log
       - sys_app
       - sys_user_social
+      - sys_auth_template
+      - sys_template_menu
   sign:
     enabled: true              # 开启接口签名
     mode: ANNOTATION           # 仅 @ApiSign 标注的接口校验签名

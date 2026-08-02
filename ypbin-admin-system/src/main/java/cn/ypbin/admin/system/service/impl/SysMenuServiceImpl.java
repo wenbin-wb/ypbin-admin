@@ -17,14 +17,20 @@ import cn.ypbin.admin.system.mapper.SysRoleMenuMapper;
 import cn.ypbin.admin.system.model.req.MenuSaveReq;
 import cn.ypbin.admin.system.model.resp.MenuResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
+import cn.ypbin.admin.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -45,6 +51,7 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
 
     private final SysPermissionService permissionService;
     private final SysRoleMenuMapper roleMenuMapper;
+    private final SysAuthTemplateService authTemplateService;
 
     @Override
     public List<RouteResp> buildRoutes(Long userId) {
@@ -55,7 +62,34 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
             .filter(m -> !TYPE_BUTTON.equals(m.getType()))
             .sorted(Comparator.comparing(m -> m.getSort() == null ? 0 : m.getSort()))
             .toList();
-        return buildRouteTree(routable, AdminConstants.ROOT_PARENT_ID);
+        return buildRouteTree(applyTenantMenuFilter(routable), AdminConstants.ROOT_PARENT_ID);
+    }
+
+    /**
+     * 按租户权限模板过滤可见菜单，并保留其祖先节点以保证路由树完整。
+     */
+    private List<SysMenu> applyTenantMenuFilter(List<SysMenu> menus) {
+        Long tenantId = UserContext.getLoginUser().map(u -> u.getTenantId()).orElse(null);
+        Set<Long> allowedIds = authTemplateService.resolveTenantMenuIds(tenantId);
+        if (allowedIds == null) {
+            return menus;
+        }
+        // 建 id->menu 索引，便于向上回溯祖先
+        Map<Long, SysMenu> byId = menus.stream()
+            .collect(Collectors.toMap(SysMenu::getId, m -> m, (a, b) -> a));
+        Set<Long> keptIds = new HashSet<>();
+        for (SysMenu menu : menus) {
+            if (!allowedIds.contains(menu.getId())) {
+                continue;
+            }
+            // 保留该菜单及其所有祖先（沿 pid 一路向上，到 pid=0 为止）
+            Long cur = menu.getId();
+            while (cur != null && cur != 0L && keptIds.add(cur)) {
+                SysMenu node = byId.get(cur);
+                cur = (node == null) ? null : node.getPid();
+            }
+        }
+        return menus.stream().filter(m -> keptIds.contains(m.getId())).toList();
     }
 
     @Override

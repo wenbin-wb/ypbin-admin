@@ -12,43 +12,29 @@ package cn.ypbin.admin.system.entity;
 import cn.ypbin.starter.data.core.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
-import java.time.LocalDate;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 租户。
- *
- * <p>租户表本身是全局资源，不参与租户隔离（配置在 ypbin.tenant.ignore-tables），故继承 {@link BaseEntity}。</p>
+ * 权限模板。定义一套可复用的菜单权限集合，分配给多个租户，租户登录后按其模板过滤可见菜单。
+ * 全局表，不隔离租户。
  *
  * @author wenbin
- * @since 2026-08-01
+ * @since 2026-08-02
  */
 @Getter
 @Setter
-@TableName("sys_tenant")
-public class SysTenant extends BaseEntity {
+@TableName("sys_auth_template")
+public class SysAuthTemplate extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 租户名称 */
+    /** 模板名称 */
     private String name;
 
-    /** 租户编码（唯一） */
+    /** 模板编码（唯一） */
     private String code;
-
-    /** 所属权限模板 ID */
-    private Long templateId;
-
-    /** 联系人 */
-    private String contactName;
-
-    /** 联系电话 */
-    private String contactPhone;
-
-    /** 到期时间，为空表示永不过期 */
-    private LocalDate expireDate;
 
     /** 备注 */
     private String remark;
