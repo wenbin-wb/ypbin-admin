@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
+import cn.ypbin.starter.json.ref.RefText;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
@@ -47,6 +48,7 @@ public class LogResp {
     private String clientType;
 
     @JsonSerialize(using = ToStringSerializer.class)
+    @RefText("user")
     private Long operateUserId;
 
     private LocalDateTime operateTime;

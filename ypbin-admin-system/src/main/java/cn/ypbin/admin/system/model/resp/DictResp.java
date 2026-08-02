@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
+import cn.ypbin.starter.json.ref.RefText;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
@@ -33,6 +34,9 @@ public class DictResp {
     private Integer status;
 
     private String remark;
+
+    @RefText("user")
+    private Long createUser;
 
     private LocalDateTime createTime;
 }

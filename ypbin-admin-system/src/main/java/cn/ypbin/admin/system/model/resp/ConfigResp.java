@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
+import cn.ypbin.starter.json.ref.RefText;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
@@ -37,6 +38,9 @@ public class ConfigResp {
     private Integer builtIn;
 
     private String remark;
+
+    @RefText("user")
+    private Long createUser;
 
     private LocalDateTime updateTime;
 }
