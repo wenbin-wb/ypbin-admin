@@ -79,6 +79,22 @@ ypbin:
   sign:
     enabled: true              # 开启接口签名
     mode: ANNOTATION           # 仅 @ApiSign 标注的接口校验签名
+  log:
+    includes:                  # 操作日志全局采集项：默认(参数/IP/客户端) + 浏览器/操作系统
+      - REQUEST_PARAM
+      - IP
+      - CLIENT
+      - BROWSER
+      - OS
+    access:
+      enabled: true            # 全量访问日志（打印到应用日志，非落库），与 @Log 操作日志互补
+      exclude-path-patterns:   # 不记流水的路径：健康检查、接口文档、静态资源
+        - /actuator/**
+        - /doc.html
+        - /swagger-ui/**
+        - /v3/api-docs/**
+        - /webjars/**
+        - /favicon.ico
   data-permission:
     enabled: true
   async:
