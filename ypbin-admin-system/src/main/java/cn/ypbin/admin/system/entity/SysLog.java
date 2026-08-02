@@ -9,15 +9,23 @@
  */
 package cn.ypbin.admin.system.entity;
 
-import cn.ypbin.starter.data.core.BaseEntity;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.io.Serial;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 系统日志。承载操作日志与登录日志（按 module 区分），字段与 starter LogRecord 对齐。全局表。
+ * 系统日志。承载操作日志与登录日志（按 module 区分），字段与 starter LogRecord 对齐。
+ *
+ * <p>不继承 BaseEntity：日志由 @Async 异步线程落库，异步线程无 Sa-Token 上下文，
+ * 若走 BaseEntity 的审计字段自动填充会因取当前登录人而抛 SaTokenContextException。
+ * 日志自带 operateUserId/operateTime 记录操作人与时间，无需审计/逻辑删除字段。</p>
  *
  * @author wenbin
  * @since 2026-08-01
@@ -25,10 +33,15 @@ import lombok.Setter;
 @Getter
 @Setter
 @TableName("sys_log")
-public class SysLog extends BaseEntity {
+public class SysLog implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
+
+    /** 主键，雪花算法生成 */
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long id;
 
     /** 日志描述 */
     private String description;

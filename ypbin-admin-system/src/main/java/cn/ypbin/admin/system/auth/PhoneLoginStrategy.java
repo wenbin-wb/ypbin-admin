@@ -9,19 +9,13 @@
  */
 package cn.ypbin.admin.system.auth;
 
-import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.service.SmsCodeService;
 import cn.ypbin.admin.system.service.SysConfigService;
-import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.security.core.LoginHelper;
-import cn.ypbin.starter.security.core.LoginUser;
-import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
-import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -37,9 +31,9 @@ public class PhoneLoginStrategy implements LoginStrategy {
 
     private final SmsCodeService smsCodeService;
     private final SysUserService userService;
-    private final SysPermissionService permissionService;
     private final SysConfigService configService;
     private final PasswordAttemptLimiter attemptLimiter;
+    private final LoginSupport loginSupport;
 
     @Override
     public String authType() {
@@ -69,20 +63,6 @@ public class PhoneLoginStrategy implements LoginStrategy {
         }
         attemptLimiter.reset(phoneReq.getPhone(), clientIp);
 
-        LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, AdminConstants.AUTH_TYPE_ACCOUNT);
-        LoginUser loginUser = buildLoginUser(user);
-        UserContext.setLoginUser(loginUser);
-        userService.updateLastLoginTime(user.getId());
-
-        return new LoginResp(LoginHelper.getTokenValue());
-    }
-
-    private LoginUser buildLoginUser(SysUser user) {
-        LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
-        loginUser.setNickname(user.getRealName());
-        loginUser.setTenantId(user.getTenantId());
-        loginUser.setDeptId(user.getDeptId());
-        loginUser.setRoles(new HashSet<>(permissionService.listRoleCodes(user.getId())));
-        return loginUser;
+        return loginSupport.completeLogin(user, authType());
     }
 }

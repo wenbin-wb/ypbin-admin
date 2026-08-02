@@ -9,18 +9,15 @@
  */
 package cn.ypbin.admin.system.service;
 
-import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.system.auth.LoginSupport;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
-import cn.ypbin.starter.security.core.LoginUser;
-import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.social.core.SocialService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.util.HashSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import me.zhyd.oauth.model.AuthCallback;
@@ -45,7 +42,7 @@ public class SocialLoginService {
     private final ObjectProvider<SocialService> socialServiceProvider;
     private final SysUserService userService;
     private final SysUserSocialMapper socialMapper;
-    private final SysPermissionService permissionService;
+    private final LoginSupport loginSupport;
 
     private SocialService socialService() {
         SocialService service = socialServiceProvider.getIfAvailable();
@@ -71,8 +68,7 @@ public class SocialLoginService {
             if (user == null) {
                 throw new BusinessException("第三方账号关联的用户不存在");
             }
-            doLogin(user);
-            return new LoginResp(LoginHelper.getTokenValue());
+            return loginSupport.completeLogin(user, "SOCIAL");
         }
         // 未绑定：自动注册用户并绑定
         SysUser user = new SysUser();
@@ -92,8 +88,7 @@ public class SocialLoginService {
         social.setAccessToken(authUser.getToken().getAccessToken());
         socialMapper.insert(social);
 
-        doLogin(user);
-        return new LoginResp(LoginHelper.getTokenValue());
+        return loginSupport.completeLogin(user, "SOCIAL");
     }
 
     /**
@@ -147,14 +142,4 @@ public class SocialLoginService {
         return cb;
     }
 
-    private void doLogin(SysUser user) {
-        LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, "SOCIAL");
-        LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
-        loginUser.setNickname(user.getRealName());
-        loginUser.setTenantId(user.getTenantId());
-        loginUser.setDeptId(user.getDeptId());
-        loginUser.setRoles(new HashSet<>(permissionService.listRoleCodes(user.getId())));
-        UserContext.setLoginUser(loginUser);
-        userService.updateLastLoginTime(user.getId());
-    }
 }
