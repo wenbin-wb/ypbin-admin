@@ -21,6 +21,7 @@ import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.req.ChangePasswordReq;
 import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
+import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysUserService;
@@ -170,8 +171,18 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     }
 
     @Override
-    public UserResp getProfile() {
-        return getUserDetail(LoginHelper.getUserId());
+    public ProfileResp getProfile() {
+        Long userId = LoginHelper.getUserId();
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        // 本人查看本人：手机/邮箱不脱敏，供编辑表单原样回填
+        ProfileResp resp = new ProfileResp();
+        BeanUtils.copyProperties(user, resp);
+        resp.setRoleIds(userRoleMapper.selectRoleIdsByUserId(userId));
+        resp.setPostIds(userPostMapper.selectPostIdsByUserId(userId));
+        return resp;
     }
 
     @Override

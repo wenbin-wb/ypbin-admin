@@ -11,7 +11,7 @@ package cn.ypbin.admin.system.controller;
 
 import cn.ypbin.admin.system.model.req.ChangePasswordReq;
 import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
-import cn.ypbin.admin.system.model.resp.UserResp;
+import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
@@ -38,7 +38,7 @@ public class UserProfileController extends BaseController {
     private final SysUserService userService;
 
     @GetMapping
-    public R<UserResp> profile() {
+    public R<ProfileResp> profile() {
         return ok(userService.getProfile());
     }
 

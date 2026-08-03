@@ -20,6 +20,7 @@ import cn.ypbin.starter.crud.service.BaseService;
  */
 import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
+import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.starter.crud.model.PageResult;
 
@@ -87,11 +88,11 @@ public interface SysUserService extends BaseService<SysUser> {
     void deleteUser(Long id);
 
     /**
-     * 查询当前登录用户的个人信息。
+     * 查询当前登录用户的个人信息（手机/邮箱不脱敏，供本人编辑回填）。
      *
-     * @return 用户信息
+     * @return 个人信息
      */
-    UserResp getProfile();
+    ProfileResp getProfile();
 
     /**
      * 更新当前登录用户的个人信息（仅展示类字段）。
