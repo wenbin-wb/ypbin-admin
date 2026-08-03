@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.entity.SysFile;
 import cn.ypbin.admin.system.service.SysFileService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.storage.model.FileInfo;
@@ -71,7 +72,7 @@ public class SysFileController extends BaseController {
     public R<PageResult<SysFile>> list(@RequestParam(defaultValue = "1") long page,
                                         @RequestParam(defaultValue = "20") long pageSize) {
         // thin wrapper — delegate to paged list
-        return ok(fileService.page(new cn.ypbin.starter.crud.model.PageQuery() {{
+        return ok(fileService.page(new PageQuery() {{
             setPage(page);
             setPageSize(pageSize);
         }}));

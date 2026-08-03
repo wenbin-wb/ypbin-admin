@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.starter.datapermission.core.DataPermissionContext;
 import cn.ypbin.starter.datapermission.core.DataScopeHandler;
 import cn.ypbin.starter.security.core.LoginHelper;
+import cn.ypbin.starter.security.core.UserContext;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -151,7 +152,7 @@ public class AdminDataScopeHandler implements DataScopeHandler {
     }
 
     private Long getCurrentUserDeptId() {
-        return cn.ypbin.starter.security.core.UserContext.getLoginUser()
+        return UserContext.getLoginUser()
             .map(u -> u.getDeptId()).orElse(null);
     }
 

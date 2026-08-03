@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysMenu;
+import cn.ypbin.admin.system.model.req.MenuSaveReq;
 import cn.ypbin.admin.system.model.resp.MenuResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.crud.service.BaseService;
@@ -62,7 +63,7 @@ public interface SysMenuService extends BaseService<SysMenu> {
      *
      * @param req 请求
      */
-    void createMenu(cn.ypbin.admin.system.model.req.MenuSaveReq req);
+    void createMenu(MenuSaveReq req);
 
     /**
      * 编辑菜单（名称查重排除自身）。
@@ -70,7 +71,7 @@ public interface SysMenuService extends BaseService<SysMenu> {
      * @param id  菜单 ID
      * @param req 请求
      */
-    void updateMenu(Long id, cn.ypbin.admin.system.model.req.MenuSaveReq req);
+    void updateMenu(Long id, MenuSaveReq req);
 
     /**
      * 删除菜单（存在子菜单时拒绝，并清理角色-菜单关联）。

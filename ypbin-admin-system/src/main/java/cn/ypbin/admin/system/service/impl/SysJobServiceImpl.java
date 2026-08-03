@@ -22,6 +22,7 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.job.core.JobDefinition;
 import cn.ypbin.starter.job.core.JobManager;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -45,9 +46,9 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
         LambdaQueryWrapper<SysJobLog> wrapper = new LambdaQueryWrapper<SysJobLog>()
             .eq(jobId != null, SysJobLog::getJobId, jobId)
             .orderByDesc(SysJobLog::getCreateTime);
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<SysJobLog> mpPage =
-            new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(query.getPage(), query.getPageSize());
-        com.baomidou.mybatisplus.extension.plugins.pagination.Page<SysJobLog> result =
+        Page<SysJobLog> mpPage =
+            new Page<>(query.getPage(), query.getPageSize());
+        Page<SysJobLog> result =
             jobLogMapper.selectPage(mpPage, wrapper);
         List<JobLogResp> items = result.getRecords().stream().map(log -> {
             JobLogResp r = new JobLogResp();

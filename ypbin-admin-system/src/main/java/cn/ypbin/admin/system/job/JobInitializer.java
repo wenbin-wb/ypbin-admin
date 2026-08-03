@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.mapper.SysJobMapper;
 import cn.ypbin.starter.job.core.JobDefinition;
 import cn.ypbin.starter.job.core.JobManager;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class JobInitializer {
     @PostConstruct
     public void init() {
         List<SysJob> jobs = jobMapper.selectList(
-            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysJob>()
+            new LambdaQueryWrapper<SysJob>()
                 .eq(SysJob::getStatus, 1));
         for (SysJob job : jobs) {
             JobDefinition def = new JobDefinition(job.getId(), job.getName(), job.getExecutor(), job.getCron());

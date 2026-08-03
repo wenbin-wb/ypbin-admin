@@ -18,6 +18,7 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.social.core.SocialService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import me.zhyd.oauth.model.AuthCallback;
@@ -76,7 +77,7 @@ public class SocialLoginService {
         user.setRealName(authUser.getNickname());
         user.setNickname(authUser.getNickname());
         user.setAvatar(authUser.getAvatar());
-        user.setPwdResetTime(java.time.LocalDateTime.now());
+        user.setPwdResetTime(LocalDateTime.now());
         userService.save(user);
 
         SysUserSocial social = new SysUserSocial();

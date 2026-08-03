@@ -11,6 +11,8 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.model.query.UserQuery;
+import cn.ypbin.admin.system.model.req.AssignRolesReq;
+import cn.ypbin.admin.system.model.req.ResetPasswordReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.service.SysUserService;
@@ -75,6 +77,24 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:delete")
     public R<Void> delete(@PathVariable Long id) {
         userService.deleteUser(id);
+        return ok();
+    }
+
+    @Log(value = "重置用户密码", module = "用户管理")
+    @PutMapping("/{id}/reset-password")
+    @SaCheckPermission("system:user:edit")
+    public R<Void> resetPassword(@PathVariable Long id,
+                                 @RequestBody ResetPasswordReq req) {
+        userService.resetPassword(id, req.getPassword());
+        return ok();
+    }
+
+    @Log(value = "分配用户角色", module = "用户管理")
+    @PutMapping("/{id}/roles")
+    @SaCheckPermission("system:user:edit")
+    public R<Void> assignRoles(@PathVariable Long id,
+                               @RequestBody AssignRolesReq req) {
+        userService.assignRoles(id, req.getRoleIds());
         return ok();
     }
 }

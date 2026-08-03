@@ -121,7 +121,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         user.setPwdResetTime(LocalDateTime.now());
         save(user);
         recordPasswordHistory(user.getId(), encoded);
-        assignRoles(user.getId(), req.getRoleIds());
+        assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
     }
 
@@ -151,7 +151,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         // 仅当显式传入 roleIds 时才重分配角色（null=不改动角色，空列表=清空角色）
         if (req.getRoleIds() != null) {
             userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
-            assignRoles(id, req.getRoleIds());
+            assignRolesInternal(id, req.getRoleIds());
         }
         if (req.getPostIds() != null) {
             userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
@@ -168,6 +168,41 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         removeById(id);
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resetPassword(Long id, String password) {
+        SysUser user = getById(id);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        if (id == 1L) {
+            throw new BusinessException("内置超级管理员不可重置密码");
+        }
+        if (!StringUtils.hasText(password)) {
+            throw new BusinessException("新密码不能为空");
+        }
+        validatePassword(password, user.getUsername());
+        checkPasswordHistory(id, password);
+        String encoded = PasswordEncoderUtil.encode(password);
+        SysUser update = new SysUser();
+        update.setId(id);
+        update.setPassword(encoded);
+        update.setPwdResetTime(LocalDateTime.now());
+        updateById(update);
+        recordPasswordHistory(id, encoded);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void assignRoles(Long id, List<Long> roleIds) {
+        if (getById(id) == null) {
+            throw new BusinessException("用户不存在");
+        }
+        // 覆盖式重设角色
+        userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
+        assignRolesInternal(id, roleIds);
     }
 
     @Override
@@ -225,7 +260,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
     }
 
-    private void assignRoles(Long userId, List<Long> roleIds) {
+    private void assignRolesInternal(Long userId, List<Long> roleIds) {
         if (roleIds == null || roleIds.isEmpty()) {
             return;
         }

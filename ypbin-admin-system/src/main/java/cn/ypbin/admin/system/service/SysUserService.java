@@ -10,7 +10,15 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.query.UserQuery;
+import cn.ypbin.admin.system.model.req.ChangePasswordReq;
+import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
+import cn.ypbin.admin.system.model.req.UserSaveReq;
+import cn.ypbin.admin.system.model.resp.ProfileResp;
+import cn.ypbin.admin.system.model.resp.UserResp;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 用户服务。
@@ -18,12 +26,6 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @author wenbin
  * @since 2026-08-01
  */
-import cn.ypbin.admin.system.model.query.UserQuery;
-import cn.ypbin.admin.system.model.req.UserSaveReq;
-import cn.ypbin.admin.system.model.resp.ProfileResp;
-import cn.ypbin.admin.system.model.resp.UserResp;
-import cn.ypbin.starter.crud.model.PageResult;
-
 public interface SysUserService extends BaseService<SysUser> {
 
     /**
@@ -88,6 +90,22 @@ public interface SysUserService extends BaseService<SysUser> {
     void deleteUser(Long id);
 
     /**
+     * 重置指定用户密码（管理员操作，校验密码策略，不校验原密码）。
+     *
+     * @param id       用户 ID
+     * @param password 新密码
+     */
+    void resetPassword(Long id, String password);
+
+    /**
+     * 分配角色（覆盖式重设该用户的角色）。
+     *
+     * @param id      用户 ID
+     * @param roleIds 角色 ID 集合
+     */
+    void assignRoles(Long id, List<Long> roleIds);
+
+    /**
      * 查询当前登录用户的个人信息（手机/邮箱不脱敏，供本人编辑回填）。
      *
      * @return 个人信息
@@ -99,12 +117,12 @@ public interface SysUserService extends BaseService<SysUser> {
      *
      * @param req 请求
      */
-    void updateProfile(cn.ypbin.admin.system.model.req.ProfileUpdateReq req);
+    void updateProfile(ProfileUpdateReq req);
 
     /**
      * 修改当前登录用户密码（校验原密码 + 密码策略 + 历史密码不重复）。
      *
      * @param req 请求
      */
-    void changePassword(cn.ypbin.admin.system.model.req.ChangePasswordReq req);
+    void changePassword(ChangePasswordReq req);
 }
