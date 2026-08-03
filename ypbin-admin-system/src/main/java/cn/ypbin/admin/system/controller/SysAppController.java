@@ -11,10 +11,12 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.entity.SysApp;
+import cn.ypbin.admin.system.model.req.SysAppSaveReq;
 import cn.ypbin.admin.system.service.SysAppService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,17 +50,22 @@ public class SysAppController extends BaseController {
     @Log(value = "新增开放应用", module = "开放应用")
     @PostMapping
     @SaCheckPermission("system:app:add")
-    public R<Void> create(@RequestBody SysApp entity) {
-        appService.save(entity);
-        return ok();
+    public R<String> create(@Valid @RequestBody SysAppSaveReq req) {
+        return ok(appService.createApp(req));
+    }
+
+    @Log(value = "重置应用密钥", module = "开放应用")
+    @PutMapping("/{id}/reset-secret")
+    @SaCheckPermission("system:app:edit")
+    public R<String> resetSecret(@PathVariable Long id) {
+        return ok(appService.resetSecret(id));
     }
 
     @Log(value = "修改开放应用", module = "开放应用")
     @PutMapping("/{id}")
     @SaCheckPermission("system:app:edit")
-    public R<Void> update(@PathVariable Long id, @RequestBody SysApp entity) {
-        entity.setId(id);
-        appService.updateById(entity);
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody SysAppSaveReq req) {
+        appService.updateApp(id, req);
         return ok();
     }
 

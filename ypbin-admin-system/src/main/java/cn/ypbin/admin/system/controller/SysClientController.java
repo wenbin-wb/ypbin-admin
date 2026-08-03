@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.entity.SysClient;
+import cn.ypbin.admin.system.model.req.SysClientSaveReq;
 import cn.ypbin.admin.system.service.SysClientService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
@@ -49,17 +50,22 @@ public class SysClientController extends BaseController {
     @Log(value = "新增客户端", module = "客户端管理")
     @PostMapping
     @SaCheckPermission("system:client:add")
-    public R<Void> create(@Valid @RequestBody SysClient entity) {
-        clientService.save(entity);
-        return ok();
+    public R<String> create(@Valid @RequestBody SysClientSaveReq req) {
+        return ok(clientService.createClient(req));
+    }
+
+    @Log(value = "重置客户端密钥", module = "客户端管理")
+    @PutMapping("/{id}/reset-secret")
+    @SaCheckPermission("system:client:edit")
+    public R<String> resetSecret(@PathVariable Long id) {
+        return ok(clientService.resetSecret(id));
     }
 
     @Log(value = "修改客户端", module = "客户端管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:client:edit")
-    public R<Void> update(@PathVariable Long id, @RequestBody SysClient entity) {
-        entity.setId(id);
-        clientService.updateById(entity);
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody SysClientSaveReq req) {
+        clientService.updateClient(id, req);
         return ok();
     }
 

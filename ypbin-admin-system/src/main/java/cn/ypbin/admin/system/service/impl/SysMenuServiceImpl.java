@@ -228,6 +228,14 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
         meta.setHideInMenu(menu.getHideInMenu());
         meta.setIframeSrc(menu.getIframeSrc());
         meta.setLink(menu.getLink());
+        meta.setActivePath(menu.getActivePath());
+        meta.setAffixTab(menu.getAffixTab());
+        meta.setBadge(menu.getBadge());
+        meta.setBadgeType(menu.getBadgeType());
+        meta.setBadgeVariants(menu.getBadgeVariants());
+        meta.setHideChildrenInMenu(menu.getHideChildrenInMenu());
+        meta.setHideInBreadcrumb(menu.getHideInBreadcrumb());
+        meta.setHideInTab(menu.getHideInTab());
         return meta;
     }
 }

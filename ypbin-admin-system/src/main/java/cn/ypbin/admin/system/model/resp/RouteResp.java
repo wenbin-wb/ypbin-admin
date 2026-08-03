@@ -81,5 +81,29 @@ public class RouteResp {
 
         /** 外链地址 */
         private String link;
+
+        /** 高亮的菜单路径 */
+        private String activePath;
+
+        /** 是否固定标签页 */
+        private Boolean affixTab;
+
+        /** 徽标内容 */
+        private String badge;
+
+        /** 徽标类型：dot/normal */
+        private String badgeType;
+
+        /** 徽标样式 */
+        private String badgeVariants;
+
+        /** 是否隐藏子菜单 */
+        private Boolean hideChildrenInMenu;
+
+        /** 是否在面包屑中隐藏 */
+        private Boolean hideInBreadcrumb;
+
+        /** 是否在标签栏中隐藏 */
+        private Boolean hideInTab;
     }
 }

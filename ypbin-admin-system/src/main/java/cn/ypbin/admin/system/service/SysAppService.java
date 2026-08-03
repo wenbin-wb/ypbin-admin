@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysApp;
+import cn.ypbin.admin.system.model.req.SysAppSaveReq;
 import cn.ypbin.starter.crud.service.BaseService;
 
 /**
@@ -19,4 +20,28 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @since 2026-08-02
  */
 public interface SysAppService extends BaseService<SysApp> {
+
+    /**
+     * 新增开放应用（自动生成 accessKey/secretKey）。
+     *
+     * @param req 请求
+     * @return 生成的明文 SecretKey（仅此一次返回）
+     */
+    String createApp(SysAppSaveReq req);
+
+    /**
+     * 编辑开放应用（保留 accessKey/secretKey，不重新生成）。
+     *
+     * @param id  应用 ID
+     * @param req 请求
+     */
+    void updateApp(Long id, SysAppSaveReq req);
+
+    /**
+     * 重置 SecretKey（重新生成，accessKey 不变）。
+     *
+     * @param id 应用 ID
+     * @return 新的明文 SecretKey
+     */
+    String resetSecret(Long id);
 }

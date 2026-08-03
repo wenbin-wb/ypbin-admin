@@ -76,4 +76,28 @@ public class SysMenu extends BaseEntity {
 
     /** 外链地址 */
     private String link;
+
+    /** 高亮的菜单路径（当前路由不在菜单中显示时，指定需要激活的菜单） */
+    private String activePath;
+
+    /** 是否固定标签页 */
+    private Boolean affixTab;
+
+    /** 徽标内容（badgeType 为 normal 时生效） */
+    private String badge;
+
+    /** 徽标类型：dot 点、normal 文字 */
+    private String badgeType;
+
+    /** 徽标样式：default/destructive/primary/success/warning */
+    private String badgeVariants;
+
+    /** 是否隐藏子菜单 */
+    private Boolean hideChildrenInMenu;
+
+    /** 是否在面包屑中隐藏 */
+    private Boolean hideInBreadcrumb;
+
+    /** 是否在标签栏中隐藏 */
+    private Boolean hideInTab;
 }

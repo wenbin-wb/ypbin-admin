@@ -49,6 +49,12 @@ public class SysJobController extends BaseController {
         return ok(jobService.list());
     }
 
+    @GetMapping("/log")
+    @SaCheckPermission("system:job:list")
+    public R<PageResult<JobLogResp>> allLogs(PageQuery query) {
+        return ok(jobService.pageLogs(null, query));
+    }
+
     @GetMapping("/log/{jobId}")
     @SaCheckPermission("system:job:list")
     public R<PageResult<JobLogResp>> logs(@PathVariable Long jobId, PageQuery query) {

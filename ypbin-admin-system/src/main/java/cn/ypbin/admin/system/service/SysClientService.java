@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysClient;
+import cn.ypbin.admin.system.model.req.SysClientSaveReq;
 import cn.ypbin.starter.crud.service.BaseService;
 
 /**
@@ -19,4 +20,28 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @since 2026-08-01
  */
 public interface SysClientService extends BaseService<SysClient> {
+
+    /**
+     * 新增客户端（自动生成 clientSecret）。
+     *
+     * @param req 请求
+     * @return 生成的明文密钥（仅此一次返回）
+     */
+    String createClient(SysClientSaveReq req);
+
+    /**
+     * 编辑客户端（保留 clientSecret，不重新生成）。
+     *
+     * @param id  客户端 ID
+     * @param req 请求
+     */
+    void updateClient(Long id, SysClientSaveReq req);
+
+    /**
+     * 重置客户端密钥（重新生成 clientSecret）。
+     *
+     * @param id 客户端 ID
+     * @return 新的明文密钥
+     */
+    String resetSecret(Long id);
 }
