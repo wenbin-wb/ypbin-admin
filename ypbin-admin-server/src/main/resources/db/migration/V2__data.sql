@@ -51,7 +51,8 @@ VALUES (11, 1, '正常', '1', 'success', 1, 1, NOW(), 1, 0),
 
 -- 示例任务：清理临时文件（默认停用）
 INSERT INTO sys_job (id, name, executor, cron, create_user, create_time, status, is_deleted)
-VALUES (1, '清理临时文件', 'cleanTempFile', '0 0 3 * * ?', 1, NOW(), 0, 0);
+VALUES (1, '清理临时文件', 'cleanTempFile', '0 0 3 * * ?', 1, NOW(), 0, 0),
+       (2, '公告定时发布扫描', 'noticePublishScan', '0 * * * * ?', 1, NOW(), 1, 0);
 
 -- 默认 Web 管理后台客户端
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
