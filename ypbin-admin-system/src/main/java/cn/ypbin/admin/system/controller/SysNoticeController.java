@@ -52,7 +52,7 @@ public class SysNoticeController extends BaseController {
     @PostMapping
     @SaCheckPermission("system:notice:add")
     public R<Void> create(@RequestBody SysNotice entity) {
-        entity.setPublishTime(LocalDateTime.now());
+        applyPublishState(entity);
         noticeService.save(entity);
         return ok();
     }
@@ -62,8 +62,37 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:edit")
     public R<Void> update(@PathVariable Long id, @RequestBody SysNotice entity) {
         entity.setId(id);
+        applyPublishState(entity);
         noticeService.updateById(entity);
         return ok();
+    }
+
+    @Log(value = "撤回公告", module = "公告管理")
+    @PutMapping("/{id}/revoke")
+    @SaCheckPermission("system:notice:edit")
+    public R<Void> revoke(@PathVariable Long id) {
+        SysNotice entity = new SysNotice();
+        entity.setId(id);
+        entity.setPublishStatus(3);
+        noticeService.updateById(entity);
+        return ok();
+    }
+
+    /**
+     * 依据发布方式推导发布状态与发布时间：
+     * 草稿(publishStatus=0) 保持草稿；定时(publishType=2) 置为待发布；否则立即发布。
+     */
+    private void applyPublishState(SysNotice entity) {
+        Integer publishStatus = entity.getPublishStatus();
+        if (publishStatus != null && publishStatus == 0) {
+            return;
+        }
+        if (entity.getPublishType() != null && entity.getPublishType() == 2) {
+            entity.setPublishStatus(1);
+        } else {
+            entity.setPublishStatus(2);
+            entity.setPublishTime(LocalDateTime.now());
+        }
     }
 
     @Log(value = "删除公告", module = "公告管理")

@@ -12,9 +12,18 @@ VALUES (1, '全部权限', 'ALL', '内置模板：拥有全部菜单权限', 1, 
 INSERT INTO sys_tenant (id, name, code, template_id, contact_name, remark, create_time, status, is_deleted)
 VALUES (1, '默认租户', 'default', 1, 'admin', '系统内置默认租户', NOW(), 1, 0);
 
--- 默认部门
-INSERT INTO sys_dept (id, tenant_id, pid, name, sort, leader, create_time, status, is_deleted)
-VALUES (1, 1, 0, '总公司', 1, 'admin', NOW(), 1, 0);
+-- 部门树（测试数据）：长沙词云信息科技为总公司，下设职能与业务部门
+INSERT INTO sys_dept (id, tenant_id, pid, name, sort, leader, phone, email, remark, create_user, create_time, status, is_deleted)
+VALUES (1, 1, 0, '长沙词云信息科技', 1, '张伟', '0731-88888888', 'hr@ciyun.com', '总公司', 1, NOW(), 1, 0),
+       (2, 1, 1, '研发中心', 1, '李强', '13800000001', 'rd@ciyun.com', NULL, 1, NOW(), 1, 0),
+       (3, 1, 1, '产品中心', 2, '王芳', '13800000002', 'product@ciyun.com', NULL, 1, NOW(), 1, 0),
+       (4, 1, 1, '市场部', 3, '赵敏', '13800000003', 'market@ciyun.com', NULL, 1, NOW(), 1, 0),
+       (5, 1, 1, '职能中心', 4, '陈静', '13800000004', 'admin@ciyun.com', NULL, 1, NOW(), 1, 0),
+       (6, 1, 2, '后端组', 1, '刘洋', NULL, NULL, NULL, 1, NOW(), 1, 0),
+       (7, 1, 2, '前端组', 2, '孙磊', NULL, NULL, NULL, 1, NOW(), 1, 0),
+       (8, 1, 2, '测试组', 3, '周涛', NULL, NULL, NULL, 1, NOW(), 1, 0),
+       (9, 1, 5, '人事部', 1, '陈静', NULL, NULL, NULL, 1, NOW(), 1, 0),
+       (10, 1, 5, '财务部', 2, '杨丽', NULL, NULL, NULL, 1, NOW(), 1, 0);
 
 -- 超级管理员 admin/admin123
 INSERT INTO sys_user (id, tenant_id, username, password, real_name, nickname, dept_id, gender,
@@ -47,6 +56,50 @@ VALUES (1, '清理临时文件', 'cleanTempFile', '0 0 3 * * ?', 1, NOW(), 0, 0)
 -- 默认 Web 管理后台客户端
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
 VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL', 86400, 1800, 1, 1, NOW(), 1, 0);
+
+-- =============================================================
+-- 测试数据（方便页面调试；密码统一 admin123）
+-- =============================================================
+-- 岗位
+INSERT INTO sys_post (id, tenant_id, name, code, category, sort, remark, create_user, create_time, status, is_deleted)
+VALUES (11, 1, '总经理', 'CEO', '管理', 1, NULL, 1, NOW(), 1, 0),
+       (12, 1, '技术总监', 'CTO', '管理', 2, NULL, 1, NOW(), 1, 0),
+       (13, 1, '研发工程师', 'DEV', '技术', 3, NULL, 1, NOW(), 1, 0),
+       (14, 1, '产品经理', 'PM', '产品', 4, NULL, 1, NOW(), 1, 0),
+       (15, 1, '测试工程师', 'QA', '技术', 5, NULL, 1, NOW(), 1, 0),
+       (16, 1, '人事专员', 'HR', '职能', 6, NULL, 1, NOW(), 1, 0);
+
+-- 测试角色（super 之外的业务角色）
+INSERT INTO sys_role (id, tenant_id, name, code, data_scope, sort, remark, create_user, create_time, status, is_deleted)
+VALUES (2, 1, '管理员', 'admin', 1, 2, '拥有大部分管理权限', 1, NOW(), 1, 0),
+       (3, 1, '普通员工', 'staff', 4, 3, '仅本人数据权限', 1, NOW(), 1, 0);
+
+-- 测试用户（密码均为 admin123）
+INSERT INTO sys_user (id, tenant_id, username, password, real_name, nickname, dept_id, phone, email, gender,
+                      remark, pwd_reset_time, create_user, create_time, status, is_deleted)
+VALUES (2, 1, 'lilei', '$2a$10$ZuXfY6FkrI0fEGRoX9AlZuo3r/askEJEVHz6rKwKMrDVCpttLIq82',
+        '李强', '强哥', 2, '13900000001', 'liqiang@ciyun.com', 1, '研发中心负责人', NOW(), 1, NOW(), 1, 0),
+       (3, 1, 'wangfang', '$2a$10$ZuXfY6FkrI0fEGRoX9AlZuo3r/askEJEVHz6rKwKMrDVCpttLIq82',
+        '王芳', '芳芳', 3, '13900000002', 'wangfang@ciyun.com', 2, '产品中心负责人', NOW(), 1, NOW(), 1, 0),
+       (4, 1, 'liuyang', '$2a$10$ZuXfY6FkrI0fEGRoX9AlZuo3r/askEJEVHz6rKwKMrDVCpttLIq82',
+        '刘洋', '洋洋', 6, '13900000003', 'liuyang@ciyun.com', 1, '后端组开发', NOW(), 1, NOW(), 1, 0),
+       (5, 1, 'zhoutao', '$2a$10$ZuXfY6FkrI0fEGRoX9AlZuo3r/askEJEVHz6rKwKMrDVCpttLIq82',
+        '周涛', '涛哥', 8, '13900000004', 'zhoutao@ciyun.com', 1, '测试组', NOW(), 1, NOW(), 0, 0);
+
+-- 测试用户-角色
+INSERT INTO sys_user_role (user_id, role_id)
+VALUES (2, 2), (3, 2), (4, 3), (5, 3);
+
+-- 测试用户-岗位
+INSERT INTO sys_user_post (user_id, post_id)
+VALUES (2, 12), (3, 14), (4, 13), (5, 15);
+
+-- 测试公告（不同状态/类型/范围）
+INSERT INTO sys_notice (id, title, content, notice_type, notice_scope, scope_target_ids, notify_methods, is_top, publish_type, publish_status, publish_time, create_user, create_time, status, is_deleted)
+VALUES (1, '系统上线通知', '<p>词云信息科技管理后台正式上线，欢迎大家使用。</p>', 1, 1, NULL, 'site', 1, 1, 2, NOW(), 1, NOW(), 1, 0),
+       (2, '五一放假安排', '<p>5 月 1 日至 5 月 5 日放假，共 5 天。</p>', 2, 1, NULL, 'site,email', 0, 1, 2, NOW(), 1, NOW(), 1, 0),
+       (3, '研发中心周会通知', '<p>本周五下午 3 点研发中心全员周会。</p>', 1, 3, '2', 'site', 0, 1, 2, NOW(), 1, NOW(), 1, 0),
+       (4, '年终总结大会（草稿）', '<p>年终总结大会筹备中……</p>', 2, 1, NULL, 'site', 0, 2, 0, NULL, 1, NOW(), 1, 0);
 
 -- =============================================================
 -- 系统参数
@@ -125,14 +178,29 @@ INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, keep_al
 VALUES (101, 1, 'Analytics', 'menu', '/dashboard/analytics', '/dashboard/analytics/index', 'page.dashboard.analytics', 'lucide:area-chart', 1, 1, NOW(), 1, 0),
        (102, 1, 'Workspace', 'menu', '/dashboard/workspace', '/dashboard/workspace/index', 'page.dashboard.workspace', 'carbon:workspace', 0, 2, NOW(), 1, 0);
 
--- 顶级分类目录
+-- 顶级分类目录 + 一级单页菜单
+-- 一级顺序：仪表盘 / 组织 / 权限 / 租户 / 任务调度 / 文件 / 通知 / 监控 / 系统
 INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, sort, create_time, status, is_deleted)
 VALUES (3001, 0, 'OrgManage', 'catalog', '/system/org', 'BasicLayout', 'system.org.title', 'carbon:tree-view-alt', 1, NOW(), 1, 0),
        (3002, 0, 'AuthManage', 'catalog', '/system/auth', 'BasicLayout', 'system.auth.title', 'carbon:security', 2, NOW(), 1, 0),
-       (3003, 0, 'SysManage', 'catalog', '/system/sys', 'BasicLayout', 'system.sys.title', 'carbon:settings-adjust', 3, NOW(), 1, 0),
-       (3004, 0, 'MonitorManage', 'catalog', '/system/monitor', 'BasicLayout', 'system.monitor.title', 'carbon:activity', 4, NOW(), 1, 0),
-       (3005, 0, 'TenantManage', 'catalog', '/system/tenant', 'BasicLayout', 'system.tenant.title', 'carbon:building', 5, NOW(), 1, 0),
-       (3006, 0, 'JobManage', 'catalog', '/system/jobm', 'BasicLayout', 'system.job.title', 'carbon:timer', 6, NOW(), 1, 0);
+       (3005, 0, 'TenantManage', 'catalog', '/system/tenant', 'BasicLayout', 'system.tenant.title', 'carbon:building', 3, NOW(), 1, 0),
+       (3006, 0, 'JobManage', 'catalog', '/system/jobm', 'BasicLayout', 'system.schedule.title', 'carbon:timer', 4, NOW(), 1, 0),
+       (3004, 0, 'MonitorManage', 'catalog', '/system/monitor', 'BasicLayout', 'system.monitor.title', 'carbon:activity', 7, NOW(), 1, 0),
+       (3003, 0, 'SysManage', 'catalog', '/system/sys', 'BasicLayout', 'system.sys.title', 'carbon:settings-adjust', 8, NOW(), 1, 0);
+
+-- 文件管理、通知公告：提到一级（单页菜单，框架自动套 BasicLayout 外壳）
+INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (2600, 0, 'SystemFile', 'menu', '/system/file', '/system/file/list', 'system:file:list', 'system.file.title', 'carbon:document-attachment', 5, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (260001, 2600, 'SystemFileUpload', 'button', 'system:file:upload', 'common.upload', 1, NOW(), 1, 0),
+       (260002, 2600, 'SystemFileDelete', 'button', 'system:file:delete', 'common.delete', 2, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (2700, 0, 'SystemNotice', 'menu', '/system/notice', '/system/notice/list', 'system:notice:list', 'system.notice.title', 'carbon:notification', 6, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (270001, 2700, 'SystemNoticeAdd', 'button', 'system:notice:add', 'common.create', 1, NOW(), 1, 0),
+       (270002, 2700, 'SystemNoticeEdit', 'button', 'system:notice:edit', 'common.edit', 2, NOW(), 1, 0),
+       (270003, 2700, 'SystemNoticeDelete', 'button', 'system:notice:delete', 'common.delete', 3, NOW(), 1, 0);
 
 -- 组织管理（3001）：用户 / 部门 / 岗位
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
@@ -185,14 +253,7 @@ VALUES (290001, 2900, 'SystemAppAdd', 'button', 'system:app:add', 'common.create
        (290002, 2900, 'SystemAppEdit', 'button', 'system:app:edit', 'common.edit', 2, NOW(), 1, 0),
        (290003, 2900, 'SystemAppDelete', 'button', 'system:app:delete', 'common.delete', 3, NOW(), 1, 0);
 
-INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2952, 3002, 'SystemAuthTemplate', 'menu', '/system/auth-template', '/system/auth-template/list', 'system:auth-template:list', 'system.authTemplate.title', 'carbon:template', 3, NOW(), 1, 0);
-INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
-VALUES (295201, 2952, 'SystemAuthTemplateAdd', 'button', 'system:auth-template:add', 'common.create', 1, NOW(), 1, 0),
-       (295202, 2952, 'SystemAuthTemplateEdit', 'button', 'system:auth-template:edit', 'common.edit', 2, NOW(), 1, 0),
-       (295203, 2952, 'SystemAuthTemplateDelete', 'button', 'system:auth-template:delete', 'common.delete', 3, NOW(), 1, 0);
-
--- 系统管理（3003）：字典 / 参数 / 文件 / 通知
+-- 系统管理（3003，排最后）：字典 / 参数
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (250, 3003, 'SystemDict', 'menu', '/system/dict', '/system/dict/list', 'system:dict:list', 'system.dict.title', 'carbon:catalog', 5, NOW(), 1, 0);
 INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
@@ -207,19 +268,6 @@ VALUES (26001, 260, 'SystemConfigAdd', 'button', 'system:config:add', 'common.cr
        (26002, 260, 'SystemConfigEdit', 'button', 'system:config:edit', 'common.edit', 2, NOW(), 1, 0),
        (26003, 260, 'SystemConfigDelete', 'button', 'system:config:delete', 'common.delete', 3, NOW(), 1, 0);
 
-INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2600, 3003, 'SystemFile', 'menu', '/system/file', '/system/file/list', 'system:file:list', 'system.file.title', 'carbon:document-attachment', 11, NOW(), 1, 0);
-INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
-VALUES (260001, 2600, 'SystemFileUpload', 'button', 'system:file:upload', 'common.upload', 1, NOW(), 1, 0),
-       (260002, 2600, 'SystemFileDelete', 'button', 'system:file:delete', 'common.delete', 2, NOW(), 1, 0);
-
-INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2700, 3003, 'SystemNotice', 'menu', '/system/notice', '/system/notice/list', 'system:notice:list', 'system.notice.title', 'carbon:notification', 12, NOW(), 1, 0);
-INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
-VALUES (270001, 2700, 'SystemNoticeAdd', 'button', 'system:notice:add', 'common.create', 1, NOW(), 1, 0),
-       (270002, 2700, 'SystemNoticeEdit', 'button', 'system:notice:edit', 'common.edit', 2, NOW(), 1, 0),
-       (270003, 2700, 'SystemNoticeDelete', 'button', 'system:notice:delete', 'common.delete', 3, NOW(), 1, 0);
-
 -- 监控管理（3004）：日志 / 在线用户
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (270, 3004, 'SystemLog', 'menu', '/system/log', '/system/log/list', 'system:log:list', 'system.log.title', 'carbon:document', 7, NOW(), 1, 0);
@@ -231,13 +279,20 @@ VALUES (280, 3004, 'SystemOnlineUser', 'menu', '/system/online-user', '/system/o
 INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
 VALUES (28001, 280, 'SystemOnlineUserKickout', 'button', 'system:online-user:kickout', 'common.kickout', 1, NOW(), 1, 0);
 
--- 租户管理（3005）：租户
+-- 租户管理（3005）：租户列表 / 权限模板（权限模板是分配给租户的菜单权限集，归此目录）
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2950, 3005, 'SystemTenant', 'menu', '/system/tenant', '/system/tenant/list', 'system:tenant:list', 'system.tenant.title', 'carbon:building-insights-2', 1, NOW(), 1, 0);
+VALUES (2950, 3005, 'SystemTenant', 'menu', '/system/tenant', '/system/tenant/list', 'system:tenant:list', 'system.tenant.list', 'carbon:building-insights-2', 1, NOW(), 1, 0);
 INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
 VALUES (295001, 2950, 'SystemTenantAdd', 'button', 'system:tenant:add', 'common.create', 1, NOW(), 1, 0),
        (295002, 2950, 'SystemTenantEdit', 'button', 'system:tenant:edit', 'common.edit', 2, NOW(), 1, 0),
        (295003, 2950, 'SystemTenantDelete', 'button', 'system:tenant:delete', 'common.delete', 3, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (2952, 3005, 'SystemAuthTemplate', 'menu', '/system/auth-template', '/system/auth-template/list', 'system:auth-template:list', 'system.authTemplate.title', 'carbon:template', 2, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (295201, 2952, 'SystemAuthTemplateAdd', 'button', 'system:auth-template:add', 'common.create', 1, NOW(), 1, 0),
+       (295202, 2952, 'SystemAuthTemplateEdit', 'button', 'system:auth-template:edit', 'common.edit', 2, NOW(), 1, 0),
+       (295203, 2952, 'SystemAuthTemplateDelete', 'button', 'system:auth-template:delete', 'common.delete', 3, NOW(), 1, 0);
 
 -- 任务管理（3006）：定时任务 / 执行日志（汇总页）
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)

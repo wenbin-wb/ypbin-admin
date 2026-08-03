@@ -334,17 +334,27 @@ CREATE TABLE sys_file
 -- 系统公告
 CREATE TABLE sys_notice
 (
-    id          BIGINT       NOT NULL COMMENT '主键',
-    title       VARCHAR(255) NOT NULL COMMENT '标题',
-    content     TEXT         NULL COMMENT '公告内容',
-    notice_type TINYINT      NULL COMMENT '类型：1 通知 2 公告',
-    publish_time DATETIME    NULL COMMENT '发布时间',
-    create_user BIGINT       NULL COMMENT '创建人',
-    create_time DATETIME     NULL COMMENT '创建时间',
-    update_user BIGINT       NULL COMMENT '更新人',
-    update_time DATETIME     NULL COMMENT '更新时间',
-    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态',
-    is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    id              BIGINT       NOT NULL COMMENT '主键',
+    title           VARCHAR(255) NOT NULL COMMENT '标题',
+    content         MEDIUMTEXT   NULL COMMENT '公告内容（富文本）',
+    cover           VARCHAR(512) NULL COMMENT '封面图 URL',
+    notice_type     TINYINT      NULL COMMENT '类型：1 通知 2 公告',
+    notice_scope    TINYINT      NULL DEFAULT 1 COMMENT '通知范围：1 全体 2 指定角色 3 指定部门 4 指定用户',
+    scope_target_ids VARCHAR(1024) NULL COMMENT '范围目标 ID 集合（逗号分隔）',
+    notify_methods  VARCHAR(64)  NULL COMMENT '通知方式（逗号分隔：site/email/sms）',
+    is_top          TINYINT      NULL DEFAULT 0 COMMENT '是否置顶：1 是 0 否',
+    publish_type    TINYINT      NULL DEFAULT 1 COMMENT '发布方式：1 立即 2 定时',
+    publish_status  TINYINT      NULL DEFAULT 2 COMMENT '发布状态：0 草稿 1 待发布 2 已发布 3 已撤回',
+    scheduled_time  DATETIME     NULL COMMENT '定时发布时间',
+    publish_time    DATETIME     NULL COMMENT '实际发布时间',
+    effective_time  DATETIME     NULL COMMENT '生效时间',
+    expire_time     DATETIME     NULL COMMENT '失效时间',
+    create_user     BIGINT       NULL COMMENT '创建人',
+    create_time     DATETIME     NULL COMMENT '创建时间',
+    update_user     BIGINT       NULL COMMENT '更新人',
+    update_time     DATETIME     NULL COMMENT '更新时间',
+    status          TINYINT      NOT NULL DEFAULT 1 COMMENT '状态',
+    is_deleted      TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '系统公告';
 
