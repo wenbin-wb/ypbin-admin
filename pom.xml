@@ -22,7 +22,7 @@
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.5.16</spring-boot.version>
-        <ypbin-starter.version>1.0.0-SNAPSHOT</ypbin-starter.version>
+        <ypbin-starter.version>1.0.0</ypbin-starter.version>
         <sms4j.version>3.3.5</sms4j.version>
     </properties>
 
@@ -36,9 +36,9 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- ypbin-starter 统一 BOM -->
+            <!-- ypbin-starter 统一 BOM（正式版 groupId 为 cn.ypbin） -->
             <dependency>
-                <groupId>cn.ypbin.starter</groupId>
+                <groupId>cn.ypbin</groupId>
                 <artifactId>ypbin-starter-bom</artifactId>
                 <version>${ypbin-starter.version}</version>
                 <type>pom</type>

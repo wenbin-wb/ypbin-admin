@@ -17,52 +17,52 @@
     <dependencies>
         <!-- 单体 Web 一站式基础能力（web/json/data/cache/security/api-doc/log/tools/async） -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-app-web</artifactId>
         </dependency>
         <!-- 通用 CRUD 基类 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-crud</artifactId>
         </dependency>
         <!-- 多租户 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-tenant</artifactId>
         </dependency>
         <!-- 数据权限 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-datapermission</artifactId>
         </dependency>
         <!-- 行为验证码 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-captcha</artifactId>
         </dependency>
         <!-- 消息（短信/邮件） -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-messaging</artifactId>
         </dependency>
         <!-- 文件存储 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-storage</artifactId>
         </dependency>
         <!-- 定时任务 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-job</artifactId>
         </dependency>
         <!-- 接口签名 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-sign</artifactId>
         </dependency>
         <!-- 第三方登录 -->
         <dependency>
-            <groupId>cn.ypbin.starter</groupId>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-social</artifactId>
         </dependency>
         <!-- IP 归属地（离线库，实现 starter 的 IpLocationResolver 扩展点） -->
