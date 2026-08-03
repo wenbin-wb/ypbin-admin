@@ -11,9 +11,9 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.entity.SysNotice;
+import cn.ypbin.admin.system.service.NoticePublishService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
 import cn.ypbin.starter.log.annotation.Log;
 import java.time.LocalDateTime;
@@ -41,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SysNoticeController extends BaseController {
 
     private final BaseService<SysNotice> noticeService;
+    private final NoticePublishService noticePublishService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:notice:list")
@@ -52,8 +53,11 @@ public class SysNoticeController extends BaseController {
     @PostMapping
     @SaCheckPermission("system:notice:add")
     public R<Void> create(@RequestBody SysNotice entity) {
-        applyPublishState(entity);
+        boolean published = applyPublishState(entity);
         noticeService.save(entity);
+        if (published) {
+            noticePublishService.dispatch(entity);
+        }
         return ok();
     }
 
@@ -62,8 +66,11 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:edit")
     public R<Void> update(@PathVariable Long id, @RequestBody SysNotice entity) {
         entity.setId(id);
-        applyPublishState(entity);
+        boolean published = applyPublishState(entity);
         noticeService.updateById(entity);
+        if (published) {
+            noticePublishService.dispatch(entity);
+        }
         return ok();
     }
 
@@ -81,18 +88,21 @@ public class SysNoticeController extends BaseController {
     /**
      * 依据发布方式推导发布状态与发布时间：
      * 草稿(publishStatus=0) 保持草稿；定时(publishType=2) 置为待发布；否则立即发布。
+     *
+     * @return 是否为「立即发布」（需触发推送）
      */
-    private void applyPublishState(SysNotice entity) {
+    private boolean applyPublishState(SysNotice entity) {
         Integer publishStatus = entity.getPublishStatus();
         if (publishStatus != null && publishStatus == 0) {
-            return;
+            return false;
         }
         if (entity.getPublishType() != null && entity.getPublishType() == 2) {
             entity.setPublishStatus(1);
-        } else {
-            entity.setPublishStatus(2);
-            entity.setPublishTime(LocalDateTime.now());
+            return false;
         }
+        entity.setPublishStatus(2);
+        entity.setPublishTime(LocalDateTime.now());
+        return true;
     }
 
     @Log(value = "删除公告", module = "公告管理")

@@ -203,6 +203,10 @@ VALUES (270001, 2700, 'SystemNoticeAdd', 'button', 'system:notice:add', 'common.
        (270002, 2700, 'SystemNoticeEdit', 'button', 'system:notice:edit', 'common.edit', 2, NOW(), 1, 0),
        (270003, 2700, 'SystemNoticeDelete', 'button', 'system:notice:delete', 'common.delete', 3, NOW(), 1, 0);
 
+-- 我的消息（站内信中心，全员可见、无权限码，route name 与铃铛跳转一致）
+INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES (4000, 0, 'MyMessage', 'menu', '/message', '/_core/message/list', 'system.message.title', 'carbon:notification-new', 9, NOW(), 1, 0);
+
 -- 组织管理（3001）：用户 / 部门 / 岗位
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (210, 3001, 'SystemUser', 'menu', '/system/user', '/system/user/list', 'system:user:list', 'system.user.title', 'carbon:user', 1, NOW(), 1, 0);

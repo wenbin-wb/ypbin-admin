@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.job;
 
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
+import cn.ypbin.admin.system.service.NoticePublishService;
 import cn.ypbin.starter.job.core.JobContext;
 import cn.ypbin.starter.job.core.JobHandler;
 import cn.ypbin.starter.job.core.YpbinJob;
@@ -41,6 +42,7 @@ public class NoticePublishJob implements JobHandler {
     private static final int STATUS_PUBLISHED = 2;
 
     private final SysNoticeMapper noticeMapper;
+    private final NoticePublishService noticePublishService;
 
     @Override
     public void execute(JobContext context) {
@@ -57,6 +59,10 @@ public class NoticePublishJob implements JobHandler {
             update.setPublishStatus(STATUS_PUBLISHED);
             update.setPublishTime(now);
             noticeMapper.updateById(update);
+            // 状态流转为已发布后触发推送（解析目标→站内信→邮件/短信→SSE）
+            notice.setPublishStatus(STATUS_PUBLISHED);
+            notice.setPublishTime(now);
+            noticePublishService.dispatch(notice);
         }
         log.info("[定时发布] 本次发布公告 {} 条", due.size());
     }
