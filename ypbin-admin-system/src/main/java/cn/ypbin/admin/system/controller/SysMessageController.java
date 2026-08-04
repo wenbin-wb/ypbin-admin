@@ -20,6 +20,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -94,6 +95,18 @@ public class SysMessageController extends BaseController {
             .eq(SysMessage::getId, id)
             .eq(SysMessage::getReceiverUserId, userId)
             .set(SysMessage::getReadStatus, 1));
+        return ok();
+    }
+
+    /**
+     * 删除站内信。仅能删除当前登录用户自己的消息。
+     */
+    @DeleteMapping("/{id}")
+    public R<Void> delete(@PathVariable Long id) {
+        Long userId = LoginHelper.getUserId();
+        messageMapper.delete(new LambdaQueryWrapper<SysMessage>()
+            .eq(SysMessage::getId, id)
+            .eq(SysMessage::getReceiverUserId, userId));
         return ok();
     }
 
