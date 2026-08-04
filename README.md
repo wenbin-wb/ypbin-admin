@@ -17,6 +17,10 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 前后端分离的企业级后台管理系统。后端基于 [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) 构建，专注业务实现；前端见 [vue-vben-admin](https://github.com/wenbin-wb/vue-vben-admin)。
 
+统一响应、鉴权会话、多租户、数据权限、缓存、任务调度、消息推送这些"每个项目都要重写一遍"的系统级能力，全部沉在 starter 里做对做透。admin 只干一件事——把它们接上业务，然后专心写业务。**新项目从这里起步，第一天就站在生产就绪的地基上。**
+
+> 如果它帮你省下了搭脚手架的那几天，点个 ⭐ Star 就是最好的回礼——也让更多人少走弯路。
+
 ## 功能
 
 - **组织权限** — 用户、角色、部门、岗位、菜单，RBAC 与按钮级鉴权、数据权限
@@ -51,6 +55,16 @@ ypbin-admin-common    公共层：常量、starter 扩展点实现、基础配�
 ypbin-admin-system    业务层：实体 / mapper / service / controller
 ypbin-admin-server    启动层：主类、配置、数据库迁移
 ```
+
+## 参与进来
+
+项目仍在持续迭代，功能与文档还在不断打磨。欢迎：
+
+- 🐛 提 [Issue](https://github.com/wenbin-wb/ypbin-admin/issues) —— bug、疑问、吐槽都行
+- 💡 提 [PR](https://github.com/wenbin-wb/ypbin-admin/pulls) 或建议 —— 有更好的做法，一起把它做对
+- ⭐ Star / Fork —— 拿去改成你自己的项目，正是它存在的意义
+
+用得顺手，或者哪里硌手，都欢迎告诉我。
 
 ## 许可证
 
