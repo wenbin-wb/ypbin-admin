@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.mapper.SysMessageMapper;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.security.core.LoginHelper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -43,17 +44,20 @@ public class SysMessageController extends BaseController {
      * 分页查询当前用户站内信，可按已读状态过滤。
      */
     @GetMapping
-    public R<Page<SysMessage>> list(@RequestParam(defaultValue = "1") long page,
-                                    @RequestParam(defaultValue = "10") long pageSize,
-                                    @RequestParam(required = false) Integer readStatus,
-                                    @RequestParam(required = false) Integer messageType) {
+    public R<PageResult<SysMessage>> list(@RequestParam(defaultValue = "1") long page,
+                                          @RequestParam(defaultValue = "10") long pageSize,
+                                          @RequestParam(required = false) Integer readStatus,
+                                          @RequestParam(required = false) Integer messageType) {
         Long userId = LoginHelper.getUserId();
         LambdaQueryWrapper<SysMessage> wrapper = new LambdaQueryWrapper<SysMessage>()
             .eq(SysMessage::getReceiverUserId, userId)
             .eq(readStatus != null, SysMessage::getReadStatus, readStatus)
             .eq(messageType != null, SysMessage::getMessageType, messageType)
             .orderByDesc(SysMessage::getCreateTime);
-        return ok(messageMapper.selectPage(new Page<>(page, pageSize), wrapper));
+        Page<SysMessage> result = messageMapper.selectPage(new Page<>(page, pageSize), wrapper);
+        // 统一分页结构为 PageResult(items/total)，与前端 vxe-grid 期望一致
+        return ok(PageResult.of(result.getRecords(), result.getTotal(),
+            result.getCurrent(), result.getSize()));
     }
 
     /**

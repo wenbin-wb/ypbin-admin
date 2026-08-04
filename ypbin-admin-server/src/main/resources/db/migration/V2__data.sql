@@ -209,9 +209,9 @@ VALUES (270001, 2700, 'SystemNoticeAdd', 'button', 'system:notice:add', 'common.
 INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, sort, create_time, status, is_deleted)
 VALUES (4000, 3007, 'MyMessage', 'menu', '/message', '/_core/message/list', 'system.message.title', 'carbon:email', 2, NOW(), 1, 0);
 
--- 接口文档（外链，新窗口打开后端 springdoc 的 swagger-ui；vite 已代理 /swagger-ui、/v3/api-docs 等到后端）
-INSERT INTO sys_menu (id, pid, name, type, path, link, title, icon, sort, create_time, status, is_deleted)
-VALUES (4001, 0, 'ApiDoc', 'link', '/api-doc', '/swagger-ui/index.html', 'system.apiDoc.title', 'carbon:document-tasks', 10, NOW(), 1, 0);
+-- 接口文档（内嵌 iframe 打开后端 springdoc 的 swagger-ui；vite 已代理 /swagger-ui、/v3/api-docs 等到后端）
+INSERT INTO sys_menu (id, pid, name, type, path, component, iframe_src, title, icon, sort, create_time, status, is_deleted)
+VALUES (4001, 0, 'ApiDoc', 'embedded', '/api-doc', 'IFrameView', '/swagger-ui/index.html', 'system.apiDoc.title', 'carbon:document-tasks', 10, NOW(), 1, 0);
 
 -- 组织管理（3001）：用户 / 部门 / 岗位
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
