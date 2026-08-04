@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.entity;
 
 import cn.ypbin.starter.data.core.BaseEntity;
+import cn.ypbin.starter.json.ref.RefText;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
 import java.time.LocalDate;
@@ -38,7 +39,8 @@ public class SysTenant extends BaseEntity {
     /** 租户编码（唯一） */
     private String code;
 
-    /** 所属权限模板 ID */
+    /** 所属权限模板 ID，额外输出 templateIdName（模板名称） */
+    @RefText("template")
     private Long templateId;
 
     /** 联系人 */

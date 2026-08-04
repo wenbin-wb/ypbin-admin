@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.service.NoticePublishService;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.service.BaseService;
@@ -82,6 +83,22 @@ public class SysNoticeController extends BaseController {
         entity.setId(id);
         entity.setPublishStatus(3);
         noticeService.updateById(entity);
+        return ok();
+    }
+
+    @Log(value = "发布公告", module = "公告管理")
+    @PutMapping("/{id}/publish")
+    @SaCheckPermission("system:notice:edit")
+    public R<Void> publish(@PathVariable Long id) {
+        SysNotice notice = noticeService.getById(id);
+        if (notice == null) {
+            throw new BusinessException("公告不存在");
+        }
+        // 草稿/待发布/已撤回 → 立即发布：置为已发布、回填发布时间并触发推送
+        notice.setPublishStatus(2);
+        notice.setPublishTime(LocalDateTime.now());
+        noticeService.updateById(notice);
+        noticePublishService.dispatch(notice);
         return ok();
     }
 

@@ -45,11 +45,13 @@ public class SysMessageController extends BaseController {
     @GetMapping
     public R<Page<SysMessage>> list(@RequestParam(defaultValue = "1") long page,
                                     @RequestParam(defaultValue = "10") long pageSize,
-                                    @RequestParam(required = false) Integer readStatus) {
+                                    @RequestParam(required = false) Integer readStatus,
+                                    @RequestParam(required = false) Integer messageType) {
         Long userId = LoginHelper.getUserId();
         LambdaQueryWrapper<SysMessage> wrapper = new LambdaQueryWrapper<SysMessage>()
             .eq(SysMessage::getReceiverUserId, userId)
             .eq(readStatus != null, SysMessage::getReadStatus, readStatus)
+            .eq(messageType != null, SysMessage::getMessageType, messageType)
             .orderByDesc(SysMessage::getCreateTime);
         return ok(messageMapper.selectPage(new Page<>(page, pageSize), wrapper));
     }

@@ -9,8 +9,10 @@
  */
 package cn.ypbin.admin.system.provider;
 
+import cn.ypbin.admin.system.entity.SysAuthTemplate;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.mapper.SysAuthTemplateMapper;
 import cn.ypbin.admin.system.mapper.SysDeptMapper;
 import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.starter.json.ref.RefTextProvider;
@@ -80,6 +82,29 @@ public class DbRefTextProviders {
                 .map(id -> Long.valueOf(id.toString())).toList();
             return deptMapper.selectBatchIds(idList).stream()
                 .collect(Collectors.toMap(d -> (Serializable) d.getId(), SysDept::getName));
+        }
+    }
+
+    /**
+     * 权限模板引用翻译：类型 "template"，ID→模板名称。
+     */
+    @Component
+    @RequiredArgsConstructor
+    public static class TemplateName implements RefTextProvider {
+
+        private final SysAuthTemplateMapper templateMapper;
+
+        @Override
+        public String type() {
+            return "template";
+        }
+
+        @Override
+        public Map<Object, String> getNames(Collection<Object> ids) {
+            List<Long> idList = ids.stream()
+                .map(id -> Long.valueOf(id.toString())).toList();
+            return templateMapper.selectBatchIds(idList).stream()
+                .collect(Collectors.toMap(t -> (Serializable) t.getId(), SysAuthTemplate::getName));
         }
     }
 }

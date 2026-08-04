@@ -109,6 +109,8 @@ ypbin:
     enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
   api-crypto:
     key: ypbin-admin-secret     # 接口加解密 AES 密钥（生产换掉）
+  # TODO 待部署阶段接入：当前 admin 未引入 ypbin-starter-cloud-observability 模块，
+  # 以下 observability 配置无自动配置支撑（空配，不生效）。反哺 starter 提供单体可用的可观测性能力后再启用。
   observability:
     enabled: true
     request-id-header: X-Request-Id
@@ -131,6 +133,10 @@ logging:
   level:
     cn.ypbin.admin: debug
 
+# TODO 待部署阶段接入：当前未引入 spring-boot-starter-actuator，以下 management 配置不生效，
+# /actuator/health 返回 404（非鉴权问题）。计划反哺 starter 由 observability 模块统一提供
+# actuator + health 端点 + 自动放行 /actuator/health（复用 SecurityExcludePathProvider 机制），
+# admin 引入模块后再启用；届时放行须精确到 health，勿放 env/beans/heapdump 等敏感端点。
 management:
   endpoints:
     web:

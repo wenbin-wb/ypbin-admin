@@ -186,6 +186,7 @@ VALUES (3001, 0, 'OrgManage', 'catalog', '/system/org', 'BasicLayout', 'system.o
        (3002, 0, 'AuthManage', 'catalog', '/system/auth', 'BasicLayout', 'system.auth.title', 'carbon:security', 2, NOW(), 1, 0),
        (3005, 0, 'TenantManage', 'catalog', '/system/tenant', 'BasicLayout', 'system.tenant.title', 'carbon:building', 3, NOW(), 1, 0),
        (3006, 0, 'JobManage', 'catalog', '/system/jobm', 'BasicLayout', 'system.schedule.title', 'carbon:timer', 4, NOW(), 1, 0),
+       (3007, 0, 'MessageManage', 'catalog', '/message-center', 'BasicLayout', 'system.messageCenter.title', 'carbon:notification', 6, NOW(), 1, 0),
        (3004, 0, 'MonitorManage', 'catalog', '/system/monitor', 'BasicLayout', 'system.monitor.title', 'carbon:activity', 7, NOW(), 1, 0),
        (3003, 0, 'SysManage', 'catalog', '/system/sys', 'BasicLayout', 'system.sys.title', 'carbon:settings-adjust', 8, NOW(), 1, 0);
 
@@ -196,20 +197,21 @@ INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, 
 VALUES (260001, 2600, 'SystemFileUpload', 'button', 'system:file:upload', 'common.upload', 1, NOW(), 1, 0),
        (260002, 2600, 'SystemFileDelete', 'button', 'system:file:delete', 'common.delete', 2, NOW(), 1, 0);
 
+-- 消息中心（3007）：通知公告（管理发布）+ 我的消息（个人收件箱）
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2700, 0, 'SystemNotice', 'menu', '/system/notice', '/system/notice/list', 'system:notice:list', 'system.notice.title', 'carbon:notification', 6, NOW(), 1, 0);
+VALUES (2700, 3007, 'SystemNotice', 'menu', '/system/notice', '/system/notice/list', 'system:notice:list', 'system.notice.title', 'carbon:notification', 1, NOW(), 1, 0);
 INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
 VALUES (270001, 2700, 'SystemNoticeAdd', 'button', 'system:notice:add', 'common.create', 1, NOW(), 1, 0),
        (270002, 2700, 'SystemNoticeEdit', 'button', 'system:notice:edit', 'common.edit', 2, NOW(), 1, 0),
        (270003, 2700, 'SystemNoticeDelete', 'button', 'system:notice:delete', 'common.delete', 3, NOW(), 1, 0);
 
--- 我的消息（站内信中心，全员可见、无权限码，route name 与铃铛跳转一致）
+-- 我的消息（个人收件箱，全员可见、无权限码，route name 与铃铛跳转一致）
 INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, sort, create_time, status, is_deleted)
-VALUES (4000, 0, 'MyMessage', 'menu', '/message', '/_core/message/list', 'system.message.title', 'carbon:notification-new', 9, NOW(), 1, 0);
+VALUES (4000, 3007, 'MyMessage', 'menu', '/message', '/_core/message/list', 'system.message.title', 'carbon:email', 2, NOW(), 1, 0);
 
--- 接口文档（外链，新窗口打开 /doc.html，全员可见、无权限码）
+-- 接口文档（外链，新窗口打开后端 springdoc 的 swagger-ui；vite 已代理 /swagger-ui、/v3/api-docs 等到后端）
 INSERT INTO sys_menu (id, pid, name, type, path, link, title, icon, sort, create_time, status, is_deleted)
-VALUES (4001, 0, 'ApiDoc', 'link', '/api-doc', '/doc.html', 'system.apiDoc.title', 'carbon:document-tasks', 10, NOW(), 1, 0);
+VALUES (4001, 0, 'ApiDoc', 'link', '/api-doc', '/swagger-ui/index.html', 'system.apiDoc.title', 'carbon:document-tasks', 10, NOW(), 1, 0);
 
 -- 组织管理（3001）：用户 / 部门 / 岗位
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
