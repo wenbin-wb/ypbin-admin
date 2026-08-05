@@ -45,6 +45,6 @@ public class RoleResp {
 
     private LocalDateTime createTime;
 
-    /** 已分配菜单 ID 集合（前端字段 permissions） */
+    /** 已分配菜单 ID 集合 */
     private List<Long> permissions;
 }

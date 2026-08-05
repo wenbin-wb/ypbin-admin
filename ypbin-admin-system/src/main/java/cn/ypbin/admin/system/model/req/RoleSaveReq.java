@@ -42,6 +42,6 @@ public class RoleSaveReq {
     /** 备注 */
     private String remark;
 
-    /** 分配的菜单 ID 集合（前端字段 permissions） */
+    /** 分配的菜单 ID 集合 */
     private List<Long> permissions;
 }

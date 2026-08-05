@@ -78,9 +78,16 @@ ypbin:
       - sys_user_social
       - sys_auth_template
       - sys_template_menu
+      - sys_license
   sign:
     enabled: true              # 开启接口签名
     mode: ANNOTATION           # 仅 @ApiSign 标注的接口校验签名
+  license:
+    enabled: false             # 本应用是授权签发端（供应方），自身不做 License 自保护
+    issuer:                    # 签发密钥经环境变量注入，不落库；首次可调用 /system/license/generate-key 生成
+      public-key: ${LICENSE_ISSUER_PUBLIC_KEY:}
+      private-key: ${LICENSE_ISSUER_PRIVATE_KEY:}
+      sm4-key: ${LICENSE_ISSUER_SM4_KEY:}
   log:
     includes:                  # 操作日志全局采集项：默认(参数/IP/客户端) + 浏览器/操作系统
       - REQUEST_PARAM

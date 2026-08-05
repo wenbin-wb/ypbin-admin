@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
  * 引用翻译数据源集合：用户名称、部门名称。
  *
  * <p>每个实现对应一个 {@code @RefText("type")}，由 starter 的列表预加载机制批量查询，
- * 零 N+1。命名上不暴露 vben/frontend 等前端词语。</p>
+ * 零 N+1。</p>
  *
  * @author wenbin
  * @since 2026-08-02

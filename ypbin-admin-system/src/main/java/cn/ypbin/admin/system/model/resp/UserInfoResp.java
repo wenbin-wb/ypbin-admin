@@ -23,14 +23,14 @@ import lombok.Data;
 @Data
 public class UserInfoResp {
 
-    /** 用户 ID（前端 userId） */
+    /** 用户 ID */
     @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     /** 登录账号 */
     private String username;
 
-    /** 真实姓名/显示名（前端 realName） */
+    /** 真实姓名/显示名 */
     private String realName;
 
     /** 头像 */
@@ -42,7 +42,7 @@ public class UserInfoResp {
     /** 首页地址 */
     private String homePath;
 
-    /** 角色码集合（前端权限指令/路由用） */
+    /** 角色码集合（供权限判定与菜单路由） */
     private List<String> roles;
 
     /** 权限码集合 */

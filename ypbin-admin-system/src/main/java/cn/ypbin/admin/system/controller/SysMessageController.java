@@ -56,7 +56,7 @@ public class SysMessageController extends BaseController {
             .eq(messageType != null, SysMessage::getMessageType, messageType)
             .orderByDesc(SysMessage::getCreateTime);
         Page<SysMessage> result = messageMapper.selectPage(new Page<>(page, pageSize), wrapper);
-        // 统一分页结构为 PageResult(items/total)，与前端 vxe-grid 期望一致
+        // 统一分页结构为 PageResult(items/total)，与其它列表接口保持一致
         return ok(PageResult.of(result.getRecords(), result.getTotal(),
             result.getCurrent(), result.getSize()));
     }

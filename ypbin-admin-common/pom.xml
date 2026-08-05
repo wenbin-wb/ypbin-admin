@@ -65,6 +65,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-social</artifactId>
         </dependency>
+        <!-- 商业授权（签发/管理台复用其 LicenseSigner 与国密能力） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-license</artifactId>
+        </dependency>
         <!-- IP 归属地（离线库，实现 starter 的 IpLocationResolver 扩展点） -->
         <dependency>
             <groupId>net.dreamlu</groupId>
