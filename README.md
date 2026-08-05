@@ -15,7 +15,7 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 ---
 
-前后端分离的企业级后台管理系统。后端基于 [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) 构建，专注业务实现；前端见 [vue-vben-admin](https://github.com/wenbin-wb/vue-vben-admin)。
+前后端分离的企业级后台管理系统。后端基于 [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) 构建，专注业务实现；前端见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 
 统一响应、鉴权会话、多租户、数据权限、缓存、任务调度、消息推送这些"每个项目都要重写一遍"的系统级能力，全部沉在 starter 里做对做透。admin 只干一件事——把它们接上业务，然后专心写业务。**新项目从这里起步，第一天就站在生产就绪的地基上。**
 
@@ -46,7 +46,7 @@ mvn -f ypbin-admin-server/pom.xml spring-boot:run
 
 接口文档 `http://localhost:8080/swagger-ui/index.html`，初始账号 `admin / 123456`。
 
-前端启动见 [vue-vben-admin](https://github.com/wenbin-wb/vue-vben-admin)。
+前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 
 ## 模块
 
