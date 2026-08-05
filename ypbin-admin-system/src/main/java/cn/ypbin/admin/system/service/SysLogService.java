@@ -12,8 +12,10 @@ package cn.ypbin.admin.system.service;
 import cn.ypbin.admin.system.entity.SysLog;
 import cn.ypbin.admin.system.model.query.LogQuery;
 import cn.ypbin.admin.system.model.resp.LogResp;
+import cn.ypbin.admin.system.model.resp.LogTrendResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 系统日志服务（只读）。
@@ -30,4 +32,20 @@ public interface SysLogService extends BaseService<SysLog> {
      * @return 分页结果
      */
     PageResult<LogResp> pageLogs(LogQuery query);
+
+    /**
+     * 查询最近若干条操作日志（用于仪表盘最新动态）。
+     *
+     * @param limit 条数
+     * @return 按操作时间倒序的日志列表
+     */
+    List<LogResp> latestLogs(int limit);
+
+    /**
+     * 查询近若干天的操作日志按天趋势（无日志的日期补零）。
+     *
+     * @param days 天数
+     * @return 每天一条 {date, count}，按日期升序，长度恒为 days
+     */
+    List<LogTrendResp> logTrend(int days);
 }

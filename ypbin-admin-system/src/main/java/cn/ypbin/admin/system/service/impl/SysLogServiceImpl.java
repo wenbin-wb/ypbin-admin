@@ -13,11 +13,18 @@ import cn.ypbin.admin.system.entity.SysLog;
 import cn.ypbin.admin.system.mapper.SysLogMapper;
 import cn.ypbin.admin.system.model.query.LogQuery;
 import cn.ypbin.admin.system.model.resp.LogResp;
+import cn.ypbin.admin.system.model.resp.LogTrendResp;
 import cn.ypbin.admin.system.service.SysLogService;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -43,6 +50,33 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
             .orderByDesc(SysLog::getOperateTime));
         List<LogResp> items = source.getItems().stream().map(this::toResp).toList();
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
+    }
+
+    @Override
+    public List<LogResp> latestLogs(int limit) {
+        List<SysLog> source = list(new LambdaQueryWrapper<SysLog>()
+            .orderByDesc(SysLog::getOperateTime)
+            .last("LIMIT " + limit));
+        return source.stream().map(this::toResp).toList();
+    }
+
+    @Override
+    public List<LogTrendResp> logTrend(int days) {
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusDays(days - 1L);
+        // 聚合结果按日期建索引，缺失的日期后续补零
+        Map<String, Long> countByDate = baseMapper.selectDailyTrend(startDate.atStartOfDay()).stream()
+            .collect(Collectors.toMap(LogTrendResp::getDate, LogTrendResp::getCount));
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        List<LogTrendResp> result = new ArrayList<>(days);
+        for (int i = 0; i < days; i++) {
+            String date = startDate.plusDays(i).format(formatter);
+            LogTrendResp item = new LogTrendResp();
+            item.setDate(date);
+            item.setCount(countByDate.getOrDefault(date, 0L));
+            result.add(item);
+        }
+        return result;
     }
 
     private LogResp toResp(SysLog log) {
