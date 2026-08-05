@@ -139,4 +139,16 @@ public class SysLicenseController extends BaseController {
         response.getWriter().write(entity.getAuthCode());
         response.getWriter().flush();
     }
+
+    /**
+     * 查看内联授权码（仅 CODE 交付模式的已签发授权）。用于复制交付给被授权方。
+     *
+     * @param id 授权主键
+     * @return Base64 授权串
+     */
+    @GetMapping("/{id}/auth-code")
+    @SaCheckPermission("system:license:list")
+    public R<String> authCode(@PathVariable Long id) {
+        return ok(licenseService.loadAuthCode(id));
+    }
 }

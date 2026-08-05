@@ -196,6 +196,18 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         return entity;
     }
 
+    @Override
+    public String loadAuthCode(Long id) {
+        SysLicense entity = getExisting(id);
+        if (!STATUS_ISSUED.equals(entity.getApproveStatus())) {
+            throw new BusinessException("仅已签发状态可查看授权码");
+        }
+        if (!DELIVERY_CODE.equals(entity.getDeliveryMode())) {
+            throw new BusinessException("该授权为授权文件交付，请下载授权文件");
+        }
+        return entity.getAuthCode();
+    }
+
     /**
      * 签发：用配置托管的私钥与 SM4 密钥对授权内容签名加密，产出授权串写入更新对象。
      *

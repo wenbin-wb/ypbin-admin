@@ -223,6 +223,13 @@ rg -n "vben|RouteRecordRaw|前端契约" --glob '*.java'
 
 > **本机 Git-bash 踩坑**：`grep -P`（PCRE，含中文字符类）在 Windows Git-bash 报 `-P supports only unibyte and UTF-8 locales`，跑不了。查中文/复杂模式一律用 **Grep 工具**（内置 ripgrep），不要用带 `-P` 的 shell grep。
 
+## 常见踩坑（PITFALLS — 来自本项目真实修复，动手前先自检）
+
+1. **异步落库的实体别继承 `BaseEntity`/`TenantBaseEntity`**。走 `@Async` 异步线程持久化的实体（如操作日志 `SysLog`），异步线程**没有 Sa-Token 上下文**，若继承基类走审计字段（createUser/updateUser）自动填充，会抛 `SaTokenContextException`。这类实体自带 `operateUser`/`operateTime` 等字段、不继承基类即可（参照 commit `de24d05` 把 `SysLog` 从 `BaseEntity` 摘出）。这是铁律8「无上下文线程取用户会抛异常」在 admin 侧的具体后果。
+   - 建表脚本也要同步删掉这类表冗余的审计/逻辑删除列，与实体严格一致（铁律1：字段全程同名、库=实体一致）。
+
+2. **多入口登录要统一收尾，避免各自构建 `LoginUser` 漏填字段**。账号/手机/第三方等多种登录入口若各自 `new LoginUser(...)`，极易漏填 `clientId/clientType/authType`，导致操作日志取不到客户端信息。抽一个统一的登录收尾（如 `LoginSupport`）集中回填客户端信息 + 记录在线终端，三种入口共用（参照 commit `de24d05` 的 `LoginSupport`）。
+
 ## 验证
 
 本机命令行无 java/mvn，走 IntelliJ 内置工具链编译（memory `build-env`）。admin 开发**只编译验证不启动服务**，统一后面测试（memory `ypbin-admin-workflow`）。改完让用户在 IDEA 里 Build 或用其内置 Maven 编译对应模块，确认无编译错误再交付。

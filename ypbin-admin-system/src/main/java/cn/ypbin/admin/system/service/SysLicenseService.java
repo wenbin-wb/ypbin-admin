@@ -106,4 +106,12 @@ public interface SysLicenseService extends BaseService<SysLicense> {
      * @return 授权对象（含 authCode 与被授权方名称）
      */
     SysLicense loadForDownload(Long id);
+
+    /**
+     * 取内联授权码用于复制交付（仅已签发且内联授权码交付模式的授权）。
+     *
+     * @param id 授权主键
+     * @return Base64 授权串
+     */
+    String loadAuthCode(Long id);
 }
