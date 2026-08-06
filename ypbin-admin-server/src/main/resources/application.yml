@@ -89,8 +89,6 @@ ypbin:
       public-key: ${LICENSE_ISSUER_PUBLIC_KEY:}
       private-key: ${LICENSE_ISSUER_PRIVATE_KEY:}
       sm4-key: ${LICENSE_ISSUER_SM4_KEY:}
-    remote:                    # 消费端联机校验共享令牌（请求头 X-License-Token），须与消费端 ypbin.license.online.token 一致
-      token: ${LICENSE_REMOTE_TOKEN:demo-remote-token}
   log:
     includes:                  # 操作日志全局采集项：默认(参数/IP/客户端) + 浏览器/操作系统
       - REQUEST_PARAM

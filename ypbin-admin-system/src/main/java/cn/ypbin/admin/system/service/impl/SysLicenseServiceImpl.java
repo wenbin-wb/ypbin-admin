@@ -10,15 +10,17 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.common.config.LicenseIssuerProperties;
-import cn.ypbin.admin.common.config.LicenseRemoteProperties;
+import cn.ypbin.admin.system.entity.SysApp;
 import cn.ypbin.admin.system.entity.SysLicense;
 import cn.ypbin.admin.system.mapper.SysLicenseMapper;
 import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
+import cn.ypbin.admin.system.model.resp.LicenseDeliveryResp;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseRemoteResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
+import cn.ypbin.admin.system.service.SysAppService;
 import cn.ypbin.admin.system.service.SysLicenseService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -31,8 +33,6 @@ import cn.ypbin.starter.tools.crypto.Sm2Utils;
 import cn.ypbin.starter.tools.crypto.Sm2Utils.KeyPairBase64;
 import cn.ypbin.starter.tools.crypto.Sm4Utils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -70,7 +70,7 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
     private static final String DELIVERY_FILE = "FILE";
 
     private final LicenseIssuerProperties issuerProperties;
-    private final LicenseRemoteProperties remoteProperties;
+    private final SysAppService sysAppService;
 
     @Override
     public PageResult<LicenseResp> pageLicense(LicenseQuery query) {
@@ -204,26 +204,27 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
     }
 
     @Override
-    public String loadAuthCode(Long id) {
+    public LicenseDeliveryResp getDelivery(Long id) {
         SysLicense entity = getExisting(id);
         if (!STATUS_ISSUED.equals(entity.getApproveStatus())) {
-            throw new BusinessException("仅已签发状态可查看授权码");
+            throw new BusinessException("仅已签发状态可查看交付信息");
         }
-        if (!DELIVERY_CODE.equals(entity.getDeliveryMode())) {
-            throw new BusinessException("该授权为授权文件交付，请下载授权文件");
+        LicenseDeliveryResp resp = new LicenseDeliveryResp();
+        resp.setAuthCode(entity.getAuthCode());
+        if (entity.getAppId() != null) {
+            SysApp app = sysAppService.getById(entity.getAppId());
+            if (app != null) {
+                resp.setAppId(app.getId());
+                resp.setAppName(app.getAppName());
+                resp.setAccessKey(app.getAccessKey());
+                resp.setSecretKey(app.getSecretKey());
+            }
         }
-        return entity.getAuthCode();
+        return resp;
     }
 
     @Override
-    public LicenseRemoteResp verifyRemote(String licenseId, String fingerprint, String token) {
-        // 令牌未配置或与消费端不一致：一律判无效，不静默放行
-        String expected = remoteProperties.getToken();
-        if (!StringUtils.hasText(expected) || !StringUtils.hasText(token)
-            || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
-            token.getBytes(StandardCharsets.UTF_8))) {
-            return LicenseRemoteResp.invalid("联机校验鉴权失败，令牌无效或未配置");
-        }
+    public LicenseRemoteResp verifyRemote(String licenseId, String fingerprint) {
         SysLicense entity = getOne(new LambdaQueryWrapper<SysLicense>()
             .eq(SysLicense::getLicenseId, licenseId), false);
         if (entity == null) {
@@ -263,6 +264,40 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         update.setLicenseId(licenseId);
         update.setAuthCode(authCode);
         update.setApproveStatus(STATUS_ISSUED);
+        ensureOnlineApp(entity, update);
+    }
+
+    /**
+     * 签发时确保联机开放应用存在：同一被授权方复用已有应用，否则按被授权方自动新建。
+     * 应用只是联机请求的传输凭据，吊销授权不连带禁用应用（有效性由授权状态本身判定），
+     * 避免误伤同被授权方的其他授权。
+     *
+     * @param entity 授权记录
+     * @param update 待更新对象（写入联机应用 ID）
+     */
+    private void ensureOnlineApp(SysLicense entity, SysLicense update) {
+        SysApp app = sysAppService.getOne(new LambdaQueryWrapper<SysApp>()
+            .eq(SysApp::getAppName, entity.getSubject())
+            .eq(SysApp::getEnabled, 1)
+            .last("LIMIT 1"), false);
+        if (app == null) {
+            app = new SysApp();
+            app.setAppName(entity.getSubject());
+            app.setAccessKey(generateAppKey());
+            app.setSecretKey(generateAppKey());
+            app.setEnabled(1);
+            sysAppService.save(app);
+        }
+        update.setAppId(app.getId());
+    }
+
+    /**
+     * 生成开放应用密钥（32 位无横线 UUID hex）。
+     *
+     * @return 新密钥
+     */
+    private String generateAppKey() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     /**

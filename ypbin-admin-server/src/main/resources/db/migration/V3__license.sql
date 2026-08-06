@@ -1,8 +1,9 @@
 -- =============================================================
--- ypbin-admin 商业授权模块建表 + 菜单种子（阶段二：签发管理控制台）
+-- ypbin-admin 商业授权模块建表（阶段二：签发管理控制台）
 -- sys_license 为全局表（不隔离租户），已在 application.yml 的 tenant.ignore-tables 登记。
 -- 授权本身可绑定某业务租户（tenant_id 字段），与表级租户隔离无关。
 -- JSON 列（fingerprints/modules/quotas/attributes）由 MyBatis-Plus JacksonTypeHandler 读写。
+-- 授权管理菜单种子已并入 V2__data.sql（LicenseManage 3008 / SystemLicense 3100 / 按钮 310001~310007）。
 -- =============================================================
 
 -- 商业授权表
@@ -21,6 +22,7 @@ CREATE TABLE sys_license
     quotas         JSON         NULL COMMENT '业务额度限制（如 device=100、user=500）',
     attributes     JSON         NULL COMMENT '自定义扩展参数',
     delivery_mode  VARCHAR(16)  NOT NULL COMMENT '交付模式：CODE 内联授权码 / FILE 授权文件',
+    app_id         BIGINT       NULL COMMENT '联机开放应用ID（签发时按被授权方自动创建或复用）',
     auth_code      MEDIUMTEXT   NULL COMMENT '签发产物：Base64 授权串（审批通过后写入）',
     approve_status VARCHAR(16)  NOT NULL DEFAULT 'DRAFT' COMMENT '审批状态：DRAFT/PENDING/ISSUED/REJECTED/REVOKED',
     approve_user   BIGINT       NULL COMMENT '审批人（签发/驳回操作人，须不同于创建人）',
@@ -34,27 +36,6 @@ CREATE TABLE sys_license
     is_deleted     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
     PRIMARY KEY (id),
     KEY idx_license_id (license_id),
-    KEY idx_approve_status (approve_status)
+    KEY idx_approve_status (approve_status),
+    KEY idx_app_id (app_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '商业授权';
-
--- =============================================================
--- 授权管理菜单（独立顶级目录 LicenseManage，id 3008，排在系统管理之后）
--- =============================================================
-INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, sort, create_time, status, is_deleted)
-VALUES (3008, 0, 'LicenseManage', 'catalog', '/system/license-manage', 'BasicLayout', 'system.license.title', 'carbon:license', 9, NOW(), 1, 0);
-
-INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (3100, 3008, 'SystemLicense', 'menu', '/system/license', '/system/license/list', 'system:license:list', 'system.license.list', 'carbon:license', 1, NOW(), 1, 0);
-
-INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
-VALUES (310001, 3100, 'SystemLicenseAdd', 'button', 'system:license:add', 'common.create', 1, NOW(), 1, 0),
-       (310002, 3100, 'SystemLicenseEdit', 'button', 'system:license:edit', 'common.edit', 2, NOW(), 1, 0),
-       (310003, 3100, 'SystemLicenseDelete', 'button', 'system:license:delete', 'common.delete', 3, NOW(), 1, 0),
-       (310004, 3100, 'SystemLicenseSubmit', 'button', 'system:license:submit', 'system.license.submit', 4, NOW(), 1, 0),
-       (310005, 3100, 'SystemLicenseApprove', 'button', 'system:license:approve', 'system.license.approve', 5, NOW(), 1, 0),
-       (310006, 3100, 'SystemLicenseRevoke', 'button', 'system:license:revoke', 'system.license.revoke', 6, NOW(), 1, 0),
-       (310007, 3100, 'SystemLicenseGenKey', 'button', 'system:license:genkey', 'system.license.genkey', 7, NOW(), 1, 0);
-
--- 全部权限模板追加授权本模块新增菜单（保持默认租户拥有全部菜单权限）
-INSERT INTO sys_template_menu (template_id, menu_id)
-SELECT 1, id FROM sys_menu WHERE id IN (3008, 3100, 310001, 310002, 310003, 310004, 310005, 310006, 310007);

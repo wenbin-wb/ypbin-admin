@@ -37,6 +37,16 @@ VALUES (1, 1, '超级管理员', 'super', 1, 1, '系统内置超级管理员角�
 
 INSERT INTO sys_user_role (user_id, role_id) VALUES (1, 1);
 
+-- 授权双人复核第二账号（与 admin 互为创建人/审批人）
+-- 授权签发要求「审批人 ≠ 创建人」，故内置第二个超管账号：一方创建提交、另一方登录审批签发。
+-- 账号 approver / admin123（BCrypt 同 admin，仅本地测试用），授予 super 角色跳过权限码校验。
+INSERT INTO sys_user (id, tenant_id, username, password, real_name, nickname, dept_id, gender,
+                      remark, pwd_reset_time, create_user, create_time, status, is_deleted)
+VALUES (6, 1, 'approver', '$2a$10$ZuXfY6FkrI0fEGRoX9AlZuo3r/askEJEVHz6rKwKMrDVCpttLIq82',
+        '授权审批员', '审批员', 1, 1, '授权双人复核的第二审批人', NOW(), 1, NOW(), 1, 0);
+
+INSERT INTO sys_user_role (user_id, role_id) VALUES (6, 1);
+
 -- 内置字典：状态、性别
 INSERT INTO sys_dict (id, name, code, remark, create_user, create_time, status, is_deleted)
 VALUES (1, '系统状态', 'sys_status', '通用启用/禁用状态', 1, NOW(), 1, 0),
@@ -235,7 +245,7 @@ VALUES (250001, 2500, 'SystemPostAdd', 'button', 'system:post:add', 'common.crea
        (250002, 2500, 'SystemPostEdit', 'button', 'system:post:edit', 'common.edit', 2, NOW(), 1, 0),
        (250003, 2500, 'SystemPostDelete', 'button', 'system:post:delete', 'common.delete', 3, NOW(), 1, 0);
 
--- 权限管理（3002）：角色 / 菜单 / 客户端 / 开放应用 / 权限模板
+-- 权限管理（3002）：角色 / 菜单 / 客户端
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (220, 3002, 'SystemRole', 'menu', '/system/role', '/system/role/list', 'system:role:list', 'system.role.title', 'carbon:user-role', 2, NOW(), 1, 0);
 INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
@@ -256,13 +266,6 @@ INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, 
 VALUES (29001, 290, 'SystemClientAdd', 'button', 'system:client:add', 'common.create', 1, NOW(), 1, 0),
        (29002, 290, 'SystemClientEdit', 'button', 'system:client:edit', 'common.edit', 2, NOW(), 1, 0),
        (29003, 290, 'SystemClientDelete', 'button', 'system:client:delete', 'common.delete', 3, NOW(), 1, 0);
-
-INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2900, 3002, 'SystemApp', 'menu', '/system/app', '/system/app/list', 'system:app:list', 'system.app.title', 'carbon:api', 14, NOW(), 1, 0);
-INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
-VALUES (290001, 2900, 'SystemAppAdd', 'button', 'system:app:add', 'common.create', 1, NOW(), 1, 0),
-       (290002, 2900, 'SystemAppEdit', 'button', 'system:app:edit', 'common.edit', 2, NOW(), 1, 0),
-       (290003, 2900, 'SystemAppDelete', 'button', 'system:app:delete', 'common.delete', 3, NOW(), 1, 0);
 
 -- 系统管理（3003，排最后）：字典 / 参数
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
@@ -315,6 +318,35 @@ VALUES (280001, 2800, 'SystemJobAdd', 'button', 'system:job:add', 'common.create
 
 INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (2951, 3006, 'SystemJobLog', 'menu', '/system/job/log', '/system/job/log/list', 'system:job:list', 'system.jobLog.title', 'carbon:document', 2, NOW(), 1, 0);
+
+-- 授权管理（独立顶级目录 3008，排在系统管理之后、接口文档之前）：授权列表 + 开放应用
+INSERT INTO sys_menu (id, pid, name, type, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES (3008, 0, 'LicenseManage', 'catalog', '/system/license-manage', 'BasicLayout', 'system.license.title', 'carbon:license', 9, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (3100, 3008, 'SystemLicense', 'menu', '/system/license', '/system/license/list', 'system:license:list', 'system.license.list', 'carbon:license', 1, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (310001, 3100, 'SystemLicenseAdd', 'button', 'system:license:add', 'common.create', 1, NOW(), 1, 0),
+       (310002, 3100, 'SystemLicenseEdit', 'button', 'system:license:edit', 'common.edit', 2, NOW(), 1, 0),
+       (310003, 3100, 'SystemLicenseDelete', 'button', 'system:license:delete', 'common.delete', 3, NOW(), 1, 0),
+       (310004, 3100, 'SystemLicenseSubmit', 'button', 'system:license:submit', 'system.license.submit', 4, NOW(), 1, 0),
+       (310005, 3100, 'SystemLicenseApprove', 'button', 'system:license:approve', 'system.license.approve', 5, NOW(), 1, 0),
+       (310006, 3100, 'SystemLicenseRevoke', 'button', 'system:license:revoke', 'system.license.revoke', 6, NOW(), 1, 0),
+       (310007, 3100, 'SystemLicenseGenKey', 'button', 'system:license:genkey', 'system.license.genkey', 7, NOW(), 1, 0);
+
+-- 开放应用（联机校验等接口签名场景的 AK/SK 凭据，从权限管理并入本目录）
+INSERT INTO sys_menu (id, pid, name, type, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (2900, 3008, 'SystemApp', 'menu', '/system/app', '/system/app/list', 'system:app:list', 'system.app.title', 'carbon:api', 2, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (290001, 2900, 'SystemAppAdd', 'button', 'system:app:add', 'common.create', 1, NOW(), 1, 0),
+       (290002, 2900, 'SystemAppEdit', 'button', 'system:app:edit', 'common.edit', 2, NOW(), 1, 0),
+       (290003, 2900, 'SystemAppDelete', 'button', 'system:app:delete', 'common.delete', 3, NOW(), 1, 0);
+
+-- 演示联机校验开放应用（供 ypbin-license-demo 零配置联机回验）
+-- AK/SK 固定 32 位 hex，与 demo 默认配置一致，仅开发/演示用；生产在「开放应用管理」新建并按需重置密钥
+INSERT INTO sys_app (id, access_key, secret_key, app_name, enabled, create_user, create_time, status, is_deleted)
+VALUES (1, '0a1b2c3d4e5f60718293a4b5c6d7e8f9', '98a7b6c5d4e3f2019a8b7c6d5e4f3021', 'ypbin-license-demo 联机校验', 1, 1, NOW(), 1, 0);
 
 -- =============================================================
 -- 全部权限模板授权所有菜单（默认租户拥有全部菜单权限）

@@ -82,7 +82,30 @@ License 体系分两端，职责严格分离：
 
 > 机器指纹从消费端 `/fingerprint`（或代码 `MachineFingerprint.current()`）取得，签发时填进去即完成机器绑定。
 
-### 2.2 状态机
+### 2.2 额度限制与扩展参数
+
+`quotas` 与 `attributes` 是授权内容里两个「随授权打包」的灵活载体，都在签发时填入、验签后由消费端读取，签名保证不可篡改。
+
+**额度限制 `quotas`（业务计数上限）**：键为额度名、值为上限，例如：
+
+```json
+{ "device": 100, "user": 500, "api-request": 100000 }
+```
+
+- 定义的是**契约上限**：签进授权串、随授权防篡改，消费端读到的值一定是签发时的原样；
+- **实际使用计数由消费端自己维护并强制**：`quotas` 只回答「上限是多少」，不负责计数。业务侧在新增设备/用户时自增计数，超过上限即拦截（`quota("device")` 用法见 5.5）；
+- 常见场景：按设备数/用户数授权（`device` / `user`）、按调用量计费（`api-request`）、按并发实例数限流。
+
+**扩展参数 `attributes`（能力开关/版本标识）**：业务侧自解释的键值对，例如：
+
+```json
+{ "edition": "enterprise", "support-level": "gold" }
+```
+
+- 常见的「免费版/专业版/企业版」差异即由此驱动：`edition=enterprise` 开放高级功能、`support-level=gold` 决定工单响应等级；
+- 与额度不同，它不强制任何计数，只是把「买的是哪个版本/服务」固化到授权里，消费端按值分支（`attribute("edition")` 用法见 5.5）。
+
+### 2.3 状态机
 
 **审批状态**（签发端管理台的 `approve_status`）：
 
@@ -100,7 +123,7 @@ DRAFT(草稿) → PENDING(待审批) → ISSUED(已签发)
 | `GRACE` | ⚠️ | 非法可用：已过期但在宽限期内 |
 | `ILLEGAL` | ❌ | 非法不可用：无授权/验签失败/指纹不符/未生效/过期宽限耗尽/时钟回拨 |
 
-### 2.3 交付模式
+### 2.4 交付模式
 
 - **授权码 `CODE`**：签发后复制一段 Base64 授权串，直接发给对方（适合精简授权，上限 768 字符）。
 - **授权文件 `FILE`**：下载 `.lic` 文件，内容即授权串（内容复杂时建议用这个）。
@@ -130,7 +153,7 @@ mvn -f ypbin-admin-server/pom.xml spring-boot:run   # 默认 8080
 | 账号 | 角色 | 用途 |
 |---|---|---|
 | `admin` | 超级管理员 | 创建、提交、吊销授权 |
-| `approver` | 超级管理员（V4 种子） | **审批签发**（审批人必须 ≠ 创建人，实现双人复核） |
+| `approver` | 超级管理员（V2 种子） | **审批签发**（审批人必须 ≠ 创建人，实现双人复核） |
 
 > 生产环境请立即修改默认密码。
 
@@ -153,18 +176,15 @@ LICENSE_ISSUER_SM4_KEY=<SM4 密钥 Base64>
 
 > **私钥只属于签发端**。消费端配置的是 SM2 公钥 + SM4 密钥（同一套密钥对，见第 5 章），私钥绝不外发。
 
-### 3.4 联机校验令牌（可选）
+### 3.4 注册联机校验应用（可选）
 
-若要让消费端联机回验吊销，配置共享令牌：
+若要让消费端联机回验吊销，先为每个消费端应用准备好开放应用 AK/SK。**多数情况无需手工建**：审批通过签发授权时，系统会按被授权方 `subject` 自动创建/复用开放应用，AK/SK 随交付信息展示（见 4.4）；如需独立应用（与授权解耦、多产品共用一个客户端身份），再手工建：
 
-```yaml
-ypbin:
-  license:
-    remote:
-      token: ${LICENSE_REMOTE_TOKEN:demo-remote-token}   # 生产用环境变量覆盖
-```
+1. 登录 admin → **授权管理 → 开放应用** → **新建**；
+2. 填应用名称（如 `客户A-生产`），保存后自动生成 AK/SK——Access Key 是公开的应用标识、Secret Key 是参与签名的私有密钥，**仅展示一次**；
+3. 把 AK/SK 交付给该消费端，配到其 `ypbin.license.online.access-key / secret-key`（见 6.1），联机请求即以该应用的密钥做接口签名鉴权。
 
-该令牌须与每个消费端的 `ypbin.license.online.token` 一致。
+> 内置演示应用「ypbin-license-demo 联机校验」已由 V2 种子创建，AK/SK 与 demo 默认配置一致，仅开发/演示用。生产请用签发自动创建或手工新建的应用配独立 AK/SK：某应用密钥泄露只影响该应用，可在应用管理**重置密钥**或**禁用**，不影响其他消费端。
 
 ---
 
@@ -200,6 +220,8 @@ DRAFT 行点 **提交** → 状态变 **待审批 PENDING**。
 
 - **授权码**：ISSUED 行 → 更多 → **查看授权码** → 复制弹窗里的 Base64 授权串，发给对方。
 - **授权文件**：ISSUED 行 → 更多 → **下载** → 得到 `<licenseId>.lic` 文件（内容即授权串）。
+
+> 交付弹窗同时展示**签发时按被授权方自动创建的联机应用 AK/SK**（同主体复用、续期不重建，AK/SK 对客户保持稳定），连同授权串一起发给消费端，无需再去应用管理手工建。FILE 交付下也可用「更多 → **联机应用信息**」单独查看这份 AK/SK。
 
 ### 4.5 其他管理操作
 
@@ -280,7 +302,31 @@ boolean usable = status.isUsable();
 LicenseContent content = licenseManager.getContent(); // subject/licenseId/expireAt/modules/quotas...
 ```
 
-### 5.5 机器指纹
+### 5.5 读取额度与扩展参数
+
+消费端按业务需要读取授权里的额度和扩展参数（无授权时 `getContent()` 为 `null`，先判空再读）：
+
+```java
+LicenseContent content = licenseManager.getContent();
+if (content == null) {
+    // 无授权：业务自己决定是否拦截
+}
+
+// 额度：返回该额度上限（Long），未配置返回 null（视为不限）
+Long deviceLimit = content.quota("device");
+if (deviceLimit != null && currentDeviceCount > deviceLimit) {
+    throw new LicenseException(LicenseErrorCode.LICENSE_QUOTA_EXCEEDED,
+        "设备数超出授权额度 " + deviceLimit + "，请联系供应方扩容");
+}
+
+// 扩展参数：返回参数值（String），未配置返回 null
+String edition = content.attribute("edition");
+boolean enterprise = "enterprise".equals(edition);   // 按值分支开放高级能力
+```
+
+> 额度只是「上限」的契约：`currentDeviceCount` 这类实际使用计数须由业务自己维护（入库/缓存自增），授权只负责告诉你上限，不负责计数。
+
+### 5.6 机器指纹
 
 ```java
 String fp = MachineFingerprint.current();   // 采集主机特征生成 SM3 摘要
@@ -302,11 +348,12 @@ ypbin:
   license:
     online:
       base-url: ${LICENSE_ONLINE_BASE_URL:http://localhost:8080}   # 签发端地址
-      token: ${LICENSE_ONLINE_TOKEN:demo-remote-token}             # 与签发端 remote.token 一致
+      access-key: ${LICENSE_ONLINE_ACCESS_KEY:}                    # 开放应用 Access Key（签发端注册）
+      secret-key: ${LICENSE_ONLINE_SECRET_KEY:}                    # 开放应用 Secret Key（参与签名）
       timeout: 3s                                                  # 可选，默认 3s
 ```
 
-配了 `base-url` 即自动装配 HTTP 联机校验（`HttpRemoteVerifyProvider`），未配则纯离线。
+配了 `base-url` 即自动装配 HTTP 联机校验（`HttpRemoteVerifyProvider`），且要求 `access-key / secret-key` 齐备（缺失启动即报错暴露配置问题）；未配 `base-url` 则纯离线。
 
 ### 6.2 三种触发方式（可叠加）
 
@@ -318,11 +365,11 @@ ypbin:
 
 | 场景 | 消费端行为 |
 |---|---|
-| 签发端明确返回 `valid=false`（已吊销/授权不存在/令牌无效/指纹不符） | **拦截**（错误码 7008） |
+| 签发端明确返回 `valid=false`（已吊销/授权不存在/签名无效/指纹不符） | **拦截**（错误码 7008） |
 | 网络不可达 / 超时 / 非 200 / 响应异常 | **放行** + 日志 warn 告警 |
-| 令牌未配置或错误 | 签发端判无效（不静默放行） |
+| 签名/应用密钥未配置或错误 | 签发端签名校验不过 → 返回 `valid=false`（不静默放行） |
 
-> 消费端联机接口路径：`GET {签发端}/open/license/verify?licenseId=..&fingerprint=..`，请求头 `X-License-Token`。该接口已在签发端安全放行清单中，无需登录。
+> 消费端联机接口路径：`GET {签发端}/open/license/verify?licenseId=..&fingerprint=..&accessKey=..&timestamp=..&nonce=..&sign=..`。鉴权为开放应用 AK/SK 接口签名（四件套 `accessKey/timestamp/nonce/sign`，含时间窗与 nonce 防重放），由 `ypbin-starter-sign` 的 `SignClient` 自动生成，业务侧无需手工拼。该接口已在签发端安全放行清单中，无需登录。
 
 ---
 
@@ -339,7 +386,7 @@ ypbin:
 | 7005 | 授权尚未到生效时间 | `effectiveAt` 未到 |
 | 7006 | 授权已过期 | 过期且宽限期耗尽 |
 | 7007 | 检测到系统时间异常 | 系统时间被回拨篡改 |
-| 7008 | 联机授权校验未通过 | 已吊销 / 授权不存在 / 令牌无效 / 指纹不符 |
+| 7008 | 联机授权校验未通过 | 已吊销 / 授权不存在 / 签名无效 / 指纹不符 |
 | 7009 | 功能模块未授权 | 访问了授权范围外的模块 |
 | 7010 | 已达到授权额度上限 | 设备数/用户数等超出 `quotas` |
 
@@ -349,7 +396,7 @@ ypbin:
 
 1. **私钥不落库、不下发**：签发端 SM2 私钥只存在于部署环境变量；消费端只需公钥 + SM4 密钥。私钥外泄 = 任何人都能签发授权。
 2. **密钥一次性展示**：「生成密钥」弹窗仅返回一次，务必离线保管；生产环境每套授权用独立密钥对。
-3. **联机令牌保密**：`remote.token` / `online.token` 用环境变量注入，不要提交到代码库；令牌泄露时任何持有者都能查询授权状态。
+3. **应用密钥保密**：`access-key / secret-key` 用环境变量注入，不要提交到代码库。Secret Key 泄露后他人可伪造该应用的联机请求，须在签发端「开放应用管理」重置密钥；每应用独立密钥、可随时禁用，泄露只影响单一应用。**生产勿用内置演示应用（V2 种子）的密钥**。签发时按被授权方自动创建的联机应用，其 Secret Key 在授权交付信息中可见（需 `system:license:list` 权限）；该应用与手工建的应用一样，可在开放应用管理随时重置密钥/禁用。
 4. **时钟回拨保护**：消费端检测到系统时间回拨超过阈值即判非法（7007），防止通过改时间绕过过期。
 5. **授权串防篡改**：SM2 签名保证授权串任何字节被改都会验签失败（7003）。
 6. **变更授权需重新签发**：任何字段修改都走「编辑 → 重新提交 → 重新审批」，签发后授权串变化、旧串失效。
@@ -372,6 +419,9 @@ ypbin:
 
 **Q：签发端不可达时消费端会崩吗？**
 不会。联机失败按「放行+告警」处理，只有签发端明确判无效才拦截。
+
+**Q：联机校验的 AK/SK 从哪来？泄露了怎么办？**
+审批通过签发授权时，系统按被授权方 `subject` 自动创建/复用开放应用，AK/SK 在交付信息中展示（同主体续期复用、保持稳定）；也可在「授权管理 → 开放应用」手工建独立应用。Secret Key 泄露可到应用管理**重置密钥**或**禁用**该应用，只影响该应用、不影响其他消费端；生产环境不要用内置演示应用（V2 种子）的密钥。
 
 **Q：admin 自己审批为什么报错？**
 双人复核设计：审批人必须 ≠ 创建人，须用 `approver` 登录审批。

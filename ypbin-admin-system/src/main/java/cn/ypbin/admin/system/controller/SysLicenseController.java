@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.entity.SysLicense;
 import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
+import cn.ypbin.admin.system.model.resp.LicenseDeliveryResp;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
 import cn.ypbin.admin.system.service.SysLicenseService;
@@ -141,14 +142,15 @@ public class SysLicenseController extends BaseController {
     }
 
     /**
-     * 查看内联授权码（仅 CODE 交付模式的已签发授权）。用于复制交付给被授权方。
+     * 取授权交付信息（授权码 + 联机应用 AK/SK）。授权码对 CODE/FILE 交付均可用（FILE 另走下载
+     * 输出 .lic）；联机应用在审批通过时按被授权方自动创建或复用，AK/SK 随交付信息展示给消费端。
      *
      * @param id 授权主键
-     * @return Base64 授权串
+     * @return 交付信息
      */
-    @GetMapping("/{id}/auth-code")
+    @GetMapping("/{id}/delivery")
     @SaCheckPermission("system:license:list")
-    public R<String> authCode(@PathVariable Long id) {
-        return ok(licenseService.loadAuthCode(id));
+    public R<LicenseDeliveryResp> delivery(@PathVariable Long id) {
+        return ok(licenseService.getDelivery(id));
     }
 }

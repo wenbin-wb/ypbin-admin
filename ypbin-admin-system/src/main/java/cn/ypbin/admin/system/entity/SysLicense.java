@@ -80,6 +80,9 @@ public class SysLicense extends BaseEntity {
     /** 签发来源：manual 手工 / payment 支付（预留，当前默认手工） */
     private String source;
 
+    /** 联机开放应用 ID（审批通过时按被授权方自动创建或复用；可为空表示未建联机应用） */
+    private Long appId;
+
     /** 签发产物：Base64 授权串（审批通过后写入） */
     private String authCode;
 

@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.entity.SysLicense;
 import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
+import cn.ypbin.admin.system.model.resp.LicenseDeliveryResp;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseRemoteResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
@@ -109,20 +110,25 @@ public interface SysLicenseService extends BaseService<SysLicense> {
     SysLicense loadForDownload(Long id);
 
     /**
-     * 取内联授权码用于复制交付（仅已签发且内联授权码交付模式的授权）。
+     * 取授权交付信息（授权码 + 联机应用密钥，仅已签发的授权可用）。
+     *
+     * <p>联机应用在审批通过时按被授权方自动创建或复用：同主体已有应用则复用、否则新建并生成
+     * 独立 AK/SK。消费端用它配置联机校验（online.access-key / secret-key），随授权一并交付。</p>
      *
      * @param id 授权主键
-     * @return Base64 授权串
+     * @return 交付信息（授权码与联机应用密钥）
      */
-    String loadAuthCode(Long id);
+    LicenseDeliveryResp getDelivery(Long id);
 
     /**
      * 联机校验授权状态（供消费端回验吊销等在线约束）。
      *
+     * <p>鉴权由接口签名完成：请求须携带开放应用 AK/SK 签名（accessKey/timestamp/nonce/sign），
+     * 在 controller 层经 {@code SignChecker} 校验通过后才进入本方法。</p>
+     *
      * @param licenseId   授权编号
      * @param fingerprint 消费端机器指纹（可选）
-     * @param token       共享令牌（请求头 X-License-Token）
      * @return 联机校验结果（无效时携带原因）
      */
-    LicenseRemoteResp verifyRemote(String licenseId, String fingerprint, String token);
+    LicenseRemoteResp verifyRemote(String licenseId, String fingerprint);
 }
