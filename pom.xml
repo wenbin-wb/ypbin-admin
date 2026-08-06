@@ -24,6 +24,7 @@
         <spring-boot.version>3.5.16</spring-boot.version>
         <ypbin-starter.version>1.2.0-SNAPSHOT</ypbin-starter.version>
         <sms4j.version>3.3.5</sms4j.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <dependencyManagement>

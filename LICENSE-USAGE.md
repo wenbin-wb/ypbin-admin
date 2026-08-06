@@ -251,7 +251,7 @@ DRAFT 行点 **提交** → 状态变 **待审批 PENDING**。
 </dependency>
 ```
 
-> 通过 `ypbin-starter-bom` 引入（见 starter 文档）。联机回验可追加 `ypbin-starter-job`（定期任务）与 `ypbin-starter-security`（登录回验），见第 6 章。
+> 通过 `ypbin-starter-bom` 引入（见 starter 文档）。联机回验可追加 `ypbin-starter-sign`（联机请求签名）、`ypbin-starter-job`（定期任务）与 `ypbin-starter-security`（登录回验），见第 6 章。
 
 ### 5.2 配置密钥与授权文件
 
@@ -350,26 +350,30 @@ ypbin:
       base-url: ${LICENSE_ONLINE_BASE_URL:http://localhost:8080}   # 签发端地址
       access-key: ${LICENSE_ONLINE_ACCESS_KEY:}                    # 开放应用 Access Key（签发端注册）
       secret-key: ${LICENSE_ONLINE_SECRET_KEY:}                    # 开放应用 Secret Key（参与签名）
-      timeout: 3s                                                  # 可选，默认 3s
+      timeout: 5s                                                  # 可选，默认 5s
+      cache-seconds: 3600                                          # 可选，默认 3600：明确有效后窗口内不重复联机，吊销感知 ≤ 1 小时
 ```
 
-配了 `base-url` 即自动装配 HTTP 联机校验（`HttpRemoteVerifyProvider`），且要求 `access-key / secret-key` 齐备（缺失启动即报错暴露配置问题）；未配 `base-url` 则纯离线。
+配了 `base-url` 即自动装配 HTTP 联机校验（`HttpRemoteVerifyProvider`），且要求 `access-key / secret-key` 齐备（缺失启动即报错暴露配置问题）；未配 `base-url` 则纯离线。联机校验的请求签名依赖 `ypbin-starter-sign`（现为可选依赖）——未引入时即使配了 `base-url` 也不装配 HTTP 联机校验（`@ConditionalOnClass`），同样退化为纯离线。
 
 ### 6.2 三种触发方式（可叠加）
 
-1. **接口调用时**：`@LicenseCheck(online = true)`，每次调用实时回验；
-2. **登录时**：引入 `ypbin-starter-security`，`StpUtil.login` 触发登录回验（吊销后登录被拦）；
-3. **定期任务**：引入 `ypbin-starter-job`，注册执行器 `licenseOnlineVerify` 的 30s 定时任务，吊销后持续告警。
+1. **接口调用时**：`@LicenseCheck(online = true)`，每次调用回验（命中 `cache-seconds` 窗口直接放行，不重复联机）；
+2. **登录时**：引入 `ypbin-starter-security`，`StpUtil.login` 触发登录回验（吊销后登录被拦，感知延迟同样 ≤ `cache-seconds` 窗口）；
+3. **定期任务**：引入 `ypbin-starter-job`，注册执行器 `licenseOnlineVerify` 的 30s 定时任务，吊销后持续告警（感知延迟同样 ≤ `cache-seconds` 窗口）。
 
 ### 6.3 行为策略
 
 | 场景 | 消费端行为 |
 |---|---|
 | 签发端明确返回 `valid=false`（已吊销/授权不存在/签名无效/指纹不符） | **拦截**（错误码 7008） |
+| 上次明确有效后处于 `cache-seconds` 窗口内 | **放行**（不重复联机，吊销感知延迟 ≤ 窗口，默认 1 小时） |
 | 网络不可达 / 超时 / 非 200 / 响应异常 | **放行** + 日志 warn 告警 |
 | 签名/应用密钥未配置或错误 | 签发端签名校验不过 → 返回 `valid=false`（不静默放行） |
 
 > 消费端联机接口路径：`GET {签发端}/open/license/verify?licenseId=..&fingerprint=..&accessKey=..&timestamp=..&nonce=..&sign=..`。鉴权为开放应用 AK/SK 接口签名（四件套 `accessKey/timestamp/nonce/sign`，含时间窗与 nonce 防重放），由 `ypbin-starter-sign` 的 `SignClient` 自动生成，业务侧无需手工拼。该接口已在签发端安全放行清单中，无需登录。
+
+> 缓存窗口语义：仅服务端**明确返回有效**才进入 `cache-seconds` 窗口；网络异常/非 200 等「放行但不明确有效」不进入窗口，下次调用仍会重试，避免服务恢复后吊销感知被窗口掩盖。
 
 ---
 
@@ -400,6 +404,7 @@ ypbin:
 4. **时钟回拨保护**：消费端检测到系统时间回拨超过阈值即判非法（7007），防止通过改时间绕过过期。
 5. **授权串防篡改**：SM2 签名保证授权串任何字节被改都会验签失败（7003）。
 6. **变更授权需重新签发**：任何字段修改都走「编辑 → 重新提交 → 重新审批」，签发后授权串变化、旧串失效。
+7. **联机通道必须 HTTPS**：机器指纹与授权编号经 GET 参数上报，生产环境 `ypbin.license.online.base-url` 必须使用 HTTPS，避免指纹/授权信息在传输中被窃取或篡改。
 
 ---
 
@@ -409,7 +414,7 @@ ypbin:
 看签发时是否绑定了指纹。绑定了则换机即失效，需在签发端重新签发绑定新指纹的授权；未绑定则任意机器可用。
 
 **Q：吊销后消费端还放行？**
-离线模式感知不到吊销。接入联机校验（第 6 章）后，吊销通过接口调用/登录/定期任务实时生效。
+离线模式感知不到吊销。接入联机校验（第 6 章）后，吊销经接口调用/登录/定期任务生效；受 `cache-seconds` 窗口影响，感知延迟 ≤ 1 小时（窗口内最近一次明确有效则直接放行，网络放行不进入窗口）。
 
 **Q：内容复杂时授权码超长 / 报「授权信息过多」？**
 授权码超 768 字符上限，改用授权文件 `FILE` 交付即可。
