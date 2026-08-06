@@ -77,6 +77,9 @@ public class SysLicense extends BaseEntity {
     /** 交付模式：CODE 内联授权码 / FILE 授权文件 */
     private String deliveryMode;
 
+    /** 签发来源：manual 手工 / payment 支付（预留，当前默认手工） */
+    private String source;
+
     /** 签发产物：Base64 授权串（审批通过后写入） */
     private String authCode;
 

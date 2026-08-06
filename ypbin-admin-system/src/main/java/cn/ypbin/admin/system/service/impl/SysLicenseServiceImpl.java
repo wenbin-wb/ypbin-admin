@@ -10,12 +10,14 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.common.config.LicenseIssuerProperties;
+import cn.ypbin.admin.common.config.LicenseRemoteProperties;
 import cn.ypbin.admin.system.entity.SysLicense;
 import cn.ypbin.admin.system.mapper.SysLicenseMapper;
 import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
+import cn.ypbin.admin.system.model.resp.LicenseRemoteResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
 import cn.ypbin.admin.system.service.SysLicenseService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -29,6 +31,8 @@ import cn.ypbin.starter.tools.crypto.Sm2Utils;
 import cn.ypbin.starter.tools.crypto.Sm2Utils.KeyPairBase64;
 import cn.ypbin.starter.tools.crypto.Sm4Utils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -66,6 +70,7 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
     private static final String DELIVERY_FILE = "FILE";
 
     private final LicenseIssuerProperties issuerProperties;
+    private final LicenseRemoteProperties remoteProperties;
 
     @Override
     public PageResult<LicenseResp> pageLicense(LicenseQuery query) {
@@ -91,6 +96,8 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         SysLicense entity = new SysLicense();
         BeanUtils.copyProperties(req, entity);
         entity.setApproveStatus(STATUS_DRAFT);
+        // 当前仅手工签发；支付自动获取授权为预留能力（source=payment），落地前固定手工来源
+        entity.setSource("manual");
         save(entity);
         return entity.getId();
     }
@@ -206,6 +213,31 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             throw new BusinessException("该授权为授权文件交付，请下载授权文件");
         }
         return entity.getAuthCode();
+    }
+
+    @Override
+    public LicenseRemoteResp verifyRemote(String licenseId, String fingerprint, String token) {
+        // 令牌未配置或与消费端不一致：一律判无效，不静默放行
+        String expected = remoteProperties.getToken();
+        if (!StringUtils.hasText(expected) || !StringUtils.hasText(token)
+            || !MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),
+            token.getBytes(StandardCharsets.UTF_8))) {
+            return LicenseRemoteResp.invalid("联机校验鉴权失败，令牌无效或未配置");
+        }
+        SysLicense entity = getOne(new LambdaQueryWrapper<SysLicense>()
+            .eq(SysLicense::getLicenseId, licenseId), false);
+        if (entity == null) {
+            return LicenseRemoteResp.invalid("授权不存在：" + licenseId);
+        }
+        if (!STATUS_ISSUED.equals(entity.getApproveStatus())) {
+            return LicenseRemoteResp.invalid("授权状态不可用（" + entity.getApproveStatus()
+                + "），可能已被吊销");
+        }
+        if (StringUtils.hasText(fingerprint)
+            && !toContent(entity, entity.getLicenseId()).matchesFingerprint(fingerprint)) {
+            return LicenseRemoteResp.invalid("机器指纹不匹配");
+        }
+        return LicenseRemoteResp.valid();
     }
 
     /**

@@ -65,6 +65,9 @@ public class LicenseResp {
     /** 交付模式：CODE / FILE */
     private String deliveryMode;
 
+    /** 签发来源：manual 手工 / payment 支付（预留） */
+    private String source;
+
     /** 审批状态：DRAFT / PENDING / ISSUED / REJECTED / REVOKED */
     private String approveStatus;
 

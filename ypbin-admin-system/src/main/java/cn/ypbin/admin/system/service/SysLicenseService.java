@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
+import cn.ypbin.admin.system.model.resp.LicenseRemoteResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
@@ -114,4 +115,14 @@ public interface SysLicenseService extends BaseService<SysLicense> {
      * @return Base64 授权串
      */
     String loadAuthCode(Long id);
+
+    /**
+     * 联机校验授权状态（供消费端回验吊销等在线约束）。
+     *
+     * @param licenseId   授权编号
+     * @param fingerprint 消费端机器指纹（可选）
+     * @param token       共享令牌（请求头 X-License-Token）
+     * @return 联机校验结果（无效时携带原因）
+     */
+    LicenseRemoteResp verifyRemote(String licenseId, String fingerprint, String token);
 }
