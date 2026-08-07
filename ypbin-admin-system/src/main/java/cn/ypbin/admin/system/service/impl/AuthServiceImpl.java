@@ -17,9 +17,11 @@ import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.system.service.AuthService;
+import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.starter.captcha.core.CaptchaService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
@@ -43,9 +45,20 @@ public class AuthServiceImpl implements AuthService {
     private final SysMenuService menuService;
     private final PasswordAttemptLimiter attemptLimiter;
     private final LoginSupport loginSupport;
+    private final CaptchaService captchaService;
+    private final SysConfigService configService;
 
     @Override
     public LoginResp login(LoginReq req, String ip) {
+        // 0. 开启登录验证码时，先校验行为验证码再查账号，防止撞库
+        if (configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false)) {
+            if (req.getCaptchaId() == null || req.getCaptchaTrack() == null) {
+                throw new BusinessException("请先完成验证码校验");
+            }
+            if (!captchaService.verify(req.getCaptchaId(), req.getCaptchaTrack())) {
+                throw new BusinessException("验证码校验失败");
+            }
+        }
         String username = req.getUsername();
         // 1. 登录前判断账号是否已被错误锁定（已锁定抛 AccountLockedException）
         attemptLimiter.checkLocked(username, ip);

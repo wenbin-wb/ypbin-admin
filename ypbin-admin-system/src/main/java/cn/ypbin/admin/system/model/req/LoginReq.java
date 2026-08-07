@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.model.req;
 
+import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -28,4 +29,10 @@ public class LoginReq {
     /** 登录密码 */
     @NotBlank(message = "密码不能为空")
     private String password;
+
+    /** 行为验证码 id（LOGIN_CAPTCHA_ENABLED 开启时必传） */
+    private String captchaId;
+
+    /** 行为验证码拖动轨迹（LOGIN_CAPTCHA_ENABLED 开启时必传） */
+    private ImageCaptchaTrack captchaTrack;
 }
