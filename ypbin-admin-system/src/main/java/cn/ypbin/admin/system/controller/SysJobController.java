@@ -11,6 +11,9 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.entity.SysJob;
+import cn.ypbin.admin.system.model.req.CronPreviewReq;
+import cn.ypbin.admin.system.model.req.JobSaveReq;
+import cn.ypbin.admin.system.model.resp.CronPreviewResp;
 import cn.ypbin.admin.system.model.resp.JobLogResp;
 import cn.ypbin.admin.system.service.SysJobService;
 import cn.ypbin.starter.core.model.R;
@@ -18,6 +21,7 @@ import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,7 +31,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -61,21 +64,25 @@ public class SysJobController extends BaseController {
         return ok(jobService.pageLogs(jobId, query));
     }
 
+    @PostMapping("/cron/preview")
+    @SaCheckPermission("system:job:list")
+    public R<CronPreviewResp> previewCron(@Valid @RequestBody CronPreviewReq req) {
+        return ok(jobService.previewCron(req.getCron()));
+    }
+
     @Log(value = "新增定时任务", module = "定时任务")
     @PostMapping
     @SaCheckPermission("system:job:add")
-    public R<Void> create(@RequestBody SysJob entity) {
-        entity.setStatus(0);
-        jobService.save(entity);
+    public R<Void> create(@Valid @RequestBody JobSaveReq req) {
+        jobService.createJob(req);
         return ok();
     }
 
     @Log(value = "修改定时任务", module = "定时任务")
     @PutMapping("/{id}")
     @SaCheckPermission("system:job:edit")
-    public R<Void> update(@PathVariable Long id, @RequestBody SysJob entity) {
-        entity.setId(id);
-        jobService.updateById(entity);
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody JobSaveReq req) {
+        jobService.updateJob(id, req);
         return ok();
     }
 

@@ -111,6 +111,11 @@ ypbin:
     enabled: true
   sse:
     enabled: true
+
+# tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
+captcha:
+  expire:
+    default: 60000
   sensitive-words:
     replacement: '*'            # 敏感词替换字符
   i18n:

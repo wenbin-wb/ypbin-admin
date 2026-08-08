@@ -10,6 +10,8 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysJob;
+import cn.ypbin.admin.system.model.req.JobSaveReq;
+import cn.ypbin.admin.system.model.resp.CronPreviewResp;
 import cn.ypbin.admin.system.model.resp.JobLogResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.model.PageQuery;
@@ -22,6 +24,29 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @since 2026-08-02
  */
 public interface SysJobService extends BaseService<SysJob> {
+
+    /**
+     * 新增任务。
+     *
+     * @param req 任务参数
+     */
+    void createJob(JobSaveReq req);
+
+    /**
+     * 修改任务。
+     *
+     * @param id 任务 ID
+     * @param req 任务参数
+     */
+    void updateJob(Long id, JobSaveReq req);
+
+    /**
+     * 校验 Cron 并预览后续执行时间。
+     *
+     * @param cron Cron 表达式
+     * @return 预览结果
+     */
+    CronPreviewResp previewCron(String cron);
 
     /**
      * 分页查询执行日志。
