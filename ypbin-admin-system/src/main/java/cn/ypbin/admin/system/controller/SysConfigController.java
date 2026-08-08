@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -74,10 +73,11 @@ public class SysConfigController extends BaseController {
     }
 
     @Log(value = "批量保存参数", module = "系统参数")
-    @PutMapping("/batch")
+    @PutMapping("/group/{configGroup}")
     @SaCheckPermission("system:config:edit")
-    public R<Void> updateBatch(@RequestBody ConfigUpdateBatchReq req) {
-        configService.updateBatch(req);
+    public R<Void> updateGroup(@PathVariable String configGroup,
+                               @Valid @RequestBody ConfigUpdateBatchReq req) {
+        configService.updateGroup(configGroup, req);
         return ok();
     }
 

@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.auth.LoginSupport;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
+import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
@@ -20,18 +21,16 @@ import cn.ypbin.starter.social.core.SocialService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import me.zhyd.oauth.model.AuthCallback;
 import me.zhyd.oauth.model.AuthUser;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
- * 第三方登录服务：code 换用户信息 → 查绑定 → 登录（或绑定已有账号/解绑）。
- *
- * <p>{@code SocialService} 仅在配置了至少一个第三方平台时由 starter 装配，故用 {@link ObjectProvider}
- * 可选注入；未配置任何平台时调用相关接口返回清晰业务错误，而非启动失败。</p>
+ * 第三方登录服务：授权码换取用户信息并完成登录、绑定或解绑。
  *
  * @author wenbin
  * @since 2026-08-02
@@ -40,28 +39,21 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SocialLoginService {
 
-    private final ObjectProvider<SocialService> socialServiceProvider;
+    private final SocialService socialService;
     private final SysUserService userService;
     private final SysUserSocialMapper socialMapper;
     private final LoginSupport loginSupport;
-
-    private SocialService socialService() {
-        SocialService service = socialServiceProvider.getIfAvailable();
-        if (service == null) {
-            throw new BusinessException("未配置任何第三方登录平台");
-        }
-        return service;
-    }
 
     /**
      * 用授权码完成第三方登录。已绑定的直接登录；未绑定的自动创建账号并绑定。
      */
     @Transactional(rollbackFor = Exception.class)
-    public LoginResp login(String source, String code, String state) {
-        AuthUser authUser = socialService().login(source, buildCallback(code, state));
+    public LoginResp login(String source, SocialCallbackReq req) {
+        String normalizedSource = normalizeSource(source);
+        AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
 
         SysUserSocial binding = socialMapper.selectOne(new LambdaQueryWrapper<SysUserSocial>()
-            .eq(SysUserSocial::getPlatform, source)
+            .eq(SysUserSocial::getPlatform, normalizedSource)
             .eq(SysUserSocial::getOpenId, authUser.getUuid()));
         if (binding != null) {
             // 已绑定：直接登录
@@ -73,7 +65,7 @@ public class SocialLoginService {
         }
         // 未绑定：自动注册用户并绑定
         SysUser user = new SysUser();
-        user.setUsername(source + "_" + authUser.getUuid());
+        user.setUsername(normalizedSource + "_" + authUser.getUuid());
         user.setRealName(authUser.getNickname());
         user.setNickname(authUser.getNickname());
         user.setAvatar(authUser.getAvatar());
@@ -82,7 +74,7 @@ public class SocialLoginService {
 
         SysUserSocial social = new SysUserSocial();
         social.setUserId(user.getId());
-        social.setPlatform(source);
+        social.setPlatform(normalizedSource);
         social.setOpenId(authUser.getUuid());
         social.setNickname(authUser.getNickname());
         social.setAvatar(authUser.getAvatar());
@@ -96,20 +88,21 @@ public class SocialLoginService {
      * 已登录用户绑定第三方账号。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void bind(String source, String code, String state) {
-        AuthUser authUser = socialService().login(source, buildCallback(code, state));
+    public void bind(String source, SocialCallbackReq req) {
+        String normalizedSource = normalizeSource(source);
+        AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
         Long userId = LoginHelper.getUserId();
 
         boolean exists = socialMapper.exists(new LambdaQueryWrapper<SysUserSocial>()
             .eq(SysUserSocial::getUserId, userId)
-            .eq(SysUserSocial::getPlatform, source));
+            .eq(SysUserSocial::getPlatform, normalizedSource));
         if (exists) {
             throw new BusinessException("该平台已绑定");
         }
 
         SysUserSocial social = new SysUserSocial();
         social.setUserId(userId);
-        social.setPlatform(source);
+        social.setPlatform(normalizedSource);
         social.setOpenId(authUser.getUuid());
         social.setNickname(authUser.getNickname());
         social.setAvatar(authUser.getAvatar());
@@ -124,7 +117,7 @@ public class SocialLoginService {
         Long userId = LoginHelper.getUserId();
         socialMapper.delete(new LambdaQueryWrapper<SysUserSocial>()
             .eq(SysUserSocial::getUserId, userId)
-            .eq(SysUserSocial::getPlatform, source));
+            .eq(SysUserSocial::getPlatform, normalizeSource(source)));
     }
 
     /**
@@ -136,11 +129,22 @@ public class SocialLoginService {
             .stream().map(SysUserSocial::getPlatform).toList();
     }
 
-    private AuthCallback buildCallback(String code, String state) {
-        AuthCallback cb = new AuthCallback();
-        cb.setCode(code);
-        cb.setState(state);
-        return cb;
+    private static String normalizeSource(String source) {
+        if (!StringUtils.hasText(source)) {
+            throw new BusinessException("第三方登录平台不能为空");
+        }
+        return source.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private AuthCallback buildCallback(SocialCallbackReq req) {
+        if (!StringUtils.hasText(req.getCode()) && !StringUtils.hasText(req.getAuth_code())) {
+            throw new BusinessException("第三方登录授权码不能为空");
+        }
+        AuthCallback callback = new AuthCallback();
+        callback.setCode(req.getCode());
+        callback.setAuth_code(req.getAuth_code());
+        callback.setState(req.getState());
+        return callback;
     }
 
 }

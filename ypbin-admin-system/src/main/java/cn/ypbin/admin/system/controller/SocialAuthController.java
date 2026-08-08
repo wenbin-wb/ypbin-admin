@@ -9,21 +9,19 @@
  */
 package cn.ypbin.admin.system.controller;
 
+import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.service.SocialLoginService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.social.core.SocialService;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -37,52 +35,39 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SocialAuthController extends BaseController {
 
-    private final ObjectProvider<SocialService> socialServiceProvider;
+    private final SocialService socialService;
     private final SocialLoginService socialLoginService;
-
-    private SocialService socialService() {
-        SocialService service = socialServiceProvider.getIfAvailable();
-        if (service == null) {
-            throw new BusinessException("未配置任何第三方登录平台");
-        }
-        return service;
-    }
 
     /**
      * 已注册的第三方平台列表。未配置任何平台时返回空集合。
      */
     @GetMapping("/platforms")
     public R<Set<String>> platforms() {
-        SocialService service = socialServiceProvider.getIfAvailable();
-        return ok(service == null ? Set.of() : service.sources());
+        return ok(socialService.sources());
     }
 
     /**
-     * 生成授权跳转地址。前端拿到 url 后跳转（window.location.href）。
+     * 生成授权跳转地址。
      */
     @GetMapping("/authorize/{source}")
     public R<String> authorize(@PathVariable String source) {
-        return ok(socialService().authorizeUrl(source));
+        return ok(socialService.authorizeUrl(source));
     }
 
     /**
      * 授权回调 → 用 code 换用户信息 → 绑定已有账号或自动注册并登录。
      */
     @PostMapping("/callback/{source}")
-    public R<LoginResp> callback(@PathVariable String source,
-                                   @RequestParam String code,
-                                   @RequestParam(required = false) String state) {
-        return ok(socialLoginService.login(source, code, state));
+    public R<LoginResp> callback(@PathVariable String source, SocialCallbackReq req) {
+        return ok(socialLoginService.login(source, req));
     }
 
     /**
      * 已登录用户绑定第三方账号。
      */
     @PostMapping("/bind/{source}")
-    public R<Void> bind(@PathVariable String source,
-                         @RequestParam String code,
-                         @RequestParam(required = false) String state) {
-        socialLoginService.bind(source, code, state);
+    public R<Void> bind(@PathVariable String source, SocialCallbackReq req) {
+        socialLoginService.bind(source, req);
         return ok();
     }
 

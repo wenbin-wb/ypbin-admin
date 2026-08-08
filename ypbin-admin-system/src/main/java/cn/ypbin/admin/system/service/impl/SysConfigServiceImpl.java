@@ -16,18 +16,19 @@ import cn.ypbin.admin.system.model.req.ConfigSaveReq;
 import cn.ypbin.admin.system.model.req.ConfigUpdateBatchReq;
 import cn.ypbin.admin.system.model.resp.ConfigResp;
 import cn.ypbin.admin.system.service.SysConfigService;
+import cn.ypbin.admin.system.social.ConfigChangedEvent;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import jakarta.annotation.PostConstruct;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -45,8 +46,10 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     /** 布尔真值集合 */
     private static final Set<String> TRUE_VALUES = Set.of("true", "1", "on", "yes");
 
-    /** configKey -> configValue 本地缓存 */
-    private final Map<String, String> cache = new ConcurrentHashMap<>();
+    /** configKey -> configValue 本地不可变快照 */
+    private volatile Map<String, String> cache = Map.of();
+
+    private final ApplicationEventPublisher eventPublisher;
 
     @PostConstruct
     public void init() {
@@ -74,7 +77,7 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         try {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
-            return defaultValue;
+            throw new BusinessException("系统参数必须为整数：" + key);
         }
     }
 
@@ -82,6 +85,7 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     public PageResult<ConfigResp> pageConfigs(ConfigQuery query) {
         PageResult<SysConfig> source = page(query, new LambdaQueryWrapper<SysConfig>()
             .eq(StringUtils.hasText(query.getConfigGroup()), SysConfig::getConfigGroup, query.getConfigGroup())
+            .eq(query.getBuiltIn() != null, SysConfig::getBuiltIn, query.getBuiltIn())
             .like(StringUtils.hasText(query.getName()), SysConfig::getName, query.getName())
             .like(StringUtils.hasText(query.getConfigKey()), SysConfig::getConfigKey, query.getConfigKey())
             .orderByAsc(SysConfig::getConfigGroup));
@@ -97,63 +101,102 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createConfig(ConfigSaveReq req) {
+        rejectSocialConfig(req.getConfigGroup(), req.getConfigKey());
         checkKeyUnique(req.getConfigKey(), null);
         SysConfig config = new SysConfig();
         BeanUtils.copyProperties(req, config);
         config.setBuiltIn(0);
-        save(config);
-        refreshCache();
+        if (!save(config)) {
+            throw new BusinessException("参数新增失败");
+        }
+        publishConfigChanged(req.getConfigGroup());
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateConfig(Long id, ConfigSaveReq req) {
-        if (getById(id) == null) {
+        SysConfig existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("参数不存在");
+        }
+        rejectSocialConfig(existing);
+        rejectSocialConfig(req.getConfigGroup(), req.getConfigKey());
+        if (Integer.valueOf(1).equals(existing.getBuiltIn())
+            && (!existing.getConfigKey().equals(req.getConfigKey())
+            || !existing.getConfigGroup().equals(req.getConfigGroup())
+            || !existing.getName().equals(req.getName()))) {
+            throw new BusinessException("内置参数不可修改参数键、分组或名称");
         }
         checkKeyUnique(req.getConfigKey(), id);
         SysConfig config = new SysConfig();
         BeanUtils.copyProperties(req, config);
         config.setId(id);
-        updateById(config);
-        refreshCache();
+        if (!updateById(config)) {
+            throw new BusinessException("参数更新失败");
+        }
+        publishConfigChanged(existing.getConfigGroup(), req.getConfigGroup());
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteConfig(Long id) {
         SysConfig config = getById(id);
         if (config == null) {
             throw new BusinessException("参数不存在");
         }
-        if (config.getBuiltIn() != null && config.getBuiltIn() == 1) {
+        rejectSocialConfig(config);
+        if (Integer.valueOf(1).equals(config.getBuiltIn())) {
             throw new BusinessException("内置参数不可删除");
         }
-        removeById(id);
-        refreshCache();
+        if (!removeById(id)) {
+            throw new BusinessException("参数删除失败");
+        }
+        publishConfigChanged(config.getConfigGroup());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void updateBatch(ConfigUpdateBatchReq req) {
-        if (req.getConfigs() == null || req.getConfigs().isEmpty()) {
-            return;
+    public void updateGroup(String configGroup, ConfigUpdateBatchReq req) {
+        if (!StringUtils.hasText(configGroup)) {
+            throw new BusinessException("参数分组不能为空");
         }
-        req.getConfigs().forEach((key, value) -> update(new LambdaUpdateWrapper<SysConfig>()
-            .eq(SysConfig::getConfigKey, key)
-            .set(SysConfig::getConfigValue, value)));
-        refreshCache();
+        rejectSocialGroup(configGroup);
+        Set<String> keys = req.getConfigs().keySet();
+        if (keys.stream().anyMatch(key -> !StringUtils.hasText(key))) {
+            throw new BusinessException("参数键不能为空");
+        }
+        if (req.getConfigs().values().stream().anyMatch(value -> value == null)) {
+            throw new BusinessException("参数值不能为空");
+        }
+        if (keys.stream().anyMatch(key -> key.startsWith("SOCIAL_"))) {
+            throw new BusinessException("第三方登录配置必须使用专用接口维护");
+        }
+        List<SysConfig> configs = list(new LambdaQueryWrapper<SysConfig>()
+            .eq(SysConfig::getConfigGroup, configGroup)
+            .in(SysConfig::getConfigKey, keys));
+        if (configs.size() != keys.size()) {
+            throw new BusinessException("包含未知参数或跨分组参数");
+        }
+        for (SysConfig config : configs) {
+            config.setConfigValue(req.getConfigs().get(config.getConfigKey()));
+            if (!updateById(config)) {
+                throw new BusinessException("参数更新失败：" + config.getConfigKey());
+            }
+        }
+        publishConfigChanged(configGroup);
     }
 
     @Override
     public void refreshCache() {
-        Map<String, String> fresh = new ConcurrentHashMap<>();
+        Map<String, String> fresh = new HashMap<>();
         for (SysConfig config : list()) {
             if (config.getConfigKey() != null && config.getConfigValue() != null) {
                 fresh.put(config.getConfigKey(), config.getConfigValue());
             }
         }
-        cache.clear();
-        cache.putAll(fresh);
+        cache = Map.copyOf(fresh);
     }
 
     private void checkKeyUnique(String configKey, Long excludeId) {
@@ -165,9 +208,42 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         }
     }
 
+    private void publishConfigChanged(String... configGroups) {
+        boolean smsChanged = false;
+        for (String configGroup : configGroups) {
+            if ("sms".equals(configGroup)) {
+                smsChanged = true;
+                break;
+            }
+        }
+        eventPublisher.publishEvent(new ConfigChangedEvent(smsChanged));
+    }
+
+    private static void rejectSocialGroup(String configGroup) {
+        if ("social".equalsIgnoreCase(configGroup)) {
+            throw new BusinessException("第三方登录配置必须使用专用接口维护");
+        }
+    }
+
+    private static void rejectSocialConfig(String configGroup, String configKey) {
+        rejectSocialGroup(configGroup);
+        if (configKey != null && configKey.startsWith("SOCIAL_")) {
+            throw new BusinessException("第三方登录配置必须使用专用接口维护");
+        }
+    }
+
+    private static void rejectSocialConfig(SysConfig config) {
+        rejectSocialConfig(config.getConfigGroup(), config.getConfigKey());
+    }
+
     private ConfigResp toResp(SysConfig config) {
         ConfigResp resp = new ConfigResp();
         BeanUtils.copyProperties(config, resp);
+        if (config.getConfigKey() != null
+            && config.getConfigKey().startsWith("SOCIAL_")
+            && config.getConfigKey().endsWith("_CLIENT_SECRET")) {
+            resp.setConfigValue("");
+        }
         return resp;
     }
 }

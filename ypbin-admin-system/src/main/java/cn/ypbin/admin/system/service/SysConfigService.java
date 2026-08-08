@@ -92,11 +92,12 @@ public interface SysConfigService extends BaseService<SysConfig> {
     void deleteConfig(Long id);
 
     /**
-     * 按键值对批量更新参数（配置页面保存）。
+     * 按分组批量更新参数。
      *
-     * @param req 批量更新请求
+     * @param configGroup 参数分组
+     * @param req         批量更新请求
      */
-    void updateBatch(ConfigUpdateBatchReq req);
+    void updateGroup(String configGroup, ConfigUpdateBatchReq req);
 
     /**
      * 刷新本地参数缓存。

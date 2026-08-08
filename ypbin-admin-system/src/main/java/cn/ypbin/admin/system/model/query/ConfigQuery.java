@@ -33,4 +33,7 @@ public class ConfigQuery extends PageQuery {
 
     /** 参数键（模糊） */
     private String configKey;
+
+    /** 是否内置：1 内置、0 自定义 */
+    private Integer builtIn;
 }

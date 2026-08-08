@@ -9,91 +9,36 @@
  */
 package cn.ypbin.admin.system.social;
 
-import cn.ypbin.admin.system.service.SysConfigService;
-import cn.ypbin.starter.social.core.AuthRequestProvider;
-import me.zhyd.oauth.config.AuthConfig;
-import me.zhyd.oauth.request.AuthAlipayRequest;
-import me.zhyd.oauth.request.AuthDingTalkAccountRequest;
-import me.zhyd.oauth.request.AuthGiteeRequest;
-import me.zhyd.oauth.request.AuthGithubRequest;
-import me.zhyd.oauth.request.AuthQqRequest;
-import me.zhyd.oauth.request.AuthRequest;
-import me.zhyd.oauth.request.AuthWeChatOpenRequest;
-import org.springframework.context.annotation.Bean;
+import cn.ypbin.admin.system.model.resp.SocialConfigResp;
+import cn.ypbin.admin.system.service.SocialConfigService;
+import cn.ypbin.starter.social.core.SocialRequestRegistry;
+import lombok.RequiredArgsConstructor;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 第三方登录平台自动装配。从 sys_config 读取 clientId/secret/redirectUri，
- * 始终注册 Provider（未配的用空值，实际使用 JustAuth 报清晰错误）。键前缀 {@code SOCIAL_{PLATFORM}_}。
+ * 第三方登录平台启动初始化器。
  *
  * @author wenbin
- * @since 2026-08-02
+ * @since 2026-08-08
  */
 @Configuration
-public class SocialAuthConfiguration {
+@RequiredArgsConstructor
+public class SocialAuthConfiguration implements ApplicationRunner {
 
-    private final SysConfigService config;
+    private final SocialConfigService socialConfigService;
+    private final SocialRequestRegistry socialRequestRegistry;
 
-    public SocialAuthConfiguration(SysConfigService config) {
-        this.config = config;
-    }
-
-    @Bean
-    public AuthRequestProvider githubProvider() {
-        AuthConfig cfg = buildConfig("GITHUB");
-        return cfg == null ? null : provider("github", new AuthGithubRequest(cfg));
-    }
-
-    @Bean
-    public AuthRequestProvider giteeProvider() {
-        AuthConfig cfg = buildConfig("GITEE");
-        return cfg == null ? null : provider("gitee", new AuthGiteeRequest(cfg));
-    }
-
-    @Bean
-    public AuthRequestProvider qqProvider() {
-        AuthConfig cfg = buildConfig("QQ");
-        return cfg == null ? null : provider("qq", new AuthQqRequest(cfg));
-    }
-
-    @Bean
-    public AuthRequestProvider wechatOpenProvider() {
-        AuthConfig cfg = buildConfig("WECHAT_OPEN");
-        return cfg == null ? null : provider("wechat_open", new AuthWeChatOpenRequest(cfg));
-    }
-
-    @Bean
-    public AuthRequestProvider alipayProvider() {
-        AuthConfig cfg = buildConfig("ALIPAY");
-        return cfg == null ? null : provider("alipay", new AuthAlipayRequest(cfg));
-    }
-
-    @Bean
-    public AuthRequestProvider dingtalkProvider() {
-        AuthConfig cfg = buildConfig("DINGTALK");
-        return cfg == null ? null : provider("dingtalk", new AuthDingTalkAccountRequest(cfg));
-    }
-
-    /**
-     * 构建平台 OAuth 配置；clientId 未配置时返回 null（该平台不注册，避免 JustAuth 构造器校验失败拖垮启动）。
-     */
-    private AuthConfig buildConfig(String platform) {
-        String prefix = "SOCIAL_" + platform + "_";
-        String clientId = config.getString(prefix + "CLIENT_ID", "");
-        if (clientId.isBlank()) {
-            return null;
+    @Override
+    public void run(ApplicationArguments args) {
+        for (SocialConfigResp config : socialConfigService.listConfigs()) {
+            if (Boolean.TRUE.equals(config.getEnabled())) {
+                socialRequestRegistry.register(config.getSource(),
+                    socialConfigService.createEnabledRequest(config.getSource()));
+            } else {
+                socialRequestRegistry.remove(config.getSource());
+            }
         }
-        return AuthConfig.builder()
-            .clientId(clientId)
-            .clientSecret(config.getString(prefix + "CLIENT_SECRET", ""))
-            .redirectUri(config.getString(prefix + "REDIRECT_URI", ""))
-            .build();
-    }
-
-    private static AuthRequestProvider provider(String source, AuthRequest request) {
-        return new AuthRequestProvider() {
-            @Override public String getSource() { return source; }
-            @Override public AuthRequest getAuthRequest() { return request; }
-        };
     }
 }

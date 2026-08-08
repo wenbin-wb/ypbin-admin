@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.system.model.req;
 
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import java.util.Map;
 import lombok.Data;
 
@@ -22,5 +24,7 @@ import lombok.Data;
 public class ConfigUpdateBatchReq {
 
     /** 参数键值对（configKey -> configValue） */
+    @NotEmpty(message = "参数配置不能为空")
+    @Size(max = 100, message = "单次最多更新 100 项参数")
     private Map<String, String> configs;
 }
