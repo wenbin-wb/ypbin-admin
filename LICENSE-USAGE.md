@@ -158,7 +158,7 @@ ADMIN_BOOTSTRAP_REAL_NAME=<平台管理员姓名>
 ADMIN_BOOTSTRAP_TENANT_ID=1
 ```
 
-初始化成功后将 `ADMIN_BOOTSTRAP_ENABLED` 改为 `false`。授权审批要求审批人与创建人不同，因此还需通过用户管理创建并授权另一个平台管理员作为复核人。
+初始化成功后将 `ADMIN_BOOTSTRAP_ENABLED` 改为 `false`。授权审批要求审批人与创建人不同，因此还需通过用户管理创建并授权另一个平台管理员作为复核人。开发环境种子数据预置 `admin / admin123` 可直接登录（供本地调试），生产部署请勿依赖，按上述 Bootstrap 流程初始化平台管理员。
 
 ### 3.3 配置签发密钥（必做，首次）
 
