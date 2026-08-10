@@ -25,40 +25,15 @@ import java.util.List;
  */
 public interface SysRoleService extends BaseService<SysRole> {
 
-    /**
-     * 分页查询角色列表。
-     *
-     * @param query 查询条件
-     * @return 分页结果
-     */
     PageResult<RoleResp> pageRoles(RoleQuery query);
 
-    /**
-     * 查询全部角色（下拉选项用）。
-     *
-     * @return 角色列表
-     */
     List<RoleResp> listAll();
 
-    /**
-     * 新增角色（编码查重 + 事务内分配菜单）。
-     *
-     * @param req 请求
-     */
     void createRole(RoleSaveReq req);
 
-    /**
-     * 编辑角色（编码查重排除自身 + 事务内重分配菜单）。
-     *
-     * @param id  角色 ID
-     * @param req 请求
-     */
     void updateRole(Long id, RoleSaveReq req);
 
-    /**
-     * 删除角色（同时清理角色-菜单与用户-角色关联）。
-     *
-     * @param id 角色 ID
-     */
+    void updateStatus(Long id, Integer status);
+
     void deleteRole(Long id);
 }

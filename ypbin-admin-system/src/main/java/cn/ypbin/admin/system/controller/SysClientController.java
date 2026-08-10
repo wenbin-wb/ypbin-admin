@@ -10,8 +10,10 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.entity.SysClient;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.SysClientSaveReq;
+import cn.ypbin.admin.system.model.resp.ClientCredentialResp;
+import cn.ypbin.admin.system.model.resp.ClientResp;
 import cn.ypbin.admin.system.service.SysClientService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
@@ -37,27 +39,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/client")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysClientController extends BaseController {
 
     private final SysClientService clientService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:client:list")
-    public R<List<SysClient>> list() {
-        return ok(clientService.list());
+    public R<List<ClientResp>> list() {
+        return ok(clientService.listClients());
     }
 
     @Log(value = "新增客户端", module = "客户端管理")
     @PostMapping
     @SaCheckPermission("system:client:add")
-    public R<String> create(@Valid @RequestBody SysClientSaveReq req) {
+    public R<ClientCredentialResp> create(@Valid @RequestBody SysClientSaveReq req) {
         return ok(clientService.createClient(req));
     }
 
     @Log(value = "重置客户端密钥", module = "客户端管理")
     @PutMapping("/{id}/reset-secret")
-    @SaCheckPermission("system:client:edit")
-    public R<String> resetSecret(@PathVariable Long id) {
+    @SaCheckPermission("system:client:reset-secret")
+    public R<ClientCredentialResp> resetSecret(@PathVariable Long id) {
         return ok(clientService.resetSecret(id));
     }
 

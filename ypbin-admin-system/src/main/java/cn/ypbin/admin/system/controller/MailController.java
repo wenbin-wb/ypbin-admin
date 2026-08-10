@@ -9,13 +9,17 @@
  */
 package cn.ypbin.admin.system.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
+import cn.ypbin.admin.system.model.req.MailTestReq;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.messaging.mail.MailService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -27,13 +31,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/mail")
 @RequiredArgsConstructor
+@PlatformAccess
 public class MailController extends BaseController {
 
     private final MailService mailService;
 
     @PostMapping("/test")
-    public R<Void> testSend(@RequestParam String to) {
-        mailService.sendTest(to);
+    @SaCheckPermission("system:mail:test")
+    public R<Void> testSend(@Valid @RequestBody MailTestReq req) {
+        mailService.sendTest(req.getTo());
         return ok();
     }
 }

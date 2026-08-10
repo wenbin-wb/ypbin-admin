@@ -17,8 +17,20 @@ package cn.ypbin.admin.common.constant;
  */
 public final class AdminConstants {
 
-    /** 超级管理员角色标识：拥有全部权限，跳过权限校验 */
+    /** 超级管理员角色标识 */
     public static final String SUPER_ADMIN_ROLE = "super";
+
+    /** 平台用户类型 */
+    public static final String USER_TYPE_PLATFORM = "PLATFORM";
+
+    /** 租户用户类型 */
+    public static final String USER_TYPE_TENANT = "TENANT";
+
+    /** 平台超级管理员角色类型 */
+    public static final String ROLE_TYPE_PLATFORM_SUPER = "PLATFORM_SUPER";
+
+    /** 租户角色类型 */
+    public static final String ROLE_TYPE_TENANT = "TENANT_ROLE";
 
     /** 默认租户 ID */
     public static final Long DEFAULT_TENANT_ID = 1L;

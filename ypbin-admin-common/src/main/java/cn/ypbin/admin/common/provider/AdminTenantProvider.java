@@ -17,9 +17,9 @@ import org.springframework.stereotype.Component;
 /**
  * 租户来源：从当前登录用户的会话上下文取租户 ID。
  *
- * <p>未登录时（登录接口本身、定时任务等）返回空，此时行级租户拦截器不追加租户条件——
- * 登录按全局唯一的用户名查人，登录后查角色/权限走 {@code TenantContext.executeIgnore}。
- * 需要显式跨租户的场景用 {@code @TenantIgnore} 或 {@code TenantContext} 处理。</p>
+ * <p>无登录且未显式绑定租户时返回空，行级租户拦截器按 {@code tenant_id = NULL}
+ * fail-closed，不会放开租户边界。后台任务必须显式绑定租户，跨租户扫描必须明确使用
+ * {@code TenantContext.executeIgnore}。</p>
  *
  * @author wenbin
  * @since 2026-08-01

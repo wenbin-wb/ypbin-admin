@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
 import cn.ypbin.admin.system.model.resp.LicenseDeliveryResp;
+import cn.ypbin.admin.system.model.resp.LicenseIssueResp;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseRemoteResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
@@ -134,7 +135,7 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void approve(Long id, LicenseApproveReq req, Long operator) {
+    public LicenseIssueResp approve(Long id, LicenseApproveReq req, Long operator) {
         SysLicense entity = getExisting(id);
         if (!STATUS_PENDING.equals(entity.getApproveStatus())) {
             throw new BusinessException("仅待审批状态可审批");
@@ -149,8 +150,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         update.setId(id);
         update.setApproveUser(operator);
         update.setApproveTime(LocalDateTime.now());
+        LicenseIssueResp issueResp = null;
         if (Boolean.TRUE.equals(req.getApprove())) {
-            issue(entity, update);
+            issueResp = issue(entity, update);
         } else {
             if (!StringUtils.hasText(req.getRejectReason())) {
                 throw new BusinessException("驳回时必须填写驳回原因");
@@ -159,6 +161,7 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             update.setRejectReason(req.getRejectReason());
         }
         updateById(update);
+        return issueResp;
     }
 
     @Override
@@ -217,28 +220,51 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
                 resp.setAppId(app.getId());
                 resp.setAppName(app.getAppName());
                 resp.setAccessKey(app.getAccessKey());
-                resp.setSecretKey(app.getSecretKey());
             }
         }
         return resp;
     }
 
     @Override
-    public LicenseRemoteResp verifyRemote(String licenseId, String fingerprint) {
+    public LicenseRemoteResp verifyRemote(String licenseId, String fingerprint, String accessKey) {
+        if (!StringUtils.hasText(accessKey)) {
+            return LicenseRemoteResp.invalid("AUTH_FAILED", "无法确认调用应用");
+        }
+        SysApp app = sysAppService.getOne(new LambdaQueryWrapper<SysApp>()
+            .eq(SysApp::getAccessKey, accessKey)
+            .eq(SysApp::getEnabled, 1), false);
+        if (app == null || app.getExpireTime() != null && LocalDateTime.now().isAfter(app.getExpireTime())) {
+            return LicenseRemoteResp.invalid("APP_UNAVAILABLE", "调用应用不存在、已禁用或已过期");
+        }
         SysLicense entity = getOne(new LambdaQueryWrapper<SysLicense>()
             .eq(SysLicense::getLicenseId, licenseId), false);
         if (entity == null) {
-            return LicenseRemoteResp.invalid("授权不存在：" + licenseId);
+            return LicenseRemoteResp.invalid("LICENSE_NOT_FOUND", "授权不存在");
         }
         if (!STATUS_ISSUED.equals(entity.getApproveStatus())) {
-            return LicenseRemoteResp.invalid("授权状态不可用（" + entity.getApproveStatus()
-                + "），可能已被吊销");
+            return LicenseRemoteResp.invalid("LICENSE_UNAVAILABLE", "授权未签发或已吊销");
         }
-        if (StringUtils.hasText(fingerprint)
-            && !toContent(entity, entity.getLicenseId()).matchesFingerprint(fingerprint)) {
-            return LicenseRemoteResp.invalid("机器指纹不匹配");
+        if (entity.getAppId() == null || !entity.getAppId().equals(app.getId())) {
+            return LicenseRemoteResp.invalid("APP_MISMATCH", "调用应用与授权不匹配");
         }
-        return LicenseRemoteResp.valid();
+        LicenseContent content = toContent(entity, entity.getLicenseId());
+        LocalDateTime now = LocalDateTime.now();
+        LicenseStatus status = LicenseManager.evaluateAt(content, now);
+        if (status == LicenseStatus.ILLEGAL) {
+            String reasonCode = content.effectiveAt() != null && now.isBefore(content.effectiveAt())
+                ? "LICENSE_NOT_YET_VALID" : "LICENSE_EXPIRED";
+            return LicenseRemoteResp.invalid(reasonCode, "授权不在可用时间范围内");
+        }
+        if (content.isMachineBound() && !StringUtils.hasText(fingerprint)) {
+            return LicenseRemoteResp.invalid("FINGERPRINT_REQUIRED", "授权要求提供机器指纹");
+        }
+        if (!content.matchesFingerprint(fingerprint)) {
+            return LicenseRemoteResp.invalid("FINGERPRINT_MISMATCH", "机器指纹不匹配");
+        }
+        if (status == LicenseStatus.GRACE) {
+            return LicenseRemoteResp.valid("GRACE", "授权处于宽限期");
+        }
+        return LicenseRemoteResp.valid("VALID", "授权有效");
     }
 
     /**
@@ -246,8 +272,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
      *
      * @param entity 原授权记录
      * @param update 待更新对象（承载签发产物）
+     * @return 本次签发结果
      */
-    private void issue(SysLicense entity, SysLicense update) {
+    private LicenseIssueResp issue(SysLicense entity, SysLicense update) {
         String privateKey = issuerProperties.getPrivateKey();
         String sm4Key = issuerProperties.getSm4Key();
         if (!StringUtils.hasText(privateKey) || !StringUtils.hasText(sm4Key)) {
@@ -264,7 +291,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         update.setLicenseId(licenseId);
         update.setAuthCode(authCode);
         update.setApproveStatus(STATUS_ISSUED);
-        ensureOnlineApp(entity, update);
+        LicenseIssueResp resp = ensureOnlineApp(entity, update);
+        resp.setAuthCode(authCode);
+        return resp;
     }
 
     /**
@@ -274,21 +303,30 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
      *
      * @param entity 授权记录
      * @param update 待更新对象（写入联机应用 ID）
+     * @return 联机应用交付信息，新建应用时携带一次性密钥
      */
-    private void ensureOnlineApp(SysLicense entity, SysLicense update) {
+    private LicenseIssueResp ensureOnlineApp(SysLicense entity, SysLicense update) {
         SysApp app = sysAppService.getOne(new LambdaQueryWrapper<SysApp>()
             .eq(SysApp::getAppName, entity.getSubject())
             .eq(SysApp::getEnabled, 1)
             .last("LIMIT 1"), false);
+        String secretKey = null;
         if (app == null) {
             app = new SysApp();
             app.setAppName(entity.getSubject());
             app.setAccessKey(generateAppKey());
-            app.setSecretKey(generateAppKey());
+            secretKey = generateAppKey();
+            app.setSecretKey(secretKey);
             app.setEnabled(1);
             sysAppService.save(app);
         }
         update.setAppId(app.getId());
+        LicenseIssueResp resp = new LicenseIssueResp();
+        resp.setAppId(app.getId());
+        resp.setAppName(app.getAppName());
+        resp.setAccessKey(app.getAccessKey());
+        resp.setSecretKey(secretKey);
+        return resp;
     }
 
     /**

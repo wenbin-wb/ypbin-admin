@@ -11,7 +11,10 @@ package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysClient;
 import cn.ypbin.admin.system.model.req.SysClientSaveReq;
+import cn.ypbin.admin.system.model.resp.ClientCredentialResp;
+import cn.ypbin.admin.system.model.resp.ClientResp;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 登录客户端服务。
@@ -22,12 +25,19 @@ import cn.ypbin.starter.crud.service.BaseService;
 public interface SysClientService extends BaseService<SysClient> {
 
     /**
+     * 查询登录客户端列表。
+     *
+     * @return 不含密钥的客户端列表
+     */
+    List<ClientResp> listClients();
+
+    /**
      * 新增客户端（自动生成 clientSecret）。
      *
      * @param req 请求
-     * @return 生成的明文密钥（仅此一次返回）
+     * @return 仅此次返回的客户端凭据
      */
-    String createClient(SysClientSaveReq req);
+    ClientCredentialResp createClient(SysClientSaveReq req);
 
     /**
      * 编辑客户端（保留 clientSecret，不重新生成）。
@@ -43,5 +53,5 @@ public interface SysClientService extends BaseService<SysClient> {
      * @param id 客户端 ID
      * @return 新的明文密钥
      */
-    String resetSecret(Long id);
+    ClientCredentialResp resetSecret(Long id);
 }

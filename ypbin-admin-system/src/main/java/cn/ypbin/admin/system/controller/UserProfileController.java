@@ -12,17 +12,22 @@ package cn.ypbin.admin.system.controller;
 import cn.ypbin.admin.system.model.req.ChangePasswordReq;
 import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.resp.ProfileResp;
+import cn.ypbin.admin.system.service.SysFileService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.storage.model.FileInfo;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 个人中心接口。操作对象恒为当前登录用户，仅需登录、不挂用户管理权限。
@@ -37,14 +42,22 @@ public class UserProfileController extends BaseController {
 
     private final SysUserService userService;
 
+    private final SysFileService fileService;
+
     @GetMapping
     public R<ProfileResp> profile() {
         return ok(userService.getProfile());
     }
 
+    @Log(value = "上传个人头像", module = "个人中心")
+    @PostMapping("/avatar")
+    public R<FileInfo> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        return ok(fileService.uploadFile(file, "avatar"));
+    }
+
     @Log(value = "修改个人信息", module = "个人中心")
     @PutMapping
-    public R<Void> update(@RequestBody ProfileUpdateReq req) {
+    public R<Void> update(@Valid @RequestBody ProfileUpdateReq req) {
         userService.updateProfile(req);
         return ok();
     }

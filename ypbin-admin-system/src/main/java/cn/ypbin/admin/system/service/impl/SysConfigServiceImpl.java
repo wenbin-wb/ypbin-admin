@@ -46,6 +46,11 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     /** 布尔真值集合 */
     private static final Set<String> TRUE_VALUES = Set.of("true", "1", "on", "yes");
 
+    /** 不允许通过查询接口返回的敏感参数 */
+    private static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of(
+        "SMS_ACCESS_KEY_SECRET",
+        "MAIL_PASSWORD");
+
     /** configKey -> configValue 本地不可变快照 */
     private volatile Map<String, String> cache = Map.of();
 
@@ -239,9 +244,10 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     private ConfigResp toResp(SysConfig config) {
         ConfigResp resp = new ConfigResp();
         BeanUtils.copyProperties(config, resp);
-        if (config.getConfigKey() != null
-            && config.getConfigKey().startsWith("SOCIAL_")
-            && config.getConfigKey().endsWith("_CLIENT_SECRET")) {
+        String configKey = config.getConfigKey();
+        if (configKey != null
+            && (SENSITIVE_CONFIG_KEYS.contains(configKey)
+            || configKey.startsWith("SOCIAL_") && configKey.endsWith("_CLIENT_SECRET"))) {
             resp.setConfigValue("");
         }
         return resp;

@@ -47,4 +47,7 @@ public class RoleResp {
 
     /** 已分配菜单 ID 集合 */
     private List<Long> permissions;
+
+    /** 自定义数据范围部门 ID 集合 */
+    private List<Long> deptIds;
 }

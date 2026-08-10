@@ -81,74 +81,80 @@ public class AdminDataScopeHandler implements DataScopeHandler {
 
     @Override
     public String getDataScopeSql(String mappedStatementId, String tableName) {
-        Long userId = LoginHelper.getUserId();
-        if (userId == null) {
+        if (!"sys_user".equalsIgnoreCase(tableName)) {
             return null;
         }
-        // 计算数据范围时需查 sys_role/sys_dept，这些表无 dept_id 列；必须挂起数据权限上下文，
-        // 否则内部查询也会被拦截器追加 dept_id 条件导致 SQL 报错。
-        Set<Long> deptIds;
+        Long userId = LoginHelper.getUserId();
+        if (userId == null) {
+            return "id = -1";
+        }
+        ScopeResult scope;
         DataPermissionContext.exit();
         try {
             if (permissionService().isSuperAdmin(userId)) {
                 return null;
             }
-            deptIds = computeDeptIds(userId);
+            scope = computeScope(userId);
         } finally {
             DataPermissionContext.enter();
         }
-        if (deptIds == null || deptIds.isEmpty()) {
-            // null = 全部数据范围（不限），空集合 = 无可见部门
-            return deptIds == null ? null : "dept_id = -1";
+        if (scope.all()) {
+            return null;
         }
-        return "dept_id IN (" + deptIds.stream()
-            .map(String::valueOf).collect(Collectors.joining(",")) + ")";
+        List<String> conditions = new ArrayList<>();
+        if (!scope.deptIds().isEmpty()) {
+            conditions.add("dept_id IN (" + scope.deptIds().stream()
+                .map(String::valueOf).collect(Collectors.joining(",")) + ")");
+        }
+        if (scope.self()) {
+            conditions.add("id = " + userId);
+        }
+        return conditions.isEmpty() ? "id = -1" : "(" + String.join(" OR ", conditions) + ")";
     }
 
-    /** null = 全部/不限；空集合 = 无可见部门；非空 = 限制范围 */
-    private Set<Long> computeDeptIds(Long userId) {
+    private ScopeResult computeScope(Long userId) {
         List<SysRole> roles = roleMapper().selectByUserId(userId);
         if (roles.isEmpty()) {
-            return Set.of();
+            return new ScopeResult(false, false, Set.of());
         }
-        // 任意角色是"全部"范围 → 不限
-        for (SysRole role : roles) {
-            if (role.getDataScope() != null && role.getDataScope() == SCOPE_ALL) {
-                return null;
-            }
+        if (roles.stream().anyMatch(role -> Integer.valueOf(SCOPE_ALL).equals(role.getDataScope()))) {
+            return new ScopeResult(true, false, Set.of());
         }
 
         Long userDeptId = getCurrentUserDeptId();
         Map<Long, List<SysDept>> pidIndex = buildPidIndex();
-        Set<Long> result = new HashSet<>();
+        Set<Long> deptIds = new HashSet<>();
+        boolean self = false;
 
         for (SysRole role : roles) {
-            int scope = role.getDataScope() != null ? role.getDataScope() : SCOPE_ALL;
+            int scope = role.getDataScope() == null ? 0 : role.getDataScope();
             switch (scope) {
                 case SCOPE_DEPT_AND_CHILD:
                     if (userDeptId != null) {
-                        result.add(userDeptId);
-                        result.addAll(collectDescendants(userDeptId, pidIndex));
+                        deptIds.add(userDeptId);
+                        deptIds.addAll(collectDescendants(userDeptId, pidIndex));
                     }
                     break;
                 case SCOPE_DEPT:
                     if (userDeptId != null) {
-                        result.add(userDeptId);
+                        deptIds.add(userDeptId);
                     }
                     break;
                 case SCOPE_CUSTOM:
                     List<Long> bindIds = roleDeptMapper().selectDeptIdsByRoleId(role.getId());
-                    result.addAll(bindIds);
+                    deptIds.addAll(bindIds);
                     for (Long bindId : bindIds) {
-                        result.addAll(collectDescendants(bindId, pidIndex));
+                        deptIds.addAll(collectDescendants(bindId, pidIndex));
                     }
                     break;
                 case SCOPE_SELF:
-                    // handled by caller using create_user column, not dept_id
+                    self = true;
+                    break;
+                default:
                     break;
             }
         }
-        return result;
+        return new ScopeResult(false, self, deptIds);
     }
 
     private Long getCurrentUserDeptId() {
@@ -171,5 +177,8 @@ public class AdminDataScopeHandler implements DataScopeHandler {
             ids.addAll(collectDescendants(child.getId(), pidIndex));
         }
         return ids;
+    }
+
+    private record ScopeResult(boolean all, boolean self, Set<Long> deptIds) {
     }
 }

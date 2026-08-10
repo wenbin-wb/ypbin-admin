@@ -41,6 +41,18 @@ public interface SysJobService extends BaseService<SysJob> {
     void updateJob(Long id, JobSaveReq req);
 
     /**
+     * 删除任务并注销运行态。
+     *
+     * @param id 任务 ID
+     */
+    void deleteJob(Long id);
+
+    /**
+     * 将本节点运行态与数据库中的启用任务对齐。
+     */
+    void reconcileRuntime();
+
+    /**
      * 校验 Cron 并预览后续执行时间。
      *
      * @param cron Cron 表达式

@@ -11,13 +11,12 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.entity.SysNotice;
-import cn.ypbin.admin.system.service.NoticePublishService;
-import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.admin.system.model.req.NoticeSaveReq;
+import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.crud.service.BaseService;
 import cn.ypbin.starter.log.annotation.Log;
-import java.time.LocalDateTime;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,7 +26,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -41,37 +39,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SysNoticeController extends BaseController {
 
-    private final BaseService<SysNotice> noticeService;
-    private final NoticePublishService noticePublishService;
+    private final SysNoticeService noticeService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:notice:list")
     public R<List<SysNotice>> list() {
-        return ok(noticeService.list());
+        return ok(noticeService.listNotices());
     }
 
     @Log(value = "新增公告", module = "公告管理")
     @PostMapping
     @SaCheckPermission("system:notice:add")
-    public R<Void> create(@RequestBody SysNotice entity) {
-        boolean published = applyPublishState(entity);
-        noticeService.save(entity);
-        if (published) {
-            noticePublishService.dispatch(entity);
-        }
+    public R<Void> create(@Valid @RequestBody NoticeSaveReq req) {
+        noticeService.createNotice(req);
         return ok();
     }
 
     @Log(value = "修改公告", module = "公告管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:notice:edit")
-    public R<Void> update(@PathVariable Long id, @RequestBody SysNotice entity) {
-        entity.setId(id);
-        boolean published = applyPublishState(entity);
-        noticeService.updateById(entity);
-        if (published) {
-            noticePublishService.dispatch(entity);
-        }
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody NoticeSaveReq req) {
+        noticeService.updateNotice(id, req);
         return ok();
     }
 
@@ -79,10 +67,7 @@ public class SysNoticeController extends BaseController {
     @PutMapping("/{id}/revoke")
     @SaCheckPermission("system:notice:edit")
     public R<Void> revoke(@PathVariable Long id) {
-        SysNotice entity = new SysNotice();
-        entity.setId(id);
-        entity.setPublishStatus(3);
-        noticeService.updateById(entity);
+        noticeService.revoke(id);
         return ok();
     }
 
@@ -90,43 +75,15 @@ public class SysNoticeController extends BaseController {
     @PutMapping("/{id}/publish")
     @SaCheckPermission("system:notice:edit")
     public R<Void> publish(@PathVariable Long id) {
-        SysNotice notice = noticeService.getById(id);
-        if (notice == null) {
-            throw new BusinessException("公告不存在");
-        }
-        // 草稿/待发布/已撤回 → 立即发布：置为已发布、回填发布时间并触发推送
-        notice.setPublishStatus(2);
-        notice.setPublishTime(LocalDateTime.now());
-        noticeService.updateById(notice);
-        noticePublishService.dispatch(notice);
+        noticeService.publish(id);
         return ok();
-    }
-
-    /**
-     * 依据发布方式推导发布状态与发布时间：
-     * 草稿(publishStatus=0) 保持草稿；定时(publishType=2) 置为待发布；否则立即发布。
-     *
-     * @return 是否为「立即发布」（需触发推送）
-     */
-    private boolean applyPublishState(SysNotice entity) {
-        Integer publishStatus = entity.getPublishStatus();
-        if (publishStatus != null && publishStatus == 0) {
-            return false;
-        }
-        if (entity.getPublishType() != null && entity.getPublishType() == 2) {
-            entity.setPublishStatus(1);
-            return false;
-        }
-        entity.setPublishStatus(2);
-        entity.setPublishTime(LocalDateTime.now());
-        return true;
     }
 
     @Log(value = "删除公告", module = "公告管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:notice:delete")
     public R<Void> delete(@PathVariable Long id) {
-        noticeService.removeById(id);
+        noticeService.deleteNotice(id);
         return ok();
     }
 }

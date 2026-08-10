@@ -9,8 +9,10 @@
  */
 package cn.ypbin.admin.system.model.req;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
@@ -32,11 +34,10 @@ public class JobSaveReq {
     private String executor;
 
     /** Spring Cron 表达式 */
-    @NotBlank(message = "Cron 表达式不能为空")
     private String cron;
 
-    /** 固定间隔秒数 */
-    @PositiveOrZero(message = "固定间隔秒数不能小于 0")
+    /** 固定频率秒数 */
+    @Positive(message = "固定间隔秒数必须大于 0")
     private Long fixedRateSeconds;
 
     /** 执行参数 */
@@ -49,4 +50,10 @@ public class JobSaveReq {
     /** 是否启用集群防重 */
     @NotNull(message = "并发控制不能为空")
     private Integer concurrentGuard;
+
+    /** 校验触发方式。 */
+    @AssertTrue(message = "Cron 表达式与固定间隔秒数必须且只能指定一项")
+    public boolean isTriggerValid() {
+        return (cron != null && !cron.isBlank()) ^ fixedRateSeconds != null;
+    }
 }

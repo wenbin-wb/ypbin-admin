@@ -13,7 +13,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * 登录客户端新增/编辑请求。clientSecret 由后端生成，不接收前端传入。
+ * 登录客户端新增/编辑请求。clientSecret 由服务端生成，不接收外部输入。
  *
  * @author wenbin
  * @since 2026-08-03

@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.system.entity;
 
-import cn.ypbin.starter.data.core.BaseEntity;
+import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
 import java.time.LocalDateTime;
@@ -17,7 +17,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 系统公告。全局共享，不隔离租户。
+ * 租户公告。
  *
  * @author wenbin
  * @since 2026-08-02
@@ -25,7 +25,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @TableName("sys_notice")
-public class SysNotice extends BaseEntity {
+public class SysNotice extends TenantBaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -59,6 +59,9 @@ public class SysNotice extends BaseEntity {
 
     /** 发布状态：0 草稿、1 待发布、2 已发布、3 已撤回 */
     private Integer publishStatus;
+
+    /** 发布版本 */
+    private Long publishVersion;
 
     /** 定时发布时间（发布方式为定时时生效） */
     private LocalDateTime scheduledTime;

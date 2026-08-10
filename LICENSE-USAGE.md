@@ -148,14 +148,17 @@ DRAFT(草稿) → PENDING(待审批) → ISSUED(已签发)
 mvn -f ypbin-admin-server/pom.xml spring-boot:run   # 默认 8080
 ```
 
-内置两个超管（互为审批复核人，密码均 `admin123`）：
+系统不提供默认可登录密码。首次部署时显式设置以下环境变量，启动后会一次性创建或启用平台管理员并绑定平台超级管理员角色：
 
-| 账号 | 角色 | 用途 |
-|---|---|---|
-| `admin` | 超级管理员 | 创建、提交、吊销授权 |
-| `approver` | 超级管理员（V2 种子） | **审批签发**（审批人必须 ≠ 创建人，实现双人复核） |
+```bash
+ADMIN_BOOTSTRAP_ENABLED=true
+ADMIN_BOOTSTRAP_USERNAME=<平台管理员账号>
+ADMIN_BOOTSTRAP_PASSWORD=<符合密码策略的初始密码>
+ADMIN_BOOTSTRAP_REAL_NAME=<平台管理员姓名>
+ADMIN_BOOTSTRAP_TENANT_ID=1
+```
 
-> 生产环境请立即修改默认密码。
+初始化成功后将 `ADMIN_BOOTSTRAP_ENABLED` 改为 `false`。授权审批要求审批人与创建人不同，因此还需通过用户管理创建并授权另一个平台管理员作为复核人。
 
 ### 3.3 配置签发密钥（必做，首次）
 
@@ -261,8 +264,8 @@ DRAFT 行点 **提交** → 状态变 **待审批 PENDING**。
 ypbin:
   license:
     enabled: true
-    public-key: ${LICENSE_PUBLIC_KEY:MFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAE...}   # SM2 公钥，与签发端同一套
-    secret-key: ${LICENSE_SM4_KEY:SMMTzfogKfcZFxZtUGmZVg==}                    # SM4 密钥
+    public-key: ${LICENSE_PUBLIC_KEY:}     # SM2 公钥，与签发端同一套
+    secret-key: ${LICENSE_SM4_KEY:}        # SM4 密钥
     location: ./license.dat            # 授权串文件路径
     fingerprint-enabled: true          # 机器指纹绑定校验（签发时绑定了指纹才生效）
     allow-startup-without-license: false  # true = 无授权也能启动，但受保护能力被拦截

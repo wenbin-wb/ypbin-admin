@@ -18,8 +18,8 @@ import lombok.Setter;
 /**
  * 系统菜单/权限。
  *
- * <p>菜单是全局资源（不隔离租户），故继承 {@link BaseEntity}。{@code type} 区分目录/菜单/按钮/内嵌/外链，
- * 按钮类型不进路由树、仅贡献权限码。前端所需的 meta 字段以扁平列存储，响应时组装为嵌套 meta。</p>
+ * <p>菜单是全局资源（不隔离租户），故继承 {@link BaseEntity}。{@code type} 区分目录、菜单、按钮、内嵌和外链，
+ * 按钮类型不进路由树、仅贡献权限码。展示属性以扁平列存储，路由响应按需组装元信息。</p>
  *
  * @author wenbin
  * @since 2026-08-01
@@ -41,10 +41,13 @@ public class SysMenu extends BaseEntity {
     /** 菜单类型：catalog 目录、menu 菜单、button 按钮、embedded 内嵌、link 外链 */
     private String type;
 
+    /** 是否仅平台用户可见 */
+    private Boolean platformOnly;
+
     /** 路由路径 */
     private String path;
 
-    /** 组件路径（目录用布局占位，前端映射为 BasicLayout） */
+    /** 组件路径（目录使用布局占位） */
     private String component;
 
     /** 权限标识（按钮/接口鉴权用，如 system:user:add） */

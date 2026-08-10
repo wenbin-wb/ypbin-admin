@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.AuthTemplateSaveReq;
 import cn.ypbin.admin.system.model.resp.AuthTemplateResp;
 import cn.ypbin.admin.system.service.SysAuthTemplateService;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/auth-template")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysAuthTemplateController extends BaseController {
 
     private final SysAuthTemplateService templateService;

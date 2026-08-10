@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.DictItemSaveReq;
 import cn.ypbin.admin.system.model.resp.DictItemResp;
 import cn.ypbin.admin.system.service.SysDictItemService;
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/dict-item")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysDictItemController extends BaseController {
 
     private final SysDictItemService dictItemService;

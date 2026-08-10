@@ -8,7 +8,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USER:root}
-    password: ${DB_PASSWORD:root123456}
+    password: ${DB_PASSWORD:}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -33,6 +33,15 @@ sa-token:
 
 # ypbin-starter 配置
 ypbin:
+  admin:
+    bootstrap:
+      enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+      username: ${ADMIN_BOOTSTRAP_USERNAME:}
+      password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+      real-name: ${ADMIN_BOOTSTRAP_REAL_NAME:平台管理员}
+      tenant-id: ${ADMIN_BOOTSTRAP_TENANT_ID:1}
+    job:
+      reconcile-delay: ${ADMIN_JOB_RECONCILE_DELAY:30000}
   web:
     repeatable-read:
       enabled: true           # 启用签名模块需读取请求体，必须开启
@@ -72,7 +81,6 @@ ypbin:
       - sys_user_post
       - sys_role_dept
       - sys_file
-      - sys_notice
       - sys_job
       - sys_job_log
       - sys_app
@@ -121,7 +129,7 @@ captcha:
   i18n:
     enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
   api-crypto:
-    key: ypbin-admin-secret     # 接口加解密 AES 密钥（生产换掉）
+    key: ${API_CRYPTO_KEY:}     # 接口加解密 AES 密钥由部署环境注入
   # TODO 待部署阶段接入：当前 admin 未引入 ypbin-starter-cloud-observability 模块，
   # 以下 observability 配置无自动配置支撑（空配，不生效）。反哺 starter 提供单体可用的可观测性能力后再启用。
   observability:

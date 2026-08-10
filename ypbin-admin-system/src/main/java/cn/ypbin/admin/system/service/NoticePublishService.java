@@ -12,10 +12,9 @@ package cn.ypbin.admin.system.service;
 import cn.ypbin.admin.system.entity.SysNotice;
 
 /**
- * 公告发布推送服务。
+ * 公告可靠投递服务。
  *
- * <p>发布动作的统一入口：按通知范围解析目标用户，写站内信，并按通知方式经邮件/短信/SSE 触达。
- * 供公告的「立即发布」与「定时发布扫描」共用。</p>
+ * <p>在公告发布事务中冻结接收人与通道，事务提交后由任务扫描投递记录并持久化处理结果。</p>
  *
  * @author wenbin
  * @since 2026-08-03
@@ -23,10 +22,28 @@ import cn.ypbin.admin.system.entity.SysNotice;
 public interface NoticePublishService {
 
     /**
-     * 执行一条已发布公告的推送（解析目标 → 写站内信 → 邮件/短信 → SSE）。
-     * 幂等性由调用方保证（仅在状态流转为「已发布」时调用一次）。
+     * 校验公告的接收人与通道配置。
      *
      * @param notice 公告
      */
-    void dispatch(SysNotice notice);
+    void validateDeliveries(SysNotice notice);
+
+    void freezeDeliveries(SysNotice notice, long publishVersion);
+
+    /**
+     * 恢复超时的处理中记录。
+     */
+    void recoverProcessing();
+
+    /**
+     * 扫描并处理待投递记录。
+     */
+    void dispatchPending();
+
+    /**
+     * 处理单条投递记录。
+     *
+     * @param deliveryId 投递记录 ID
+     */
+    void dispatchNotice(Long deliveryId);
 }

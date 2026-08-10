@@ -14,8 +14,7 @@ import lombok.Data;
 /**
  * 授权交付信息。
  *
- * <p>签发交付给被授权方的全部凭据：内联授权码（CODE 交付展示；FILE 交付由下载接口输出，本字段同样可用）
- * 与联机开放应用密钥（审批通过时按被授权方自动创建或复用，供消费端配置联机校验）。</p>
+ * <p>提供可重复读取的授权码与联机应用公开标识，不返回应用密钥。</p>
  *
  * @author wenbin
  * @since 2026-08-06
@@ -34,7 +33,4 @@ public class LicenseDeliveryResp {
 
     /** 联机应用 Access Key */
     private String accessKey;
-
-    /** 联机应用 Secret Key（交付给消费端配置 online.secret-key） */
-    private String secretKey;
 }

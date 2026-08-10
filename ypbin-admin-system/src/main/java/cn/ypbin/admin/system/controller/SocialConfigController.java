@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.SocialConfigUpdateReq;
 import cn.ypbin.admin.system.model.resp.SocialConfigResp;
 import cn.ypbin.admin.system.service.SocialConfigService;
@@ -36,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/config/social")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SocialConfigController extends BaseController {
 
     private final SocialConfigService socialConfigService;

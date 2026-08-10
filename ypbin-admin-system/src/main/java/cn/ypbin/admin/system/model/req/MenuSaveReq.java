@@ -32,6 +32,9 @@ public class MenuSaveReq {
     @NotBlank(message = "菜单类型不能为空")
     private String type;
 
+    /** 是否仅平台用户可见 */
+    private Boolean platformOnly;
+
     /** 路由路径 */
     private String path;
 

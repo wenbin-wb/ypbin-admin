@@ -12,9 +12,12 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.system.entity.SysApp;
 import cn.ypbin.admin.system.mapper.SysAppMapper;
 import cn.ypbin.admin.system.model.req.SysAppSaveReq;
+import cn.ypbin.admin.system.model.resp.AppCredentialResp;
+import cn.ypbin.admin.system.model.resp.AppResp;
 import cn.ypbin.admin.system.service.SysAppService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -29,20 +32,23 @@ import org.springframework.stereotype.Service;
 public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> implements SysAppService {
 
     @Override
-    public String createApp(SysAppSaveReq req) {
+    public List<AppResp> listApps() {
+        return list().stream().map(this::toResp).toList();
+    }
+
+    @Override
+    public AppCredentialResp createApp(SysAppSaveReq req) {
         SysApp app = new SysApp();
         BeanUtils.copyProperties(req, app);
-        // 密钥由后端生成，不接收前端传入
         app.setAccessKey(generateKey());
         String secretKey = generateKey();
         app.setSecretKey(secretKey);
         save(app);
-        // 明文 SecretKey 仅在创建时返回一次
-        return secretKey;
+        return new AppCredentialResp(app.getAccessKey(), secretKey);
     }
 
     @Override
-    public String resetSecret(Long id) {
+    public AppCredentialResp resetSecret(Long id) {
         SysApp app = getById(id);
         if (app == null) {
             throw new BusinessException("开放应用不存在");
@@ -52,7 +58,7 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         update.setId(id);
         update.setSecretKey(secretKey);
         updateById(update);
-        return secretKey;
+        return new AppCredentialResp(app.getAccessKey(), secretKey);
     }
 
     @Override
@@ -63,8 +69,13 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         SysApp app = new SysApp();
         BeanUtils.copyProperties(req, app);
         app.setId(id);
-        // 编辑不重新生成 AK/SK，保留原密钥
         updateById(app);
+    }
+
+    private AppResp toResp(SysApp app) {
+        AppResp resp = new AppResp();
+        BeanUtils.copyProperties(app, resp);
+        return resp;
     }
 
     private String generateKey() {

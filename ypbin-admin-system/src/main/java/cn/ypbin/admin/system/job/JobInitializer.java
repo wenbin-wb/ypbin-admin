@@ -9,14 +9,10 @@
  */
 package cn.ypbin.admin.system.job;
 
-import cn.ypbin.admin.system.entity.SysJob;
-import cn.ypbin.admin.system.mapper.SysJobMapper;
-import cn.ypbin.starter.job.core.JobDefinition;
-import cn.ypbin.starter.job.core.JobManager;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.ypbin.admin.system.service.SysJobService;
 import jakarta.annotation.PostConstruct;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,21 +25,17 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JobInitializer {
 
-    private final SysJobMapper jobMapper;
-    private final JobManager jobManager;
+    private final SysJobService jobService;
 
     @PostConstruct
     public void init() {
-        List<SysJob> jobs = jobMapper.selectList(
-            new LambdaQueryWrapper<SysJob>()
-                .eq(SysJob::getStatus, 1));
-        for (SysJob job : jobs) {
-            JobDefinition def = new JobDefinition(job.getId(), job.getName(), job.getExecutor(), job.getCron());
-            def.setFixedRateSeconds(job.getFixedRateSeconds());
-            def.setArgs(job.getArgs());
-            def.setTimeoutSeconds(job.getTimeoutSeconds() != null ? job.getTimeoutSeconds() : 0);
-            def.setConcurrentGuard(job.getConcurrentGuard() == null || job.getConcurrentGuard() == 1);
-            jobManager.register(def);
-        }
+        jobService.reconcileRuntime();
+    }
+
+    @Scheduled(
+        fixedDelayString = "${ypbin.admin.job.reconcile-delay:30000}",
+        initialDelayString = "${ypbin.admin.job.reconcile-delay:30000}")
+    public void reconcile() {
+        jobService.reconcileRuntime();
     }
 }

@@ -13,6 +13,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.req.AssignRolesReq;
 import cn.ypbin.admin.system.model.req.ResetPasswordReq;
+import cn.ypbin.admin.system.model.req.StatusReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.service.SysUserService;
@@ -46,7 +47,7 @@ public class SysUserController extends BaseController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:user:list")
-    public R<PageResult<UserResp>> list(UserQuery query) {
+    public R<PageResult<UserResp>> list(@Valid UserQuery query) {
         return ok(userService.pageUsers(query));
     }
 
@@ -72,6 +73,14 @@ public class SysUserController extends BaseController {
         return ok();
     }
 
+    @Log(value = "修改用户状态", module = "用户管理")
+    @PutMapping("/{id}/status")
+    @SaCheckPermission("system:user:edit")
+    public R<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody StatusReq req) {
+        userService.updateStatus(id, req.getStatus());
+        return ok();
+    }
+
     @Log(value = "删除用户", module = "用户管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:user:delete")
@@ -83,8 +92,7 @@ public class SysUserController extends BaseController {
     @Log(value = "重置用户密码", module = "用户管理")
     @PutMapping("/{id}/reset-password")
     @SaCheckPermission("system:user:edit")
-    public R<Void> resetPassword(@PathVariable Long id,
-                                 @RequestBody ResetPasswordReq req) {
+    public R<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordReq req) {
         userService.resetPassword(id, req.getPassword());
         return ok();
     }
@@ -92,8 +100,7 @@ public class SysUserController extends BaseController {
     @Log(value = "分配用户角色", module = "用户管理")
     @PutMapping("/{id}/roles")
     @SaCheckPermission("system:user:edit")
-    public R<Void> assignRoles(@PathVariable Long id,
-                               @RequestBody AssignRolesReq req) {
+    public R<Void> assignRoles(@PathVariable Long id, @Valid @RequestBody AssignRolesReq req) {
         userService.assignRoles(id, req.getRoleIds());
         return ok();
     }

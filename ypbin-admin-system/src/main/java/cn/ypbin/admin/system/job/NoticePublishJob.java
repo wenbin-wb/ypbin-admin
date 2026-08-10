@@ -12,9 +12,11 @@ package cn.ypbin.admin.system.job;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
 import cn.ypbin.admin.system.service.NoticePublishService;
+import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.job.core.JobContext;
 import cn.ypbin.starter.job.core.JobHandler;
 import cn.ypbin.starter.job.core.YpbinJob;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,47 +25,44 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 定时发布扫描任务：将已到发布时间的待发布公告置为已发布。
- *
- * <p>扫描 publish_status=1（待发布）且 scheduled_time&lt;=now 的公告，置为已发布并回填发布时间。</p>
+ * 公告定时发布与可靠投递扫描任务。
  *
  * @author wenbin
- * @since 2026-08-03
+ * @since 2026-08-09
  */
 @YpbinJob("noticePublishScan")
 @RequiredArgsConstructor
 public class NoticePublishJob implements JobHandler {
 
     private static final Logger log = LoggerFactory.getLogger(NoticePublishJob.class);
-
-    /** 待发布 */
-    private static final int STATUS_PENDING = 1;
-    /** 已发布 */
-    private static final int STATUS_PUBLISHED = 2;
+    private static final int PENDING = 1;
+    private static final int NOTICE_BATCH_SIZE = 100;
 
     private final SysNoticeMapper noticeMapper;
+    private final SysNoticeService noticeService;
     private final NoticePublishService noticePublishService;
 
     @Override
     public void execute(JobContext context) {
-        LocalDateTime now = LocalDateTime.now();
-        List<SysNotice> due = noticeMapper.selectList(new LambdaQueryWrapper<SysNotice>()
-            .eq(SysNotice::getPublishStatus, STATUS_PENDING)
-            .le(SysNotice::getScheduledTime, now));
-        if (due.isEmpty()) {
-            return;
-        }
+        List<SysNotice> due = TenantContext.executeIgnore(() -> noticeMapper.selectList(
+            new LambdaQueryWrapper<SysNotice>()
+                .eq(SysNotice::getPublishStatus, PENDING)
+                .le(SysNotice::getScheduledTime, LocalDateTime.now())
+                .orderByAsc(SysNotice::getScheduledTime)
+                .last("LIMIT " + NOTICE_BATCH_SIZE)));
+        int published = 0;
         for (SysNotice notice : due) {
-            SysNotice update = new SysNotice();
-            update.setId(notice.getId());
-            update.setPublishStatus(STATUS_PUBLISHED);
-            update.setPublishTime(now);
-            noticeMapper.updateById(update);
-            // 状态流转为已发布后触发推送（解析目标→站内信→邮件/短信→SSE）
-            notice.setPublishStatus(STATUS_PUBLISHED);
-            notice.setPublishTime(now);
-            noticePublishService.dispatch(notice);
+            try {
+                TenantContext.runWithTenant(notice.getTenantId(),
+                    () -> noticeService.publishScheduled(notice.getId(), notice.getPublishVersion()));
+                published++;
+            } catch (Exception e) {
+                log.error("定时公告发布失败，noticeId={}，tenantId={}",
+                    notice.getId(), notice.getTenantId(), e);
+            }
         }
-        log.info("[定时发布] 本次发布公告 {} 条", due.size());
+        noticePublishService.recoverProcessing();
+        noticePublishService.dispatchPending();
+        log.info("公告扫描完成，待发布={}，成功发布={}", due.size(), published);
     }
 }

@@ -19,7 +19,6 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.social.core.SocialService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -63,25 +62,7 @@ public class SocialLoginService {
             }
             return loginSupport.completeLogin(user, "SOCIAL");
         }
-        // 未绑定：自动注册用户并绑定
-        SysUser user = new SysUser();
-        user.setUsername(normalizedSource + "_" + authUser.getUuid());
-        user.setRealName(authUser.getNickname());
-        user.setNickname(authUser.getNickname());
-        user.setAvatar(authUser.getAvatar());
-        user.setPwdResetTime(LocalDateTime.now());
-        userService.save(user);
-
-        SysUserSocial social = new SysUserSocial();
-        social.setUserId(user.getId());
-        social.setPlatform(normalizedSource);
-        social.setOpenId(authUser.getUuid());
-        social.setNickname(authUser.getNickname());
-        social.setAvatar(authUser.getAvatar());
-        social.setAccessToken(authUser.getToken().getAccessToken());
-        socialMapper.insert(social);
-
-        return loginSupport.completeLogin(user, "SOCIAL");
+        throw new BusinessException("第三方账号尚未绑定，请先登录已有账号完成绑定");
     }
 
     /**
@@ -93,11 +74,17 @@ public class SocialLoginService {
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
         Long userId = LoginHelper.getUserId();
 
-        boolean exists = socialMapper.exists(new LambdaQueryWrapper<SysUserSocial>()
+        boolean userBound = socialMapper.exists(new LambdaQueryWrapper<SysUserSocial>()
             .eq(SysUserSocial::getUserId, userId)
             .eq(SysUserSocial::getPlatform, normalizedSource));
-        if (exists) {
+        if (userBound) {
             throw new BusinessException("该平台已绑定");
+        }
+        boolean accountBound = socialMapper.exists(new LambdaQueryWrapper<SysUserSocial>()
+            .eq(SysUserSocial::getPlatform, normalizedSource)
+            .eq(SysUserSocial::getOpenId, authUser.getUuid()));
+        if (accountBound) {
+            throw new BusinessException("该第三方账号已绑定其他用户");
         }
 
         SysUserSocial social = new SysUserSocial();

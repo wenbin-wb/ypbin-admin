@@ -40,6 +40,14 @@ public interface SysPermissionService {
     List<String> listRoleCodes(Long userId);
 
     /**
+     * 判断用户是否为平台用户。
+     *
+     * @param userId 用户 ID
+     * @return 是否为正常且未删除的平台用户
+     */
+    boolean isPlatformUser(Long userId);
+
+    /**
      * 判断用户是否为超级管理员。
      *
      * @param userId 用户 ID

@@ -52,7 +52,7 @@ public interface AuthService {
     List<String> currentPermissions();
 
     /**
-     * 获取当前登录用户的前端路由树。
+     * 获取当前登录用户的客户端路由树。
      *
      * @return 路由树
      */

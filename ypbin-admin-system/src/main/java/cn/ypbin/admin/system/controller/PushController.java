@@ -9,14 +9,17 @@
  */
 package cn.ypbin.admin.system.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
+import cn.ypbin.admin.system.model.req.PushTestReq;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.messaging.push.PushService;
+import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
+@PlatformAccess
 public class PushController extends BaseController {
 
     private final PushService pushService;
@@ -35,8 +39,9 @@ public class PushController extends BaseController {
      * 推送测试（仅 admin 可见的调试端点）。
      */
     @PostMapping("/system/push/test")
-    public R<Void> pushTest(@RequestParam Long userId, @RequestBody Map<String, Object> payload) {
-        pushService.sendToUser(userId.toString(), "test-message", payload);
+    @SaCheckPermission("system:push:test")
+    public R<Void> pushTest(@Valid @RequestBody PushTestReq req) {
+        pushService.sendToUser(req.getUserId().toString(), "test-message", Map.of("message", req.getMessage()));
         return ok();
     }
 }

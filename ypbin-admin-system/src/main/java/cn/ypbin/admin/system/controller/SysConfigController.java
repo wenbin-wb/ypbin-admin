@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.query.ConfigQuery;
 import cn.ypbin.admin.system.model.req.ConfigSaveReq;
 import cn.ypbin.admin.system.model.req.ConfigUpdateBatchReq;
@@ -40,13 +41,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/config")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysConfigController extends BaseController {
 
     private final SysConfigService configService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:config:list")
-    public R<PageResult<ConfigResp>> list(ConfigQuery query) {
+    public R<PageResult<ConfigResp>> list(@Valid ConfigQuery query) {
         return ok(configService.pageConfigs(query));
     }
 

@@ -28,101 +28,31 @@ import java.util.List;
  */
 public interface SysUserService extends BaseService<SysUser> {
 
-    /**
-     * 按用户名查询用户（全局唯一，忽略租户上下文）。
-     *
-     * @param username 登录账号
-     * @return 用户，不存在返回 null
-     */
     SysUser getByUsername(String username);
 
-    /**
-     * 按手机号查询用户（全局唯一，忽略租户上下文）。
-     *
-     * @param phone 手机号
-     * @return 用户，不存在返回 null
-     */
     SysUser getByPhone(String phone);
 
-    /**
-     * 更新用户最后登录时间。
-     *
-     * @param userId 用户 ID
-     */
     void updateLastLoginTime(Long userId);
 
-    /**
-     * 分页查询用户列表。
-     *
-     * @param query 查询条件
-     * @return 分页结果
-     */
     PageResult<UserResp> pageUsers(UserQuery query);
 
-    /**
-     * 查询用户详情（含已分配角色 ID）。
-     *
-     * @param id 用户 ID
-     * @return 用户详情
-     */
     UserResp getUserDetail(Long id);
 
-    /**
-     * 新增用户（密码加密 + 用户名查重 + 事务内分配角色）。
-     *
-     * @param req 请求
-     */
     void createUser(UserSaveReq req);
 
-    /**
-     * 编辑用户（用户名查重排除自身 + 可选改密 + 事务内重分配角色）。
-     *
-     * @param id  用户 ID
-     * @param req 请求
-     */
     void updateUser(Long id, UserSaveReq req);
 
-    /**
-     * 删除用户（同时清理用户-角色关联）。
-     *
-     * @param id 用户 ID
-     */
+    void updateStatus(Long id, Integer status);
+
     void deleteUser(Long id);
 
-    /**
-     * 重置指定用户密码（管理员操作，校验密码策略，不校验原密码）。
-     *
-     * @param id       用户 ID
-     * @param password 新密码
-     */
     void resetPassword(Long id, String password);
 
-    /**
-     * 分配角色（覆盖式重设该用户的角色）。
-     *
-     * @param id      用户 ID
-     * @param roleIds 角色 ID 集合
-     */
     void assignRoles(Long id, List<Long> roleIds);
 
-    /**
-     * 查询当前登录用户的个人信息（手机/邮箱不脱敏，供本人编辑回填）。
-     *
-     * @return 个人信息
-     */
     ProfileResp getProfile();
 
-    /**
-     * 更新当前登录用户的个人信息（仅展示类字段）。
-     *
-     * @param req 请求
-     */
     void updateProfile(ProfileUpdateReq req);
 
-    /**
-     * 修改当前登录用户密码（校验原密码 + 密码策略 + 历史密码不重复）。
-     *
-     * @param req 请求
-     */
     void changePassword(ChangePasswordReq req);
 }

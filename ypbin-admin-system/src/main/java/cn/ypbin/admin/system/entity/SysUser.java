@@ -33,6 +33,9 @@ public class SysUser extends TenantBaseEntity {
     /** 登录账号（租户内唯一） */
     private String username;
 
+    /** 用户类型：PLATFORM 平台用户、TENANT 租户用户 */
+    private String userType;
+
     /** 登录密码（BCrypt 密文，响应不输出） */
     private String password;
 
@@ -48,7 +51,7 @@ public class SysUser extends TenantBaseEntity {
     /** 头像 URL */
     private String avatar;
 
-    /** 手机号 */
+    /** 全局唯一手机号 */
     private String phone;
 
     /** 邮箱 */

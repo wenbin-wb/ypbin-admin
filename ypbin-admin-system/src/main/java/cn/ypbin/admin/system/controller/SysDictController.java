@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.query.DictQuery;
 import cn.ypbin.admin.system.model.req.DictSaveReq;
 import cn.ypbin.admin.system.model.resp.DictResp;
@@ -38,13 +39,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/dict")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysDictController extends BaseController {
 
     private final SysDictService dictService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:dict:list")
-    public R<PageResult<DictResp>> list(DictQuery query) {
+    public R<PageResult<DictResp>> list(@Valid DictQuery query) {
         return ok(dictService.pageDicts(query));
     }
 

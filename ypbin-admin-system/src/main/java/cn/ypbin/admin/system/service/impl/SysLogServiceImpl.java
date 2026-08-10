@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.model.query.LogQuery;
 import cn.ypbin.admin.system.model.resp.LogResp;
 import cn.ypbin.admin.system.model.resp.LogTrendResp;
 import cn.ypbin.admin.system.service.SysLogService;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -54,6 +55,9 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
 
     @Override
     public List<LogResp> latestLogs(int limit) {
+        if (limit < 1 || limit > 100) {
+            throw new BusinessException("日志条数必须在 1 到 100 之间");
+        }
         List<SysLog> source = list(new LambdaQueryWrapper<SysLog>()
             .orderByDesc(SysLog::getOperateTime)
             .last("LIMIT " + limit));
@@ -62,6 +66,9 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
 
     @Override
     public List<LogTrendResp> logTrend(int days) {
+        if (days < 1 || days > 90) {
+            throw new BusinessException("统计天数必须在 1 到 90 之间");
+        }
         LocalDate today = LocalDate.now();
         LocalDate startDate = today.minusDays(days - 1L);
         // 聚合结果按日期建索引，缺失的日期后续补零

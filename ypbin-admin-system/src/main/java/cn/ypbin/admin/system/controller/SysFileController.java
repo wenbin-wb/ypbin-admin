@@ -9,16 +9,17 @@
  */
 package cn.ypbin.admin.system.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.entity.SysFile;
+import cn.ypbin.admin.system.model.query.FileQuery;
 import cn.ypbin.admin.system.service.SysFileService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.storage.model.FileInfo;
-import cn.ypbin.starter.storage.core.FileStorageService;
-import java.io.IOException;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,50 +39,31 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/system/file")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysFileController extends BaseController {
 
-    private final FileStorageService fileStorageService;
     private final SysFileService fileService;
 
     @Log(value = "上传文件", module = "文件管理")
     @PostMapping("/upload")
-    public R<FileInfo> upload(@RequestParam("file") MultipartFile file,
-                              @RequestParam(defaultValue = "default") String module) {
-        try {
-            FileInfo info = fileStorageService.upload(file.getInputStream(), file.getOriginalFilename())
-                .path(module + "/")
-                .execute();
-            SysFile entity = new SysFile();
-            entity.setPlatform(info.getPlatform());
-            entity.setUrl(info.getUrl());
-            entity.setOriginalName(info.getOriginalName());
-            entity.setFileName(info.getFileName());
-            entity.setFileSize(info.getSize());
-            entity.setContentType(info.getContentType());
-            entity.setExtension(info.getExtension());
-            entity.setHash(info.getHash());
-            entity.setModule(module);
-            fileService.save(entity);
-            return ok(info);
-        } catch (IOException e) {
-            return R.fail(500, "文件上传失败：" + e.getMessage());
-        }
+    @SaCheckPermission("system:file:upload")
+    public R<FileInfo> upload(
+        @RequestParam("file") MultipartFile file,
+        @RequestParam(defaultValue = "default") String module) {
+        return ok(fileService.uploadFile(file, module));
     }
 
     @GetMapping("/list")
-    public R<PageResult<SysFile>> list(@RequestParam(defaultValue = "1") long page,
-                                        @RequestParam(defaultValue = "20") long pageSize) {
-        // thin wrapper — delegate to paged list
-        return ok(fileService.page(new PageQuery() {{
-            setPage(page);
-            setPageSize(pageSize);
-        }}));
+    @SaCheckPermission("system:file:list")
+    public R<PageResult<SysFile>> list(@Valid FileQuery query) {
+        return ok(fileService.pageFiles(query));
     }
 
     @Log(value = "删除文件", module = "文件管理")
     @DeleteMapping("/{id}")
+    @SaCheckPermission("system:file:delete")
     public R<Void> delete(@PathVariable Long id) {
-        fileService.removeById(id);
+        fileService.deleteFile(id);
         return ok();
     }
 }

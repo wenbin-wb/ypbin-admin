@@ -29,6 +29,12 @@ public class SysMessage extends TenantBaseEntity {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /** 来源公告 ID，普通消息为空 */
+    private Long noticeId;
+
+    /** 公告发布版本，普通消息为空 */
+    private Long publishVersion;
+
     /** 接收人用户 ID */
     private Long receiverUserId;
 

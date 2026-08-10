@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.service.SysUserService;
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/online-user")
 @RequiredArgsConstructor
+@PlatformAccess
 public class OnlineUserController extends BaseController {
 
     private final OnlineUserService onlineUserService;

@@ -26,30 +26,38 @@ public class LicenseRemoteResp {
     /** 授权当前是否有效可用 */
     private boolean valid;
 
-    /** 判定说明（无效时的原因，供消费端日志/提示） */
+    /** 稳定判定码 */
+    private String reasonCode;
+
+    /** 判定说明 */
     private String reason;
 
     /**
      * 有效响应。
      *
+     * @param reasonCode 判定码
+     * @param reason     判定说明
      * @return 有效响应
      */
-    public static LicenseRemoteResp valid() {
+    public static LicenseRemoteResp valid(String reasonCode, String reason) {
         LicenseRemoteResp resp = new LicenseRemoteResp();
         resp.setValid(true);
-        resp.setReason("ok");
+        resp.setReasonCode(reasonCode);
+        resp.setReason(reason);
         return resp;
     }
 
     /**
      * 无效响应。
      *
-     * @param reason 无效原因
+     * @param reasonCode 判定码
+     * @param reason     无效原因
      * @return 无效响应
      */
-    public static LicenseRemoteResp invalid(String reason) {
+    public static LicenseRemoteResp invalid(String reasonCode, String reason) {
         LicenseRemoteResp resp = new LicenseRemoteResp();
         resp.setValid(false);
+        resp.setReasonCode(reasonCode);
         resp.setReason(reason);
         return resp;
     }

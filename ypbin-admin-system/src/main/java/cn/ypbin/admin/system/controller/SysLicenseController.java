@@ -10,11 +10,13 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.entity.SysLicense;
 import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
 import cn.ypbin.admin.system.model.resp.LicenseDeliveryResp;
+import cn.ypbin.admin.system.model.resp.LicenseIssueResp;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
 import cn.ypbin.admin.system.service.SysLicenseService;
@@ -51,13 +53,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/license")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysLicenseController extends BaseController {
 
     private final SysLicenseService licenseService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:license:list")
-    public R<PageResult<LicenseResp>> list(LicenseQuery query) {
+    public R<PageResult<LicenseResp>> list(@Valid LicenseQuery query) {
         return ok(licenseService.pageLicense(query));
     }
 
@@ -93,9 +96,8 @@ public class SysLicenseController extends BaseController {
     @Log(value = "审批授权", module = "授权管理")
     @PutMapping("/{id}/approve")
     @SaCheckPermission("system:license:approve")
-    public R<Void> approve(@PathVariable Long id, @Valid @RequestBody LicenseApproveReq req) {
-        licenseService.approve(id, req, LoginHelper.getUserId());
-        return ok();
+    public R<LicenseIssueResp> approve(@PathVariable Long id, @Valid @RequestBody LicenseApproveReq req) {
+        return ok(licenseService.approve(id, req, LoginHelper.getUserId()));
     }
 
     @Log(value = "吊销授权", module = "授权管理")
@@ -130,7 +132,7 @@ public class SysLicenseController extends BaseController {
      */
     @Log(value = "下载授权文件", module = "授权管理")
     @GetMapping("/{id}/download")
-    @SaCheckPermission("system:license:list")
+    @SaCheckPermission("system:license:delivery")
     public void download(@PathVariable Long id, HttpServletResponse response) throws IOException {
         SysLicense entity = licenseService.loadForDownload(id);
         String fileName = URLEncoder.encode(entity.getLicenseId() + ".lic", StandardCharsets.UTF_8);
@@ -142,14 +144,15 @@ public class SysLicenseController extends BaseController {
     }
 
     /**
-     * 取授权交付信息（授权码 + 联机应用 AK/SK）。授权码对 CODE/FILE 交付均可用（FILE 另走下载
-     * 输出 .lic）；联机应用在审批通过时按被授权方自动创建或复用，AK/SK 随交付信息展示给消费端。
+     * 取可重复读取的授权交付信息。授权码对 CODE/FILE 交付均可用（FILE 另走下载输出 .lic）；
+     * 联机应用仅返回 Access Key，Secret Key 只在首次创建或重置时展示一次。
      *
      * @param id 授权主键
      * @return 交付信息
      */
+    @Log(value = "查看授权交付信息", module = "授权管理")
     @GetMapping("/{id}/delivery")
-    @SaCheckPermission("system:license:list")
+    @SaCheckPermission("system:license:delivery")
     public R<LicenseDeliveryResp> delivery(@PathVariable Long id) {
         return ok(licenseService.getDelivery(id));
     }

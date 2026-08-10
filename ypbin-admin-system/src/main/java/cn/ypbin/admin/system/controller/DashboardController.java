@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.system.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.mapper.SysDeptMapper;
 import cn.ypbin.admin.system.mapper.SysMenuMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
@@ -19,10 +21,14 @@ import cn.ypbin.admin.system.service.SysLogService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.security.online.OnlineUserService;
+import cn.ypbin.starter.tenant.core.TenantContext;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,6 +43,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
+@Validated
+@PlatformAccess
 public class DashboardController extends BaseController {
 
     private final SysUserMapper userMapper;
@@ -55,15 +63,18 @@ public class DashboardController extends BaseController {
      * 系统概览计数：用户 / 角色 / 部门 / 菜单 / 在线用户 / 操作日志。
      */
     @GetMapping("/stats")
+    @SaCheckPermission("system:dashboard:view")
     public R<Map<String, Object>> stats() {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("userCount", userMapper.selectCount(null));
-        data.put("roleCount", roleMapper.selectCount(null));
-        data.put("deptCount", deptMapper.selectCount(null));
-        data.put("menuCount", menuMapper.selectCount(null));
-        data.put("onlineCount", onlineUserService.count());
-        data.put("logCount", logService.count());
-        return ok(data);
+        return ok(TenantContext.executeIgnore(() -> {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("userCount", userMapper.selectCount(null));
+            data.put("roleCount", roleMapper.selectCount(null));
+            data.put("deptCount", deptMapper.selectCount(null));
+            data.put("menuCount", menuMapper.selectCount(null));
+            data.put("onlineCount", onlineUserService.count());
+            data.put("logCount", logService.count());
+            return data;
+        }));
     }
 
     /**
@@ -72,7 +83,9 @@ public class DashboardController extends BaseController {
      * @param limit 条数，默认 10
      */
     @GetMapping("/latest-logs")
-    public R<List<LogResp>> latestLogs(@RequestParam(defaultValue = "10") int limit) {
+    @SaCheckPermission("system:dashboard:view")
+    public R<List<LogResp>> latestLogs(
+        @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit) {
         return ok(logService.latestLogs(limit));
     }
 
@@ -82,7 +95,9 @@ public class DashboardController extends BaseController {
      * @param days 天数，默认 7
      */
     @GetMapping("/log-trend")
-    public R<List<LogTrendResp>> logTrend(@RequestParam(defaultValue = "7") int days) {
+    @SaCheckPermission("system:dashboard:view")
+    public R<List<LogTrendResp>> logTrend(
+        @RequestParam(defaultValue = "7") @Min(1) @Max(90) int days) {
         return ok(logService.logTrend(days));
     }
 }

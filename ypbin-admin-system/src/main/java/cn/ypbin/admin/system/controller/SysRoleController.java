@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.model.query.RoleQuery;
 import cn.ypbin.admin.system.model.req.RoleSaveReq;
+import cn.ypbin.admin.system.model.req.StatusReq;
 import cn.ypbin.admin.system.model.resp.RoleResp;
 import cn.ypbin.admin.system.service.SysRoleService;
 import cn.ypbin.starter.core.model.R;
@@ -45,7 +46,7 @@ public class SysRoleController extends BaseController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:role:list")
-    public R<PageResult<RoleResp>> list(RoleQuery query) {
+    public R<PageResult<RoleResp>> list(@Valid RoleQuery query) {
         return ok(roleService.pageRoles(query));
     }
 
@@ -68,6 +69,14 @@ public class SysRoleController extends BaseController {
     @SaCheckPermission("system:role:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody RoleSaveReq req) {
         roleService.updateRole(id, req);
+        return ok();
+    }
+
+    @Log(value = "修改角色状态", module = "角色管理")
+    @PutMapping("/{id}/status")
+    @SaCheckPermission("system:role:edit")
+    public R<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody StatusReq req) {
+        roleService.updateStatus(id, req.getStatus());
         return ok();
     }
 

@@ -10,7 +10,10 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysTenant;
+import cn.ypbin.admin.system.model.req.TenantSaveReq;
+import cn.ypbin.admin.system.model.resp.TenantResp;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 租户服务。
@@ -19,4 +22,12 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @since 2026-08-01
  */
 public interface SysTenantService extends BaseService<SysTenant> {
+
+    List<TenantResp> listTenants();
+
+    void createTenant(TenantSaveReq req);
+
+    void updateTenant(Long id, TenantSaveReq req);
+
+    void deleteTenant(Long id);
 }

@@ -10,14 +10,16 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.ypbin.admin.system.entity.SysMessage;
-import cn.ypbin.admin.system.mapper.SysMessageMapper;
+import cn.ypbin.admin.system.model.query.MessageQuery;
+import cn.ypbin.admin.system.service.SysMessageService;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.security.core.LoginHelper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import cn.ypbin.starter.crud.model.PageResult;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -39,26 +41,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SysMessageController extends BaseController {
 
-    private final SysMessageMapper messageMapper;
+    private final SysMessageService messageService;
 
     /**
      * 分页查询当前用户站内信，可按已读状态过滤。
      */
     @GetMapping
-    public R<PageResult<SysMessage>> list(@RequestParam(defaultValue = "1") long page,
-                                          @RequestParam(defaultValue = "10") long pageSize,
-                                          @RequestParam(required = false) Integer readStatus,
-                                          @RequestParam(required = false) Integer messageType) {
-        Long userId = LoginHelper.getUserId();
-        LambdaQueryWrapper<SysMessage> wrapper = new LambdaQueryWrapper<SysMessage>()
-            .eq(SysMessage::getReceiverUserId, userId)
-            .eq(readStatus != null, SysMessage::getReadStatus, readStatus)
-            .eq(messageType != null, SysMessage::getMessageType, messageType)
-            .orderByDesc(SysMessage::getCreateTime);
-        Page<SysMessage> result = messageMapper.selectPage(new Page<>(page, pageSize), wrapper);
-        // 统一分页结构为 PageResult(items/total)，与其它列表接口保持一致
-        return ok(PageResult.of(result.getRecords(), result.getTotal(),
-            result.getCurrent(), result.getSize()));
+    public R<PageResult<SysMessage>> list(@Valid MessageQuery query) {
+        return ok(messageService.pageMessages(currentUserId(), query));
     }
 
     /**
@@ -66,23 +56,16 @@ public class SysMessageController extends BaseController {
      */
     @GetMapping("/unread-count")
     public R<Long> unreadCount() {
-        Long userId = LoginHelper.getUserId();
-        long count = messageMapper.selectCount(new LambdaQueryWrapper<SysMessage>()
-            .eq(SysMessage::getReceiverUserId, userId)
-            .eq(SysMessage::getReadStatus, 0));
-        return ok(count);
+        return ok(messageService.unreadCount(currentUserId()));
     }
 
     /**
-     * 最近未读消息（铃铛下拉展示用）。
+     * 最近消息，包含已读和未读消息。
      */
     @GetMapping("/recent")
-    public R<List<SysMessage>> recent(@RequestParam(defaultValue = "10") long limit) {
-        Long userId = LoginHelper.getUserId();
-        return ok(messageMapper.selectList(new LambdaQueryWrapper<SysMessage>()
-            .eq(SysMessage::getReceiverUserId, userId)
-            .orderByDesc(SysMessage::getCreateTime)
-            .last("limit " + limit)));
+    public R<List<SysMessage>> recent(
+        @RequestParam(defaultValue = "10") @Min(1) @Max(100) long limit) {
+        return ok(messageService.recent(currentUserId(), limit));
     }
 
     /**
@@ -90,11 +73,7 @@ public class SysMessageController extends BaseController {
      */
     @PutMapping("/{id}/read")
     public R<Void> markRead(@PathVariable Long id) {
-        Long userId = LoginHelper.getUserId();
-        messageMapper.update(null, new LambdaUpdateWrapper<SysMessage>()
-            .eq(SysMessage::getId, id)
-            .eq(SysMessage::getReceiverUserId, userId)
-            .set(SysMessage::getReadStatus, 1));
+        messageService.markRead(currentUserId(), id);
         return ok();
     }
 
@@ -103,10 +82,7 @@ public class SysMessageController extends BaseController {
      */
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
-        Long userId = LoginHelper.getUserId();
-        messageMapper.delete(new LambdaQueryWrapper<SysMessage>()
-            .eq(SysMessage::getId, id)
-            .eq(SysMessage::getReceiverUserId, userId));
+        messageService.delete(currentUserId(), id);
         return ok();
     }
 
@@ -115,11 +91,15 @@ public class SysMessageController extends BaseController {
      */
     @PutMapping("/read-all")
     public R<Void> markAllRead() {
-        Long userId = LoginHelper.getUserId();
-        messageMapper.update(null, new LambdaUpdateWrapper<SysMessage>()
-            .eq(SysMessage::getReceiverUserId, userId)
-            .eq(SysMessage::getReadStatus, 0)
-            .set(SysMessage::getReadStatus, 1));
+        messageService.markAllRead(currentUserId());
         return ok();
+    }
+
+    private Long currentUserId() {
+        Long userId = LoginHelper.getUserId();
+        if (userId == null) {
+            throw new BusinessException("当前用户未登录");
+        }
+        return userId;
     }
 }

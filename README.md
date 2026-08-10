@@ -45,7 +45,7 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 mvn -f ypbin-admin-server/pom.xml spring-boot:run
 ```
 
-接口文档 `http://localhost:8080/swagger-ui/index.html`，初始账号 `admin / 123456`。
+接口文档为 `http://localhost:8080/swagger-ui/index.html`。系统不提供默认可登录密码；首次部署需通过 `ADMIN_BOOTSTRAP_ENABLED=true`、`ADMIN_BOOTSTRAP_USERNAME` 和 `ADMIN_BOOTSTRAP_PASSWORD` 显式创建或启用平台管理员，成功后关闭 Bootstrap。
 
 前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 

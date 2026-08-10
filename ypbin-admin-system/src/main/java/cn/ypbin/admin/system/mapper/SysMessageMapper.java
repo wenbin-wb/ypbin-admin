@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.mapper;
 
 import cn.ypbin.admin.system.entity.SysMessage;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Insert;
 
 /**
  * 用户消息 Mapper。
@@ -19,4 +20,16 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * @since 2026-08-02
  */
 public interface SysMessageMapper extends BaseMapper<SysMessage> {
+
+    @Insert("""
+        INSERT INTO sys_message
+            (id, tenant_id, notice_id, publish_version, receiver_user_id,
+             title, content, message_type, read_status,
+             create_time, update_time, status, is_deleted)
+        VALUES
+            (#{id}, #{tenantId}, #{noticeId}, #{publishVersion}, #{receiverUserId},
+             #{title}, #{content}, #{messageType}, #{readStatus},
+             #{createTime}, #{updateTime}, #{status}, #{isDeleted})
+        """)
+    int insertNoticeMessage(SysMessage message);
 }

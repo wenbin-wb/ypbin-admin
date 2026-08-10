@@ -10,7 +10,10 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysPost;
+import cn.ypbin.admin.system.model.req.PostSaveReq;
+import cn.ypbin.admin.system.model.resp.PostResp;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 岗位服务。
@@ -19,4 +22,12 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @since 2026-08-02
  */
 public interface SysPostService extends BaseService<SysPost> {
+
+    List<PostResp> listPosts();
+
+    void createPost(PostSaveReq req);
+
+    void updatePost(Long id, PostSaveReq req);
+
+    void deletePost(Long id);
 }

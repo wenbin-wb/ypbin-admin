@@ -10,11 +10,13 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.entity.SysPost;
+import cn.ypbin.admin.system.model.req.PostSaveReq;
+import cn.ypbin.admin.system.model.resp.PostResp;
 import cn.ypbin.admin.system.service.SysPostService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -41,24 +43,23 @@ public class SysPostController extends BaseController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:post:list")
-    public R<List<SysPost>> list() {
-        return ok(postService.list());
+    public R<List<PostResp>> list() {
+        return ok(postService.listPosts());
     }
 
     @Log(value = "新增岗位", module = "岗位管理")
     @PostMapping
     @SaCheckPermission("system:post:add")
-    public R<Void> create(@RequestBody SysPost entity) {
-        postService.save(entity);
+    public R<Void> create(@Valid @RequestBody PostSaveReq req) {
+        postService.createPost(req);
         return ok();
     }
 
     @Log(value = "修改岗位", module = "岗位管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:post:edit")
-    public R<Void> update(@PathVariable Long id, @RequestBody SysPost entity) {
-        entity.setId(id);
-        postService.updateById(entity);
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody PostSaveReq req) {
+        postService.updatePost(id, req);
         return ok();
     }
 
@@ -66,7 +67,7 @@ public class SysPostController extends BaseController {
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:post:delete")
     public R<Void> delete(@PathVariable Long id) {
-        postService.removeById(id);
+        postService.deletePost(id);
         return ok();
     }
 }

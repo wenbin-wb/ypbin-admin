@@ -62,10 +62,10 @@ public interface SysAuthTemplateService extends BaseService<SysAuthTemplate> {
     Set<Long> listMenuIds(Long templateId);
 
     /**
-     * 解析租户可见的菜单 ID 集合：按租户所属权限模板计算。
+     * 解析租户可见的菜单 ID 集合。
      *
-     * @param tenantId 租户 ID，为 null 表示平台（不按模板过滤）
-     * @return 允许的菜单 ID 集合；返回 null 表示不过滤（全部可见）
+     * @param tenantId 租户 ID
+     * @return 允许的菜单 ID 集合
      */
     Set<Long> resolveTenantMenuIds(Long tenantId);
 }

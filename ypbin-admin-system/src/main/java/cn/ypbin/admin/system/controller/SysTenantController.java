@@ -10,13 +10,15 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.entity.SysTenant;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
+import cn.ypbin.admin.system.model.req.TenantSaveReq;
+import cn.ypbin.admin.system.model.resp.TenantResp;
 import cn.ypbin.admin.system.service.SysTenantService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tenant.annotation.TenantIgnore;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -38,30 +40,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/tenant")
 @RequiredArgsConstructor
 @TenantIgnore
+@PlatformAccess
 public class SysTenantController extends BaseController {
 
     private final SysTenantService tenantService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:tenant:list")
-    public R<List<SysTenant>> list() {
-        return ok(tenantService.list());
+    public R<List<TenantResp>> list() {
+        return ok(tenantService.listTenants());
     }
 
     @Log(value = "新增租户", module = "租户管理")
     @PostMapping
     @SaCheckPermission("system:tenant:add")
-    public R<Void> create(@RequestBody SysTenant entity) {
-        tenantService.save(entity);
+    public R<Void> create(@Valid @RequestBody TenantSaveReq req) {
+        tenantService.createTenant(req);
         return ok();
     }
 
     @Log(value = "修改租户", module = "租户管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:tenant:edit")
-    public R<Void> update(@PathVariable Long id, @RequestBody SysTenant entity) {
-        entity.setId(id);
-        tenantService.updateById(entity);
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody TenantSaveReq req) {
+        tenantService.updateTenant(id, req);
         return ok();
     }
 
@@ -69,7 +71,7 @@ public class SysTenantController extends BaseController {
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:tenant:delete")
     public R<Void> delete(@PathVariable Long id) {
-        tenantService.removeById(id);
+        tenantService.deleteTenant(id);
         return ok();
     }
 }

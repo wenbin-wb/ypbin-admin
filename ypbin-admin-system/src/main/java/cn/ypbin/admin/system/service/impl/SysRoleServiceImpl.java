@@ -9,21 +9,34 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.system.entity.SysDept;
+import cn.ypbin.admin.system.entity.SysMenu;
 import cn.ypbin.admin.system.entity.SysRole;
+import cn.ypbin.admin.system.entity.SysRoleDept;
 import cn.ypbin.admin.system.entity.SysRoleMenu;
 import cn.ypbin.admin.system.entity.SysUserRole;
+import cn.ypbin.admin.system.mapper.SysDeptMapper;
+import cn.ypbin.admin.system.mapper.SysMenuMapper;
+import cn.ypbin.admin.system.mapper.SysRoleDeptMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMenuMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.model.query.RoleQuery;
 import cn.ypbin.admin.system.model.req.RoleSaveReq;
 import cn.ypbin.admin.system.model.resp.RoleResp;
+import cn.ypbin.admin.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.system.service.SysRoleService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -40,12 +53,19 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> implements SysRoleService {
 
+    private static final int SCOPE_CUSTOM = 5;
+
     private final SysRoleMenuMapper roleMenuMapper;
+    private final SysRoleDeptMapper roleDeptMapper;
     private final SysUserRoleMapper userRoleMapper;
+    private final SysMenuMapper menuMapper;
+    private final SysDeptMapper deptMapper;
+    private final SysAuthTemplateService authTemplateService;
 
     @Override
     public PageResult<RoleResp> pageRoles(RoleQuery query) {
         PageResult<SysRole> source = page(query, new LambdaQueryWrapper<SysRole>()
+            .eq(SysRole::getRoleType, AdminConstants.ROLE_TYPE_TENANT)
             .like(StringUtils.hasText(query.getName()), SysRole::getName, query.getName())
             .like(StringUtils.hasText(query.getCode()), SysRole::getCode, query.getCode())
             .eq(query.getStatus() != null, SysRole::getStatus, query.getStatus())
@@ -56,18 +76,26 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
 
     @Override
     public List<RoleResp> listAll() {
-        return list(new LambdaQueryWrapper<SysRole>().orderByAsc(SysRole::getSort))
+        return list(new LambdaQueryWrapper<SysRole>()
+            .eq(SysRole::getRoleType, AdminConstants.ROLE_TYPE_TENANT)
+            .eq(SysRole::getStatus, 1)
+            .orderByAsc(SysRole::getSort))
             .stream().map(this::toResp).toList();
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createRole(RoleSaveReq req) {
+        checkReservedCode(req.getCode());
         checkCodeUnique(req.getCode(), null);
+        validateMenus(req.getPermissions());
+        validateDepartments(req.getDataScope(), req.getDeptIds());
         SysRole role = new SysRole();
-        BeanUtils.copyProperties(req, role, "permissions");
+        BeanUtils.copyProperties(req, role, "permissions", "deptIds");
+        role.setRoleType(AdminConstants.ROLE_TYPE_TENANT);
         save(role);
         assignMenus(role.getId(), req.getPermissions());
+        assignDepartments(role.getId(), req.getDeptIds());
     }
 
     @Override
@@ -77,24 +105,62 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         if (existing == null) {
             throw new BusinessException("角色不存在");
         }
+        checkTenantRole(existing);
+        checkReservedCode(req.getCode());
         checkCodeUnique(req.getCode(), id);
+        validateMenus(req.getPermissions());
+        validateDepartments(req.getDataScope(), req.getDeptIds());
         SysRole role = new SysRole();
-        BeanUtils.copyProperties(req, role, "permissions");
+        BeanUtils.copyProperties(req, role, "permissions", "deptIds");
         role.setId(id);
         updateById(role);
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getRoleId, id));
+        roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, id));
         assignMenus(id, req.getPermissions());
+        assignDepartments(id, req.getDeptIds());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateStatus(Long id, Integer status) {
+        SysRole role = getById(id);
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
+        checkTenantRole(role);
+        boolean updated = update(new SysRole(), new LambdaUpdateWrapper<SysRole>()
+            .eq(SysRole::getId, id)
+            .eq(SysRole::getRoleType, AdminConstants.ROLE_TYPE_TENANT)
+            .set(SysRole::getStatus, status));
+        if (!updated) {
+            throw new BusinessException("角色状态更新失败");
+        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteRole(Long id) {
-        if (id == 1L) {
-            throw new BusinessException("内置超级管理员角色不可删除");
+        SysRole role = getById(id);
+        if (role == null) {
+            throw new BusinessException("角色不存在");
         }
+        checkTenantRole(role);
         removeById(id);
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getRoleId, id));
+        roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, id));
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getRoleId, id));
+    }
+
+    private void checkReservedCode(String code) {
+        if (AdminConstants.SUPER_ADMIN_ROLE.equalsIgnoreCase(code)) {
+            throw new BusinessException("角色标识为系统保留值：" + code);
+        }
+    }
+
+    private void checkTenantRole(SysRole role) {
+        if (!AdminConstants.ROLE_TYPE_TENANT.equals(role.getRoleType())) {
+            throw new BusinessException("平台角色不可通过角色管理修改");
+        }
     }
 
     private void checkCodeUnique(String code, Long excludeId) {
@@ -106,13 +172,69 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         }
     }
 
+    private void validateMenus(List<Long> menuIds) {
+        if (menuIds == null || menuIds.isEmpty()) {
+            return;
+        }
+        Set<Long> requestedIds = new HashSet<>(menuIds);
+        List<SysMenu> menus = menuMapper.selectList(new LambdaQueryWrapper<SysMenu>()
+            .in(SysMenu::getId, requestedIds)
+            .eq(SysMenu::getStatus, 1));
+        Set<Long> existingIds = menus.stream().map(SysMenu::getId).collect(Collectors.toSet());
+        if (!existingIds.equals(requestedIds)) {
+            throw new BusinessException("角色授权包含不存在或已禁用的菜单");
+        }
+        Long tenantId = currentTenantId();
+        Set<Long> allowedIds = authTemplateService.resolveTenantMenuIds(tenantId);
+        if (!allowedIds.containsAll(requestedIds)) {
+            throw new BusinessException("角色授权包含租户权限模板之外的菜单");
+        }
+    }
+
+    private void validateDepartments(Integer dataScope, List<Long> deptIds) {
+        if (!Integer.valueOf(SCOPE_CUSTOM).equals(dataScope)) {
+            if (deptIds != null && !deptIds.isEmpty()) {
+                throw new BusinessException("仅自定义数据范围可以分配部门");
+            }
+            return;
+        }
+        if (deptIds == null || deptIds.isEmpty()) {
+            throw new BusinessException("自定义数据范围必须分配部门");
+        }
+        Set<Long> requestedIds = new HashSet<>(deptIds);
+        List<SysDept> departments = deptMapper.selectList(new LambdaQueryWrapper<SysDept>()
+            .in(SysDept::getId, requestedIds)
+            .eq(SysDept::getStatus, 1));
+        Set<Long> existingIds = departments.stream().map(SysDept::getId).collect(Collectors.toSet());
+        Long tenantId = currentTenantId();
+        boolean invalid = !existingIds.equals(requestedIds)
+            || departments.stream().anyMatch(dept -> !tenantId.equals(dept.getTenantId()));
+        if (invalid) {
+            throw new BusinessException("角色数据范围包含不存在、已禁用或跨租户部门");
+        }
+    }
+
     private void assignMenus(Long roleId, List<Long> menuIds) {
         if (menuIds == null || menuIds.isEmpty()) {
             return;
         }
-        for (Long menuId : menuIds) {
+        for (Long menuId : new HashSet<>(menuIds)) {
             roleMenuMapper.insert(new SysRoleMenu(roleId, menuId));
         }
+    }
+
+    private void assignDepartments(Long roleId, List<Long> deptIds) {
+        if (deptIds == null || deptIds.isEmpty()) {
+            return;
+        }
+        for (Long deptId : new HashSet<>(deptIds)) {
+            roleDeptMapper.insert(new SysRoleDept(roleId, deptId));
+        }
+    }
+
+    private Long currentTenantId() {
+        return UserContext.getTenantId()
+            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
     }
 
     private RoleResp toResp(SysRole role) {
@@ -124,6 +246,7 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
     private RoleResp toRespWithMenus(SysRole role) {
         RoleResp resp = toResp(role);
         resp.setPermissions(roleMenuMapper.selectMenuIdsByRoleId(role.getId()));
+        resp.setDeptIds(roleDeptMapper.selectDeptIdsByRoleId(role.getId()));
         return resp;
     }
 }

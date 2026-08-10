@@ -56,8 +56,8 @@ public class OpenLicenseController {
         if (!sign.success()) {
             // 签名鉴权失败必须返回 valid=false 而非依赖拦截器抛 R.fail：消费端联机校验对非 200/无 data 的
             // 响应一律「放行+告警」，只有明确 valid=false 才阻断；走拦截器会把鉴权失败静默放行、形同虚设
-            return R.ok(LicenseRemoteResp.invalid("联机校验鉴权失败，签名无效或已过期"));
+            return R.ok(LicenseRemoteResp.invalid("AUTH_FAILED", "联机校验鉴权失败"));
         }
-        return R.ok(licenseService.verifyRemote(licenseId, fingerprint));
+        return R.ok(licenseService.verifyRemote(licenseId, fingerprint, sign.accessKey()));
     }
 }

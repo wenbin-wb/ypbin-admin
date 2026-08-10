@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.model.req.CronPreviewReq;
 import cn.ypbin.admin.system.model.req.JobSaveReq;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/job")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysJobController extends BaseController {
 
     private final SysJobService jobService;
@@ -54,13 +56,13 @@ public class SysJobController extends BaseController {
 
     @GetMapping("/log")
     @SaCheckPermission("system:job:list")
-    public R<PageResult<JobLogResp>> allLogs(PageQuery query) {
+    public R<PageResult<JobLogResp>> allLogs(@Valid PageQuery query) {
         return ok(jobService.pageLogs(null, query));
     }
 
     @GetMapping("/log/{jobId}")
     @SaCheckPermission("system:job:list")
-    public R<PageResult<JobLogResp>> logs(@PathVariable Long jobId, PageQuery query) {
+    public R<PageResult<JobLogResp>> logs(@PathVariable Long jobId, @Valid PageQuery query) {
         return ok(jobService.pageLogs(jobId, query));
     }
 
@@ -90,7 +92,7 @@ public class SysJobController extends BaseController {
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:job:delete")
     public R<Void> delete(@PathVariable Long id) {
-        jobService.removeById(id);
+        jobService.deleteJob(id);
         return ok();
     }
 

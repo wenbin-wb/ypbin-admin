@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.MenuSaveReq;
 import cn.ypbin.admin.system.model.resp.MenuResp;
 import cn.ypbin.admin.system.service.SysMenuService;
@@ -38,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/menu")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysMenuController extends BaseController {
 
     private final SysMenuService menuService;

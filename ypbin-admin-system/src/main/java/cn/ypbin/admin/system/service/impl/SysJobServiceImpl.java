@@ -48,23 +48,61 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     private final CronService cronService;
 
     @Override
-    public void createJob(JobSaveReq req) {
-        validateCron(req.getCron());
+    public synchronized void createJob(JobSaveReq req) {
         SysJob job = new SysJob();
         BeanUtils.copyProperties(req, job);
+        validateDefinition(job);
         job.setStatus(0);
-        save(job);
+        if (!save(job)) {
+            throw new BusinessException("新增任务失败");
+        }
     }
 
     @Override
-    public void updateJob(Long id, JobSaveReq req) {
-        validateCron(req.getCron());
+    public synchronized void updateJob(Long id, JobSaveReq req) {
         SysJob existing = requireJob(id);
+        boolean previouslyScheduled = isEnabled(existing);
+        JobDefinition previousDefinition = toDefinition(existing);
         BeanUtils.copyProperties(req, existing);
-        updateById(existing);
-        if (existing.getStatus() != null && existing.getStatus() == 1) {
-            jobManager.register(toDefinition(existing));
+        validateDefinition(existing);
+        JobDefinition updatedDefinition = toDefinition(existing);
+        if (previouslyScheduled) {
+            replaceRuntime(updatedDefinition);
         }
+        try {
+            if (!updateById(existing)) {
+                throw new BusinessException("修改任务失败");
+            }
+        } catch (RuntimeException failure) {
+            if (previouslyScheduled) {
+                restoreRuntime(true, previousDefinition, failure);
+            }
+            throw failure;
+        }
+    }
+
+    @Override
+    public synchronized void deleteJob(Long id) {
+        SysJob job = requireJob(id);
+        boolean previouslyScheduled = isEnabled(job);
+        JobDefinition previousDefinition = toDefinition(job);
+        jobManager.unregister(id);
+        try {
+            if (!removeById(id)) {
+                throw new BusinessException("删除任务失败");
+            }
+        } catch (RuntimeException failure) {
+            restoreRuntime(previouslyScheduled, previousDefinition, failure);
+            throw failure;
+        }
+    }
+
+    @Override
+    public synchronized void reconcileRuntime() {
+        List<SysJob> jobs = list(new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, 1));
+        jobs.forEach(this::validateDefinition);
+        List<JobDefinition> definitions = jobs.stream().map(this::toDefinition).toList();
+        reconcileRuntime(definitions);
     }
 
     @Override
@@ -97,25 +135,68 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     }
 
     @Override
-    public void start(Long id) {
+    public synchronized void start(Long id) {
         SysJob job = requireJob(id);
+        boolean previouslyScheduled = isEnabled(job);
+        JobDefinition definition = toDefinition(job);
+        jobManager.replace(definition);
         job.setStatus(1);
-        updateById(job);
-        jobManager.register(toDefinition(job));
+        try {
+            if (!updateById(job)) {
+                throw new BusinessException("启动任务失败");
+            }
+        } catch (RuntimeException failure) {
+            restoreRuntime(previouslyScheduled, definition, failure);
+            throw failure;
+        }
     }
 
     @Override
-    public void stop(Long id) {
+    public synchronized void stop(Long id) {
         SysJob job = requireJob(id);
-        job.setStatus(0);
-        updateById(job);
+        boolean previouslyScheduled = isEnabled(job);
+        JobDefinition definition = toDefinition(job);
         jobManager.unregister(id);
+        job.setStatus(0);
+        try {
+            if (!updateById(job)) {
+                throw new BusinessException("停止任务失败");
+            }
+        } catch (RuntimeException failure) {
+            restoreRuntime(previouslyScheduled, definition, failure);
+            throw failure;
+        }
     }
 
     @Override
     public void triggerNow(Long id) {
         SysJob job = requireJob(id);
         jobManager.triggerNow(toDefinition(job));
+    }
+
+    private void validateDefinition(SysJob job) {
+        JobDefinition definition = toDefinition(job);
+        try {
+            jobManager.validateDefinition(definition);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
+    }
+
+    private void replaceRuntime(JobDefinition definition) {
+        try {
+            jobManager.replace(definition);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
+    }
+
+    private void reconcileRuntime(List<JobDefinition> definitions) {
+        try {
+            jobManager.reconcile(definitions);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage());
+        }
     }
 
     private void validateCron(String cron) {
@@ -132,6 +213,23 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
             throw new BusinessException("任务不存在");
         }
         return job;
+    }
+
+    private boolean isEnabled(SysJob job) {
+        return job.getStatus() != null && job.getStatus() == 1;
+    }
+
+    private void restoreRuntime(boolean previouslyScheduled, JobDefinition definition,
+                                RuntimeException failure) {
+        try {
+            if (previouslyScheduled) {
+                jobManager.replace(definition);
+            } else {
+                jobManager.unregister(definition.getId());
+            }
+        } catch (RuntimeException compensationFailure) {
+            failure.addSuppressed(compensationFailure);
+        }
     }
 
     private JobDefinition toDefinition(SysJob job) {

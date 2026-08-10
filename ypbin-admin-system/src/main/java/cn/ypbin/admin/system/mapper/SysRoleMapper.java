@@ -30,9 +30,32 @@ public interface SysRoleMapper extends BaseMapper<SysRole> {
      * @return 角色列表
      */
     @Select("""
-        SELECT r.* FROM sys_role r
+        SELECT DISTINCT r.* FROM sys_role r
         INNER JOIN sys_user_role ur ON ur.role_id = r.id
-        WHERE ur.user_id = #{userId} AND r.is_deleted = 0
+        INNER JOIN sys_user u ON u.id = ur.user_id
+        WHERE ur.user_id = #{userId}
+          AND u.tenant_id = r.tenant_id
+          AND u.status = 1 AND u.is_deleted = 0
+          AND r.status = 1 AND r.is_deleted = 0
         """)
     List<SysRole> selectByUserId(@Param("userId") Long userId);
+
+    /**
+     * 判断用户是否绑定有效的平台超级管理员角色。
+     *
+     * @param userId 用户 ID
+     * @return 匹配数量
+     */
+    @Select("""
+        SELECT COUNT(1) FROM sys_user u
+        INNER JOIN sys_user_role ur ON ur.user_id = u.id
+        INNER JOIN sys_role r ON r.id = ur.role_id
+        WHERE u.id = #{userId}
+          AND u.user_type = 'PLATFORM'
+          AND r.role_type = 'PLATFORM_SUPER'
+          AND u.tenant_id = r.tenant_id
+          AND u.status = 1 AND u.is_deleted = 0
+          AND r.status = 1 AND r.is_deleted = 0
+        """)
+    long countPlatformSuperByUserId(@Param("userId") Long userId);
 }

@@ -47,21 +47,24 @@ public class PhoneLoginStrategy implements LoginStrategy {
         if (!configService.getBoolean("LOGIN_SMS_ENABLED", false)) {
             throw new BusinessException("短信验证码登录未开启");
         }
-        // 校验验证码（消费一次性）
-        smsCodeService.verify(phoneReq.getPhone(), phoneReq.getCode());
+        String phone = phoneReq.getPhone().trim();
+        attemptLimiter.checkLocked(phone, clientIp);
+        try {
+            smsCodeService.verify(phone, phoneReq.getCode());
+        } catch (BusinessException e) {
+            attemptLimiter.recordFailure(phone, clientIp);
+            throw e;
+        }
 
-        // 锁定检查（按手机号维度）
-        attemptLimiter.checkLocked(phoneReq.getPhone(), clientIp);
-
-        SysUser user = userService.getByPhone(phoneReq.getPhone());
+        SysUser user = userService.getByPhone(phone);
         if (user == null) {
-            attemptLimiter.recordFailure(phoneReq.getPhone(), clientIp);
+            attemptLimiter.recordFailure(phone, clientIp);
             throw new BusinessException("手机号未注册");
         }
         if (user.getStatus() != null && user.getStatus() == 0) {
             throw new BusinessException("账号已被禁用");
         }
-        attemptLimiter.reset(phoneReq.getPhone(), clientIp);
+        attemptLimiter.reset(phone, clientIp);
 
         return loginSupport.completeLogin(user, authType());
     }

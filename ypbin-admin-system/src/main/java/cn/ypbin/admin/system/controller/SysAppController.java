@@ -10,8 +10,10 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.entity.SysApp;
+import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.SysAppSaveReq;
+import cn.ypbin.admin.system.model.resp.AppCredentialResp;
+import cn.ypbin.admin.system.model.resp.AppResp;
 import cn.ypbin.admin.system.service.SysAppService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
@@ -37,27 +39,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/app")
 @RequiredArgsConstructor
+@PlatformAccess
 public class SysAppController extends BaseController {
 
     private final SysAppService appService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:app:list")
-    public R<List<SysApp>> list() {
-        return ok(appService.list());
+    public R<List<AppResp>> list() {
+        return ok(appService.listApps());
     }
 
     @Log(value = "新增开放应用", module = "开放应用")
     @PostMapping
     @SaCheckPermission("system:app:add")
-    public R<String> create(@Valid @RequestBody SysAppSaveReq req) {
+    public R<AppCredentialResp> create(@Valid @RequestBody SysAppSaveReq req) {
         return ok(appService.createApp(req));
     }
 
     @Log(value = "重置应用密钥", module = "开放应用")
     @PutMapping("/{id}/reset-secret")
-    @SaCheckPermission("system:app:edit")
-    public R<String> resetSecret(@PathVariable Long id) {
+    @SaCheckPermission("system:app:reset-secret")
+    public R<AppCredentialResp> resetSecret(@PathVariable Long id) {
         return ok(appService.resetSecret(id));
     }
 

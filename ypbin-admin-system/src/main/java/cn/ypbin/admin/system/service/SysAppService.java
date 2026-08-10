@@ -11,7 +11,10 @@ package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysApp;
 import cn.ypbin.admin.system.model.req.SysAppSaveReq;
+import cn.ypbin.admin.system.model.resp.AppCredentialResp;
+import cn.ypbin.admin.system.model.resp.AppResp;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 开放应用服务。
@@ -22,12 +25,19 @@ import cn.ypbin.starter.crud.service.BaseService;
 public interface SysAppService extends BaseService<SysApp> {
 
     /**
+     * 查询开放应用列表。
+     *
+     * @return 不含密钥的应用列表
+     */
+    List<AppResp> listApps();
+
+    /**
      * 新增开放应用（自动生成 accessKey/secretKey）。
      *
      * @param req 请求
-     * @return 生成的明文 SecretKey（仅此一次返回）
+     * @return 仅此次返回的应用凭据
      */
-    String createApp(SysAppSaveReq req);
+    AppCredentialResp createApp(SysAppSaveReq req);
 
     /**
      * 编辑开放应用（保留 accessKey/secretKey，不重新生成）。
@@ -43,5 +53,5 @@ public interface SysAppService extends BaseService<SysApp> {
      * @param id 应用 ID
      * @return 新的明文 SecretKey
      */
-    String resetSecret(Long id);
+    AppCredentialResp resetSecret(Long id);
 }

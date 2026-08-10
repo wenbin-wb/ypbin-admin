@@ -32,7 +32,7 @@ public class RouteResp {
     /** 路由路径 */
     private String path;
 
-    /** 组件路径（目录用 BasicLayout） */
+    /** 组件路径 */
     private String component;
 
     /** 重定向 */

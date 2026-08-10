@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.model.query.LicenseQuery;
 import cn.ypbin.admin.system.model.req.LicenseApproveReq;
 import cn.ypbin.admin.system.model.req.LicenseSaveReq;
 import cn.ypbin.admin.system.model.resp.LicenseDeliveryResp;
+import cn.ypbin.admin.system.model.resp.LicenseIssueResp;
 import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseRemoteResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
@@ -77,8 +78,9 @@ public interface SysLicenseService extends BaseService<SysLicense> {
      * @param id        授权主键
      * @param req       审批结论
      * @param operator  审批操作人
+     * @return 通过时返回签发结果，驳回时为空
      */
-    void approve(Long id, LicenseApproveReq req, Long operator);
+    LicenseIssueResp approve(Long id, LicenseApproveReq req, Long operator);
 
     /**
      * 吊销授权（已签发 → 已吊销）。
@@ -110,13 +112,10 @@ public interface SysLicenseService extends BaseService<SysLicense> {
     SysLicense loadForDownload(Long id);
 
     /**
-     * 取授权交付信息（授权码 + 联机应用密钥，仅已签发的授权可用）。
-     *
-     * <p>联机应用在审批通过时按被授权方自动创建或复用：同主体已有应用则复用、否则新建并生成
-     * 独立 AK/SK。消费端用它配置联机校验（online.access-key / secret-key），随授权一并交付。</p>
+     * 取授权交付信息（授权码与联机应用公开标识，仅已签发的授权可用）。
      *
      * @param id 授权主键
-     * @return 交付信息（授权码与联机应用密钥）
+     * @return 不含应用密钥的交付信息
      */
     LicenseDeliveryResp getDelivery(Long id);
 
@@ -127,8 +126,9 @@ public interface SysLicenseService extends BaseService<SysLicense> {
      * 在 controller 层经 {@code SignChecker} 校验通过后才进入本方法。</p>
      *
      * @param licenseId   授权编号
-     * @param fingerprint 消费端机器指纹（可选）
-     * @return 联机校验结果（无效时携带原因）
+     * @param fingerprint 消费端机器指纹
+     * @param accessKey   已认证的应用标识
+     * @return 联机校验结果（无效时携带稳定原因码）
      */
-    LicenseRemoteResp verifyRemote(String licenseId, String fingerprint);
+    LicenseRemoteResp verifyRemote(String licenseId, String fingerprint, String accessKey);
 }

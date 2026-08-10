@@ -25,8 +25,8 @@ import java.util.List;
 public interface SysMenuService extends BaseService<SysMenu> {
 
     /**
-     * 构建指定用户可见的前端路由树（供 {@code /menu/all}）。
-     * 排除按钮类型，超管返回全部菜单。
+     * 构建指定用户可见的路由树（供 {@code /menu/all}）。
+     * 排除按钮类型，平台用户可见平台菜单。
      *
      * @param userId 用户 ID
      * @return 路由树
@@ -34,9 +34,9 @@ public interface SysMenuService extends BaseService<SysMenu> {
     List<RouteResp> buildRoutes(Long userId);
 
     /**
-     * 构建完整菜单管理树（供 {@code /system/menu/list}），含按钮节点。
+     * 构建完整、有序的菜单管理列表（供 {@code /system/menu/list}），含禁用和按钮菜单。
      *
-     * @return 菜单管理树
+     * @return 菜单管理列表
      */
     List<MenuResp> tree();
 

@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 开放应用新增/编辑请求。accessKey/secretKey 由后端生成，不接收前端传入。
+ * 开放应用新增/编辑请求。accessKey/secretKey 由服务端生成，不接收外部输入。
  *
  * @author wenbin
  * @since 2026-08-02

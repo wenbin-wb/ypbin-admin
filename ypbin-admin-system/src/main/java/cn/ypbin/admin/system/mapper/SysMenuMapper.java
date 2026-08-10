@@ -32,24 +32,15 @@ public interface SysMenuMapper extends BaseMapper<SysMenu> {
     @Select("""
         SELECT DISTINCT m.* FROM sys_menu m
         INNER JOIN sys_role_menu rm ON rm.menu_id = m.id
-        INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
-        WHERE ur.user_id = #{userId} AND m.is_deleted = 0
-        ORDER BY m.sort ASC
+        INNER JOIN sys_role r ON r.id = rm.role_id
+        INNER JOIN sys_user_role ur ON ur.role_id = r.id
+        INNER JOIN sys_user u ON u.id = ur.user_id
+        WHERE ur.user_id = #{userId}
+          AND u.tenant_id = r.tenant_id
+          AND u.status = 1 AND u.is_deleted = 0
+          AND r.status = 1 AND r.is_deleted = 0
+          AND m.status = 1 AND m.is_deleted = 0
+        ORDER BY m.sort ASC, m.id ASC
         """)
     List<SysMenu> selectByUserId(@Param("userId") Long userId);
-
-    /**
-     * 查询用户拥有的权限标识集合（非空 authCode，去重）。
-     *
-     * @param userId 用户 ID
-     * @return 权限标识列表
-     */
-    @Select("""
-        SELECT DISTINCT m.auth_code FROM sys_menu m
-        INNER JOIN sys_role_menu rm ON rm.menu_id = m.id
-        INNER JOIN sys_user_role ur ON ur.role_id = rm.role_id
-        WHERE ur.user_id = #{userId} AND m.is_deleted = 0
-          AND m.auth_code IS NOT NULL AND m.auth_code <> ''
-        """)
-    List<String> selectAuthCodesByUserId(@Param("userId") Long userId);
 }
