@@ -19,6 +19,8 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 统一响应、鉴权会话、多租户、数据权限、缓存、任务调度、消息推送这些"每个项目都要重写一遍"的系统级能力，全部沉在 starter 里做对做透。admin 只干一件事——把它们接上业务，然后专心写业务。**新项目从这里起步，第一天就站在生产就绪的地基上。**
 
+> 完整文档见 [ypbin.cn](https://ypbin.cn/guide/admin/) · [接口契约](https://ypbin.cn/guide/admin/api) · [架构与集成](https://ypbin.cn/guide/admin/architecture)
+
 > 如果它帮你省下了搭脚手架的那几天，点个 ⭐ Star 就是最好的回礼——也让更多人少走弯路。
 
 ## 功能
