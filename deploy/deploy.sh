@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'echo "!! 脚本执行失败于第 ${LINENO} 行"' ERR
+
+echo "deploy.sh @ $(date '+%F %T')"
 
 ROOT="${YPBIN_ROOT:-/opt/ypbin}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
