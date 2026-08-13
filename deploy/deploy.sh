@@ -6,14 +6,16 @@ REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
 
 echo "==> [1/5] 检查并安装依赖"
-if ! command -v git >/dev/null 2>&1 || ! command -v mvn >/dev/null 2>&1 || ! java -version >/dev/null 2>&1; then
-  apt-get update -qq
-  apt-get install -f -y -qq 2>/dev/null || true
+command -v git >/dev/null 2>&1 || NEED_GIT=1
+command -v mvn >/dev/null 2>&1 || NEED_MVN=1
+java -version >/dev/null 2>&1 || NEED_JDK=1
+if [ "${NEED_GIT:-0}${NEED_MVN:-0}${NEED_JDK:-0}" != "000" ]; then
+  apt-get update -y || { echo "apt update 失败"; exit 1; }
+  apt-get install -f -y || { echo "修复依赖失败,请手动执行: apt --fix-broken install -y"; exit 1; }
 fi
-if ! command -v git >/dev/null 2>&1; then apt-get install -y -qq git; fi
-if ! command -v mvn >/dev/null 2>&1; then apt-get install -y -qq maven; fi
-if ! java -version >/dev/null 2>&1; then apt-get install -y -qq default-jdk-headless; fi
-apt-get install -f -y -qq 2>/dev/null || true
+[ "${NEED_GIT:-0}" != "1" ] || { echo "安装 git"; apt-get install -y git; }
+[ "${NEED_MVN:-0}" != "1" ] || { echo "安装 maven"; apt-get install -y maven; }
+[ "${NEED_JDK:-0}" != "1" ] || { echo "安装 JDK"; apt-get install -y default-jdk-headless; }
 
 # 探测并导出 JAVA_HOME(多方式兜底)
 if [ -z "${JAVA_HOME:-}" ]; then
