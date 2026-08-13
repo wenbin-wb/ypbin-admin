@@ -15,7 +15,13 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 ---
 
-## 预览
+## 在线演示
+
+<p align="center">
+  <a href="https://admin.ypbin.cn/"><strong>https://admin.ypbin.cn</strong></a> —— 免配置直接访问，体验完整后台
+</p>
+
+## 界面预览
 
 <p align="center">
   <img src="https://ypbin.cn/screenshots/admin-ui/dashboard.png" alt="运行概览" width="75%" />
