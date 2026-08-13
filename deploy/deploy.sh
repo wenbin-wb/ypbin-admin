@@ -20,15 +20,18 @@ fi
 [ "${NEED_MVN:-0}" != "1" ] || { echo "安装 maven"; apt-get install -y maven; }
 [ "${NEED_JDK:-0}" != "1" ] || { echo "安装 JDK"; apt-get install -y default-jdk-headless; }
 
-# 探测并导出 JAVA_HOME(多方式兜底)
+# 探测并导出 JAVA_HOME(多方式兜底,容错避免 pipefail 误判)
 if [ -z "${JAVA_HOME:-}" ]; then
-  JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-17' | head -1)"
+  JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-17' | head -1 || true)"
 fi
 if [ -z "${JAVA_HOME:-}" ]; then
-  JAVA_HOME="$(ls -d /usr/lib/jvm/java-17* 2>/dev/null | head -1)"
+  JAVA_HOME="$(ls -d /usr/lib/jvm/java-17* 2>/dev/null | head -1 || true)"
 fi
 if [ -z "${JAVA_HOME:-}" ] && command -v java >/dev/null 2>&1; then
-  JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+  JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")" 2>/dev/null || true)"
+fi
+if [ -z "${JAVA_HOME:-}" ]; then
+  echo "!! 未找到 JDK,JAVA_HOME 探测失败"; exit 1
 fi
 export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
