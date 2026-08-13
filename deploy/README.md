@@ -53,14 +53,17 @@ scp -r apps/web-antd/dist/* root@<服务器IP>:/opt/ypbin/admin-ui-dist/
 | `ADMIN_PORT` / `ADMIN_UI_PORT` | 端口(默认 8080 / 18080,被占用可改) |
 | `YPBIN_CORS_ORIGINS` | **CORS 允许的来源,逗号分隔**(生产必配,见下) |
 
-## CORS 配置(容易踩坑)
+## CORS 配置
 
-admin 后端默认只允许 `http://localhost:*`。浏览器从其他域名/IP 访问时,POST 会报 `403 Invalid CORS request`。
+**默认关闭**——同源访问(nginx 代理或同端口,即一键部署默认形态)无需 CORS,浏览器 POST 不会报跨域错误。
 
-在 `.env` 配置(逗号分隔):
+仅当**跨域访问**(前端与后端不在同一源)时才需开启,在 `.env` 配置:
+
 ```
+YPBIN_CORS_ENABLED=true
 YPBIN_CORS_ORIGINS=http://localhost:*,https://admin.你的域名.com,http://你的服务器IP:*
 ```
+
 改后重跑 deploy.sh(重建 jar 生效)。
 
 ## 对外访问(宝塔 nginx)
