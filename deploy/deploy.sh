@@ -8,16 +8,12 @@ DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
 echo "==> [1/5] 检查并安装依赖"
 if ! command -v git >/dev/null 2>&1 || ! command -v mvn >/dev/null 2>&1 || ! java -version >/dev/null 2>&1; then
   apt-get update -qq
+  apt-get install -f -y -qq 2>/dev/null || true
 fi
-if ! command -v git >/dev/null 2>&1; then
-  apt-get install -y -qq git
-fi
-if ! java -version >/dev/null 2>&1; then
-  apt-get install -y -qq openjdk-17-jdk-headless
-fi
-if ! command -v mvn >/dev/null 2>&1; then
-  apt-get install -y -qq maven
-fi
+if ! command -v git >/dev/null 2>&1; then apt-get install -y -qq git; fi
+if ! command -v mvn >/dev/null 2>&1; then apt-get install -y -qq maven; fi
+if ! java -version >/dev/null 2>&1; then apt-get install -y -qq default-jdk-headless; fi
+apt-get install -f -y -qq 2>/dev/null || true
 
 # 探测并导出 JAVA_HOME(多方式兜底)
 if [ -z "${JAVA_HOME:-}" ]; then
