@@ -6,17 +6,32 @@ REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
 
 echo "==> [1/5] 检查并安装依赖"
-if ! command -v git >/dev/null 2>&1; then
-  apt-get update -qq && apt-get install -y -qq git
+if ! command -v git >/dev/null 2>&1 || ! command -v mvn >/dev/null 2>&1 || ! java -version >/dev/null 2>&1; then
+  apt-get update -qq
 fi
-if ! command -v java >/dev/null 2>&1; then
-  apt-get update -qq && apt-get install -y -qq openjdk-17-jdk-headless
+if ! command -v git >/dev/null 2>&1; then
+  apt-get install -y -qq git
+fi
+if ! java -version >/dev/null 2>&1; then
+  apt-get install -y -qq openjdk-17-jdk-headless
 fi
 if ! command -v mvn >/dev/null 2>&1; then
-  apt-get update -qq && apt-get install -y -qq maven
+  apt-get install -y -qq maven
 fi
-export JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
+
+# 探测并导出 JAVA_HOME(多方式兜底)
+if [ -z "${JAVA_HOME:-}" ]; then
+  JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-17' | head -1)"
+fi
+if [ -z "${JAVA_HOME:-}" ]; then
+  JAVA_HOME="$(ls -d /usr/lib/jvm/java-17* 2>/dev/null | head -1)"
+fi
+if [ -z "${JAVA_HOME:-}" ] && command -v java >/dev/null 2>&1; then
+  JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+fi
+export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
+echo "JAVA_HOME=$JAVA_HOME"
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
