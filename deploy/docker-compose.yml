@@ -34,6 +34,7 @@ services:
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?请在 .env 设置初始管理员密码}
       ADMIN_BOOTSTRAP_REAL_NAME: 平台管理员
+      YPBIN_WEB_CORS_ALLOWED_ORIGIN_PATTERNS: "${YPBIN_CORS_ORIGINS:-http://localhost:*}"
       TZ: Asia/Shanghai
     ports:
       - "${ADMIN_PORT:-8080}:8080"

@@ -47,11 +47,9 @@ ypbin:
       enabled: true           # 启用签名模块需读取请求体，必须开启
     cors:
       enabled: true
+      # 生产环境通过环境变量 YPBIN_WEB_CORS_ALLOWED_ORIGIN_PATTERNS 覆盖(逗号分隔)
       allowed-origin-patterns:
         - "http://localhost:*"
-        - "http://43.242.200.8:*"
-        - "https://*.ypbin.cn"
-        - "http://*.ypbin.cn"
     xss:
       enabled: true
       excludes: ["/webhook/**"]

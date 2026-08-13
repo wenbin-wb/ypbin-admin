@@ -66,6 +66,7 @@ if [ ! -f .env ]; then
 MYSQL_ROOT_PASSWORD=$ROOT_PASS
 ADMIN_BOOTSTRAP_USERNAME=admin
 ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS
+YPBIN_CORS_ORIGINS=http://localhost:*
 EOF
   echo "  ┌──────────────────────────────────────────┐"
   echo "  │  首次部署已生成凭据,请保存              │"
@@ -74,6 +75,7 @@ EOF
   echo "  │  管理员密码      : $ADMIN_PASS      "
   echo "  └──────────────────────────────────────────┘"
   echo "  (凭据已写入 $DEPLOY_DIR/.env,可随时修改)"
+  echo "  (如需浏览器跨域访问,请在 .env 配置 YPBIN_CORS_ORIGINS 加入你的域名/IP)"
 fi
 
 echo "==> [5/5] 启动服务"
