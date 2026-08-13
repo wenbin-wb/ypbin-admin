@@ -53,9 +53,9 @@ for repo in ypbin-starter ypbin-admin ypbin-admin-ui; do
   fi
 done
 
-echo "==> [3/5] 构建 admin jar(首次约 2-5 分钟)"
+echo "==> [3/5] 构建 admin jar(首次约 3-6 分钟)"
 mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests install -q
-mvn -f "$ROOT/ypbin-admin/ypbin-admin-server/pom.xml" -am -DskipTests package -q
+mvn -f "$ROOT/ypbin-admin/pom.xml" -DskipTests install -q
 
 echo "==> [4/5] 准备环境变量"
 mkdir -p "$DEPLOY_DIR" && cd "$DEPLOY_DIR"
