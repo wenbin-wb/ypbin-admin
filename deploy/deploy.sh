@@ -2,35 +2,62 @@
 set -euo pipefail
 
 ROOT="${YPBIN_ROOT:-/opt/ypbin}"
-CONFIG_DIR="$ROOT/ypbin-admin/deploy"
+REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
+DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
 
-echo "==> 检查环境"
-command -v git >/dev/null || { echo "缺少 git"; exit 1; }
-command -v mvn >/dev/null || { echo "缺少 maven,先安装: apt install -y maven"; exit 1; }
-command -v docker >/dev/null || { echo "缺少 docker,先安装: curl -fsSL https://get.docker.com | sh"; exit 1; }
-docker compose version >/dev/null 2>&1 || { echo "缺少 docker compose 插件"; exit 1; }
+echo "==> [1/5] 检查并安装依赖"
+if ! command -v git >/dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y -qq git
+fi
+if ! command -v mvn >/dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y -qq maven
+fi
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y -qq docker-compose-plugin
+fi
 
-echo "==> 更新代码"
+echo "==> [2/5] 拉取或更新代码"
 mkdir -p "$ROOT" && cd "$ROOT"
 for repo in ypbin-starter ypbin-admin ypbin-admin-ui; do
   if [ ! -d "$repo/.git" ]; then
-    git clone "https://github.com/wenbin-wb/$repo.git"
+    git clone --quiet "$REPO_BASE/$repo.git"
   else
-    (cd "$repo" && git pull --ff-only)
+    (cd "$repo" && git pull --ff-only --quiet)
   fi
 done
 
-echo "==> 构建 admin jar"
+echo "==> [3/5] 构建 admin jar(首次约 2-5 分钟)"
 mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests install -q
 mvn -f "$ROOT/ypbin-admin/ypbin-admin-server/pom.xml" -am -DskipTests package -q
 
-echo "==> 启动服务"
-cd "$CONFIG_DIR"
+echo "==> [4/5] 准备环境变量"
+mkdir -p "$DEPLOY_DIR" && cd "$DEPLOY_DIR"
 if [ ! -f .env ]; then
-  cp .env.example .env
-  echo "已生成 .env 模板,请先编辑密码后重跑: nano $CONFIG_DIR/.env"
-  exit 1
+  ROOT_PASS="$(openssl rand -hex 16)"
+  ADMIN_PASS="$(openssl rand -base64 12 | tr '+/' 'Aa')"
+  cat > .env <<EOF
+MYSQL_ROOT_PASSWORD=$ROOT_PASS
+ADMIN_BOOTSTRAP_USERNAME=admin
+ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS
+EOF
+  echo "  ┌──────────────────────────────────────────┐"
+  echo "  │  首次部署已生成凭据,请保存              │"
+  echo "  │  MySQL root 密码 : $ROOT_PASS        "
+  echo "  │  管理员账号      : admin                │"
+  echo "  │  管理员密码      : $ADMIN_PASS      "
+  echo "  └──────────────────────────────────────────┘"
+  echo "  (凭据已写入 $DEPLOY_DIR/.env,可随时修改)"
 fi
+
+echo "==> [5/5] 启动服务"
 docker compose up -d --build
 
-echo "✅ 启动完成: 前端 http://服务器IP , 后端 :8080"
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo "✅ 部署完成"
+echo "   前端: http://${IP:-<服务器IP>}"
+echo "   后端: http://${IP:-<服务器IP>}:8080"
+echo "   登录: admin / $(grep '^ADMIN_BOOTSTRAP_PASSWORD=' .env | cut -d= -f2)"
+echo "   之后更新: bash $DEPLOY_DIR/deploy.sh"
