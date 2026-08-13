@@ -27,7 +27,7 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
   <img src="https://ypbin.cn/screenshots/admin-ui/dashboard.png" alt="运行概览" width="75%" />
 </p>
 <p align="center">
-  <img src="https://ypbin.cn/screenshots/admin-ui/login.png" alt="登录页" width="55%" />
+  <img src="https://ypbin.cn/screenshots/admin-ui/roles.png" alt="角色权限" width="55%" />
 </p>
 
 前后端分离的企业级后台管理系统。后端基于 [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) 构建，专注业务实现；前端见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
