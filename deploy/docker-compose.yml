@@ -36,7 +36,7 @@ services:
       ADMIN_BOOTSTRAP_REAL_NAME: 平台管理员
       TZ: Asia/Shanghai
     ports:
-      - "8080:8080"
+      - "${ADMIN_PORT:-8080}:8080"
     depends_on:
       mysql:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
       - ../admin-ui-dist:/usr/share/nginx/html:ro
       - ../../ypbin-admin-ui/deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "8081:80"
+      - "${ADMIN_UI_PORT:-18080}:80"
     depends_on:
       - admin
 
