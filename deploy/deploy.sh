@@ -77,6 +77,12 @@ EOF
 fi
 
 echo "==> [5/5] 启动服务"
+if [ ! -f "$ROOT/admin-ui-dist/index.html" ]; then
+  echo "!! 缺少前端构建产物,请先本地构建并上传到 $ROOT/admin-ui-dist/:"
+  echo "  本地构建: cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
+  echo "  上传: scp -r apps/web-antd/dist/* root@<服务器IP>:$ROOT/admin-ui-dist/"
+  exit 1
+fi
 docker compose up -d --build
 
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
