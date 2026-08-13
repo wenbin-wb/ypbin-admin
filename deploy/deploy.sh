@@ -9,9 +9,14 @@ echo "==> [1/5] 检查并安装依赖"
 if ! command -v git >/dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq git
 fi
+if ! command -v java >/dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y -qq openjdk-17-jdk-headless
+fi
 if ! command -v mvn >/dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq maven
 fi
+export JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
+export PATH="$JAVA_HOME/bin:$PATH"
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
