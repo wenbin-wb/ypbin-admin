@@ -37,6 +37,12 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
+        <!-- 健康检查 / 应用信息 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

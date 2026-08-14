@@ -66,6 +66,7 @@ ypbin:
       - /captcha
       - /captcha/verify
       - /open/license/**
+      - /actuator/health   # 健康检查放行（仅此低危端点，不放 env/beans 等）
       - /error
   tenant:
     enabled: true
@@ -125,6 +126,39 @@ ypbin:
   sensitive-words:
     enabled: true               # 启用敏感词过滤（替换字符见下）
     replacement: '*'            # 敏感词替换字符
+    words:                      # 敏感词库（演示/测试用，可按需增删；DFA 匹配，命中即替换为 *)
+      - 赌博
+      - 色情
+      - 裸聊
+      - 代开发票
+      - 违禁
+      - 非法集资
+      - 传销
+      - 邪教
+      - 毒品
+      - 军火
+      - 假证
+      - 刷单
+      - 博彩
+      - 洗钱
+      - 枪支
+      - 爆炸物
+      - 黑客
+      - 木马
+      - 病毒
+      - 盗号
+      - 外挂
+      - 作弊
+      - 代考
+      - 裸贷
+      - 高利贷
+      - 赌博网站
+      - 招嫖
+      - 军警
+      - 港独
+      - 台独
+      - 藏独
+      - 疆独
   i18n:
     enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
   api-crypto:
@@ -158,10 +192,8 @@ logging:
   level:
     cn.ypbin.admin: debug
 
-# TODO 待部署阶段接入：当前未引入 spring-boot-starter-actuator，以下 management 配置不生效，
-# /actuator/health 返回 404（非鉴权问题）。计划反哺 starter 由 observability 模块统一提供
-# actuator + health 端点 + 自动放行 /actuator/health（复用 SecurityExcludePathProvider 机制），
-# admin 引入模块后再启用；届时放行须精确到 health，勿放 env/beans/heapdump 等敏感端点。
+# Spring Boot Actuator：健康检查与应用信息。仅暴露 health/info 两个低危端点，
+# 不放 env/beans/heapdump 等敏感端点。health 需登录放行（见 ypbin.security.excludes）。
 management:
   endpoints:
     web:
