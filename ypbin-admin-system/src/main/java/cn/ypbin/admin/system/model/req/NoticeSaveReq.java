@@ -17,6 +17,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import lombok.Data;
+import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
 
 /**
  * 公告保存请求。
@@ -27,10 +28,12 @@ import lombok.Data;
 @Data
 public class NoticeSaveReq {
 
+    @SensitiveWordFilter
     @NotBlank(message = "公告标题不能为空")
     @Size(max = 255, message = "公告标题不能超过 255 个字符")
     private String title;
 
+    @SensitiveWordFilter
     @NotBlank(message = "公告内容不能为空")
     private String content;
 
