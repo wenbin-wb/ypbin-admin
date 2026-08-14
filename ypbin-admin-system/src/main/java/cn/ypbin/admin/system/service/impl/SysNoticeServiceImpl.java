@@ -16,6 +16,8 @@ import cn.ypbin.admin.system.service.NoticePublishService;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.sensitivewords.autoconfigure.SensitiveWordProperties;
+import cn.ypbin.starter.sensitivewords.core.SensitiveWordService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
@@ -44,6 +46,8 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     private static final int SCHEDULED = 2;
 
     private final NoticePublishService noticePublishService;
+    private final SensitiveWordService sensitiveWordService;
+    private final SensitiveWordProperties sensitiveWordProperties;
 
     @Override
     public List<SysNotice> listNotices() {
@@ -55,6 +59,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     public void createNotice(NoticeSaveReq req) {
         SysNotice notice = new SysNotice();
         BeanUtils.copyProperties(req, notice);
+        filterSensitive(notice);
         notice.setPublishVersion(0L);
         notice.setPublishTime(null);
         if (isDraft(req)) {
@@ -85,6 +90,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
         SysNotice update = new SysNotice();
         BeanUtils.copyProperties(req, update);
+        filterSensitive(update);
         update.setId(id);
         update.setTenantId(current.getTenantId());
         update.setPublishVersion(current.getPublishVersion());
@@ -237,5 +243,12 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
 
     private boolean isDraft(NoticeSaveReq req) {
         return Integer.valueOf(DRAFT).equals(req.getPublishStatus());
+    }
+
+    /** 公告标题与内容做敏感词过滤（命中词按配置的 replacement 字符掩码，默认 *）。 */
+    private void filterSensitive(SysNotice notice) {
+        char replacement = sensitiveWordProperties.getReplacement();
+        notice.setTitle(sensitiveWordService.filter(notice.getTitle(), replacement));
+        notice.setContent(sensitiveWordService.filter(notice.getContent(), replacement));
     }
 }

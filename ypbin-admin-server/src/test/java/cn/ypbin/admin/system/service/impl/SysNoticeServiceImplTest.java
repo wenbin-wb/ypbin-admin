@@ -21,6 +21,8 @@ import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
 import cn.ypbin.admin.system.service.NoticePublishService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.sensitivewords.autoconfigure.SensitiveWordProperties;
+import cn.ypbin.starter.sensitivewords.core.SensitiveWordService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -35,13 +37,17 @@ class SysNoticeServiceImplTest {
 
     private SysNoticeMapper noticeMapper;
     private NoticePublishService publishService;
+    private SensitiveWordService sensitiveWordService;
+    private SensitiveWordProperties sensitiveWordProperties;
     private SysNoticeServiceImpl service;
 
     @BeforeEach
     void setUp() {
         noticeMapper = mock(SysNoticeMapper.class);
         publishService = mock(NoticePublishService.class);
-        service = new SysNoticeServiceImpl(publishService);
+        sensitiveWordService = mock(SensitiveWordService.class);
+        sensitiveWordProperties = mock(SensitiveWordProperties.class);
+        service = new SysNoticeServiceImpl(publishService, sensitiveWordService, sensitiveWordProperties);
         ReflectionTestUtils.setField(service, "baseMapper", noticeMapper);
     }
 
