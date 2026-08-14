@@ -50,6 +50,21 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-storage</artifactId>
         </dependency>
+        <!-- 敏感词过滤 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-sensitive-words</artifactId>
+        </dependency>
+        <!-- 国际化 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-i18n</artifactId>
+        </dependency>
+        <!-- 接口加解密 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-api-crypto</artifactId>
+        </dependency>
         <!-- 定时任务 -->
         <dependency>
             <groupId>cn.ypbin</groupId>

@@ -122,23 +122,13 @@ ypbin:
     enabled: true
   sse:
     enabled: true
-
-# tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
-captcha:
-  expire:
-    default: 60000
   sensitive-words:
+    enabled: true               # 启用敏感词过滤（替换字符见下）
     replacement: '*'            # 敏感词替换字符
   i18n:
     enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
   api-crypto:
     key: ${API_CRYPTO_KEY:}     # 接口加解密 AES 密钥由部署环境注入
-  # TODO 待部署阶段接入：当前 admin 未引入 ypbin-starter-cloud-observability 模块，
-  # 以下 observability 配置无自动配置支撑（空配，不生效）。反哺 starter 提供单体可用的可观测性能力后再启用。
-  observability:
-    enabled: true
-    request-id-header: X-Request-Id
-    mdc-key: requestId
   api-doc:
     enabled: true
     title: ypbin-admin API
@@ -146,6 +136,17 @@ captcha:
     version: 1.0.0
     contact:
       name: wenbin
+  # TODO 待部署阶段接入：当前 admin 未引入 ypbin-starter-cloud-observability 模块，
+  # 以下 observability 配置无自动配置支撑（空配，不生效）。反哺 starter 提供单体可用的可观测性能力后再启用。
+  observability:
+    enabled: true
+    request-id-header: X-Request-Id
+    mdc-key: requestId
+
+# tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
+captcha:
+  expire:
+    default: 60000
 
 mybatis-plus:
   configuration:
