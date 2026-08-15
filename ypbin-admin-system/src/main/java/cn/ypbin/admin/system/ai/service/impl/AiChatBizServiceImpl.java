@@ -11,9 +11,11 @@ package cn.ypbin.admin.system.ai.service.impl;
 
 import cn.ypbin.admin.system.ai.entity.AiConversation;
 import cn.ypbin.admin.system.ai.entity.AiMessage;
+import cn.ypbin.admin.system.ai.entity.AiUsageLog;
 import cn.ypbin.admin.system.ai.mapper.AiConversationMapper;
 import cn.ypbin.admin.system.ai.mapper.AiMessageMapper;
 import cn.ypbin.admin.system.ai.mapper.AiPromptTemplateMapper;
+import cn.ypbin.admin.system.ai.mapper.AiUsageLogMapper;
 import cn.ypbin.admin.system.ai.model.resp.AiConversationResp;
 import cn.ypbin.admin.system.ai.model.resp.AiMessageResp;
 import cn.ypbin.admin.system.ai.service.AiChatBizService;
@@ -48,6 +50,7 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
     private final AiPromptTemplateMapper promptTemplateMapper;
+    private final AiUsageLogMapper usageLogMapper;
 
     @Override
     public SseEmitter chat(Long conversationId, String message, Long knowledgeBaseId,
@@ -165,6 +168,18 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     public void saveAssistantMessageAsync(Long conversationId, String content, int tokens) {
         Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
         saveMessage(conversationId, tenantId, "assistant", content, tokens);
+        // 写入用量日志，供统计页使用
+        AiConversation conv = conversationMapper.selectById(conversationId);
+        AiUsageLog log = new AiUsageLog();
+        log.setTenantId(tenantId);
+        log.setUserId(conv != null ? conv.getUserId() : null);
+        log.setConversationId(conversationId);
+        log.setModelId(conv != null ? conv.getModelId() : null);
+        log.setOutputTokens(tokens);
+        log.setInputTokens(0);
+        log.setTotalTokens(tokens);
+        log.setLatencyMs(0L);
+        usageLogMapper.insert(log);
     }
 
     // ---------- private helpers ----------
