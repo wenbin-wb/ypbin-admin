@@ -7,6 +7,8 @@ services:
       MYSQL_DATABASE: ypbin_admin
     volumes:
       - mysql-data:/var/lib/mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
@@ -16,6 +18,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
 
   admin:
     build:
