@@ -143,6 +143,12 @@ VALUES
 (5033, 5003, 'AiModelEdit',        'button', 1, 'ai:model:edit',         'ai.model.edit',         3, NOW(), 1, 0),
 (5034, 5003, 'AiModelDelete',      'button', 1, 'ai:model:delete',       'ai.model.delete',       4, NOW(), 1, 0);
 
+-- Prompt 模板和用量统计菜单（5040-5050 段）
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES
+(5040, 5000, 'AiPrompt',  'menu', 0, '/ai/prompt',  '/ai/prompt/index',  'ai.prompt.title',  'carbon:template',       4, NOW(), 1, 0),
+(5050, 5000, 'AiUsage',   'menu', 1, '/ai/usage',   '/ai/usage/index',   'ai.usage.title',   'carbon:analytics',      5, NOW(), 1, 0);
+
 -- 全部权限模板补充 AI 菜单（追加 menu_id 到 sys_template_menu）
 INSERT INTO sys_template_menu (template_id, menu_id)
-SELECT 1, id FROM sys_menu WHERE id BETWEEN 5000 AND 5034 AND type IN ('catalog', 'menu');
+SELECT 1, id FROM sys_menu WHERE id BETWEEN 5000 AND 5099 AND type IN ('catalog', 'menu');
