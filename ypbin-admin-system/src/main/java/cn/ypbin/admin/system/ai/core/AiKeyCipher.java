@@ -40,8 +40,8 @@ public class AiKeyCipher {
     private static final int TAG_LENGTH_BIT = 128;
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    /** 开发环境默认密钥（16 字节），生产必须通过 AI_MODEL_SECRET_KEY 覆盖 */
-    private static final String DEV_KEY = "ypbin-ai-dev-key!";
+    /** 开发环境默认密钥（恰好 16 字节），生产必须通过 AI_MODEL_SECRET_KEY 覆盖 */
+    private static final String DEV_KEY = "ypbin-ai-16-byte";
 
     private final byte[] key;
 
@@ -52,7 +52,8 @@ public class AiKeyCipher {
         }
         byte[] raw = resolved.getBytes(StandardCharsets.UTF_8);
         if (raw.length != 16 && raw.length != 24 && raw.length != 32) {
-            throw new IllegalStateException("ypbin.ai.model-config.secret-key 长度必须为 16/24/32 字节");
+            throw new IllegalStateException(
+                "ypbin.ai.model-config.secret-key 长度必须为 16/24/32 字节，当前为 " + raw.length + " 字节");
         }
         this.key = raw;
     }
