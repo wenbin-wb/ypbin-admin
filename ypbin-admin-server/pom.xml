@@ -27,7 +27,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- 数据库迁移 -->
+        <!-- 数据库迁移：SB4 已将 Flyway 自动配置拆分到 spring-boot-flyway，仅引 flyway-core 不会执行迁移 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
