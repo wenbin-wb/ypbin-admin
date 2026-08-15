@@ -91,5 +91,10 @@
             <artifactId>mica-ip2region</artifactId>
             <version>4.1.0</version>
         </dependency>
+        <!-- AI 基座（ChatClient/RAG/Memory 封装，模型 starter 在 server 模块按需引入）-->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-ai</artifactId>
+        </dependency>
     </dependencies>
 </project>
