@@ -20,24 +20,23 @@ fi
 [ "${NEED_MVN:-0}" != "1" ] || { echo "安装 maven"; apt-get install -y maven; }
 [ "${NEED_JDK:-0}" != "1" ] || { echo "安装 JDK 21"; apt-get install -y openjdk-21-jdk-headless 2>/dev/null || apt-get install -y default-jdk-headless; }
 
-# 探测并导出 JAVA_HOME — 优先使用 JDK 21，回退至 JDK 17（多方式兜底，容错避免 pipefail 误判）
+# 探测并导出 JAVA_HOME — 要求 JDK 21，不回退旧版本
 if [ -z "${JAVA_HOME:-}" ]; then
   JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-21' | head -1 || true)"
 fi
 if [ -z "${JAVA_HOME:-}" ]; then
-  JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-17' | head -1 || true)"
-fi
-if [ -z "${JAVA_HOME:-}" ]; then
   JAVA_HOME="$(ls -d /usr/lib/jvm/java-21* 2>/dev/null | head -1 || true)"
-fi
-if [ -z "${JAVA_HOME:-}" ]; then
-  JAVA_HOME="$(ls -d /usr/lib/jvm/java-17* 2>/dev/null | head -1 || true)"
 fi
 if [ -z "${JAVA_HOME:-}" ] && command -v java >/dev/null 2>&1; then
   JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")" 2>/dev/null || true)"
 fi
 if [ -z "${JAVA_HOME:-}" ]; then
-  echo "!! 未找到 JDK,JAVA_HOME 探测失败"; exit 1
+  echo "!! 未找到 JDK 21，JAVA_HOME 探测失败。请先安装 openjdk-21-jdk-headless"; exit 1
+fi
+# 校验实际版本是否为 21
+_java_ver="$("${JAVA_HOME}/bin/java" -version 2>&1 | head -1 | grep -oE '[0-9]+' | head -1)"
+if [ "${_java_ver}" != "21" ]; then
+  echo "!! 当前 JDK 版本为 ${_java_ver}，本项目要求 JDK 21。请安装 openjdk-21-jdk-headless"; exit 1
 fi
 export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"

@@ -6,7 +6,7 @@
 
 | 服务 | 镜像 | 端口(默认) | 说明 |
 |---|---|---|---|
-| `admin` | 自建(Java 17) | 8080 | Spring Boot 后端,Flyway 自动建表 |
+| `admin` | 自建(Java 21) | 8080 | Spring Boot 后端,Flyway 自动建表 |
 | `admin-ui` | nginx | 18080 | 前端静态文件(本地构建上传),`/api/` 代理到 admin |
 | `mysql` | mysql:8.4 | 内部 | 数据库,数据卷持久化 |
 | `redis` | redis:7-alpine | 内部 | 缓存 |
@@ -98,7 +98,7 @@ server {
 
 | 现象 | 原因 | 解决 |
 |---|---|---|
-| `JAVA_HOME` 未定义 | 服务器只装了 maven 没设 JAVA_HOME | 脚本已自动装 JDK17 + 探测 JAVA_HOME |
+| `JAVA_HOME` 未定义 | 服务器只装了 maven 没设 JAVA_HOME | 脚本已自动装 JDK 21 + 探测 JAVA_HOME |
 | `apt: Unmet dependencies` | 之前的安装中断留 broken 状态 | `apt --fix-broken install -y` 后重跑 |
 | 容器内通、宿主机不通 | 宝塔清掉了 Docker 转发规则 | `systemctl restart docker` 重建规则 |
 | 端口被占用 | 宝塔等已占 80/8080/8081 | 改 `.env` 的 `ADMIN_PORT`/`ADMIN_UI_PORT` |

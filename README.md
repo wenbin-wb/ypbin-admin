@@ -52,7 +52,7 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 | | |
 |---|---|
-| 后端 | Java 17 · Spring Boot 3.5 · [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) · Sa-Token · MyBatis-Plus · MySQL · Redis |
+| 后端 | Java 21 · Spring Boot 4.1 · [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) · Sa-Token · MyBatis-Plus · MySQL · Redis |
 | 前端 | Vue 3.5 · TypeScript · Ant Design Vue 4 · Vite · Pinia |
 
 ## 快速开始
