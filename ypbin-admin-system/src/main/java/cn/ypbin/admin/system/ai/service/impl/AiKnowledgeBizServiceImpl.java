@@ -50,7 +50,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     private final AiKnowledgeBaseMapper kbMapper;
     private final AiDocumentMapper documentMapper;
     private final ObjectProvider<AiRagService> ragServiceProvider;
-    private final AiChatService aiChatService;
+    private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
     @Override
     public AiKnowledgeBase createKnowledgeBase(cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq req) {
@@ -133,6 +133,10 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     @Override
     public String query(Long knowledgeBaseId, String question) {
+        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
+        if (aiChatService == null) {
+            return "AI 模块未启用，请配置 ypbin.ai.enabled=true";
+        }
         return aiChatService.chatWithKnowledge(
             "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
             .collectList()

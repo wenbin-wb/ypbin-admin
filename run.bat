@@ -1,21 +1,16 @@
 @echo off
 setlocal
 
-set "JAVA_HOME=C:\Program Files\JetBrains\IntelliJ IDEA 2026.1\jbr"
+set "JAVA_HOME=C:\Users\Administrator\.jdks\azul-21"
 set "MVN=C:\Program Files\JetBrains\IntelliJ IDEA 2026.1\plugins\maven\lib\maven3\bin\mvn.cmd"
 
-set "DB_HOST="
-set "DB_PORT="
-set "DB_NAME="
-set "DB_USER="
-set "DB_PASSWORD="
-set "REDIS_HOST="
-set "REDIS_PORT="
-set "REDIS_DB="
-set "REDIS_PASSWORD="
+rem 从 .env 加载（或直接填写）
+for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+    if not "%%A"=="" if not "%%A:~0,1%"=="#" set "%%A=%%B"
+)
 
 cd /d "%~dp0"
-echo === Starting ypbin-admin on port 8080 ===
+echo === Starting ypbin-admin on port 8080 (Java %JAVA_HOME%) ===
 call "%MVN%" -f ypbin-admin-server/pom.xml spring-boot:run
 
 pause

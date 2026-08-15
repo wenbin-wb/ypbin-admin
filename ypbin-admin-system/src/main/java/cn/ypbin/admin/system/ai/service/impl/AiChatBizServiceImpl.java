@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -46,7 +47,8 @@ import reactor.core.Disposable;
 @RequiredArgsConstructor
 public class AiChatBizServiceImpl implements AiChatBizService {
 
-    private final AiChatService aiChatService;
+    /** 可选注入：未配置模型时 AI 功能优雅降级，不影响服务启动 */
+    private final ObjectProvider<AiChatService> aiChatServiceProvider;
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
     private final AiPromptTemplateMapper promptTemplateMapper;
@@ -81,7 +83,17 @@ public class AiChatBizServiceImpl implements AiChatBizService {
 
         String convIdStr = String.valueOf(finalConvId);
 
-        // 选择对话方式
+        // 选择对话方式（AI 未配置时抛出明确错误，不影响服务启动）
+        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
+        if (aiChatService == null) {
+            SseEmitter errEmitter = new SseEmitter(0L);
+            try {
+                errEmitter.send("AI 模块未启用，请在配置中设置 ypbin.ai.enabled=true 并引入模型 starter");
+            } catch (Exception ignore) { }
+            errEmitter.complete();
+            return errEmitter;
+        }
+
         var stream = knowledgeBaseId != null
             ? aiChatService.chatWithKnowledge(convIdStr, message, String.valueOf(knowledgeBaseId))
             : (promptTemplateId != null
@@ -151,8 +163,11 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     @Override
     public void deleteConversation(Long conversationId) {
         conversationMapper.deleteById(conversationId);
-        // 同时清除 AI Memory（conversationId 字符串与 DB ID 对应）
-        aiChatService.clearMemory(String.valueOf(conversationId));
+        // 清除 AI Memory（有 AiChatService 时才清）
+        AiChatService svc = aiChatServiceProvider.getIfAvailable();
+        if (svc != null) {
+            svc.clearMemory(String.valueOf(conversationId));
+        }
     }
 
     @Override

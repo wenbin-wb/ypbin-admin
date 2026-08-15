@@ -30,8 +30,11 @@ CREATE TABLE ai_conversation
     user_id     BIGINT       NOT NULL COMMENT '创建用户',
     model_id    BIGINT       NULL COMMENT '使用的模型配置 ID',
     title       VARCHAR(200) NULL COMMENT '会话标题（首条消息自动截取）',
+    create_user BIGINT       NULL COMMENT '创建人',
     create_time DATETIME     NULL COMMENT '创建时间',
+    update_user BIGINT       NULL COMMENT '更新人',
     update_time DATETIME     NULL COMMENT '更新时间',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
     is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (id)
 ) COMMENT '对话会话';
@@ -45,7 +48,12 @@ CREATE TABLE ai_message
     role            VARCHAR(20)  NULL COMMENT '角色：user | assistant',
     content         TEXT     NULL COMMENT '消息内容（Markdown）',
     tokens          INT      NOT NULL DEFAULT 0 COMMENT 'Token 消耗',
+    create_user     BIGINT   NULL COMMENT '创建人',
     create_time     DATETIME NULL COMMENT '创建时间',
+    update_user     BIGINT   NULL COMMENT '更新人',
+    update_time     DATETIME NULL COMMENT '更新时间',
+    status          TINYINT  NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
+    is_deleted      TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (id)
 ) COMMENT '消息记录';
 
@@ -80,7 +88,10 @@ CREATE TABLE ai_document
     error_msg         VARCHAR(500) NULL COMMENT '失败原因',
     create_user       BIGINT       NULL COMMENT '上传人',
     create_time       DATETIME     NULL COMMENT '上传时间',
+    update_user       BIGINT       NULL COMMENT '更新人',
     update_time       DATETIME     NULL COMMENT '更新时间',
+    status            TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：0 处理中 1 就绪 2 失败',
+    is_deleted        TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (id)
 ) COMMENT '知识库文档';
 
@@ -115,7 +126,12 @@ CREATE TABLE ai_usage_log
     output_tokens   INT      NOT NULL DEFAULT 0 COMMENT '输出 Token',
     total_tokens    INT      NOT NULL DEFAULT 0 COMMENT '合计 Token',
     latency_ms      BIGINT   NOT NULL DEFAULT 0 COMMENT '响应耗时（ms）',
+    create_user     BIGINT   NULL COMMENT '创建人',
     create_time     DATETIME NULL COMMENT '创建时间',
+    update_user     BIGINT   NULL COMMENT '更新人',
+    update_time     DATETIME NULL COMMENT '更新时间',
+    status          TINYINT  NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
+    is_deleted      TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (id)
 ) COMMENT 'Token 用量日志';
 
