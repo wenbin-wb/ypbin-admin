@@ -179,6 +179,19 @@ ypbin:
     enabled: true
     request-id-header: X-Request-Id
     mdc-key: requestId
+  # ypbin AI 能力配置（解注释 ypbin.ai.enabled=true 并配置模型后生效）
+  ai:
+    enabled: false                             # 改为 true 开启 AI 模块
+    chat:
+      enabled: true
+      default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
+      window-size: 20                          # 携带历史消息条数
+    memory:
+      type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
+    rag:
+      enabled: false                           # 需要向量库时改为 true
+      top-k: 5
+      similarity-threshold: 0.7
 
 # tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
 captcha:
@@ -236,18 +249,3 @@ management:
 #       chat:
 #         options:
 #           model: llama3
-
-# ypbin AI 能力配置
-ypbin:
-  ai:
-    enabled: false                             # 改为 true 开启 AI 模块
-    chat:
-      enabled: true
-      default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
-      window-size: 20                          # 携带历史消息条数
-    memory:
-      type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
-    rag:
-      enabled: false                           # 需要向量库时改为 true
-      top-k: 5
-      similarity-threshold: 0.7
