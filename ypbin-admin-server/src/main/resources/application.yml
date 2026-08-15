@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: ypbin-admin
+  threads:
+    virtual:
+      enabled: true   # JDK 21 虚拟线程：Tomcat 请求线程池切换为虚拟线程，提升 I/O 密集场景并发吞吐
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true

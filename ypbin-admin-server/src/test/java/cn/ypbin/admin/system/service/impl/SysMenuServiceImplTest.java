@@ -49,12 +49,12 @@ class SysMenuServiceImplTest {
         List<MenuResp> tree = service.tree();
 
         assertThat(tree).hasSize(1);
-        MenuResp root = tree.get(0);
+        MenuResp root = tree.getFirst();
         assertThat(root.getId()).isEqualTo(1L);
         assertThat(root.getPlatformOnly()).isTrue();
         assertThat(root.getChildren()).hasSize(1);
-        assertThat(root.getChildren().get(0).getId()).isEqualTo(2L);
-        assertThat(root.getChildren().get(0).getPlatformOnly()).isFalse();
+        assertThat(root.getChildren().getFirst().getId()).isEqualTo(2L);
+        assertThat(root.getChildren().getFirst().getPlatformOnly()).isFalse();
     }
 
     private SysMenu menu(Long id, Long pid, String name, boolean platformOnly) {

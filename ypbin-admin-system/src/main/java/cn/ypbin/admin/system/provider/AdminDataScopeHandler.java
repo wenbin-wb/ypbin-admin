@@ -129,29 +129,26 @@ public class AdminDataScopeHandler implements DataScopeHandler {
         for (SysRole role : roles) {
             int scope = role.getDataScope() == null ? 0 : role.getDataScope();
             switch (scope) {
-                case SCOPE_DEPT_AND_CHILD:
+                case SCOPE_DEPT_AND_CHILD -> {
                     if (userDeptId != null) {
                         deptIds.add(userDeptId);
                         deptIds.addAll(collectDescendants(userDeptId, pidIndex));
                     }
-                    break;
-                case SCOPE_DEPT:
+                }
+                case SCOPE_DEPT -> {
                     if (userDeptId != null) {
                         deptIds.add(userDeptId);
                     }
-                    break;
-                case SCOPE_CUSTOM:
+                }
+                case SCOPE_CUSTOM -> {
                     List<Long> bindIds = roleDeptMapper().selectDeptIdsByRoleId(role.getId());
                     deptIds.addAll(bindIds);
                     for (Long bindId : bindIds) {
                         deptIds.addAll(collectDescendants(bindId, pidIndex));
                     }
-                    break;
-                case SCOPE_SELF:
-                    self = true;
-                    break;
-                default:
-                    break;
+                }
+                case SCOPE_SELF -> self = true;
+                default -> { /* 未知范围，忽略 */ }
             }
         }
         return new ScopeResult(false, self, deptIds);

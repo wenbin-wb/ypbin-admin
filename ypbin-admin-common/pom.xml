@@ -89,7 +89,7 @@
         <dependency>
             <groupId>net.dreamlu</groupId>
             <artifactId>mica-ip2region</artifactId>
-            <version>3.5.7</version>
+            <version>4.1.0</version>
         </dependency>
     </dependencies>
 </project>

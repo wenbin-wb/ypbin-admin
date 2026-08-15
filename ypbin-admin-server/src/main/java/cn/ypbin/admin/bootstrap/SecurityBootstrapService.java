@@ -79,7 +79,7 @@ public class SecurityBootstrapService {
         if (states.size() != 1) {
             throw new IllegalStateException("平台管理员初始化状态记录不存在或不唯一");
         }
-        String state = states.get(0);
+        String state = states.getFirst();
         if (!"RUNNING".equals(state) && !"COMPLETED".equals(state)) {
             throw new IllegalStateException("平台管理员初始化状态异常：" + state);
         }
@@ -140,7 +140,7 @@ public class SecurityBootstrapService {
         if (roleIds.size() != 1) {
             throw new IllegalStateException("平台管理员角色必须存在且唯一，实际数量：" + roleIds.size());
         }
-        return roleIds.get(0);
+        return roleIds.getFirst();
     }
 
     private ExistingUser findUser(String username) {
@@ -151,7 +151,7 @@ public class SecurityBootstrapService {
         if (users.size() > 1) {
             throw new IllegalStateException("平台管理员初始化账号存在重复数据：" + username);
         }
-        return users.isEmpty() ? null : users.get(0);
+        return users.isEmpty() ? null : users.getFirst();
     }
 
     private ExistingUser mapUser(ResultSet resultSet, int rowNum) throws SQLException {

@@ -18,11 +18,17 @@ if [ "${NEED_GIT:-0}${NEED_MVN:-0}${NEED_JDK:-0}" != "000" ]; then
 fi
 [ "${NEED_GIT:-0}" != "1" ] || { echo "安装 git"; apt-get install -y git; }
 [ "${NEED_MVN:-0}" != "1" ] || { echo "安装 maven"; apt-get install -y maven; }
-[ "${NEED_JDK:-0}" != "1" ] || { echo "安装 JDK"; apt-get install -y default-jdk-headless; }
+[ "${NEED_JDK:-0}" != "1" ] || { echo "安装 JDK 21"; apt-get install -y openjdk-21-jdk-headless 2>/dev/null || apt-get install -y default-jdk-headless; }
 
-# 探测并导出 JAVA_HOME(多方式兜底,容错避免 pipefail 误判)
+# 探测并导出 JAVA_HOME — 优先使用 JDK 21，回退至 JDK 17（多方式兜底，容错避免 pipefail 误判）
+if [ -z "${JAVA_HOME:-}" ]; then
+  JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-21' | head -1 || true)"
+fi
 if [ -z "${JAVA_HOME:-}" ]; then
   JAVA_HOME="$(update-alternatives --list java 2>/dev/null | sed 's|/bin/java$||' | grep 'java-17' | head -1 || true)"
+fi
+if [ -z "${JAVA_HOME:-}" ]; then
+  JAVA_HOME="$(ls -d /usr/lib/jvm/java-21* 2>/dev/null | head -1 || true)"
 fi
 if [ -z "${JAVA_HOME:-}" ]; then
   JAVA_HOME="$(ls -d /usr/lib/jvm/java-17* 2>/dev/null | head -1 || true)"
