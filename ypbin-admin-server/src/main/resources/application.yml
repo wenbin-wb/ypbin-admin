@@ -205,3 +205,49 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+
+# ============================================================
+# Spring AI 2.0 配置（按需解注释接入对应模型）
+# ============================================================
+
+# 方案 A：DeepSeek V4（推荐，国内低成本，OpenAI 兼容协议）
+# spring:
+#   ai:
+#     deepseek:
+#       api-key: ${DEEPSEEK_API_KEY:}          # 必填：sk-xxx
+#       chat:
+#         options:
+#           model: deepseek-v4-flash           # 快速版；高精度用 deepseek-v4-pro
+
+# 方案 B：OpenAI GPT-5.6
+# spring:
+#   ai:
+#     openai:
+#       api-key: ${OPENAI_API_KEY:}             # 必填
+#       chat:
+#         options:
+#           model: gpt-5.6                      # 均衡版用 gpt-5.6-terra
+
+# 方案 C：Ollama 本地部署（无需 API Key）
+# spring:
+#   ai:
+#     ollama:
+#       base-url: http://localhost:11434
+#       chat:
+#         options:
+#           model: llama3
+
+# ypbin AI 能力配置
+ypbin:
+  ai:
+    enabled: false                             # 改为 true 开启 AI 模块
+    chat:
+      enabled: true
+      default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
+      window-size: 20                          # 携带历史消息条数
+    memory:
+      type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
+    rag:
+      enabled: false                           # 需要向量库时改为 true
+      top-k: 5
+      similarity-threshold: 0.7

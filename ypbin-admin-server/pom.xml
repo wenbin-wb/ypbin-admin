@@ -43,6 +43,40 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- JDBC 对话记忆持久化（spring-ai memory，ypbin.ai.memory.type=jdbc 时需要）-->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ============================================================
+             按需解注释：接入 AI 模型
+             DeepSeek V4（国内推荐）  openai 兼容协议、低成本
+             ============================================================ -->
+        <!-- <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-deepseek</artifactId>
+        </dependency> -->
+
+        <!-- OpenAI GPT-5.6 -->
+        <!-- <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency> -->
+
+        <!-- Ollama 本地部署 -->
+        <!-- <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency> -->
+
+        <!-- RAG：Redis Vector Store（ypbin.ai.rag.enabled=true 时解注释）-->
+        <!-- <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-redis</artifactId>
+        </dependency> -->
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
