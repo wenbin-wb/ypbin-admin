@@ -90,7 +90,6 @@ CREATE TABLE ai_document
     create_time       DATETIME     NULL COMMENT '上传时间',
     update_user       BIGINT       NULL COMMENT '更新人',
     update_time       DATETIME     NULL COMMENT '更新时间',
-    status            TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：0 处理中 1 就绪 2 失败',
     is_deleted        TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
     PRIMARY KEY (id)
 ) COMMENT '知识库文档';
@@ -137,34 +136,38 @@ CREATE TABLE ai_usage_log
 
 -- 菜单（追加到 V2 种子数据格式，使用 V3 统一管理）
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
-VALUES (5000, 0, 'AiManage', 'catalog', 0, '/ai', 'BasicLayout', 'ai.title', 'carbon:machine-learning', 9, NOW(), 1, 0);
+VALUES (5000, 0, 'AiManage', 'catalog', 0, '/ai', 'BasicLayout', 'page.ai.title', 'carbon:machine-learning', 9, NOW(), 1, 0);
 
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
 VALUES
-(5001, 5000, 'AiChat',      'menu', 0, '/ai/chat',      '/ai/chat/index',      'ai.chat.title',      'carbon:chat-bot',          1, NOW(), 1, 0),
-(5002, 5000, 'AiKnowledge', 'menu', 0, '/ai/knowledge', '/ai/knowledge/index', 'ai.knowledge.title', 'carbon:data-base',          2, NOW(), 1, 0),
-(5003, 5000, 'AiConfig',    'menu', 1, '/ai/config',    '/ai/config/index',    'ai.config.title',    'carbon:settings-services',  3, NOW(), 1, 0);
+(5001, 5000, 'AiChat',      'menu', 0, '/ai/chat',      '/ai/chat/index',      'page.ai.chat.title',      'carbon:chat-bot',          1, NOW(), 1, 0),
+(5002, 5000, 'AiKnowledge', 'menu', 0, '/ai/knowledge', '/ai/knowledge/index', 'page.ai.knowledge.title', 'carbon:data-base',          2, NOW(), 1, 0),
+(5003, 5000, 'AiConfig',    'menu', 1, '/ai/config',    '/ai/config/index',    'page.ai.config.title',    'carbon:settings-services',  3, NOW(), 1, 0);
 
 -- 权限按钮
 INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
 VALUES
-(5011, 5001, 'AiChatSend',         'button', 0, 'ai:chat:send',          'ai.chat.send',          1, NOW(), 1, 0),
-(5021, 5002, 'AiKnowledgeList',    'button', 0, 'ai:knowledge:list',     'ai.knowledge.list',     1, NOW(), 1, 0),
-(5022, 5002, 'AiKnowledgeCreate',  'button', 0, 'ai:knowledge:create',   'ai.knowledge.create',   2, NOW(), 1, 0),
-(5023, 5002, 'AiKnowledgeDelete',  'button', 0, 'ai:knowledge:delete',   'ai.knowledge.delete',   3, NOW(), 1, 0),
-(5024, 5002, 'AiDocumentUpload',   'button', 0, 'ai:document:upload',    'ai.document.upload',    4, NOW(), 1, 0),
-(5025, 5002, 'AiDocumentDelete',   'button', 0, 'ai:document:delete',    'ai.document.delete',    5, NOW(), 1, 0),
-(5031, 5003, 'AiModelList',        'button', 1, 'ai:model:list',         'ai.model.list',         1, NOW(), 1, 0),
-(5032, 5003, 'AiModelCreate',      'button', 1, 'ai:model:create',       'ai.model.create',       2, NOW(), 1, 0),
-(5033, 5003, 'AiModelEdit',        'button', 1, 'ai:model:edit',         'ai.model.edit',         3, NOW(), 1, 0),
-(5034, 5003, 'AiModelDelete',      'button', 1, 'ai:model:delete',       'ai.model.delete',       4, NOW(), 1, 0);
+(5011, 5001, 'AiChatSend',         'button', 0, 'ai:chat:send',          'page.ai.chat.send',          1, NOW(), 1, 0),
+(5021, 5002, 'AiKnowledgeList',    'button', 0, 'ai:knowledge:list',     'page.ai.knowledge.list',     1, NOW(), 1, 0),
+(5022, 5002, 'AiKnowledgeCreate',  'button', 0, 'ai:knowledge:create',   'page.ai.knowledge.create',   2, NOW(), 1, 0),
+(5023, 5002, 'AiKnowledgeDelete',  'button', 0, 'ai:knowledge:delete',   'page.ai.knowledge.delete',   3, NOW(), 1, 0),
+(5024, 5002, 'AiDocumentUpload',   'button', 0, 'ai:document:upload',    'page.ai.document.upload',    4, NOW(), 1, 0),
+(5025, 5002, 'AiDocumentDelete',   'button', 0, 'ai:document:delete',    'page.ai.document.delete',    5, NOW(), 1, 0),
+(5031, 5003, 'AiModelList',        'button', 1, 'ai:model:list',         'page.ai.model.list',         1, NOW(), 1, 0),
+(5032, 5003, 'AiModelCreate',      'button', 1, 'ai:model:create',       'page.ai.model.create',       2, NOW(), 1, 0),
+(5033, 5003, 'AiModelEdit',        'button', 1, 'ai:model:edit',         'page.ai.model.edit',         3, NOW(), 1, 0),
+(5034, 5003, 'AiModelDelete',      'button', 1, 'ai:model:delete',       'page.ai.model.delete',       4, NOW(), 1, 0);
 
 -- Prompt 模板和用量统计菜单（5040-5050 段）
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
 VALUES
-(5040, 5000, 'AiPrompt',  'menu', 0, '/ai/prompt',  '/ai/prompt/index',  'ai.prompt.title',  'carbon:template',       4, NOW(), 1, 0),
-(5050, 5000, 'AiUsage',   'menu', 1, '/ai/usage',   '/ai/usage/index',   'ai.usage.title',   'carbon:analytics',      5, NOW(), 1, 0);
+(5040, 5000, 'AiPrompt',  'menu', 0, '/ai/prompt',  '/ai/prompt/index',  'page.ai.prompt.title',  'carbon:template',       4, NOW(), 1, 0),
+(5050, 5000, 'AiUsage',   'menu', 1, '/ai/usage',   '/ai/usage/index',   'page.ai.usage.title',   'carbon:analytics',      5, NOW(), 1, 0);
 
--- 全部权限模板补充 AI 菜单（追加 menu_id 到 sys_template_menu）
+-- 全部权限模板补充 AI 菜单与按钮权限（追加 menu_id 到 sys_template_menu）
 INSERT INTO sys_template_menu (template_id, menu_id)
-SELECT 1, id FROM sys_menu WHERE id BETWEEN 5000 AND 5099 AND type IN ('catalog', 'menu');
+SELECT 1, id FROM sys_menu WHERE id BETWEEN 5000 AND 5099 AND type IN ('catalog', 'menu', 'button') AND platform_only = 0;
+
+-- 平台超级管理员获得 AI 平台专用菜单（模型配置、用量统计）
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 1, id FROM sys_menu WHERE id BETWEEN 5000 AND 5099 AND platform_only = 1;

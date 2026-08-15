@@ -11,9 +11,11 @@ package cn.ypbin.admin.system.ai.service.impl;
 
 import cn.ypbin.admin.system.ai.entity.AiConversation;
 import cn.ypbin.admin.system.ai.entity.AiMessage;
+import cn.ypbin.admin.system.ai.entity.AiModelConfig;
 import cn.ypbin.admin.system.ai.entity.AiUsageLog;
 import cn.ypbin.admin.system.ai.mapper.AiConversationMapper;
 import cn.ypbin.admin.system.ai.mapper.AiMessageMapper;
+import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.admin.system.ai.mapper.AiPromptTemplateMapper;
 import cn.ypbin.admin.system.ai.mapper.AiUsageLogMapper;
 import cn.ypbin.admin.system.ai.model.resp.AiConversationResp;
@@ -31,6 +33,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -47,12 +51,15 @@ import reactor.core.Disposable;
 @RequiredArgsConstructor
 public class AiChatBizServiceImpl implements AiChatBizService {
 
+    private static final Logger log = LoggerFactory.getLogger(AiChatBizServiceImpl.class);
+
     /** 可选注入：未配置模型时 AI 功能优雅降级，不影响服务启动 */
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
     private final AiConversationMapper conversationMapper;
     private final AiMessageMapper messageMapper;
     private final AiPromptTemplateMapper promptTemplateMapper;
     private final AiUsageLogMapper usageLogMapper;
+    private final AiModelConfigMapper modelConfigMapper;
 
     @Override
     public SseEmitter chat(Long conversationId, String message, Long knowledgeBaseId,
@@ -89,7 +96,9 @@ public class AiChatBizServiceImpl implements AiChatBizService {
             SseEmitter errEmitter = new SseEmitter(0L);
             try {
                 errEmitter.send("AI 模块未启用，请在配置中设置 ypbin.ai.enabled=true 并引入模型 starter");
-            } catch (Exception ignore) { }
+            } catch (Exception e) {
+                log.warn("[ypbin-ai] 发送 AI 未启用提示失败：conversationId={}", finalConvId, e);
+            }
             errEmitter.complete();
             return errEmitter;
         }
@@ -185,16 +194,23 @@ public class AiChatBizServiceImpl implements AiChatBizService {
         saveMessage(conversationId, tenantId, "assistant", content, tokens);
         // 写入用量日志，供统计页使用
         AiConversation conv = conversationMapper.selectById(conversationId);
-        AiUsageLog log = new AiUsageLog();
-        log.setTenantId(tenantId);
-        log.setUserId(conv != null ? conv.getUserId() : null);
-        log.setConversationId(conversationId);
-        log.setModelId(conv != null ? conv.getModelId() : null);
-        log.setOutputTokens(tokens);
-        log.setInputTokens(0);
-        log.setTotalTokens(tokens);
-        log.setLatencyMs(0L);
-        usageLogMapper.insert(log);
+        AiUsageLog usage = new AiUsageLog();
+        usage.setTenantId(tenantId);
+        usage.setUserId(conv != null ? conv.getUserId() : null);
+        usage.setConversationId(conversationId);
+        usage.setModelId(conv != null ? conv.getModelId() : null);
+        // 冗余模型名（防改名影响统计），无配置时保持 null
+        if (conv != null && conv.getModelId() != null) {
+            AiModelConfig modelConfig = modelConfigMapper.selectById(conv.getModelId());
+            if (modelConfig != null) {
+                usage.setModelName(modelConfig.getModelName());
+            }
+        }
+        usage.setOutputTokens(tokens);
+        usage.setInputTokens(0);
+        usage.setTotalTokens(tokens);
+        usage.setLatencyMs(0L);
+        usageLogMapper.insert(usage);
     }
 
     // ---------- private helpers ----------

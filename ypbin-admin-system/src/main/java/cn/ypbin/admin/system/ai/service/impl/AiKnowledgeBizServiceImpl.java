@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
+import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.ai.rag.AiRagService;
@@ -53,7 +54,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
     @Override
-    public AiKnowledgeBase createKnowledgeBase(cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq req) {
+    public AiKnowledgeBase createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
         Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
         AiKnowledgeBase kb = new AiKnowledgeBase();
         kb.setTenantId(tenantId);
@@ -92,20 +93,29 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     public AiDocument uploadDocument(Long knowledgeBaseId, MultipartFile file) {
         requireKb(knowledgeBaseId);
         Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
 
         // 先落库，状态"处理中"
         AiDocument doc = new AiDocument();
         doc.setKnowledgeBaseId(knowledgeBaseId);
         doc.setTenantId(tenantId);
-        doc.setFilename(file.getOriginalFilename());
+        doc.setFilename(filename);
         doc.setFileSize(file.getSize());
         doc.setChunkCount(0);
         doc.setStatus(0);
         doc.setCreateTime(LocalDateTime.now());
         documentMapper.insert(doc);
 
-        // 异步向量化
-        vectorizeAsync(doc.getId(), knowledgeBaseId, file);
+        // 请求线程内读取字节，避免 @Async 线程中 MultipartFile 已不可读
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (Exception e) {
+            markDocFailed(doc.getId(), "文件读取失败：" + e.getMessage());
+            return doc;
+        }
+        // 异步向量化（仅传字节，不传 MultipartFile）
+        vectorizeAsync(doc.getId(), knowledgeBaseId, filename, bytes);
 
         return doc;
     }
@@ -137,23 +147,22 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         if (aiChatService == null) {
             return "AI 模块未启用，请配置 ypbin.ai.enabled=true";
         }
-        return aiChatService.chatWithKnowledge(
+        List<String> tokens = aiChatService.chatWithKnowledge(
             "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
             .collectList()
-            .block()
-            .stream()
-            .reduce("", String::concat);
+            .block();
+        return tokens == null ? "" : String.join("", tokens);
     }
 
     @Async
-    void vectorizeAsync(Long docId, Long knowledgeBaseId, MultipartFile file) {
+    void vectorizeAsync(Long docId, Long knowledgeBaseId, String filename, byte[] bytes) {
         AiRagService ragService = ragServiceProvider.getIfAvailable();
         if (ragService == null) {
             markDocFailed(docId, "RAG 未启用，请配置 ypbin.ai.rag.enabled=true 及向量库");
             return;
         }
         try {
-            List<Document> chunks = parseAndChunk(file, docId, knowledgeBaseId);
+            List<Document> chunks = parseAndChunk(bytes, filename, docId, knowledgeBaseId);
             ragService.ingest(String.valueOf(knowledgeBaseId), chunks);
             // 更新文档状态为"就绪"
             AiDocument update = new AiDocument();
@@ -171,14 +180,13 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         }
     }
 
-    private List<Document> parseAndChunk(MultipartFile file, Long docId, Long knowledgeBaseId)
-            throws Exception {
-        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
+    private List<Document> parseAndChunk(byte[] bytes, String filename, Long docId,
+            Long knowledgeBaseId) {
         Map<String, Object> metadata = Map.of(
             "knowledgeBaseId", String.valueOf(knowledgeBaseId),
             "documentId", String.valueOf(docId),
             "filename", filename);
-        return DocumentLoader.loadAndChunk(file.getBytes(), filename, metadata);
+        return DocumentLoader.loadAndChunk(bytes, filename, metadata);
     }
 
     private void markDocFailed(Long docId, String errorMsg) {

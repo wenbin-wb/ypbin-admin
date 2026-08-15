@@ -186,12 +186,17 @@ ypbin:
       enabled: true
       default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
       window-size: 20                          # 携带历史消息条数
+      rag-enabled: false                       # 全局 RAG（普通对话也检索向量库），需 rag.enabled=true
     memory:
       type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
+      window-size: 20                          # 记忆窗口大小
     rag:
       enabled: false                           # 需要向量库时改为 true
       top-k: 5
       similarity-threshold: 0.7
+      max-context-length: 8000                 # 检索上下文最大字符数
+    model-config:
+      secret-key: ${AI_MODEL_SECRET_KEY:}      # API Key 加密密钥（16/24/32 字节），生产必须注入
 
 # tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
 captcha:

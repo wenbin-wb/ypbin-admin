@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.admin.system.ai.core.AiKeyCipher;
 import cn.ypbin.admin.system.ai.entity.AiModelConfig;
 import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.admin.system.ai.model.req.AiModelConfigSaveReq;
@@ -39,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
+    private final AiKeyCipher keyCipher;
     /** Spring AI 的 ChatModel（optional，用于连通性测试）*/
     private final ObjectProvider<ChatModel> chatModelProvider;
 
@@ -59,13 +61,19 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         BeanUtils.copyProperties(req, config);
         config.setTenantId(TenantContext.getTenantId().map(Long::intValue).orElse(1));
         config.setIsDefault(0);
+        // API Key AES-GCM 加密后存储，禁止明文落库
+        config.setApiKey(keyCipher.encrypt(req.getApiKey()));
         modelConfigMapper.insert(config);
     }
 
     @Override
     public void updateModel(Long id, AiModelConfigSaveReq req) {
         AiModelConfig existing = requireModel(id);
-        BeanUtils.copyProperties(req, existing, "id", "tenantId", "isDefault");
+        BeanUtils.copyProperties(req, existing, "id", "tenantId", "isDefault", "apiKey");
+        // 留空表示不修改，非空则重新加密
+        if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
+            existing.setApiKey(keyCipher.encrypt(req.getApiKey()));
+        }
         modelConfigMapper.updateById(existing);
     }
 
