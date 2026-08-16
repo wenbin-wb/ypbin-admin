@@ -60,12 +60,14 @@ public class AiChatController extends BaseController {
 
     /** 获取当前用户的会话列表 */
     @GetMapping("/conversations")
+    @SaCheckPermission("ai:chat:send")
     public R<List<AiConversationResp>> listConversations() {
         return ok(chatBizService.listConversations());
     }
 
     /** 新建会话 */
     @PostMapping("/conversations")
+    @SaCheckPermission("ai:chat:send")
     public R<AiConversationResp> createConversation(
             @RequestParam(required = false) Long modelId) {
         return ok(chatBizService.createConversation(modelId));
@@ -73,6 +75,7 @@ public class AiChatController extends BaseController {
 
     /** 获取会话历史消息 */
     @GetMapping("/conversations/{conversationId}/messages")
+    @SaCheckPermission("ai:chat:send")
     public R<PageResult<AiMessageResp>> pageMessages(
             @PathVariable Long conversationId, PageQuery query) {
         return ok(chatBizService.pageMessages(conversationId, query));
@@ -80,6 +83,7 @@ public class AiChatController extends BaseController {
 
     /** 删除会话（同时清除 AI Memory） */
     @DeleteMapping("/conversations/{conversationId}")
+    @SaCheckPermission("ai:chat:send")
     public R<Void> deleteConversation(@PathVariable Long conversationId) {
         chatBizService.deleteConversation(conversationId);
         return ok();
@@ -87,6 +91,7 @@ public class AiChatController extends BaseController {
 
     /** 修改会话标题 */
     @PutMapping("/conversations/{conversationId}/title")
+    @SaCheckPermission("ai:chat:send")
     public R<Void> renameConversation(
             @PathVariable Long conversationId,
             @RequestBody Map<String, String> body) {

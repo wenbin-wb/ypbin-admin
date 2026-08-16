@@ -65,6 +65,9 @@ public interface AiChatBizService {
 
     /**
      * 异步保存助手回复消息（流式结束后落库，不阻塞 SSE 流）。
+     *
+     * <p>异步线程无请求上下文，租户 ID 由调用方（请求线程）显式传入。
      */
-    void saveAssistantMessageAsync(Long conversationId, String content, int tokens);
+    void saveAssistantMessageAsync(Long conversationId, Integer tenantId,
+            String content, int tokens);
 }

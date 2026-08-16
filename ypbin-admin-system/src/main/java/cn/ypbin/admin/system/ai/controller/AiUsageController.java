@@ -6,14 +6,22 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package cn.ypbin.admin.system.ai.controller;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.ai.entity.AiUsageLog;
 import cn.ypbin.admin.system.ai.mapper.AiUsageLogMapper;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.tenant.core.TenantContext;
+import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,7 +37,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * AI Token 用量统计接口。
+ * AI Token 用量统计接口（平台级，仅授权角色可见）。
  *
  * @author wenbin
  * @since 2026-08-15
@@ -49,10 +57,11 @@ public class AiUsageController extends BaseController {
      * @return 每天的 totalTokens 合计
      */
     @GetMapping("/daily")
+    @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> dailyUsage(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         LocalDateTime from = (startDate != null ? startDate : LocalDate.now().minusDays(29)).atStartOfDay();
         LocalDateTime to = (endDate != null ? endDate.plusDays(1) : LocalDate.now().plusDays(1)).atStartOfDay();
         List<AiUsageLog> logs = usageLogMapper.selectList(
@@ -76,8 +85,9 @@ public class AiUsageController extends BaseController {
      * 按模型聚合的 Token 用量（饼图数据）。
      */
     @GetMapping("/by-model")
+    @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> byModel() {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         List<AiUsageLog> logs = usageLogMapper.selectList(
             new LambdaQueryWrapper<AiUsageLog>()
                 .eq(AiUsageLog::getTenantId, tenantId));
@@ -96,8 +106,9 @@ public class AiUsageController extends BaseController {
      * 用量概览：总对话数、总 Token 数、平均响应耗时。
      */
     @GetMapping("/summary")
+    @SaCheckPermission("ai:usage:view")
     public R<Map<String, Object>> summary() {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         List<AiUsageLog> logs = usageLogMapper.selectList(
             new LambdaQueryWrapper<AiUsageLog>().eq(AiUsageLog::getTenantId, tenantId));
         long totalTokens = logs.stream()
@@ -109,5 +120,14 @@ public class AiUsageController extends BaseController {
             "totalCalls", logs.size(),
             "totalTokens", totalTokens,
             "avgLatencyMs", Math.round(avgLatency)));
+    }
+
+    /**
+     * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
+     */
+    private static Integer currentTenantId() {
+        return UserContext.getTenantId()
+            .map(Long::intValue)
+            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 }

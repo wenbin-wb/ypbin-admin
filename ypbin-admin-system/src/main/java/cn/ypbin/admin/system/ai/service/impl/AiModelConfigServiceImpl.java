@@ -16,8 +16,7 @@ import cn.ypbin.admin.system.ai.model.req.AiModelConfigSaveReq;
 import cn.ypbin.admin.system.ai.model.resp.AiModelConfigResp;
 import cn.ypbin.admin.system.ai.service.AiModelConfigService;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.security.core.LoginHelper;
-import cn.ypbin.starter.tenant.core.TenantContext;
+import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.io.IOException;
@@ -48,20 +47,22 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public List<AiModelConfigResp> listModels() {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         List<AiModelConfig> list = modelConfigMapper.selectList(
             new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
+                .eq(AiModelConfig::getStatus, 1)
                 .orderByDesc(AiModelConfig::getIsDefault)
                 .orderByDesc(AiModelConfig::getCreateTime));
         return list.stream().map(this::toResp).toList();
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createModel(AiModelConfigSaveReq req) {
         AiModelConfig config = new AiModelConfig();
         BeanUtils.copyProperties(req, config);
-        config.setTenantId(TenantContext.getTenantId().map(Long::intValue).orElse(1));
+        config.setTenantId(currentTenantId());
         config.setIsDefault(0);
         // API Key AES-GCM 加密后存储，禁止明文落库
         config.setApiKey(keyCipher.encrypt(req.getApiKey()));
@@ -69,9 +70,10 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateModel(Long id, AiModelConfigSaveReq req) {
         AiModelConfig existing = requireModel(id);
-        BeanUtils.copyProperties(req, existing, "id", "tenantId", "isDefault", "apiKey");
+        BeanUtils.copyProperties(req, existing, "id", "tenantId", "isDefault", "status", "apiKey");
         // 留空表示不修改，非空则重新加密
         if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
             existing.setApiKey(keyCipher.encrypt(req.getApiKey()));
@@ -80,6 +82,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteModel(Long id) {
         AiModelConfig existing = requireModel(id);
         if (existing.getIsDefault() != null && existing.getIsDefault() == 1) {
@@ -92,7 +95,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     @Transactional(rollbackFor = Exception.class)
     public void setDefault(Long id) {
         requireModel(id);
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         // 先清空同租户所有默认标记
         modelConfigMapper.update(null,
             new LambdaUpdateWrapper<AiModelConfig>()
@@ -178,13 +181,22 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public AiModelConfig getDefaultModel() {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         return modelConfigMapper.selectOne(
             new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
                 .eq(AiModelConfig::getIsDefault, 1)
                 .eq(AiModelConfig::getStatus, 1)
                 .last("LIMIT 1"));
+    }
+
+    /**
+     * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
+     */
+    private static Integer currentTenantId() {
+        return UserContext.getTenantId()
+            .map(Long::intValue)
+            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 
     private AiModelConfig requireModel(Long id) {

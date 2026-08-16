@@ -6,6 +6,12 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
@@ -22,9 +28,11 @@ import cn.ypbin.admin.system.ai.model.resp.AiConversationResp;
 import cn.ypbin.admin.system.ai.model.resp.AiMessageResp;
 import cn.ypbin.admin.system.ai.service.AiChatBizService;
 import cn.ypbin.starter.ai.chat.AiChatService;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.security.core.LoginHelper;
+import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -38,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
 
@@ -65,9 +74,9 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     public SseEmitter chat(Long conversationId, String message, Long knowledgeBaseId,
             Long promptTemplateId) {
         Long userId = LoginHelper.getUserId();
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
 
-        // 会话不存在则新建
+        // 会话不存在则新建；已存在则校验归属（防跨用户越权）
         Long finalConvId = ensureConversation(conversationId, userId, tenantId);
 
         // 落库用户消息
@@ -90,17 +99,10 @@ public class AiChatBizServiceImpl implements AiChatBizService {
 
         String convIdStr = String.valueOf(finalConvId);
 
-        // 选择对话方式（AI 未配置时抛出明确错误，不影响服务启动）
+        // 选择对话方式（AI 未配置时发送错误帧，不影响服务启动）
         AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
         if (aiChatService == null) {
-            SseEmitter errEmitter = new SseEmitter(0L);
-            try {
-                errEmitter.send("AI 模块未启用，请在配置中设置 ypbin.ai.enabled=true 并引入模型 starter");
-            } catch (Exception e) {
-                log.warn("[ypbin-ai] 发送 AI 未启用提示失败：conversationId={}", finalConvId, e);
-            }
-            errEmitter.complete();
-            return errEmitter;
+            return errorEmitter("AI 模块未启用，请在配置中设置 ypbin.ai.enabled=true 并引入模型 starter");
         }
 
         var stream = knowledgeBaseId != null
@@ -110,6 +112,8 @@ public class AiChatBizServiceImpl implements AiChatBizService {
                     resolveSystemPrompt(promptTemplateId), message)
                 : aiChatService.chatStream(convIdStr, message));
 
+        // 订阅引用前置：doOnNext/doOnError 与超时回调都可能在订阅赋值前触发
+        AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
         Disposable subscription = stream
             .doOnNext(token -> {
                 try {
@@ -118,30 +122,55 @@ public class AiChatBizServiceImpl implements AiChatBizService {
                     tokenCount.incrementAndGet();
                 } catch (Exception e) {
                     log.warn("[ypbin-ai] 发送流式帧失败：conversationId={}", finalConvId, e);
+                    disposeQuietly(subscriptionRef);
                     emitter.complete();
                 }
             })
             .doOnError(e -> {
                 log.error("[ypbin-ai] 流式对话失败：conversationId={}", finalConvId, e);
                 try {
-                    emitter.send("对话出错：" + rootMessage(e));
+                    emitter.send(SseEmitter.event().name("error")
+                        .data("对话出错：" + rootMessage(e)));
                 } catch (Exception sendEx) {
                     log.warn("[ypbin-ai] 发送错误提示失败：conversationId={}", finalConvId, sendEx);
                 }
+                disposeQuietly(subscriptionRef);
                 emitter.complete();
             })
             .doOnComplete(() -> {
                 emitter.complete();
-                // 流式结束后异步落库助手回复
-                saveAssistantMessageAsync(finalConvId,
+                // 流式结束后异步落库助手回复（请求线程的租户上下文在此传入）
+                saveAssistantMessageAsync(finalConvId, tenantId,
                     contentBuffer.get().toString(), tokenCount.get());
             })
             .subscribe();
+        subscriptionRef.set(subscription);
 
-        emitter.onTimeout(subscription::dispose);
-        emitter.onError(e -> subscription.dispose());
+        emitter.onTimeout(() -> disposeQuietly(subscriptionRef));
+        emitter.onError(e -> disposeQuietly(subscriptionRef));
 
         return emitter;
+    }
+
+    /**
+     * 构造仅推送一条错误帧（event:error）的 SSE 响应。
+     */
+    private static SseEmitter errorEmitter(String message) {
+        SseEmitter emitter = new SseEmitter(0L);
+        try {
+            emitter.send(SseEmitter.event().name("error").data(message));
+        } catch (Exception e) {
+            log.warn("[ypbin-ai] 发送错误提示失败", e);
+        }
+        emitter.complete();
+        return emitter;
+    }
+
+    private static void disposeQuietly(AtomicReference<Disposable> ref) {
+        Disposable d = ref.get();
+        if (d != null) {
+            d.dispose();
+        }
     }
 
     /**
@@ -168,6 +197,8 @@ public class AiChatBizServiceImpl implements AiChatBizService {
 
     @Override
     public PageResult<AiMessageResp> pageMessages(Long conversationId, PageQuery query) {
+        Long userId = LoginHelper.getUserId();
+        requireOwnedConversation(conversationId, userId);
         Page<AiMessage> page = messageMapper.selectPage(
             new Page<>(query.getPage(), query.getPageSize()),
             new LambdaQueryWrapper<AiMessage>()
@@ -178,9 +209,10 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AiConversationResp createConversation(Long modelId) {
         Long userId = LoginHelper.getUserId();
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         AiConversation conv = new AiConversation();
         conv.setUserId(userId);
         conv.setTenantId(tenantId);
@@ -191,7 +223,10 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteConversation(Long conversationId) {
+        Long userId = LoginHelper.getUserId();
+        requireOwnedConversation(conversationId, userId);
         conversationMapper.deleteById(conversationId);
         // 清除 AI Memory（有 AiChatService 时才清）
         AiChatService svc = aiChatServiceProvider.getIfAvailable();
@@ -201,7 +236,10 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void renameConversation(Long conversationId, String title) {
+        Long userId = LoginHelper.getUserId();
+        requireOwnedConversation(conversationId, userId);
         AiConversation conv = new AiConversation();
         conv.setId(conversationId);
         conv.setTitle(title);
@@ -210,37 +248,60 @@ public class AiChatBizServiceImpl implements AiChatBizService {
 
     @Override
     @Async
-    public void saveAssistantMessageAsync(Long conversationId, String content, int tokens) {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
-        saveMessage(conversationId, tenantId, "assistant", content, tokens);
-        // 写入用量日志，供统计页使用；会话查询不到（如异步线程租户上下文缺失）时跳过，避免空 userId 插入失败
-        AiConversation conv = conversationMapper.selectById(conversationId);
-        if (conv == null) {
-            log.warn("[ypbin-ai] 会话不存在，跳过用量记录：conversationId={}", conversationId);
-            return;
-        }
-        AiUsageLog usage = new AiUsageLog();
-        usage.setTenantId(tenantId);
-        usage.setUserId(conv.getUserId());
-        usage.setConversationId(conversationId);
-        usage.setModelId(conv.getModelId());
-        // 冗余模型名（防改名影响统计），无配置时保持 null
-        if (conv.getModelId() != null) {
-            AiModelConfig modelConfig = modelConfigMapper.selectById(conv.getModelId());
-            if (modelConfig != null) {
-                usage.setModelName(modelConfig.getModelName());
+    public void saveAssistantMessageAsync(Long conversationId, Integer tenantId,
+            String content, int tokens) {
+        // 异步线程无请求上下文，按传入租户包裹执行，保证行级隔离与审计正确
+        TenantContext.runWithTenant(tenantId.longValue(), () -> {
+            saveMessage(conversationId, tenantId, "assistant", content, tokens);
+            // 写入用量日志，供统计页使用；会话查询不到时跳过，避免空 userId 插入失败
+            AiConversation conv = conversationMapper.selectById(conversationId);
+            if (conv == null) {
+                log.warn("[ypbin-ai] 会话不存在，跳过用量记录：conversationId={}", conversationId);
+                return;
             }
-        }
-        usage.setOutputTokens(tokens);
-        usage.setInputTokens(0);
-        usage.setTotalTokens(tokens);
-        usage.setLatencyMs(0L);
-        usageLogMapper.insert(usage);
+            AiUsageLog usage = new AiUsageLog();
+            usage.setTenantId(tenantId);
+            usage.setUserId(conv.getUserId());
+            usage.setConversationId(conversationId);
+            usage.setModelId(conv.getModelId());
+            // 冗余模型名（防改名影响统计），无配置时保持 null
+            if (conv.getModelId() != null) {
+                AiModelConfig modelConfig = modelConfigMapper.selectById(conv.getModelId());
+                if (modelConfig != null) {
+                    usage.setModelName(modelConfig.getModelName());
+                }
+            }
+            usage.setOutputTokens(tokens);
+            usage.setInputTokens(0);
+            usage.setTotalTokens(tokens);
+            usage.setLatencyMs(0L);
+            usageLogMapper.insert(usage);
+        });
     }
 
+    /**
+     * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
+     */
+    private static Integer currentTenantId() {
+        return UserContext.getTenantId()
+            .map(Long::intValue)
+            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+    }
+
+    /**
+     * 会话存在性 + 归属校验：防止同租户下越权读取/操作他人会话。
+     */
+    private AiConversation requireOwnedConversation(Long conversationId, Long userId) {
+        AiConversation conv = conversationMapper.selectById(conversationId);
+        if (conv == null || !conv.getUserId().equals(userId)) {
+            throw new BusinessException("会话不存在或无权访问");
+        }
+        return conv;
+    }
 
     private Long ensureConversation(Long conversationId, Long userId, Integer tenantId) {
         if (conversationId != null) {
+            requireOwnedConversation(conversationId, userId);
             return conversationId;
         }
         AiConversation conv = new AiConversation();

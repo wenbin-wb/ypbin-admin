@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
@@ -25,7 +26,8 @@ import lombok.Setter;
 /**
  * AI 知识库文档。
  *
- * <p>不继承 BaseEntity：无逻辑删除（删除即硬删）、无 status 字段（用 status 列区分处理状态）。
+ * <p>不继承 BaseEntity：无审计字段；逻辑删除列 is_deleted 通过 {@link TableLogic} 接管，
+ * status 列区分向量化处理状态。
  *
  * @author wenbin
  * @since 2026-08-15
@@ -77,4 +79,8 @@ public class AiDocument implements Serializable {
     /** 更新时间 */
     @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+
+    /** 逻辑删除：0 正常 1 已删除 */
+    @TableLogic
+    private Integer isDeleted;
 }

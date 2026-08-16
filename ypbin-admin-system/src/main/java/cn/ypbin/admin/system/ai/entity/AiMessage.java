@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.ai.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
@@ -23,7 +24,8 @@ import lombok.Setter;
 /**
  * AI 消息记录（展示用，AI Memory 独立持久化）。
  *
- * <p>不继承 BaseEntity：无逻辑删除、无 update_user / update_time / status 字段。
+ * <p>不继承 BaseEntity：无审计字段（update_user / update_time / status），
+ * 逻辑删除列 is_deleted 通过 {@link TableLogic} 接管。
  *
  * @author wenbin
  * @since 2026-08-15
@@ -59,4 +61,8 @@ public class AiMessage implements Serializable {
 
     /** 创建时间 */
     private LocalDateTime createTime;
+
+    /** 逻辑删除：0 正常 1 已删除 */
+    @TableLogic
+    private Integer isDeleted;
 }

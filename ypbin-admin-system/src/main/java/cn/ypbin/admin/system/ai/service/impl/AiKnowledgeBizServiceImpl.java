@@ -6,6 +6,12 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
@@ -14,26 +20,25 @@ import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
+import cn.ypbin.admin.system.ai.service.AiDocumentVectorizer;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.ai.rag.AiRagService;
-import cn.ypbin.starter.ai.rag.DocumentLoader;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
-import cn.ypbin.starter.tenant.core.TenantContext;
+import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.document.Document;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -48,16 +53,20 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     private static final Logger log = LoggerFactory.getLogger(AiKnowledgeBizServiceImpl.class);
 
+    /** 知识库问答阻塞等待上限：模型超时/挂起时不再无限占线程 */
+    private static final Duration QUERY_BLOCK_TIMEOUT = Duration.ofSeconds(60);
+
     private final AiKnowledgeBaseMapper kbMapper;
     private final AiDocumentMapper documentMapper;
+    private final AiDocumentVectorizer documentVectorizer;
     private final ObjectProvider<AiRagService> ragServiceProvider;
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AiKnowledgeBase createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
         AiKnowledgeBase kb = new AiKnowledgeBase();
-        kb.setTenantId(tenantId);
+        kb.setTenantId(currentTenantId());
         kb.setName(req.getName());
         kb.setDescription(req.getDescription());
         kb.setRemark(req.getRemark());
@@ -68,7 +77,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     @Override
     public List<AiKnowledgeBase> listKnowledgeBases() {
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         return kbMapper.selectList(
             new LambdaQueryWrapper<AiKnowledgeBase>()
                 .eq(AiKnowledgeBase::getTenantId, tenantId)
@@ -76,6 +85,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteKnowledgeBase(Long id) {
         requireKb(id);
         // 删向量数据
@@ -92,7 +102,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     @Override
     public AiDocument uploadDocument(Long knowledgeBaseId, MultipartFile file) {
         requireKb(knowledgeBaseId);
-        Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
+        Integer tenantId = currentTenantId();
         String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
 
         // 先落库，状态"处理中"
@@ -103,7 +113,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         doc.setFileSize(file.getSize());
         doc.setChunkCount(0);
         doc.setStatus(0);
-        doc.setCreateTime(LocalDateTime.now());
+        doc.setCreateTime(java.time.LocalDateTime.now());
         documentMapper.insert(doc);
 
         // 请求线程内读取字节，避免 @Async 线程中 MultipartFile 已不可读
@@ -114,8 +124,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             markDocFailed(doc.getId(), "文件读取失败：" + e.getMessage());
             return doc;
         }
-        // 异步向量化（仅传字节，不传 MultipartFile）
-        vectorizeAsync(doc.getId(), knowledgeBaseId, filename, bytes);
+        // 异步向量化（独立 Bean 调用，保证 @Async 代理生效；仅传字节，不传 MultipartFile）
+        documentVectorizer.vectorizeAsync(doc.getId(), knowledgeBaseId, tenantId, filename, bytes);
 
         return doc;
     }
@@ -131,14 +141,18 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteDocument(Long knowledgeBaseId, Long docId) {
         AiRagService ragService = ragServiceProvider.getIfAvailable();
         if (ragService != null) {
             ragService.deleteDocument(String.valueOf(knowledgeBaseId), String.valueOf(docId));
         }
         documentMapper.deleteById(docId);
-        // 更新知识库文档计数
-        decrementDocCount(knowledgeBaseId);
+        // 更新知识库文档计数（原子 SQL，避免并发读改写漂移）
+        kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
+            .eq(AiKnowledgeBase::getId, knowledgeBaseId)
+            .gt(AiKnowledgeBase::getDocCount, 0)
+            .setSql("doc_count = doc_count - 1"));
     }
 
     @Override
@@ -150,43 +164,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         List<String> tokens = aiChatService.chatWithKnowledge(
             "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
             .collectList()
-            .block();
+            .block(QUERY_BLOCK_TIMEOUT);
         return tokens == null ? "" : String.join("", tokens);
-    }
-
-    @Async
-    void vectorizeAsync(Long docId, Long knowledgeBaseId, String filename, byte[] bytes) {
-        AiRagService ragService = ragServiceProvider.getIfAvailable();
-        if (ragService == null) {
-            markDocFailed(docId, "RAG 未启用，请配置 ypbin.ai.rag.enabled=true 及向量库");
-            return;
-        }
-        try {
-            List<Document> chunks = parseAndChunk(bytes, filename, docId, knowledgeBaseId);
-            ragService.ingest(String.valueOf(knowledgeBaseId), chunks);
-            // 更新文档状态为"就绪"
-            AiDocument update = new AiDocument();
-            update.setId(docId);
-            update.setChunkCount(chunks.size());
-            update.setStatus(1);
-            update.setUpdateTime(LocalDateTime.now());
-            documentMapper.updateById(update);
-            // 更新知识库文档计数
-            incrementDocCount(knowledgeBaseId);
-            log.debug("[ypbin-ai] 文档向量化完成: docId={}, chunks={}", docId, chunks.size());
-        } catch (Exception e) {
-            log.error("[ypbin-ai] 文档向量化失败: docId={}", docId, e);
-            markDocFailed(docId, e.getMessage());
-        }
-    }
-
-    private List<Document> parseAndChunk(byte[] bytes, String filename, Long docId,
-            Long knowledgeBaseId) {
-        Map<String, Object> metadata = Map.of(
-            "knowledgeBaseId", String.valueOf(knowledgeBaseId),
-            "documentId", String.valueOf(docId),
-            "filename", filename);
-        return DocumentLoader.loadAndChunk(bytes, filename, metadata);
     }
 
     private void markDocFailed(Long docId, String errorMsg) {
@@ -195,24 +174,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         update.setStatus(2);
         update.setErrorMsg(errorMsg != null && errorMsg.length() > 490
             ? errorMsg.substring(0, 490) : errorMsg);
-        update.setUpdateTime(LocalDateTime.now());
+        update.setUpdateTime(java.time.LocalDateTime.now());
         documentMapper.updateById(update);
-    }
-
-    private void incrementDocCount(Long kbId) {
-        AiKnowledgeBase kb = kbMapper.selectById(kbId);
-        if (kb != null) {
-            kb.setDocCount(kb.getDocCount() == null ? 1 : kb.getDocCount() + 1);
-            kbMapper.updateById(kb);
-        }
-    }
-
-    private void decrementDocCount(Long kbId) {
-        AiKnowledgeBase kb = kbMapper.selectById(kbId);
-        if (kb != null && kb.getDocCount() != null && kb.getDocCount() > 0) {
-            kb.setDocCount(kb.getDocCount() - 1);
-            kbMapper.updateById(kb);
-        }
     }
 
     private AiKnowledgeBase requireKb(Long id) {
@@ -221,5 +184,14 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             throw new BusinessException("知识库不存在");
         }
         return kb;
+    }
+
+    /**
+     * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
+     */
+    private static Integer currentTenantId() {
+        return UserContext.getTenantId()
+            .map(Long::intValue)
+            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 }
