@@ -193,6 +193,42 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         return result;
     }
 
+    @Override
+    public List<Map<String, Object>> searchMultipleTest(List<Long> knowledgeBaseIds,
+            String question, int topKPerKb) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null || knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> kbIds = knowledgeBaseIds.stream().map(String::valueOf).toList();
+        List<Document> merged = ragService.searchMultiple(kbIds, question, topKPerKb, 10);
+        return merged.stream().map(this::toSearchHit).toList();
+    }
+
+    @Override
+    public List<Map<String, Object>> searchRerankTest(Long knowledgeBaseId, String question,
+            int topK) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            return List.of();
+        }
+        requireKb(knowledgeBaseId);
+        List<Document> reranked = ragService.searchWithRerank(
+            String.valueOf(knowledgeBaseId), question, topK);
+        return reranked.stream().map(this::toSearchHit).toList();
+    }
+
+    /**
+     * 将召回 Document 转为前端检索测试器展示用的 Map。
+     */
+    private Map<String, Object> toSearchHit(Document doc) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("content", doc.getText());
+        item.put("metadata", doc.getMetadata());
+        item.put("source", doc.getMetadata().get("source"));
+        return item;
+    }
+
     private void markDocFailed(Long docId, String errorMsg) {
         AiDocument update = new AiDocument();
         update.setId(docId);

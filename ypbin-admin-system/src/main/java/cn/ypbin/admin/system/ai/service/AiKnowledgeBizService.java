@@ -55,4 +55,11 @@ public interface AiKnowledgeBizService {
 
     /** 检索测试：返回召回的文档片段列表（含原文与元数据），供检索测试器展示调优 */
     List<Map<String, Object>> searchTest(Long knowledgeBaseId, String question, int topK);
+
+    /** 多知识库联合检索测试：跨库召回合并（RRF），供前端比对单库/多库效果 */
+    List<Map<String, Object>> searchMultipleTest(List<Long> knowledgeBaseIds, String question,
+            int topKPerKb);
+
+    /** 关键词重叠重排测试：对召回片段做精排后返回，供前端观察重排效果 */
+    List<Map<String, Object>> searchRerankTest(Long knowledgeBaseId, String question, int topK);
 }

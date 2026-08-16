@@ -108,4 +108,30 @@ public class AiKnowledgeBaseController extends BaseController {
         int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
         return ok(knowledgeBizService.searchTest(id, question, topK));
     }
+
+    /** 多知识库联合检索测试（跨库 RRF 合并） */
+    @PostMapping("/search-multiple-test")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<List<Map<String, Object>>> searchMultipleTest(
+            @RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<?> rawIds = (List<?>) body.get("knowledgeBaseIds");
+        List<Long> kbIds = rawIds == null ? List.of()
+            : rawIds.stream().map(x -> Long.valueOf(String.valueOf(x))).toList();
+        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
+        int topKPerKb = body.get("topKPerKb") == null
+            ? 5 : Integer.parseInt(String.valueOf(body.get("topKPerKb")));
+        return ok(knowledgeBizService.searchMultipleTest(kbIds, question, topKPerKb));
+    }
+
+    /** 关键词重叠重排测试 */
+    @PostMapping("/{id}/search-rerank-test")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<List<Map<String, Object>>> searchRerankTest(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
+        int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
+        return ok(knowledgeBizService.searchRerankTest(id, question, topK));
+    }
 }
