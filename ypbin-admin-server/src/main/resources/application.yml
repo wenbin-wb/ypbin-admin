@@ -186,11 +186,11 @@ ypbin:
     chat:
       enabled: true
       default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
-      window-size: 20                          # 携带历史消息条数
+      window-size: 10                          # 携带历史消息条数
       rag-enabled: false                       # 全局 RAG（普通对话也检索向量库），需 rag.enabled=true
     memory:
       type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
-      window-size: 20                          # 记忆窗口大小
+      window-size: 10                          # 记忆窗口大小
     rag:
       enabled: false                           # 需要向量库时改为 true
       top-k: 5

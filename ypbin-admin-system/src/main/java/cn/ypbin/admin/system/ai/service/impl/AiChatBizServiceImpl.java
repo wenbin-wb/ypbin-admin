@@ -213,15 +213,19 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     public void saveAssistantMessageAsync(Long conversationId, String content, int tokens) {
         Integer tenantId = TenantContext.getTenantId().map(Long::intValue).orElse(1);
         saveMessage(conversationId, tenantId, "assistant", content, tokens);
-        // 写入用量日志，供统计页使用
+        // 写入用量日志，供统计页使用；会话查询不到（如异步线程租户上下文缺失）时跳过，避免空 userId 插入失败
         AiConversation conv = conversationMapper.selectById(conversationId);
+        if (conv == null) {
+            log.warn("[ypbin-ai] 会话不存在，跳过用量记录：conversationId={}", conversationId);
+            return;
+        }
         AiUsageLog usage = new AiUsageLog();
         usage.setTenantId(tenantId);
-        usage.setUserId(conv != null ? conv.getUserId() : null);
+        usage.setUserId(conv.getUserId());
         usage.setConversationId(conversationId);
-        usage.setModelId(conv != null ? conv.getModelId() : null);
+        usage.setModelId(conv.getModelId());
         // 冗余模型名（防改名影响统计），无配置时保持 null
-        if (conv != null && conv.getModelId() != null) {
+        if (conv.getModelId() != null) {
             AiModelConfig modelConfig = modelConfigMapper.selectById(conv.getModelId());
             if (modelConfig != null) {
                 usage.setModelName(modelConfig.getModelName());
