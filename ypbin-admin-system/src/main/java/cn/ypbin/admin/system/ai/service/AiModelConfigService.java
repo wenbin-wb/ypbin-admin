@@ -37,6 +37,12 @@ public interface AiModelConfigService {
     /** 设为默认模型（同一租户下其他模型 is_default 改为 0） */
     void setDefault(Long id);
 
+    /** 启用/停用模型（默认模型禁止停用） */
+    void updateStatus(Long id, Integer status);
+
+    /** 复制模型配置（新配置默认非默认、启用，名称追加“（副本）”） */
+    Long duplicate(Long id);
+
     /** 测试连通性（发一条 ping 消息，返回耗时 ms） */
     long testConnection(Long id);
 

@@ -109,6 +109,35 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateStatus(Long id, Integer status) {
+        AiModelConfig config = requireModel(id);
+        if (status != null && status == 0
+            && config.getIsDefault() != null && config.getIsDefault() == 1) {
+            throw new BusinessException("默认模型不能停用，请先更换默认模型");
+        }
+        AiModelConfig update = new AiModelConfig();
+        update.setId(id);
+        update.setStatus(status);
+        modelConfigMapper.updateById(update);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long duplicate(Long id) {
+        AiModelConfig source = requireModel(id);
+        AiModelConfig copy = new AiModelConfig();
+        BeanUtils.copyProperties(source, copy, "id", "isDefault", "status",
+            "createTime", "updateTime", "createUser", "updateUser");
+        copy.setName(source.getName() + "（副本）");
+        copy.setIsDefault(0);
+        copy.setStatus(1);
+        // API Key 密文可直接复用（同一把密钥加密，解密语义不变）
+        modelConfigMapper.insert(copy);
+        return copy.getId();
+    }
+
+    @Override
     public long testConnection(Long id) {
         AiModelConfig config = requireModel(id);
         String baseUrl = config.getBaseUrl();

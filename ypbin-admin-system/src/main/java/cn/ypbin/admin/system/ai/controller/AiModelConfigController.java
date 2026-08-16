@@ -85,6 +85,23 @@ public class AiModelConfigController extends BaseController {
         return ok();
     }
 
+    /** 启用/停用模型 */
+    @PutMapping("/{id}/status/{status}")
+    @SaCheckPermission("ai:model:edit")
+    @Log(value = "切换模型状态", module = "AI 配置")
+    public R<Void> updateStatus(@PathVariable Long id, @PathVariable Integer status) {
+        modelConfigService.updateStatus(id, status);
+        return ok();
+    }
+
+    /** 复制模型配置 */
+    @PostMapping("/{id}/duplicate")
+    @SaCheckPermission("ai:model:create")
+    @Log(value = "复制模型配置", module = "AI 配置")
+    public R<Long> duplicate(@PathVariable Long id) {
+        return ok(modelConfigService.duplicate(id));
+    }
+
     /** 测试连通性，返回响应耗时 ms */
     @PostMapping("/{id}/test")
     @SaCheckPermission("ai:model:list")
