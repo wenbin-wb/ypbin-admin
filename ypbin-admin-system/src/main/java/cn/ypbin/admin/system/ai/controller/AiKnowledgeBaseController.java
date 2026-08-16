@@ -97,4 +97,15 @@ public class AiKnowledgeBaseController extends BaseController {
             @RequestBody Map<String, String> body) {
         return ok(knowledgeBizService.query(id, body.get("question")));
     }
+
+    /** 检索测试：返回召回片段详情，供检索测试器调整 chunk 策略 */
+    @PostMapping("/{id}/search-test")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<List<Map<String, Object>>> searchTest(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
+        int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
+        return ok(knowledgeBizService.searchTest(id, question, topK));
+    }
 }

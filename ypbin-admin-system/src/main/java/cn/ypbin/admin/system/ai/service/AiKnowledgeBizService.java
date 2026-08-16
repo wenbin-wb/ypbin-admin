@@ -16,6 +16,7 @@ import cn.ypbin.admin.system.ai.model.resp.AiConversationResp;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -51,4 +52,7 @@ public interface AiKnowledgeBizService {
 
     /** 对知识库直接提问（非流式，用于"测试问答"入口） */
     String query(Long knowledgeBaseId, String question);
+
+    /** 检索测试：返回召回的文档片段列表（含原文与元数据），供检索测试器展示调优 */
+    List<Map<String, Object>> searchTest(Long knowledgeBaseId, String question, int topK);
 }

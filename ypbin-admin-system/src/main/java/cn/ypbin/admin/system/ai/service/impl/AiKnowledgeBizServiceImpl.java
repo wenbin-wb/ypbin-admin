@@ -32,13 +32,17 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.ai.document.Document;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -166,6 +170,27 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             .collectList()
             .block(QUERY_BLOCK_TIMEOUT);
         return tokens == null ? "" : String.join("", tokens);
+    }
+
+    @Override
+    public List<Map<String, Object>> searchTest(Long knowledgeBaseId, String question, int topK) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            return List.of();
+        }
+        requireKb(knowledgeBaseId);
+        int k = topK > 0 && topK <= 20 ? topK : 5;
+        List<Document> docs = ragService.search(
+            String.valueOf(knowledgeBaseId), question, k);
+        List<Map<String, Object>> result = new ArrayList<>(docs.size());
+        for (Document doc : docs) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("content", doc.getText());
+            item.put("metadata", doc.getMetadata());
+            item.put("source", doc.getMetadata().get("source"));
+            result.add(item);
+        }
+        return result;
     }
 
     private void markDocFailed(Long docId, String errorMsg) {
