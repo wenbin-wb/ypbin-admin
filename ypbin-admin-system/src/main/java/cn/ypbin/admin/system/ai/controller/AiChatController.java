@@ -10,19 +10,17 @@
 package cn.ypbin.admin.system.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.ai.model.req.AiChatReq;
-import cn.ypbin.admin.system.ai.model.resp.AiConversationResp;
-import cn.ypbin.admin.system.ai.model.resp.AiMessageResp;
-import cn.ypbin.admin.system.ai.service.AiChatBizService;
+import cn.ypbin.admin.system.ai.model.req.AiChatSendReq;
+import cn.ypbin.admin.system.ai.model.req.AiChatSessionCreateReq;
+import cn.ypbin.admin.system.ai.model.resp.AiChatMessageResp;
+import cn.ypbin.admin.system.ai.model.resp.AiChatSessionResp;
+import cn.ypbin.admin.system.ai.service.AiChatService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.crud.model.PageQuery;
-import cn.ypbin.starter.crud.model.PageResult;
+import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,64 +36,100 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * AI 对话接口。
  *
  * @author wenbin
- * @since 2026-08-15
+ * @since 2026-08-16
  */
 @RestController
 @RequestMapping("/ai/chat")
 @RequiredArgsConstructor
 public class AiChatController extends BaseController {
 
-    private final AiChatBizService chatBizService;
+    private final AiChatService chatService;
 
-    /** 流式对话（SSE text/event-stream），每个 token 作为一帧推送 */
-    @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @SaCheckPermission("ai:chat:send")
-    public SseEmitter chat(@Valid @RequestBody AiChatReq req) {
-        return chatBizService.chat(
-            req.getConversationId(),
-            req.getMessage(),
-            req.getKnowledgeBaseId(),
-            req.getPromptTemplateId());
+    /**
+     * 获取会话列表。
+     */
+    @GetMapping("/sessions")
+    @SaCheckPermission("ai:chat:list")
+    public R<List<AiChatSessionResp>> listSessions() {
+        return ok(chatService.listSessions());
     }
 
-    /** 获取当前用户的会话列表 */
-    @GetMapping("/conversations")
-    @SaCheckPermission("ai:chat:send")
-    public R<List<AiConversationResp>> listConversations() {
-        return ok(chatBizService.listConversations());
+    /**
+     * 创建新会话。
+     */
+    @PostMapping("/sessions")
+    @SaCheckPermission("ai:chat:create")
+    @Log(value = "创建对话会话", module = "AI 对话")
+    public R<Long> createSession(@Valid @RequestBody AiChatSessionCreateReq req) {
+        return ok(chatService.createSession(req));
     }
 
-    /** 新建会话 */
-    @PostMapping("/conversations")
-    @SaCheckPermission("ai:chat:send")
-    public R<AiConversationResp> createConversation(
-            @RequestParam(required = false) Long modelId) {
-        return ok(chatBizService.createConversation(modelId));
-    }
-
-    /** 获取会话历史消息 */
-    @GetMapping("/conversations/{conversationId}/messages")
-    @SaCheckPermission("ai:chat:send")
-    public R<PageResult<AiMessageResp>> pageMessages(
-            @PathVariable Long conversationId, PageQuery query) {
-        return ok(chatBizService.pageMessages(conversationId, query));
-    }
-
-    /** 删除会话（同时清除 AI Memory） */
-    @DeleteMapping("/conversations/{conversationId}")
-    @SaCheckPermission("ai:chat:send")
-    public R<Void> deleteConversation(@PathVariable Long conversationId) {
-        chatBizService.deleteConversation(conversationId);
+    /**
+     * 删除会话。
+     */
+    @DeleteMapping("/sessions/{id}")
+    @SaCheckPermission("ai:chat:delete")
+    @Log(value = "删除对话会话", module = "AI 对话")
+    public R<Void> deleteSession(@PathVariable Long id) {
+        chatService.deleteSession(id);
         return ok();
     }
 
-    /** 修改会话标题 */
-    @PutMapping("/conversations/{conversationId}/title")
+    /**
+     * 获取会话消息历史。
+     */
+    @GetMapping("/sessions/{id}/messages")
+    @SaCheckPermission("ai:chat:list")
+    public R<List<AiChatMessageResp>> listMessages(@PathVariable Long id) {
+        return ok(chatService.listMessages(id));
+    }
+
+    /**
+     * 发送消息（同步）。
+     */
+    @PostMapping("/send")
     @SaCheckPermission("ai:chat:send")
-    public R<Void> renameConversation(
-            @PathVariable Long conversationId,
-            @RequestBody Map<String, String> body) {
-        chatBizService.renameConversation(conversationId, body.get("title"));
+    @Log(value = "发送对话消息", module = "AI 对话")
+    public R<AiChatMessageResp> sendMessage(@Valid @RequestBody AiChatSendReq req) {
+        return ok(chatService.sendMessage(req));
+    }
+
+    /**
+     * 发送消息（流式 SSE）。
+     */
+    @PostMapping("/stream")
+    @SaCheckPermission("ai:chat:send")
+    public SseEmitter sendMessageStream(@Valid @RequestBody AiChatSendReq req) {
+        return chatService.sendMessageStream(req);
+    }
+
+    /**
+     * 重新生成最后一条响应。
+     */
+    @PostMapping("/sessions/{id}/regenerate")
+    @SaCheckPermission("ai:chat:send")
+    @Log(value = "重新生成响应", module = "AI 对话")
+    public R<AiChatMessageResp> regenerate(@PathVariable Long id) {
+        return ok(chatService.regenerateLastMessage(id));
+    }
+
+    /**
+     * 更新会话标题。
+     */
+    @PutMapping("/sessions/{id}/title")
+    @SaCheckPermission("ai:chat:edit")
+    public R<Void> updateTitle(@PathVariable Long id, @RequestParam String title) {
+        chatService.updateSessionTitle(id, title);
+        return ok();
+    }
+
+    /**
+     * 置顶/取消置顶会话。
+     */
+    @PutMapping("/sessions/{id}/pin")
+    @SaCheckPermission("ai:chat:edit")
+    public R<Void> togglePin(@PathVariable Long id) {
+        chatService.toggleSessionPin(id);
         return ok();
     }
 }
