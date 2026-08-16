@@ -45,7 +45,7 @@ public class Ip2regionLocationResolver implements IpLocationResolver {
         if (info == null) {
             return null;
         }
-        // 优先返回精简的省市地址；ip2region 数据为 “国家|区域|省|市|ISP”
+        // 返回 ip2region 完整地址串，格式为“国家|区域|省|市|ISP”
         String address = info.getAddressAndIsp();
         return (address == null || address.isBlank()) ? null : address;
     }

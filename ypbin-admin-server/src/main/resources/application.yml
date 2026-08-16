@@ -186,8 +186,8 @@ ypbin:
     chat:
       enabled: true
       default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
-      window-size: 10                          # 携带历史消息条数（记忆窗口，见 memory.window-size）
       rag-enabled: false                       # 全局 RAG（普通对话也检索向量库），需 rag.enabled=true
+      # 历史消息窗口统一由 memory.window-size 控制（AiChatProperties 无 windowSize 字段，勿在此添加死键）
     memory:
       type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
       window-size: 10                          # 记忆窗口大小

@@ -11,6 +11,8 @@ package cn.ypbin.admin;
 
 import cn.ypbin.admin.bootstrap.SecurityBootstrapProperties;
 import org.mybatis.spring.annotation.MapperScan;
+import cn.ypbin.admin.common.config.LicenseIssuerProperties;
+import cn.ypbin.admin.bootstrap.SecurityBootstrapProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -24,7 +26,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication
 @EnableScheduling
-@EnableConfigurationProperties(SecurityBootstrapProperties.class)
+@EnableConfigurationProperties({SecurityBootstrapProperties.class, LicenseIssuerProperties.class})
 @MapperScan("cn.ypbin.admin.**.mapper")
 public class AdminApplication {
 
