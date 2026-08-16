@@ -117,10 +117,19 @@ public class AiChatBizServiceImpl implements AiChatBizService {
                     contentBuffer.get().append(token);
                     tokenCount.incrementAndGet();
                 } catch (Exception e) {
-                    emitter.completeWithError(e);
+                    log.warn("[ypbin-ai] 发送流式帧失败：conversationId={}", finalConvId, e);
+                    emitter.complete();
                 }
             })
-            .doOnError(emitter::completeWithError)
+            .doOnError(e -> {
+                log.error("[ypbin-ai] 流式对话失败：conversationId={}", finalConvId, e);
+                try {
+                    emitter.send("对话出错：" + rootMessage(e));
+                } catch (Exception sendEx) {
+                    log.warn("[ypbin-ai] 发送错误提示失败：conversationId={}", finalConvId, sendEx);
+                }
+                emitter.complete();
+            })
             .doOnComplete(() -> {
                 emitter.complete();
                 // 流式结束后异步落库助手回复
@@ -133,6 +142,18 @@ public class AiChatBizServiceImpl implements AiChatBizService {
         emitter.onError(e -> subscription.dispose());
 
         return emitter;
+    }
+
+    /**
+     * 提取异常链最深层的原因消息，避免把完整堆栈推送给前端。
+     */
+    private static String rootMessage(Throwable e) {
+        Throwable cur = e;
+        while (cur.getCause() != null) {
+            cur = cur.getCause();
+        }
+        String msg = cur.getMessage();
+        return msg == null || msg.isBlank() ? cur.getClass().getSimpleName() : msg;
     }
 
     @Override
@@ -213,7 +234,6 @@ public class AiChatBizServiceImpl implements AiChatBizService {
         usageLogMapper.insert(usage);
     }
 
-    // ---------- private helpers ----------
 
     private Long ensureConversation(Long conversationId, Long userId, Integer tenantId) {
         if (conversationId != null) {
