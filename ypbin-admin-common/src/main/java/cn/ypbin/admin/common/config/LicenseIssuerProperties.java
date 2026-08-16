@@ -25,8 +25,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "ypbin.license.issuer")
+@ConfigurationProperties(prefix = LicenseIssuerProperties.PREFIX)
 public class LicenseIssuerProperties {
+
+    public static final String PREFIX = "ypbin.license.issuer";
 
     /** Base64 SM2 公钥（签发后回验授权、计算展示状态用） */
     private String publicKey;

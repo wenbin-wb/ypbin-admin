@@ -19,6 +19,7 @@ import cn.ypbin.admin.system.ai.model.resp.AiChatRoleResp;
 import cn.ypbin.admin.system.ai.service.AiChatRoleService;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,13 +46,15 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     public List<AiChatRoleResp> listRoles() {
         Long userId = LoginHelper.getUserId();
-        // 查询内置角色（tenant_id=0）+ 当前租户自定义角色
-        List<AiChatRole> roles = roleMapper.selectList(
-            new LambdaQueryWrapper<AiChatRole>()
-                .eq(AiChatRole::getStatus, 1)
-                .and(w -> w.eq(AiChatRole::getTenantId, 0)
-                    .or().eq(AiChatRole::getTenantId, currentTenantId()))
-                .orderByAsc(AiChatRole::getSort));
+        Long tenantId = currentTenantId();
+        // 内置角色（tenant_id=0）与当前租户自定义角色，忽略租户拦截以读取内置角色
+        List<AiChatRole> roles = TenantContext.executeIgnore(() ->
+            roleMapper.selectList(
+                new LambdaQueryWrapper<AiChatRole>()
+                    .eq(AiChatRole::getStatus, 1)
+                    .and(w -> w.eq(AiChatRole::getTenantId, 0)
+                        .or().eq(AiChatRole::getTenantId, tenantId))
+                    .orderByAsc(AiChatRole::getSort)));
 
         // 查询当前用户的收藏集合
         Set<Long> favSet = favoriteMapper.selectList(
