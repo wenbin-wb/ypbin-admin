@@ -61,7 +61,7 @@ public class AiUsageController extends BaseController {
     public R<List<Map<String, Object>>> dailyUsage(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         LocalDateTime from = (startDate != null ? startDate : LocalDate.now().minusDays(29)).atStartOfDay();
         LocalDateTime to = (endDate != null ? endDate.plusDays(1) : LocalDate.now().plusDays(1)).atStartOfDay();
         List<AiUsageLog> logs = usageLogMapper.selectList(
@@ -87,7 +87,7 @@ public class AiUsageController extends BaseController {
     @GetMapping("/by-model")
     @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> byModel() {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         List<AiUsageLog> logs = usageLogMapper.selectList(
             new LambdaQueryWrapper<AiUsageLog>()
                 .eq(AiUsageLog::getTenantId, tenantId));
@@ -108,7 +108,7 @@ public class AiUsageController extends BaseController {
     @GetMapping("/summary")
     @SaCheckPermission("ai:usage:view")
     public R<Map<String, Object>> summary() {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         List<AiUsageLog> logs = usageLogMapper.selectList(
             new LambdaQueryWrapper<AiUsageLog>().eq(AiUsageLog::getTenantId, tenantId));
         long totalTokens = logs.stream()
@@ -125,9 +125,8 @@ public class AiUsageController extends BaseController {
     /**
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
-    private static Integer currentTenantId() {
+    private static Long currentTenantId() {
         return UserContext.getTenantId()
-            .map(Long::intValue)
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 }

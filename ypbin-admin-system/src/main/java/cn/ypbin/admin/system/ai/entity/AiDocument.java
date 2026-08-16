@@ -46,7 +46,7 @@ public class AiDocument implements Serializable {
     private Long id;
 
     /** 租户 ID */
-    private Integer tenantId;
+    private Long tenantId;
 
     /** 所属知识库 */
     @JsonSerialize(using = ToStringSerializer.class)

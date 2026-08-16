@@ -77,7 +77,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     @Override
     public List<AiKnowledgeBase> listKnowledgeBases() {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         return kbMapper.selectList(
             new LambdaQueryWrapper<AiKnowledgeBase>()
                 .eq(AiKnowledgeBase::getTenantId, tenantId)
@@ -102,7 +102,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     @Override
     public AiDocument uploadDocument(Long knowledgeBaseId, MultipartFile file) {
         requireKb(knowledgeBaseId);
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
 
         // 先落库，状态"处理中"
@@ -189,9 +189,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     /**
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
-    private static Integer currentTenantId() {
+    private static Long currentTenantId() {
         return UserContext.getTenantId()
-            .map(Long::intValue)
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 }

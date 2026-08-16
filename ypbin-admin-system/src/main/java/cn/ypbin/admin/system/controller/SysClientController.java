@@ -76,7 +76,7 @@ public class SysClientController extends BaseController {
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:client:delete")
     public R<Void> delete(@PathVariable Long id) {
-        clientService.removeById(id);
+        clientService.deleteClient(id);
         return ok();
     }
 }

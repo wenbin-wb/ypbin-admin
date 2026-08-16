@@ -75,7 +75,8 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
     }
 
     private List<SysMenu> applyTenantMenuFilter(List<SysMenu> menus) {
-        Long tenantId = UserContext.getLoginUser().map(user -> user.getTenantId()).orElse(null);
+        Long tenantId = UserContext.getLoginUser().map(user -> user.getTenantId())
+            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
         Set<Long> allowedIds = authTemplateService.resolveTenantMenuIds(tenantId);
         Map<Long, SysMenu> byId = menus.stream()
             .collect(Collectors.toMap(SysMenu::getId, menu -> menu, (first, ignored) -> first));

@@ -13,8 +13,9 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 角色-部门关联。用于自定义数据范围（data_scope=5），将角色绑定到具体部门。
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
  * @author wenbin
  * @since 2026-08-02
  */
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @TableName("sys_role_dept")

@@ -68,6 +68,6 @@ public interface AiChatBizService {
      *
      * <p>异步线程无请求上下文，租户 ID 由调用方（请求线程）显式传入。
      */
-    void saveAssistantMessageAsync(Long conversationId, Integer tenantId,
+    void saveAssistantMessageAsync(Long conversationId, Long tenantId,
             String content, int tokens);
 }

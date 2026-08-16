@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.MailTestReq;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.messaging.mail.MailService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class MailController extends BaseController {
 
     @PostMapping("/test")
     @SaCheckPermission("system:mail:test")
+    @Log(value = "发送测试邮件", module = "邮件配置")
     public R<Void> testSend(@Valid @RequestBody MailTestReq req) {
         mailService.sendTest(req.getTo());
         return ok();

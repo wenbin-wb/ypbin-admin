@@ -32,13 +32,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/log")
 @RequiredArgsConstructor
-@SaCheckPermission("system:log:list")
 @PlatformAccess
 public class SysLogController extends BaseController {
 
     private final SysLogService logService;
 
     @GetMapping("/list")
+    @SaCheckPermission("system:log:list")
     public R<PageResult<LogResp>> list(@Valid LogQuery query) {
         return ok(logService.pageLogs(query));
     }

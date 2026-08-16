@@ -53,9 +53,9 @@ public class AiDocumentVectorizer {
     private final ObjectProvider<AiRagService> ragServiceProvider;
 
     @Async
-    public void vectorizeAsync(Long docId, Long knowledgeBaseId, Integer tenantId,
+    public void vectorizeAsync(Long docId, Long knowledgeBaseId, Long tenantId,
             String filename, byte[] bytes) {
-        TenantContext.runWithTenant(tenantId.longValue(), () -> {
+        TenantContext.runWithTenant(tenantId, () -> {
             AiRagService ragService = ragServiceProvider.getIfAvailable();
             if (ragService == null) {
                 markDocFailed(docId, "RAG 未启用，请配置 ypbin.ai.rag.enabled=true 及向量库");

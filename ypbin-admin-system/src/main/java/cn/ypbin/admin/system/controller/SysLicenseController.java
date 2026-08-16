@@ -73,8 +73,8 @@ public class SysLicenseController extends BaseController {
     @Log(value = "新增授权草稿", module = "授权管理")
     @PostMapping
     @SaCheckPermission("system:license:add")
-    public R<String> create(@Valid @RequestBody LicenseSaveReq req) {
-        return ok(String.valueOf(licenseService.createDraft(req)));
+    public R<Long> create(@Valid @RequestBody LicenseSaveReq req) {
+        return ok(licenseService.createDraft(req));
     }
 
     @Log(value = "修改授权草稿", module = "授权管理")

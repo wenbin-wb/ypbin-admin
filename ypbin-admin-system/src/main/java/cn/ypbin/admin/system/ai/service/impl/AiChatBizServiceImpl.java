@@ -74,7 +74,7 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     public SseEmitter chat(Long conversationId, String message, Long knowledgeBaseId,
             Long promptTemplateId) {
         Long userId = LoginHelper.getUserId();
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
 
         // 会话不存在则新建；已存在则校验归属（防跨用户越权）
         Long finalConvId = ensureConversation(conversationId, userId, tenantId);
@@ -212,7 +212,7 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     @Transactional(rollbackFor = Exception.class)
     public AiConversationResp createConversation(Long modelId) {
         Long userId = LoginHelper.getUserId();
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         AiConversation conv = new AiConversation();
         conv.setUserId(userId);
         conv.setTenantId(tenantId);
@@ -248,10 +248,10 @@ public class AiChatBizServiceImpl implements AiChatBizService {
 
     @Override
     @Async
-    public void saveAssistantMessageAsync(Long conversationId, Integer tenantId,
+    public void saveAssistantMessageAsync(Long conversationId, Long tenantId,
             String content, int tokens) {
         // 异步线程无请求上下文，按传入租户包裹执行，保证行级隔离与审计正确
-        TenantContext.runWithTenant(tenantId.longValue(), () -> {
+        TenantContext.runWithTenant(tenantId, () -> {
             saveMessage(conversationId, tenantId, "assistant", content, tokens);
             // 写入用量日志，供统计页使用；会话查询不到时跳过，避免空 userId 插入失败
             AiConversation conv = conversationMapper.selectById(conversationId);
@@ -282,9 +282,8 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     /**
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
-    private static Integer currentTenantId() {
+    private static Long currentTenantId() {
         return UserContext.getTenantId()
-            .map(Long::intValue)
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 
@@ -299,7 +298,7 @@ public class AiChatBizServiceImpl implements AiChatBizService {
         return conv;
     }
 
-    private Long ensureConversation(Long conversationId, Long userId, Integer tenantId) {
+    private Long ensureConversation(Long conversationId, Long userId, Long tenantId) {
         if (conversationId != null) {
             requireOwnedConversation(conversationId, userId);
             return conversationId;
@@ -312,7 +311,7 @@ public class AiChatBizServiceImpl implements AiChatBizService {
         return conv.getId();
     }
 
-    private void saveMessage(Long conversationId, Integer tenantId, String role,
+    private void saveMessage(Long conversationId, Long tenantId, String role,
             String content, int tokens) {
         AiMessage msg = new AiMessage();
         msg.setConversationId(conversationId);

@@ -44,7 +44,7 @@ public class AiMessage implements Serializable {
     private Long id;
 
     /** 租户 ID */
-    private Integer tenantId;
+    private Long tenantId;
 
     /** 会话 ID */
     @JsonSerialize(using = ToStringSerializer.class)

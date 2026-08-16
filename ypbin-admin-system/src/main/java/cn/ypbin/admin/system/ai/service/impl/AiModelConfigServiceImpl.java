@@ -47,7 +47,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public List<AiModelConfigResp> listModels() {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         List<AiModelConfig> list = modelConfigMapper.selectList(
             new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
@@ -95,7 +95,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     @Transactional(rollbackFor = Exception.class)
     public void setDefault(Long id) {
         requireModel(id);
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         // 先清空同租户所有默认标记
         modelConfigMapper.update(null,
             new LambdaUpdateWrapper<AiModelConfig>()
@@ -181,7 +181,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public AiModelConfig getDefaultModel() {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         return modelConfigMapper.selectOne(
             new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
@@ -193,9 +193,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     /**
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
-    private static Integer currentTenantId() {
+    private static Long currentTenantId() {
         return UserContext.getTenantId()
-            .map(Long::intValue)
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 

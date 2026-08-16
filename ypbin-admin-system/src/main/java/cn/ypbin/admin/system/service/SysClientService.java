@@ -54,4 +54,11 @@ public interface SysClientService extends BaseService<SysClient> {
      * @return 新的明文密钥
      */
     ClientCredentialResp resetSecret(Long id);
+
+    /**
+     * 删除登录客户端（校验存在性后逻辑删除）。
+     *
+     * @param id 客户端 ID
+     */
+    void deleteClient(Long id);
 }

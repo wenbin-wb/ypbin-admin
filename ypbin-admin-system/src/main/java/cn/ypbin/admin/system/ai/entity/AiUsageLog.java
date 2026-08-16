@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.entity;
 
-import cn.ypbin.starter.data.core.BaseEntity;
+import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
 import lombok.Getter;
@@ -24,13 +24,10 @@ import lombok.Setter;
 @Getter
 @Setter
 @TableName("ai_usage_log")
-public class AiUsageLog extends BaseEntity {
+public class AiUsageLog extends TenantBaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
-
-    /** 租户 ID */
-    private Integer tenantId;
 
     /** 用户 ID */
     private Long userId;

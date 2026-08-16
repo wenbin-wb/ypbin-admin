@@ -53,7 +53,7 @@ public class AiPromptTemplateController extends BaseController {
     @GetMapping
     @SaCheckPermission("ai:prompt:list")
     public R<List<AiPromptTemplate>> list() {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         return ok(templateMapper.selectList(
             new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(AiPromptTemplate::getTenantId, tenantId)
@@ -64,7 +64,7 @@ public class AiPromptTemplateController extends BaseController {
     @PostMapping
     @SaCheckPermission("ai:prompt:create")
     public R<Void> create(@Valid @RequestBody AiPromptTemplateSaveReq req) {
-        Integer tenantId = currentTenantId();
+        Long tenantId = currentTenantId();
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl);
         tpl.setTenantId(tenantId);
@@ -105,9 +105,8 @@ public class AiPromptTemplateController extends BaseController {
     /**
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
-    private static Integer currentTenantId() {
+    private static Long currentTenantId() {
         return UserContext.getTenantId()
-            .map(Long::intValue)
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 }

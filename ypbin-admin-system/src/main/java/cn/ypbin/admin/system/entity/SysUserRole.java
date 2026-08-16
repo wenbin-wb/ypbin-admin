@@ -13,8 +13,9 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
 import java.io.Serializable;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 用户-角色关联。
@@ -24,7 +25,8 @@ import lombok.NoArgsConstructor;
  * @author wenbin
  * @since 2026-08-01
  */
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @TableName("sys_user_role")

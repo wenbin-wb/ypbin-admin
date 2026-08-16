@@ -54,4 +54,11 @@ public interface SysAppService extends BaseService<SysApp> {
      * @return 新的明文 SecretKey
      */
     AppCredentialResp resetSecret(Long id);
+
+    /**
+     * 删除开放应用（校验存在性后逻辑删除）。
+     *
+     * @param id 应用 ID
+     */
+    void deleteApp(Long id);
 }

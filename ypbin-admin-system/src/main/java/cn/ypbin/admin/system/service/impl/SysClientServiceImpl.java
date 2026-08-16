@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 登录客户端服务实现。
@@ -38,6 +39,7 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ClientCredentialResp createClient(SysClientSaveReq req) {
         SysClient client = new SysClient();
         BeanUtils.copyProperties(req, client);
@@ -48,6 +50,7 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ClientCredentialResp resetSecret(Long id) {
         SysClient client = getById(id);
         if (client == null) {
@@ -62,6 +65,7 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateClient(Long id, SysClientSaveReq req) {
         if (getById(id) == null) {
             throw new BusinessException("客户端不存在");
@@ -70,6 +74,15 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
         BeanUtils.copyProperties(req, client);
         client.setId(id);
         updateById(client);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteClient(Long id) {
+        if (getById(id) == null) {
+            throw new BusinessException("客户端不存在");
+        }
+        removeById(id);
     }
 
     private ClientResp toResp(SysClient client) {

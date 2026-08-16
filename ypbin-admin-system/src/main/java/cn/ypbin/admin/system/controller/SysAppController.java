@@ -76,7 +76,7 @@ public class SysAppController extends BaseController {
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:app:delete")
     public R<Void> delete(@PathVariable Long id) {
-        appService.removeById(id);
+        appService.deleteApp(id);
         return ok();
     }
 }

@@ -16,6 +16,7 @@ import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.security.online.OnlineUser;
 import cn.ypbin.starter.security.online.OnlineUserService;
 import java.util.List;
@@ -75,6 +76,7 @@ public class OnlineUserController extends BaseController {
 
     @DeleteMapping("/{token}")
     @SaCheckPermission("system:online-user:kickout")
+    @Log(value = "强制下线用户", module = "会话管理")
     public R<Void> kickout(@PathVariable String token) {
         onlineUserService.kickoutByToken(token);
         return ok();

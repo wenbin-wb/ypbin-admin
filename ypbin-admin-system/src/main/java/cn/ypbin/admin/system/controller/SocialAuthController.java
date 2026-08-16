@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.service.SocialLoginService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.social.core.SocialService;
 import java.util.List;
 import java.util.Set;
@@ -66,6 +67,7 @@ public class SocialAuthController extends BaseController {
      * 已登录用户绑定第三方账号。
      */
     @PostMapping("/bind/{source}")
+    @Log(value = "绑定第三方账号", module = "第三方登录")
     public R<Void> bind(@PathVariable String source, SocialCallbackReq req) {
         socialLoginService.bind(source, req);
         return ok();
@@ -75,6 +77,7 @@ public class SocialAuthController extends BaseController {
      * 已登录用户解绑第三方账号。
      */
     @PostMapping("/unbind/{source}")
+    @Log(value = "解绑第三方账号", module = "第三方登录")
     public R<Void> unbind(@PathVariable String source) {
         socialLoginService.unbind(source);
         return ok();

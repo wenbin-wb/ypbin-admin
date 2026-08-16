@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 开放应用服务实现。
@@ -37,6 +38,7 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AppCredentialResp createApp(SysAppSaveReq req) {
         SysApp app = new SysApp();
         BeanUtils.copyProperties(req, app);
@@ -48,6 +50,7 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public AppCredentialResp resetSecret(Long id) {
         SysApp app = getById(id);
         if (app == null) {
@@ -62,6 +65,7 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateApp(Long id, SysAppSaveReq req) {
         if (getById(id) == null) {
             throw new BusinessException("开放应用不存在");
@@ -70,6 +74,15 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         BeanUtils.copyProperties(req, app);
         app.setId(id);
         updateById(app);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteApp(Long id) {
+        if (getById(id) == null) {
+            throw new BusinessException("开放应用不存在");
+        }
+        removeById(id);
     }
 
     private AppResp toResp(SysApp app) {
