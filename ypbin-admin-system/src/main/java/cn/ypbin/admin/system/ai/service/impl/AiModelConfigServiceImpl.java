@@ -20,12 +20,16 @@ import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,8 +45,6 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
-    /** Spring AI 的 ChatModel（optional，用于连通性测试）*/
-    private final ObjectProvider<ChatModel> chatModelProvider;
 
     @Override
     public List<AiModelConfigResp> listModels() {
@@ -105,14 +107,73 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public long testConnection(Long id) {
-        requireModel(id);
-        ChatModel model = chatModelProvider.getIfAvailable();
-        if (model == null) {
-            throw new BusinessException("ChatModel 未配置，请先在 application.yml 配置模型 starter");
+        AiModelConfig config = requireModel(id);
+        String baseUrl = config.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new BusinessException("该模型未配置接口地址（baseUrl），无法测试");
         }
+        String apiKey = keyCipher.decrypt(config.getApiKey());
         long start = System.currentTimeMillis();
-        ChatClient.create(model).prompt().user("ping").call().content();
-        return System.currentTimeMillis() - start;
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+            String payload = """
+                {"model":"%s","messages":[{"role":"user","content":"ping"}],"max_tokens":5}
+                """.formatted(config.getModelName());
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .timeout(Duration.ofSeconds(15))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8));
+            if (apiKey != null && !apiKey.isBlank()) {
+                builder.header("Authorization", "Bearer " + apiKey);
+            }
+            String[] candidates = completionUrls(baseUrl);
+            HttpResponse<String> resp = null;
+            for (String url : candidates) {
+                resp = client.send(builder.copy().uri(URI.create(url)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+                // 404 时尝试下一个候选地址，其余错误码直接返回
+                if (resp.statusCode() != 404) {
+                    break;
+                }
+            }
+            if (resp == null || resp.statusCode() != 200) {
+                int code = resp == null ? 0 : resp.statusCode();
+                String body = resp == null ? "" : resp.body();
+                throw new BusinessException("连接失败（HTTP " + code + "）："
+                    + (body == null || body.isBlank() ? "无响应内容" : truncate(body)));
+            }
+            return System.currentTimeMillis() - start;
+        } catch (IOException e) {
+            throw new BusinessException("连接失败：" + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException("连接超时或中断");
+        }
+    }
+
+    /**
+     * 根据用户填写的 baseUrl 推导 OpenAI 兼容的 chat/completions 地址：
+     * 依次尝试原路径、补 /v1 前缀、去掉多余 /v1 前缀。
+     */
+    private String[] completionUrls(String baseUrl) {
+        String normalized = baseUrl.trim();
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if (normalized.endsWith("/chat/completions")) {
+            return new String[] {normalized};
+        }
+        if (normalized.endsWith("/v1")) {
+            return new String[] {normalized + "/chat/completions"};
+        }
+        // 根路径（如 https://api.deepseek.com）：先试 /chat/completions，404 再试 /v1/chat/completions
+        return new String[] {normalized + "/chat/completions", normalized + "/v1/chat/completions"};
+    }
+
+    private String truncate(String text) {
+        return text == null ? "" : (text.length() > 300 ? text.substring(0, 300) + "..." : text);
     }
 
     @Override
