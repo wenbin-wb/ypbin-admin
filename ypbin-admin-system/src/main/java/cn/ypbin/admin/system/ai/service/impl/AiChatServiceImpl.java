@@ -122,9 +122,28 @@ public class AiChatServiceImpl implements AiChatService {
             createReq.setModelId(req.getModelId());
             sessionId = createSession(createReq);
         }
-        // 委托 BizService 实现真实 SSE 流式对话（Spring AI Reactor 流）
-        // sessionId 作为 conversationId，保持上下文记忆
-        return chatBizService.chat(sessionId, req.getContent(), null, req.getRoleId());
+        // 解析会话绑定角色的系统提示词：命中则走 chatWithRole 注入角色人设
+        String rolePrompt = resolveRoleSystemPrompt(sessionId);
+        if (rolePrompt != null) {
+            return chatBizService.chatWithRole(sessionId, req.getContent(), rolePrompt);
+        }
+        // 无角色时走默认对话，继承会话上下文记忆
+        return chatBizService.chat(sessionId, req.getContent(), null, null);
+    }
+
+    /**
+     * 解析会话绑定角色的系统提示词；无角色或非系统提示词角色返回 null。
+     */
+    private String resolveRoleSystemPrompt(Long sessionId) {
+        AiChatSession session = sessionMapper.selectById(sessionId);
+        if (session == null || session.getRoleId() == null) {
+            return null;
+        }
+        AiChatRole role = roleMapper.selectById(session.getRoleId());
+        if (role == null || role.getSystemPrompt() == null || role.getSystemPrompt().isBlank()) {
+            return null;
+        }
+        return role.getSystemPrompt();
     }
 
     @Override

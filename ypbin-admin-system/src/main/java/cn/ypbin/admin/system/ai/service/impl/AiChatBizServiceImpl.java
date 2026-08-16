@@ -49,6 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 
 /**
  * AI 对话业务实现。
@@ -73,16 +74,53 @@ public class AiChatBizServiceImpl implements AiChatBizService {
     @Override
     public SseEmitter chat(Long conversationId, String message, Long knowledgeBaseId,
             Long promptTemplateId) {
+        Flux<String> stream = buildChatStream(conversationId, message, knowledgeBaseId,
+            promptTemplateId, null);
+        return streamConversation(conversationId, message, stream);
+    }
+
+    @Override
+    public SseEmitter chatWithRole(Long conversationId, String message, String roleSystemPrompt) {
+        Flux<String> stream = buildChatStream(conversationId, message, null, null,
+            roleSystemPrompt);
+        return streamConversation(conversationId, message, stream);
+    }
+
+    /**
+     * 构造对话 Reactor 流：优先 RAG、其次角色系统提示词、再 Prompt 模板、最后默认对话。
+     */
+    private Flux<String> buildChatStream(Long conversationId, String message,
+            Long knowledgeBaseId, Long promptTemplateId, String roleSystemPrompt) {
+        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
+        if (aiChatService == null) {
+            return Flux.empty();
+        }
+        String convIdStr = String.valueOf(conversationId);
+        if (knowledgeBaseId != null) {
+            return aiChatService.chatWithKnowledge(convIdStr, message,
+                String.valueOf(knowledgeBaseId));
+        }
+        if (roleSystemPrompt != null) {
+            return aiChatService.chatWithSystemPrompt(convIdStr, roleSystemPrompt, message);
+        }
+        if (promptTemplateId != null) {
+            return aiChatService.chatWithSystemPrompt(convIdStr,
+                resolveSystemPrompt(promptTemplateId), message);
+        }
+        return aiChatService.chatStream(convIdStr, message);
+    }
+
+    /**
+     * 将对话流订阅到 SSE：落库用户消息、自动生成标题、流式推送、异步保存助手回复。
+     */
+    private SseEmitter streamConversation(Long conversationId, String message,
+            Flux<String> stream) {
         Long userId = LoginHelper.getUserId();
         Long tenantId = currentTenantId();
 
-        // 会话不存在则新建；已存在则校验归属（防跨用户越权）
         Long finalConvId = ensureConversation(conversationId, userId, tenantId);
-
-        // 落库用户消息
         saveMessage(finalConvId, tenantId, "user", message, 0);
 
-        // 自动将首条消息截取为标题
         if (conversationId == null) {
             String title = message.length() > 50 ? message.substring(0, 50) + "…" : message;
             AiConversation conv = new AiConversation();
@@ -92,27 +130,21 @@ public class AiChatBizServiceImpl implements AiChatBizService {
         }
 
         SseEmitter emitter = new SseEmitter(0L);
-
-        // 收集流式 token 用于异步落库
         AtomicReference<StringBuilder> contentBuffer = new AtomicReference<>(new StringBuilder());
         AtomicInteger tokenCount = new AtomicInteger(0);
 
-        String convIdStr = String.valueOf(finalConvId);
-
-        // 选择对话方式（AI 未配置时发送错误帧，不影响服务启动）
-        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
-        if (aiChatService == null) {
-            return errorEmitter("AI 模块未启用，请在配置中设置 ypbin.ai.enabled=true 并引入模型 starter");
+        if (aiChatServiceProvider.getIfAvailable() == null) {
+            try {
+                emitter.send(SseEmitter.event().name("error")
+                    .data("AI 模块未启用，请在配置中设置 ypbin.ai.enabled=true 并引入模型 starter"));
+            } catch (Exception e) {
+                log.warn("[ypbin-ai] 发送错误提示失败", e);
+            }
+            emitter.complete();
+            return emitter;
         }
 
-        var stream = knowledgeBaseId != null
-            ? aiChatService.chatWithKnowledge(convIdStr, message, String.valueOf(knowledgeBaseId))
-            : (promptTemplateId != null
-                ? aiChatService.chatWithSystemPrompt(convIdStr,
-                    resolveSystemPrompt(promptTemplateId), message)
-                : aiChatService.chatStream(convIdStr, message));
-
-        // 订阅引用前置：doOnNext/doOnError 与超时回调都可能在订阅赋值前触发
+        String convIdStr = String.valueOf(finalConvId);
         AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
         Disposable subscription = stream
             .doOnNext(token -> {
@@ -139,7 +171,6 @@ public class AiChatBizServiceImpl implements AiChatBizService {
             })
             .doOnComplete(() -> {
                 emitter.complete();
-                // 流式结束后异步落库助手回复（请求线程的租户上下文在此传入）
                 saveAssistantMessageAsync(finalConvId, tenantId,
                     contentBuffer.get().toString(), tokenCount.get());
             })

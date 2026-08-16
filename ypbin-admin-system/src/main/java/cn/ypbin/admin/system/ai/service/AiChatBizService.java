@@ -39,6 +39,18 @@ public interface AiChatBizService {
     SseEmitter chat(Long conversationId, String message, Long knowledgeBaseId, Long promptTemplateId);
 
     /**
+     * 对话（注入角色系统提示词，人设为角色定义）。
+     *
+     * <p>等价于以角色 system prompt 作为系统提示词发起流式对话，上下文继承该会话 memory。
+     *
+     * @param conversationId 会话 ID
+     * @param message        用户消息
+     * @param roleSystemPrompt 角色系统提示词（来自 ai_chat_role.system_prompt）
+     * @return SSE Emitter
+     */
+    SseEmitter chatWithRole(Long conversationId, String message, String roleSystemPrompt);
+
+    /**
      * 获取当前用户的会话列表。
      */
     List<AiConversationResp> listConversations();
