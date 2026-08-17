@@ -115,20 +115,33 @@ public class AiChatServiceImpl implements AiChatService {
     @Override
     public SseEmitter sendMessageStream(AiChatSendReq req) {
         Long sessionId = req.getSessionId();
-        // 新会话：先创建
+        // 新会话（无 sessionId）：角色优先走 chatWithRole，否则默认对话；
+        // BizService 内部会新建 conversation 并返回，保证流式可出字。
         if (sessionId == null) {
-            AiChatSessionCreateReq createReq = new AiChatSessionCreateReq();
-            createReq.setRoleId(req.getRoleId());
-            createReq.setModelId(req.getModelId());
-            sessionId = createSession(createReq);
+            String rolePrompt = req.getRoleId() == null
+                ? null : resolveRoleSystemPromptById(req.getRoleId());
+            if (rolePrompt != null) {
+                return chatBizService.chatWithRole(null, req.getContent(), rolePrompt);
+            }
+            return chatBizService.chat(null, req.getContent(), null, null);
         }
-        // 解析会话绑定角色的系统提示词：命中则走 chatWithRole 注入角色人设
+        // 已有会话：校验并继承上下文（session 持久化为 conversation 由后续打通）
         String rolePrompt = resolveRoleSystemPrompt(sessionId);
         if (rolePrompt != null) {
             return chatBizService.chatWithRole(sessionId, req.getContent(), rolePrompt);
         }
-        // 无角色时走默认对话，继承会话上下文记忆
         return chatBizService.chat(sessionId, req.getContent(), null, null);
+    }
+
+    /**
+     * 按角色 ID 直接解析系统提示词（用于新会话尚未落库时）。
+     */
+    private String resolveRoleSystemPromptById(Long roleId) {
+        AiChatRole role = roleMapper.selectById(roleId);
+        if (role == null || role.getSystemPrompt() == null || role.getSystemPrompt().isBlank()) {
+            return null;
+        }
+        return role.getSystemPrompt();
     }
 
     /**
