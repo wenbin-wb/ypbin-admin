@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.system.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.system.ai.model.req.KbQueryReq;
@@ -100,6 +101,23 @@ public class AiKnowledgeBaseController extends BaseController {
             @PathVariable Long id, @PathVariable Long docId) {
         knowledgeBizService.deleteDocument(id, docId);
         return ok();
+    }
+
+    /**
+     * 从 URL / Sitemap / RSS 导入文档（异步向量化）。
+     *
+     * <ul>
+     *   <li>URL — 单页抓取，sourceType=URL</li>
+     *   <li>SITEMAP — 按 sitemap.xml 批量导入，sourceType=SITEMAP，maxUrls 控制上限</li>
+     *   <li>RSS — 订阅源，sourceType=RSS</li>
+     * </ul>
+     */
+    @PostMapping("/{id}/import-url")
+    @SaCheckPermission("ai:document:upload")
+    public R<List<AiDocumentVO>> importFromUrl(
+            @PathVariable Long id,
+            @Valid @RequestBody AiDocumentImportReq req) {
+        return ok(knowledgeBizService.importFromUrl(id, req));
     }
 
     /** 重试向量化：对失败文档重新解析与入库 */

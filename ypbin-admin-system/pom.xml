@@ -24,5 +24,17 @@
             <groupId>org.dromara.sms4j</groupId>
             <artifactId>sms4j-spring-boot-starter</artifactId>
         </dependency>
+        <!-- URL/HTML 解析（URL/Sitemap 导入知识库文档） -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+        <!-- RSS/Atom 解析（RSS 订阅导入） -->
+        <dependency>
+            <groupId>com.rometools</groupId>
+            <artifactId>rome</artifactId>
+            <version>2.1.0</version>
+        </dependency>
     </dependencies>
 </project>

@@ -48,4 +48,13 @@ public class AiDocument extends TenantBaseEntity {
 
     /** 原文件本地存储路径（供失败重试向量化时读取原文） */
     private String filePath;
+
+    /**
+     * 来源类型：UPLOAD（文件上传）/ URL（单页抓取）/ SITEMAP（Sitemap 批量）/ RSS（RSS 订阅）。
+     * 空值视作 UPLOAD，兼容历史数据。
+     */
+    private String sourceType;
+
+    /** 来源 URL，URL/SITEMAP/RSS 导入时记录原始地址 */
+    private String sourceUrl;
 }

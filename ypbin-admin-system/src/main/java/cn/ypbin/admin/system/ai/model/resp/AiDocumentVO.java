@@ -36,6 +36,8 @@ public class AiDocumentVO {
     private String errorMsg;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+    private String sourceType;
+    private String sourceUrl;
 
     /** 从实体转换为 VO（屏蔽 filePath 等内部字段）。 */
     public static AiDocumentVO from(AiDocument doc) {
@@ -49,6 +51,8 @@ public class AiDocumentVO {
         vo.setErrorMsg(doc.getErrorMsg());
         vo.setCreateTime(doc.getCreateTime());
         vo.setUpdateTime(doc.getUpdateTime());
+        vo.setSourceType(doc.getSourceType());
+        vo.setSourceUrl(doc.getSourceUrl());
         return vo;
     }
 }

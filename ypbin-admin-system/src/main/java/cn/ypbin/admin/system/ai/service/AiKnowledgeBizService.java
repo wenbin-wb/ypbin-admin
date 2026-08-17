@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.ai.service;
 
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.system.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
@@ -60,6 +61,19 @@ public interface AiKnowledgeBizService {
      * 仅对 file_path 非空的文档可用；原文缺失时抛出业务异常。
      */
     void retryVectorize(Long knowledgeBaseId, Long docId);
+
+    /**
+     * 从 URL / Sitemap / RSS 导入文档（异步向量化）。
+     *
+     * <p>sourceType=URL 时导入单页；SITEMAP 按 sitemap.xml 批量导入（受 maxUrls 限制）；
+     * RSS 将订阅源每篇文章导入为一个文档。抓取失败的单条目标会被跳过并记录日志，
+     * 不会中断整体导入。
+     *
+     * @param knowledgeBaseId 目标知识库 ID
+     * @param req             导入请求（sourceType/url/maxUrls/customTitle）
+     * @return 已创建文档的 VO 列表（批量导入时每条成功 URL 一条）
+     */
+    List<AiDocumentVO> importFromUrl(Long knowledgeBaseId, AiDocumentImportReq req);
 
     /**
      * 对知识库直接提问（非流式）。
