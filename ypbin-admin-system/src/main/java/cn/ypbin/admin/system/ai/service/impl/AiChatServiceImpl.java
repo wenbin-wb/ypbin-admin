@@ -149,12 +149,19 @@ public class AiChatServiceImpl implements AiChatService {
         // 落库用户消息
         insertMessage(finalSessionId, userId, tenantId, "user", req.getContent(), null);
 
-        // 构造对话流：优先角色人设，其次默认，支持未来 RAG
+        // 构造对话流：优先 RAG > 角色人设 > 默认
         String convId = String.valueOf(finalSessionId);
         String rolePrompt = resolveRoleSystemPrompt(finalSessionId);
-        Flux<String> stream = rolePrompt != null
-            ? aiSvc.chatWithSystemPrompt(convId, rolePrompt, req.getContent())
-            : aiSvc.chatStream(convId, req.getContent());
+        Flux<String> stream;
+        if (req.getKnowledgeBaseId() != null) {
+            // RAG 检索增强：基于指定知识库回答
+            stream = aiSvc.chatWithKnowledge(convId, req.getContent(),
+                String.valueOf(req.getKnowledgeBaseId()));
+        } else if (rolePrompt != null) {
+            stream = aiSvc.chatWithSystemPrompt(convId, rolePrompt, req.getContent());
+        } else {
+            stream = aiSvc.chatStream(convId, req.getContent());
+        }
 
         SseEmitter emitter = new SseEmitter(0L);
         AtomicReference<StringBuilder> contentBuffer = new AtomicReference<>(new StringBuilder());

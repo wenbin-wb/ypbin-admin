@@ -39,6 +39,9 @@ public class AiChatSendReq {
     /** 图片附件 URL 列表（多模态输入） */
     private List<String> images;
 
+    /** 关联知识库 ID（RAG 检索增强对话，null 则不启用 RAG） */
+    private Long knowledgeBaseId;
+
     /** 是否流式响应（true 返回 SSE，false 返回完整结果） */
     private Boolean stream;
 }
