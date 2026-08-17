@@ -50,6 +50,12 @@ public interface AiKnowledgeBizService {
     /** 删除文档（同时删除向量数据） */
     void deleteDocument(Long knowledgeBaseId, Long docId);
 
+    /**
+     * 重试向量化：读回上传时落盘的原文，将文档状态重置为"处理中"后异步重新向量化。
+     * 仅对存在原文（file_path 非空）的文档可用。
+     */
+    void retryVectorize(Long knowledgeBaseId, Long docId);
+
     /** 对知识库直接提问（非流式，用于"测试问答"入口） */
     String query(Long knowledgeBaseId, String question);
 

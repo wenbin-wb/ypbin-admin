@@ -89,6 +89,15 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok();
     }
 
+    /** 重试向量化：对失败/异常的文档重新解析与入库（需上传时已落盘原文） */
+    @PostMapping("/{id}/documents/{docId}/retry")
+    @SaCheckPermission("ai:document:upload")
+    public R<Void> retryVectorize(
+            @PathVariable Long id, @PathVariable Long docId) {
+        knowledgeBizService.retryVectorize(id, docId);
+        return ok();
+    }
+
     /** 测试问答（非流式，用于知识库页面的"测试"入口） */
     @PostMapping("/{id}/query")
     @SaCheckPermission("ai:knowledge:list")

@@ -45,4 +45,7 @@ public class AiDocument extends TenantBaseEntity {
 
     /** 失败原因 */
     private String errorMsg;
+
+    /** 原文件本地存储路径（供失败重试向量化时读取原文） */
+    private String filePath;
 }

@@ -31,6 +31,10 @@ import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -127,6 +131,14 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         } catch (Exception e) {
             markDocFailed(doc.getId(), "文件读取失败：" + e.getMessage());
             return doc;
+        }
+        // 原文落盘到本地 data 目录：失败重试时无需重新上传即可重新向量化
+        String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
+        if (filePath != null) {
+            AiDocument pathUpdate = new AiDocument();
+            pathUpdate.setId(doc.getId());
+            pathUpdate.setFilePath(filePath);
+            documentMapper.updateById(pathUpdate);
         }
         // 异步向量化（独立 Bean 调用，保证 @Async 代理生效；仅传字节，不传 MultipartFile）
         documentVectorizer.vectorizeAsync(doc.getId(), knowledgeBaseId, tenantId, filename, bytes);
@@ -227,6 +239,72 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         item.put("metadata", doc.getMetadata());
         item.put("source", doc.getMetadata().get("source"));
         return item;
+    }
+
+    /**
+     * 将上传的原始文件落盘到本地 data 目录，供失败重试时重新向量化。
+     *
+     * @return 落盘后的绝对路径；落盘失败时返回 {@code null}（向量化仍可继续，仅无法重试）
+     */
+    private String persistOriginalFile(Long knowledgeBaseId, Long docId,
+            String filename, byte[] bytes) {
+        try {
+            Path dir = Paths.get(userDir(), "data", "ai-files", String.valueOf(knowledgeBaseId));
+            Files.createDirectories(dir);
+            String safeName = filename == null || filename.isBlank()
+                ? "document" : filename.replaceAll("[\\\\/:*?\"<>|]", "_");
+            Path target = dir.resolve(docId + "-" + safeName);
+            Files.write(target, bytes);
+            return target.toAbsolutePath().toString();
+        } catch (IOException e) {
+            log.error("[ypbin-ai] 文档原文落盘失败: docId={}", docId, e);
+            return null;
+        }
+    }
+
+    /**
+     * 用户目录（与 SimpleVectorStore 持久化同一根目录，避免绝对路径硬编码）。
+     */
+    private static String userDir() {
+        return System.getProperty("user.dir");
+    }
+
+    @Override
+    public void retryVectorize(Long knowledgeBaseId, Long docId) {
+        AiDocument doc = requireDoc(knowledgeBaseId, docId);
+        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
+            throw new BusinessException("该文档未保存原文，无法重试，请删除后重新上传");
+        }
+        Path path = Paths.get(doc.getFilePath());
+        if (!Files.exists(path)) {
+            throw new BusinessException("原文件不存在（可能已被清理），请删除后重新上传");
+        }
+        try {
+            byte[] bytes = Files.readAllBytes(path);
+            // 重置状态为"处理中"，异步重新向量化
+            AiDocument update = new AiDocument();
+            update.setId(docId);
+            update.setStatus(0);
+            update.setErrorMsg(null);
+            update.setUpdateTime(java.time.LocalDateTime.now());
+            documentMapper.updateById(update);
+            documentVectorizer.vectorizeAsync(docId, knowledgeBaseId,
+                doc.getTenantId(), doc.getFilename(), bytes);
+        } catch (IOException e) {
+            throw new BusinessException("读取原文件失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 校验知识库下的文档存在。
+     */
+    private AiDocument requireDoc(Long knowledgeBaseId, Long docId) {
+        AiDocument doc = documentMapper.selectById(docId);
+        if (doc == null
+            || !java.util.Objects.equals(doc.getKnowledgeBaseId(), knowledgeBaseId)) {
+            throw new BusinessException("文档不存在");
+        }
+        return doc;
     }
 
     private void markDocFailed(Long docId, String errorMsg) {
