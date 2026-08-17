@@ -27,8 +27,10 @@ import org.springframework.stereotype.Component;
  * <p>业务方可在任意 Spring Bean 的方法上标注 {@code @Tool}，由 starter-ai 的
  * {@code AiToolAutoConfiguration} 自动发现并注册给 ChatClient。
  *
- * <p>当前工具运行于 Reactor 工作线程，租户上下文不由 ThreadLocal 自动传播，
- * 待 AiChatService 接口支持 ToolContext 透传后改为 executeWithTenant 显式绑定。
+ * <p>工具运行于 Reactor 工作线程，租户上下文由 {@code TenantThreadLocalAccessor} +
+ * {@code Hooks.enableAutomaticContextPropagation} 自动传播，无需手动绑定。
+ * 禁止在工具方法内调用 {@code StpUtil} / {@code UserContext}，Sa-Token 上下文
+ * 依赖 HTTP 请求线程，在 Reactor 工作线程会抛 {@code SaTokenContextException}。
  *
  * @author wenbin
  * @since 2026-08-15
