@@ -27,7 +27,8 @@ import org.springframework.stereotype.Component;
  * <p>业务方可在任意 Spring Bean 的方法上标注 {@code @Tool}，由 starter-ai 的
  * {@code AiToolAutoConfiguration} 自动发现并注册给 ChatClient。
  *
- * <p>此处示例：查用户信息、查任务状态。AI 可在对话中主动调用这些工具获取实时数据。
+ * <p>当前工具运行于 Reactor 工作线程，租户上下文不由 ThreadLocal 自动传播，
+ * 待 AiChatService 接口支持 ToolContext 透传后改为 executeWithTenant 显式绑定。
  *
  * @author wenbin
  * @since 2026-08-15
@@ -92,9 +93,9 @@ public class AdminAiTools {
     }
 
     /**
-     * 获取当前系统在线用户数。
+     * 获取系统基础统计数据。
      *
-     * @return 在线用户统计信息
+     * @return 正常用户数和运行中定时任务数
      */
     @Tool(name = "getSystemStats",
         description = "获取当前系统基础统计：注册用户总数、已启用任务数")
