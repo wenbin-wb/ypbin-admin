@@ -25,6 +25,13 @@ public interface AiModelConfigService {
     /** 所有模型配置（API Key 脱敏） */
     List<AiModelConfigResp> listModels();
 
+    /**
+     * 按模型类型查询配置（API Key 脱敏）。
+     *
+     * @param modelType 模型类型，{@code null} 时返回全部
+     */
+    List<AiModelConfigResp> listModels(String modelType);
+
     /** 新增模型配置 */
     void createModel(AiModelConfigSaveReq req);
 
@@ -46,6 +53,13 @@ public interface AiModelConfigService {
     /** 测试连通性（发一条 ping 消息，返回耗时 ms） */
     long testConnection(Long id);
 
-    /** 获取当前租户的默认模型（启动 ChatModel 时使用） */
+    /** 获取当前租户的默认模型（启动 ChatModel 时使用，默认 CHAT 类型） */
     AiModelConfig getDefaultModel();
+
+    /**
+     * 按类型获取当前租户的默认模型。
+     *
+     * @param modelType 模型类型，{@code null} 默认 CHAT
+     */
+    AiModelConfig getDefaultModel(String modelType);
 }

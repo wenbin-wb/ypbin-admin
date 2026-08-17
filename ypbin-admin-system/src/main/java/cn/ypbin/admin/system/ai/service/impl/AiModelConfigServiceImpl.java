@@ -42,18 +42,32 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiModelConfigServiceImpl implements AiModelConfigService {
 
+    /** 对话模型 */
+    public static final String MODEL_TYPE_CHAT = "CHAT";
+    /** 向量化模型 */
+    public static final String MODEL_TYPE_EMBEDDING = "EMBEDDING";
+
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
 
     @Override
     public List<AiModelConfigResp> listModels() {
+        return listModels(null);
+    }
+
+    @Override
+    public List<AiModelConfigResp> listModels(String modelType) {
         Long tenantId = currentTenantId();
-        List<AiModelConfig> list = modelConfigMapper.selectList(
-            new LambdaQueryWrapper<AiModelConfig>()
-                .eq(AiModelConfig::getTenantId, tenantId)
-                .eq(AiModelConfig::getStatus, 1)
-                .orderByDesc(AiModelConfig::getIsDefault)
-                .orderByDesc(AiModelConfig::getCreateTime));
+        LambdaQueryWrapper<AiModelConfig> wrapper = new LambdaQueryWrapper<AiModelConfig>()
+            .eq(AiModelConfig::getTenantId, tenantId)
+            .eq(AiModelConfig::getStatus, 1);
+        if (modelType != null && !modelType.isBlank()) {
+            wrapper.eq(AiModelConfig::getModelType, modelType);
+        }
+        wrapper.orderByAsc(AiModelConfig::getModelType)
+            .orderByDesc(AiModelConfig::getIsDefault)
+            .orderByDesc(AiModelConfig::getCreateTime);
+        List<AiModelConfig> list = modelConfigMapper.selectList(wrapper);
         return list.stream().map(this::toResp).toList();
     }
 
@@ -63,6 +77,10 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         AiModelConfig config = new AiModelConfig();
         BeanUtils.copyProperties(req, config);
         config.setTenantId(currentTenantId());
+        // 类型缺省按对话模型处理，兼容存量调用
+        if (config.getModelType() == null || config.getModelType().isBlank()) {
+            config.setModelType(MODEL_TYPE_CHAT);
+        }
         config.setIsDefault(0);
         // API Key AES-GCM 加密后存储，禁止明文落库
         config.setApiKey(keyCipher.encrypt(req.getApiKey()));
@@ -94,12 +112,14 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setDefault(Long id) {
-        requireModel(id);
+        AiModelConfig target = requireModel(id);
         Long tenantId = currentTenantId();
-        // 先清空同租户所有默认标记
+        String modelType = target.getModelType() == null ? MODEL_TYPE_CHAT : target.getModelType();
+        // 先清空同租户同类型的所有默认标记，避免不同类型互相覆盖
         modelConfigMapper.update(null,
             new LambdaUpdateWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
+                .eq(AiModelConfig::getModelType, modelType)
                 .set(AiModelConfig::getIsDefault, 0));
         // 设置新默认
         modelConfigMapper.update(null,
@@ -210,10 +230,17 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public AiModelConfig getDefaultModel() {
+        return getDefaultModel(MODEL_TYPE_CHAT);
+    }
+
+    @Override
+    public AiModelConfig getDefaultModel(String modelType) {
         Long tenantId = currentTenantId();
+        String type = modelType == null || modelType.isBlank() ? MODEL_TYPE_CHAT : modelType;
         return modelConfigMapper.selectOne(
             new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
+                .eq(AiModelConfig::getModelType, type)
                 .eq(AiModelConfig::getIsDefault, 1)
                 .eq(AiModelConfig::getStatus, 1)
                 .last("LIMIT 1"));

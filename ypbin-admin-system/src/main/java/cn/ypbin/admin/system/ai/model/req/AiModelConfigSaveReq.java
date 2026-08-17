@@ -10,7 +10,6 @@
 package cn.ypbin.admin.system.ai.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -29,6 +28,9 @@ public class AiModelConfigSaveReq {
     /** 提供商：openai | deepseek | ollama | custom */
     @NotBlank(message = "提供商不能为空")
     private String provider;
+
+    /** 模型类型：CHAT 对话 | EMBEDDING 向量化，默认 CHAT */
+    private String modelType;
 
     /** API Key */
     private String apiKey;

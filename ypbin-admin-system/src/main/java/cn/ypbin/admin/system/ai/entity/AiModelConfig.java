@@ -35,6 +35,12 @@ public class AiModelConfig extends TenantBaseEntity {
     /** 提供商：openai | deepseek | ollama | custom */
     private String provider;
 
+    /**
+     * 模型类型：{@code CHAT} 对话 | {@code EMBEDDING} 向量化。
+     * embedding 模型页面化配置，替代 yml 硬编码。
+     */
+    private String modelType;
+
     /** API Key（AES-GCM 加密存储） */
     private String apiKey;
 

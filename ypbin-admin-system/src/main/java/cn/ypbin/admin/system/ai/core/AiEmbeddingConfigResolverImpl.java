@@ -11,39 +11,37 @@ package cn.ypbin.admin.system.ai.core;
 
 import cn.ypbin.admin.system.ai.entity.AiModelConfig;
 import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
-import cn.ypbin.starter.ai.chat.AiModelConfigResolver;
-import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.ai.chat.AiEmbeddingConfigResolver;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 动态模型解析器：从 {@code ai_model_config} 表读取当前租户的默认启用模型。
+ * 动态向量化模型解析器：从 {@code ai_model_config} 表读取当前租户的默认 EMBEDDING 模型。
  *
- * <p>starter 的 {@code DefaultAiChatService} 据此动态构建 OpenAI 兼容 ChatModel，
- * 无需在 yml 配置模型 starter；未配置默认模型时返回 {@code null}（对话回退 yml 模型路径）。</p>
+ * <p>starter 的 {@code AiVectorStoreAutoConfiguration} 据此动态构建 OpenAI 兼容
+ * EmbeddingModel 与 SimpleVectorStore，实现向量化模型的页面化配置。</p>
  *
  * @author wenbin
- * @since 2026-08-16
+ * @since 2026-08-17
  */
 @Component
 @RequiredArgsConstructor
-public class AiModelConfigResolverImpl implements AiModelConfigResolver {
+public class AiEmbeddingConfigResolverImpl implements AiEmbeddingConfigResolver {
 
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
 
     @Override
     public AiModelInfo resolve() {
-        // 请求线程必有登录上下文；缺失时明确失败，禁止静默回退默认租户
-        Long tenantId = UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        // 请求线程有登录上下文时用当前租户；无上下文（启动装配/异步线程）回退平台默认租户 1
+        Long tenantId = UserContext.getTenantId().orElse(1L);
         AiModelConfig config = modelConfigMapper.selectOne(
             new LambdaQueryWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getTenantId, tenantId)
-                // 对话默认模型只取 CHAT 类型，避免 embedding 模型被误用为对话模型
-                .eq(AiModelConfig::getModelType, "CHAT")
+                // 向量化模型只取 EMBEDDING 类型
+                .eq(AiModelConfig::getModelType, "EMBEDDING")
                 .eq(AiModelConfig::getIsDefault, 1)
                 .eq(AiModelConfig::getStatus, 1)
                 .last("LIMIT 1"));

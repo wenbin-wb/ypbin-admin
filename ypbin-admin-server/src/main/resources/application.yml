@@ -21,6 +21,7 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    validate-on-migrate: false
     locations: classpath:db/migration
     encoding: UTF-8
 
@@ -192,10 +193,11 @@ ypbin:
       type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
       window-size: 10                          # 记忆窗口大小
     rag:
-      enabled: false                           # 需要向量库时改为 true
+      enabled: true                            # SimpleVectorStore 内存向量库（无外部依赖）
       top-k: 5
       similarity-threshold: 0.7
       max-context-length: 8000                 # 检索上下文最大字符数
+      simple-store-path: ${AI_SIMPLE_STORE_PATH:data/ai/simple-vector-store.json}  # 向量持久化文件（重启不丢）
     model-config:
       secret-key: ${AI_MODEL_SECRET_KEY:}      # API Key 加密密钥（16/24/32 字节），生产必须注入
 

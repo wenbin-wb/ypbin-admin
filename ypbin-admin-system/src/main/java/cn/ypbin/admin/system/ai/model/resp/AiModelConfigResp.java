@@ -28,6 +28,7 @@ public class AiModelConfigResp {
 
     private String name;
     private String provider;
+    private String modelType;
     private String baseUrl;
     private String modelName;
     private Integer isDefault;
