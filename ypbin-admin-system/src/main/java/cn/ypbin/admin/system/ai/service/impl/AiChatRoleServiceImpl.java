@@ -56,11 +56,12 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
                         .or().eq(AiChatRole::getTenantId, tenantId))
                     .orderByAsc(AiChatRole::getSort)));
 
-        // 查询当前用户的收藏集合
-        Set<Long> favSet = favoriteMapper.selectList(
-            new LambdaQueryWrapper<AiChatRoleFavorite>()
-                .eq(AiChatRoleFavorite::getUserId, userId)
-                .select(AiChatRoleFavorite::getRoleId))
+        // 收藏表无 tenant_id 列，需忽略租户行拦截（否则被自动注入 tenant 条件导致 SQL 报错）
+        Set<Long> favSet = TenantContext.executeIgnore(() ->
+            favoriteMapper.selectList(
+                new LambdaQueryWrapper<AiChatRoleFavorite>()
+                    .eq(AiChatRoleFavorite::getUserId, userId)
+                    .select(AiChatRoleFavorite::getRoleId)))
             .stream()
             .map(AiChatRoleFavorite::getRoleId)
             .collect(Collectors.toSet());
@@ -104,10 +105,11 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Transactional(rollbackFor = Exception.class)
     public void toggleFavorite(Long roleId) {
         Long userId = LoginHelper.getUserId();
-        AiChatRoleFavorite existing = favoriteMapper.selectOne(
-            new LambdaQueryWrapper<AiChatRoleFavorite>()
-                .eq(AiChatRoleFavorite::getUserId, userId)
-                .eq(AiChatRoleFavorite::getRoleId, roleId));
+        AiChatRoleFavorite existing = TenantContext.executeIgnore(() ->
+            favoriteMapper.selectOne(
+                new LambdaQueryWrapper<AiChatRoleFavorite>()
+                    .eq(AiChatRoleFavorite::getUserId, userId)
+                    .eq(AiChatRoleFavorite::getRoleId, roleId)));
         if (existing != null) {
             favoriteMapper.deleteById(existing.getId());
         } else {
