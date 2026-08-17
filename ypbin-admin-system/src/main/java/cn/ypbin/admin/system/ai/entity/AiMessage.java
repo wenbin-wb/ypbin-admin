@@ -9,23 +9,15 @@
  */
 package cn.ypbin.admin.system.ai.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
+import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import java.io.Serial;
-import java.io.Serializable;
-import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
  * AI 消息记录（展示用，AI Memory 独立持久化）。
- *
- * <p>不继承 BaseEntity：无审计字段（update_user / update_time / status），
- * 逻辑删除列 is_deleted 通过 {@link TableLogic} 接管。
  *
  * @author wenbin
  * @since 2026-08-15
@@ -33,18 +25,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @TableName("ai_message")
-public class AiMessage implements Serializable {
-
-    @Serial
-    private static final long serialVersionUID = 1L;
-
-    /** 主键，雪花 ID */
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
-    @JsonSerialize(using = ToStringSerializer.class)
-    private Long id;
-
-    /** 租户 ID */
-    private Long tenantId;
+public class AiMessage extends TenantBaseEntity {
 
     /** 会话 ID */
     @JsonSerialize(using = ToStringSerializer.class)
@@ -58,11 +39,4 @@ public class AiMessage implements Serializable {
 
     /** Token 消耗 */
     private Integer tokens;
-
-    /** 创建时间 */
-    private LocalDateTime createTime;
-
-    /** 逻辑删除：0 正常 1 已删除 */
-    @TableLogic
-    private Integer isDeleted;
 }

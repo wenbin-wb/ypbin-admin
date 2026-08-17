@@ -9,11 +9,8 @@
  */
 package cn.ypbin.admin.system.ai.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
+import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
-import java.io.Serializable;
-import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -26,17 +23,11 @@ import lombok.Setter;
 @Getter
 @Setter
 @TableName("ai_chat_role_favorite")
-public class AiChatRoleFavorite implements Serializable {
-
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
+public class AiChatRoleFavorite extends TenantBaseEntity {
 
     /** 用户 ID */
     private Long userId;
 
     /** 角色 ID */
     private Long roleId;
-
-    /** 收藏时间 */
-    private LocalDateTime createTime;
 }

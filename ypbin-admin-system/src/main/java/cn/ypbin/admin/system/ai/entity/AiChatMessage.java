@@ -9,21 +9,13 @@
  */
 package cn.ypbin.admin.system.ai.entity;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
+import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import java.io.Serializable;
-import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * AI 对话消息实体（append-only，简化自含字段以匹配消息表结构）。
+ * AI 对话消息实体。
  *
  * @author wenbin
  * @since 2026-08-16
@@ -31,15 +23,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @TableName("ai_chat_message")
-public class AiChatMessage implements Serializable {
-
-    @TableId(type = IdType.ASSIGN_ID)
-    @JsonSerialize(using = ToStringSerializer.class)
-    private Long id;
-
-    /** 租户 ID */
-    @TableField("tenant_id")
-    private Long tenantId;
+public class AiChatMessage extends TenantBaseEntity {
 
     /** 会话 ID */
     private Long sessionId;
@@ -73,13 +57,4 @@ public class AiChatMessage implements Serializable {
 
     /** 扩展元数据（latency_ms、temperature 等） */
     private String metadata;
-
-    /** 创建时间 */
-    @TableField(value = "create_time", fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
-
-    /** 逻辑删除标记 */
-    @TableLogic
-    @TableField("is_deleted")
-    private Integer isDeleted;
 }

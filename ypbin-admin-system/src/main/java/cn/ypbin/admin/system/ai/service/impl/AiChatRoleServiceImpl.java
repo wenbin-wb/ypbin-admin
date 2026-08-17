@@ -21,7 +21,6 @@ import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -56,12 +55,11 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
                         .or().eq(AiChatRole::getTenantId, tenantId))
                     .orderByAsc(AiChatRole::getSort)));
 
-        // 收藏表无 tenant_id 列，需忽略租户行拦截（否则被自动注入 tenant 条件导致 SQL 报错）
-        Set<Long> favSet = TenantContext.executeIgnore(() ->
-            favoriteMapper.selectList(
-                new LambdaQueryWrapper<AiChatRoleFavorite>()
-                    .eq(AiChatRoleFavorite::getUserId, userId)
-                    .select(AiChatRoleFavorite::getRoleId)))
+        // 收藏表已含 tenant_id，由租户拦截器正常注入
+        Set<Long> favSet = favoriteMapper.selectList(
+            new LambdaQueryWrapper<AiChatRoleFavorite>()
+                .eq(AiChatRoleFavorite::getUserId, userId)
+                .select(AiChatRoleFavorite::getRoleId))
             .stream()
             .map(AiChatRoleFavorite::getRoleId)
             .collect(Collectors.toSet());
@@ -105,18 +103,16 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Transactional(rollbackFor = Exception.class)
     public void toggleFavorite(Long roleId) {
         Long userId = LoginHelper.getUserId();
-        AiChatRoleFavorite existing = TenantContext.executeIgnore(() ->
-            favoriteMapper.selectOne(
-                new LambdaQueryWrapper<AiChatRoleFavorite>()
-                    .eq(AiChatRoleFavorite::getUserId, userId)
-                    .eq(AiChatRoleFavorite::getRoleId, roleId)));
+        AiChatRoleFavorite existing = favoriteMapper.selectOne(
+            new LambdaQueryWrapper<AiChatRoleFavorite>()
+                .eq(AiChatRoleFavorite::getUserId, userId)
+                .eq(AiChatRoleFavorite::getRoleId, roleId));
         if (existing != null) {
             favoriteMapper.deleteById(existing.getId());
         } else {
             AiChatRoleFavorite fav = new AiChatRoleFavorite();
             fav.setUserId(userId);
             fav.setRoleId(roleId);
-            fav.setCreateTime(LocalDateTime.now());
             favoriteMapper.insert(fav);
         }
     }
