@@ -50,6 +50,12 @@ public interface AiKnowledgeBizService {
      */
     AiDocumentVO uploadDocument(Long knowledgeBaseId, MultipartFile file);
 
+    /**
+     * 批量上传文档并逐一异步向量化。
+     * 单文件失败不影响其它文件；返回成功创建的文档 VO 列表。
+     */
+    List<AiDocumentVO> batchUploadDocuments(Long knowledgeBaseId, MultipartFile[] files);
+
     /** 知识库文档分页列表（返回 VO，不暴露内部路径） */
     PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query);
 

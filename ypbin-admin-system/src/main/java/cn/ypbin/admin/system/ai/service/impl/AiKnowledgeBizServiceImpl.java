@@ -169,6 +169,33 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     @Override
+    public List<AiDocumentVO> batchUploadDocuments(Long knowledgeBaseId,
+            MultipartFile[] files) {
+        requireKb(knowledgeBaseId);
+        if (files == null || files.length == 0) {
+            throw new BusinessException("请选择要上传的文件");
+        }
+        if (files.length > 20) {
+            throw new BusinessException("单次最多上传 20 个文件");
+        }
+        List<AiDocumentVO> results = new ArrayList<>();
+        int failed = 0;
+        for (MultipartFile file : files) {
+            try {
+                results.add(uploadDocument(knowledgeBaseId, file));
+            } catch (Exception e) {
+                failed++;
+                log.warn("[ypbin-ai] 批量上传单个文件失败: filename={} err={}",
+                    file.getOriginalFilename(), e.getMessage());
+            }
+        }
+        if (failed > 0 && results.isEmpty()) {
+            throw new BusinessException("全部文件上传失败，请检查文件格式与内容");
+        }
+        return results;
+    }
+
+    @Override
     public PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query) {
         Page<AiDocument> page = documentMapper.selectPage(
             new Page<>(query.getPage(), query.getPageSize()),

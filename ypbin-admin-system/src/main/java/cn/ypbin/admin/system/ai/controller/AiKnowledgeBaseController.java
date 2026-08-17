@@ -103,6 +103,15 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok();
     }
 
+    /** 批量上传文档（最多 20 个），逐一异步向量化，返回成功创建的文档 VO 列表 */
+    @PostMapping("/{id}/documents/batch")
+    @SaCheckPermission("ai:document:upload")
+    public R<List<AiDocumentVO>> batchUploadDocuments(
+            @PathVariable Long id,
+            @RequestParam MultipartFile[] files) {
+        return ok(knowledgeBizService.batchUploadDocuments(id, files));
+    }
+
     /**
      * 从 URL / Sitemap / RSS 导入文档（异步向量化）。
      *
