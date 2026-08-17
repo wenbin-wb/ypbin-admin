@@ -169,44 +169,50 @@ public class AiChatServiceImpl implements AiChatService {
         AtomicInteger messageCount = new AtomicInteger(0);
 
         AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
-        Disposable subscription = stream
-            .doOnNext(token -> {
-                try {
-                    emitter.send(token);
-                    contentBuffer.get().append(token);
-                    tokenCount.incrementAndGet();
-                } catch (Exception e) {
-                    log.warn("[ypbin-ai] 发送流式帧失败：sessionId={}", finalSessionId, e);
+        // subscribe() 必须在 TenantContext.runWithTenant 作用域内调用：
+        // Hooks.enableAutomaticContextPropagation() 在 subscribe 时抓取 ThreadLocal 快照，
+        // 只有此时 TenantContext.TENANT_ID 已绑定，Reactor 工作线程才能还原出正确的租户，
+        // 从而让 @Tool 调用线程的 MyBatis-Plus 租户插件拿到真实 tenantId。
+        TenantContext.runWithTenant(tenantId, () -> {
+            Disposable subscription = stream
+                .doOnNext(token -> {
+                    try {
+                        emitter.send(token);
+                        contentBuffer.get().append(token);
+                        tokenCount.incrementAndGet();
+                    } catch (Exception e) {
+                        log.warn("[ypbin-ai] 发送流式帧失败：sessionId={}", finalSessionId, e);
+                        disposeQuietly(subscriptionRef);
+                        emitter.complete();
+                    }
+                })
+                .doOnError(e -> {
+                    log.error("[ypbin-ai] 流式对话失败：sessionId={}", finalSessionId, e);
+                    try {
+                        emitter.send(SseEmitter.event().name("error")
+                            .data("对话出错：" + rootMessage(e)));
+                    } catch (Exception sendEx) {
+                        log.warn("[ypbin-ai] 发送错误提示失败", sendEx);
+                    }
                     disposeQuietly(subscriptionRef);
                     emitter.complete();
-                }
-            })
-            .doOnError(e -> {
-                log.error("[ypbin-ai] 流式对话失败：sessionId={}", finalSessionId, e);
-                try {
-                    emitter.send(SseEmitter.event().name("error")
-                        .data("对话出错：" + rootMessage(e)));
-                } catch (Exception sendEx) {
-                    log.warn("[ypbin-ai] 发送错误提示失败", sendEx);
-                }
-                disposeQuietly(subscriptionRef);
-                emitter.complete();
-            })
-            .doOnComplete(() -> {
-                emitter.complete();
-                // 落库助手回复 + 更新会话统计
-                String assistantContent = contentBuffer.get().toString();
-                int tokens = tokenCount.get();
-                insertMessage(finalSessionId, userId, tenantId, "assistant",
-                    assistantContent, modelName());
-                updateSessionStats(finalSessionId, tokens, 2);
-                // 首条消息自动生成标题
-                if (messageCount.incrementAndGet() == 1) {
-                    autoTitleIfNew(finalSessionId, req.getContent());
-                }
-            })
-            .subscribe();
-        subscriptionRef.set(subscription);
+                })
+                .doOnComplete(() -> {
+                    emitter.complete();
+                    // 落库助手回复 + 更新会话统计
+                    String assistantContent = contentBuffer.get().toString();
+                    int tokens = tokenCount.get();
+                    insertMessage(finalSessionId, userId, tenantId, "assistant",
+                        assistantContent, modelName());
+                    updateSessionStats(finalSessionId, tokens, 2);
+                    // 首条消息自动生成标题
+                    if (messageCount.incrementAndGet() == 1) {
+                        autoTitleIfNew(finalSessionId, req.getContent());
+                    }
+                })
+                .subscribe();
+            subscriptionRef.set(subscription);
+        });
         emitter.onTimeout(() -> disposeQuietly(subscriptionRef));
         emitter.onError(e -> disposeQuietly(subscriptionRef));
         return emitter;
