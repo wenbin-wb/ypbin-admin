@@ -26,6 +26,9 @@ bin/
 *.tmp
 _run*.log
 
+# 运行时数据（AI 向量持久化、文档原文落盘等，不提交）
+data/
+
 # 环境变量文件（含真实密钥，不提交；模板 .env.example 可提交）
 .env
 .env.local
