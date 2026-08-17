@@ -195,7 +195,7 @@ ypbin:
     rag:
       enabled: true                            # SimpleVectorStore 内存向量库（无外部依赖）
       top-k: 5
-      similarity-threshold: 0.7
+      similarity-threshold: 0.5               # 中文语义向量建议 0.5（0.7 过高会过滤掉有效召回）
       max-context-length: 8000                 # 检索上下文最大字符数
       simple-store-path: ${AI_SIMPLE_STORE_PATH:data/ai/simple-vector-store.json}  # 向量持久化文件（重启不丢）
     model-config:
