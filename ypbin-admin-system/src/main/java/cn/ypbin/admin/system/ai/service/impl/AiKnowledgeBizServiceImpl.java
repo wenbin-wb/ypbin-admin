@@ -20,6 +20,7 @@ import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
+import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiDocumentVectorizer;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
 import cn.ypbin.starter.ai.chat.AiChatService;
@@ -228,6 +229,49 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         List<Document> reranked = ragService.searchWithRerank(
             String.valueOf(knowledgeBaseId), question, topK);
         return reranked.stream().map(this::toSearchHit).toList();
+    }
+
+    @Override
+    public KbQueryResult queryWithSources(Long knowledgeBaseId, String question) {
+        // 1. 先检索召回片段
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        List<KbQueryResult.SourceFragment> sources = new ArrayList<>();
+        if (ragService != null) {
+            requireKb(knowledgeBaseId);
+            List<Document> docs = ragService.searchWithRerank(
+                String.valueOf(knowledgeBaseId), question, 5);
+            for (Document doc : docs) {
+                KbQueryResult.SourceFragment frag = new KbQueryResult.SourceFragment();
+                frag.setSource(String.valueOf(doc.getMetadata().getOrDefault("source", "")));
+                frag.setContent(doc.getText());
+                frag.setMetadata(doc.getMetadata());
+                sources.add(frag);
+            }
+        }
+        // 2. 生成答案（复用 query）
+        String answer = query(knowledgeBaseId, question);
+        KbQueryResult result = new KbQueryResult();
+        result.setAnswer(answer);
+        result.setSources(sources);
+        return result;
+    }
+
+    @Override
+    public String getDocumentContent(Long knowledgeBaseId, Long docId) {
+        AiDocument doc = requireDoc(knowledgeBaseId, docId);
+        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
+            return "";
+        }
+        Path path = Paths.get(doc.getFilePath());
+        if (!Files.exists(path)) {
+            return "";
+        }
+        try {
+            return Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.warn("[ypbin-ai] 读取文档内容失败: docId={}", docId, e);
+            return "";
+        }
     }
 
     /**

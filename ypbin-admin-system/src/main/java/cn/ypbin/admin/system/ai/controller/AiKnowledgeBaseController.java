@@ -13,6 +13,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
+import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
@@ -131,6 +132,23 @@ public class AiKnowledgeBaseController extends BaseController {
         int topKPerKb = body.get("topKPerKb") == null
             ? 5 : Integer.parseInt(String.valueOf(body.get("topKPerKb")));
         return ok(knowledgeBizService.searchMultipleTest(kbIds, question, topKPerKb));
+    }
+
+    /** 带溯源的问答（答案 + 召回片段列表，用于溯源展示） */
+    @PostMapping("/{id}/query-with-sources")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<KbQueryResult> queryWithSources(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        return ok(knowledgeBizService.queryWithSources(id, body.get("question")));
+    }
+
+    /** 读取文档原文内容（Wiki 阅读页渲染用） */
+    @GetMapping("/{id}/documents/{docId}/content")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<String> getDocumentContent(
+            @PathVariable Long id, @PathVariable Long docId) {
+        return ok(knowledgeBizService.getDocumentContent(id, docId));
     }
 
     /** 关键词重叠重排测试 */

@@ -12,7 +12,7 @@ package cn.ypbin.admin.system.ai.service;
 import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
-import cn.ypbin.admin.system.ai.model.resp.AiConversationResp;
+import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import java.util.List;
@@ -68,4 +68,15 @@ public interface AiKnowledgeBizService {
 
     /** 关键词重叠重排测试：对召回片段做精排后返回，供前端观察重排效果 */
     List<Map<String, Object>> searchRerankTest(Long knowledgeBaseId, String question, int topK);
+
+    /**
+     * 带溯源的问答：同时返回 AI 答案与召回片段（用于答案溯源展示）。
+     */
+    KbQueryResult queryWithSources(Long knowledgeBaseId, String question);
+
+    /**
+     * 读取文档原文内容（供 Wiki 阅读页渲染 Markdown）。
+     * 仅支持落盘的文档（file_path 非空）。
+     */
+    String getDocumentContent(Long knowledgeBaseId, Long docId);
 }
