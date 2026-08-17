@@ -13,21 +13,14 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * 新增/编辑知识库请求。
+ * 知识库问答请求。
  *
  * @author wenbin
- * @since 2026-08-15
+ * @since 2026-08-17
  */
 @Data
-public class AiKnowledgeBaseSaveReq {
+public class KbQueryReq {
 
-    @NotBlank(message = "知识库名称不能为空")
-    private String name;
-
-    private String description;
-
-    /** 图标（emoji 或图标名） */
-    private String icon;
-
-    private String remark;
+    @NotBlank(message = "问题不能为空")
+    private String question;
 }

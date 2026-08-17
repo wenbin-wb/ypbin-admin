@@ -38,6 +38,9 @@ public class AiKnowledgeBase extends TenantBaseEntity {
     /** 文档数量（冗余计数，避免 COUNT 查询）*/
     private Integer docCount;
 
+    /** 知识库图标（emoji 或图标名，供卡片展示） */
+    private String icon;
+
     /** 备注 */
     private String remark;
 }

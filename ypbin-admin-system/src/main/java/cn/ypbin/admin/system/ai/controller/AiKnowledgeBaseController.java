@@ -10,9 +10,11 @@
 package cn.ypbin.admin.system.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
+import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
+import cn.ypbin.admin.system.ai.model.req.KbQueryReq;
+import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
 import cn.ypbin.starter.core.model.R;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -53,6 +56,15 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok(knowledgeBizService.createKnowledgeBase(req));
     }
 
+    @PutMapping("/{id}")
+    @SaCheckPermission("ai:knowledge:create")
+    public R<Void> updateKnowledgeBase(
+            @PathVariable Long id,
+            @Valid @RequestBody AiKnowledgeBaseUpdateReq req) {
+        knowledgeBizService.updateKnowledgeBase(id, req);
+        return ok();
+    }
+
     @GetMapping
     @SaCheckPermission("ai:knowledge:list")
     public R<List<AiKnowledgeBase>> listKnowledgeBases() {
@@ -66,10 +78,10 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok();
     }
 
-    /** 上传文档（PDF / Markdown / TXT），异步向量化 */
+    /** 上传文档（PDF / Markdown / TXT），异步向量化，返回 VO（不含本地路径） */
     @PostMapping("/{id}/documents")
     @SaCheckPermission("ai:document:upload")
-    public R<AiDocument> uploadDocument(
+    public R<AiDocumentVO> uploadDocument(
             @PathVariable Long id,
             @RequestParam MultipartFile file) {
         return ok(knowledgeBizService.uploadDocument(id, file));
@@ -77,7 +89,7 @@ public class AiKnowledgeBaseController extends BaseController {
 
     @GetMapping("/{id}/documents")
     @SaCheckPermission("ai:knowledge:list")
-    public R<PageResult<AiDocument>> pageDocuments(
+    public R<PageResult<AiDocumentVO>> pageDocuments(
             @PathVariable Long id, PageQuery query) {
         return ok(knowledgeBizService.pageDocuments(id, query));
     }
@@ -90,7 +102,7 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok();
     }
 
-    /** 重试向量化：对失败/异常的文档重新解析与入库（需上传时已落盘原文） */
+    /** 重试向量化：对失败文档重新解析与入库 */
     @PostMapping("/{id}/documents/{docId}/retry")
     @SaCheckPermission("ai:document:upload")
     public R<Void> retryVectorize(
@@ -99,16 +111,16 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok();
     }
 
-    /** 测试问答（非流式，用于知识库页面的"测试"入口） */
+    /** 知识库问答（非流式） */
     @PostMapping("/{id}/query")
     @SaCheckPermission("ai:knowledge:list")
     public R<String> query(
             @PathVariable Long id,
-            @RequestBody Map<String, String> body) {
-        return ok(knowledgeBizService.query(id, body.get("question")));
+            @Valid @RequestBody KbQueryReq req) {
+        return ok(knowledgeBizService.query(id, req.getQuestion()));
     }
 
-    /** 检索测试：返回召回片段详情，供检索测试器调整 chunk 策略 */
+    /** 检索测试：返回召回片段，供调优检索策略 */
     @PostMapping("/{id}/search-test")
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchTest(
@@ -117,6 +129,17 @@ public class AiKnowledgeBaseController extends BaseController {
         String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
         int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
         return ok(knowledgeBizService.searchTest(id, question, topK));
+    }
+
+    /** 关键词重叠重排测试 */
+    @PostMapping("/{id}/search-rerank-test")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<List<Map<String, Object>>> searchRerankTest(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
+        int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
+        return ok(knowledgeBizService.searchRerankTest(id, question, topK));
     }
 
     /** 多知识库联合检索测试（跨库 RRF 合并） */
@@ -134,13 +157,13 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok(knowledgeBizService.searchMultipleTest(kbIds, question, topKPerKb));
     }
 
-    /** 带溯源的问答（答案 + 召回片段列表，用于溯源展示） */
+    /** 带溯源的问答（答案 + 召回片段列表） */
     @PostMapping("/{id}/query-with-sources")
     @SaCheckPermission("ai:knowledge:list")
     public R<KbQueryResult> queryWithSources(
             @PathVariable Long id,
-            @RequestBody Map<String, String> body) {
-        return ok(knowledgeBizService.queryWithSources(id, body.get("question")));
+            @Valid @RequestBody KbQueryReq req) {
+        return ok(knowledgeBizService.queryWithSources(id, req.getQuestion()));
     }
 
     /** 读取文档原文内容（Wiki 阅读页渲染用） */
@@ -149,16 +172,5 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<String> getDocumentContent(
             @PathVariable Long id, @PathVariable Long docId) {
         return ok(knowledgeBizService.getDocumentContent(id, docId));
-    }
-
-    /** 关键词重叠重排测试 */
-    @PostMapping("/{id}/search-rerank-test")
-    @SaCheckPermission("ai:knowledge:list")
-    public R<List<Map<String, Object>>> searchRerankTest(
-            @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
-        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
-        int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
-        return ok(knowledgeBizService.searchRerankTest(id, question, topK));
     }
 }

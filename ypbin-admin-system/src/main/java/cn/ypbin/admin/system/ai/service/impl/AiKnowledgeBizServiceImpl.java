@@ -6,12 +6,6 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
@@ -20,6 +14,8 @@ import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
+import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
+import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiDocumentVectorizer;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
@@ -33,21 +29,24 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.ai.document.Document;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -62,7 +61,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     private static final Logger log = LoggerFactory.getLogger(AiKnowledgeBizServiceImpl.class);
 
-    /** 知识库问答阻塞等待上限：模型超时/挂起时不再无限占线程 */
+    /** 非流式问答最大阻塞时长；超时时直接失败，不挂起请求线程 */
     private static final Duration QUERY_BLOCK_TIMEOUT = Duration.ofSeconds(60);
 
     private final AiKnowledgeBaseMapper kbMapper;
@@ -71,6 +70,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     private final ObjectProvider<AiRagService> ragServiceProvider;
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
+    // ------------------------------------------------------------------ 知识库 CRUD
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiKnowledgeBase createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
@@ -78,6 +79,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         kb.setTenantId(currentTenantId());
         kb.setName(req.getName());
         kb.setDescription(req.getDescription());
+        kb.setIcon(req.getIcon());
         kb.setRemark(req.getRemark());
         kb.setDocCount(0);
         kbMapper.insert(kb);
@@ -85,11 +87,22 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateKnowledgeBase(Long id, AiKnowledgeBaseUpdateReq req) {
+        AiKnowledgeBase kb = requireKb(id);
+        kb.setName(req.getName());
+        kb.setDescription(req.getDescription());
+        kb.setIcon(req.getIcon());
+        kb.setRemark(req.getRemark());
+        kb.setUpdateTime(LocalDateTime.now());
+        kbMapper.updateById(kb);
+    }
+
+    @Override
     public List<AiKnowledgeBase> listKnowledgeBases() {
-        Long tenantId = currentTenantId();
         return kbMapper.selectList(
             new LambdaQueryWrapper<AiKnowledgeBase>()
-                .eq(AiKnowledgeBase::getTenantId, tenantId)
+                .eq(AiKnowledgeBase::getTenantId, currentTenantId())
                 .orderByDesc(AiKnowledgeBase::getCreateTime));
     }
 
@@ -97,43 +110,40 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteKnowledgeBase(Long id) {
         requireKb(id);
-        // 删向量数据
         AiRagService ragService = ragServiceProvider.getIfAvailable();
         if (ragService != null) {
             ragService.delete(String.valueOf(id));
         }
-        // 逻辑删除知识库和文档记录
         kbMapper.deleteById(id);
         documentMapper.delete(new LambdaQueryWrapper<AiDocument>()
             .eq(AiDocument::getKnowledgeBaseId, id));
     }
 
+    // ------------------------------------------------------------------ 文档管理
+
     @Override
-    public AiDocument uploadDocument(Long knowledgeBaseId, MultipartFile file) {
+    public AiDocumentVO uploadDocument(Long knowledgeBaseId, MultipartFile file) {
         requireKb(knowledgeBaseId);
-        Long tenantId = currentTenantId();
         String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
 
-        // 先落库，状态"处理中"
         AiDocument doc = new AiDocument();
         doc.setKnowledgeBaseId(knowledgeBaseId);
-        doc.setTenantId(tenantId);
+        doc.setTenantId(currentTenantId());
         doc.setFilename(filename);
         doc.setFileSize(file.getSize());
         doc.setChunkCount(0);
         doc.setStatus(0);
-        doc.setCreateTime(java.time.LocalDateTime.now());
+        doc.setCreateTime(LocalDateTime.now());
         documentMapper.insert(doc);
 
-        // 请求线程内读取字节，避免 @Async 线程中 MultipartFile 已不可读
         byte[] bytes;
         try {
             bytes = file.getBytes();
         } catch (Exception e) {
             markDocFailed(doc.getId(), "文件读取失败：" + e.getMessage());
-            return doc;
+            return AiDocumentVO.from(doc);
         }
-        // 原文落盘到本地 data 目录：失败重试时无需重新上传即可重新向量化
+
         String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
         if (filePath != null) {
             AiDocument pathUpdate = new AiDocument();
@@ -141,20 +151,22 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             pathUpdate.setFilePath(filePath);
             documentMapper.updateById(pathUpdate);
         }
-        // 异步向量化（独立 Bean 调用，保证 @Async 代理生效；仅传字节，不传 MultipartFile）
-        documentVectorizer.vectorizeAsync(doc.getId(), knowledgeBaseId, tenantId, filename, bytes);
 
-        return doc;
+        documentVectorizer.vectorizeAsync(
+            doc.getId(), knowledgeBaseId, doc.getTenantId(), filename, bytes);
+        return AiDocumentVO.from(doc);
     }
 
     @Override
-    public PageResult<AiDocument> pageDocuments(Long knowledgeBaseId, PageQuery query) {
+    public PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query) {
         Page<AiDocument> page = documentMapper.selectPage(
             new Page<>(query.getPage(), query.getPageSize()),
             new LambdaQueryWrapper<AiDocument>()
                 .eq(AiDocument::getKnowledgeBaseId, knowledgeBaseId)
                 .orderByDesc(AiDocument::getCreateTime));
-        return PageResult.of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize());
+        List<AiDocumentVO> vos = page.getRecords().stream()
+            .map(AiDocumentVO::from).toList();
+        return PageResult.of(vos, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     @Override
@@ -165,152 +177,10 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             ragService.deleteDocument(String.valueOf(knowledgeBaseId), String.valueOf(docId));
         }
         documentMapper.deleteById(docId);
-        // 更新知识库文档计数（原子 SQL，避免并发读改写漂移）
         kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
             .eq(AiKnowledgeBase::getId, knowledgeBaseId)
             .gt(AiKnowledgeBase::getDocCount, 0)
             .setSql("doc_count = doc_count - 1"));
-    }
-
-    @Override
-    public String query(Long knowledgeBaseId, String question) {
-        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
-        if (aiChatService == null) {
-            return "AI 模块未启用，请配置 ypbin.ai.enabled=true";
-        }
-        List<String> tokens = aiChatService.chatWithKnowledge(
-            "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
-            .collectList()
-            .block(QUERY_BLOCK_TIMEOUT);
-        return tokens == null ? "" : String.join("", tokens);
-    }
-
-    @Override
-    public List<Map<String, Object>> searchTest(Long knowledgeBaseId, String question, int topK) {
-        AiRagService ragService = ragServiceProvider.getIfAvailable();
-        if (ragService == null) {
-            return List.of();
-        }
-        requireKb(knowledgeBaseId);
-        int k = topK > 0 && topK <= 20 ? topK : 5;
-        List<Document> docs = ragService.search(
-            String.valueOf(knowledgeBaseId), question, k);
-        List<Map<String, Object>> result = new ArrayList<>(docs.size());
-        for (Document doc : docs) {
-            Map<String, Object> item = new HashMap<>();
-            item.put("content", doc.getText());
-            item.put("metadata", doc.getMetadata());
-            item.put("source", doc.getMetadata().get("source"));
-            result.add(item);
-        }
-        return result;
-    }
-
-    @Override
-    public List<Map<String, Object>> searchMultipleTest(List<Long> knowledgeBaseIds,
-            String question, int topKPerKb) {
-        AiRagService ragService = ragServiceProvider.getIfAvailable();
-        if (ragService == null || knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
-            return List.of();
-        }
-        List<String> kbIds = knowledgeBaseIds.stream().map(String::valueOf).toList();
-        List<Document> merged = ragService.searchMultiple(kbIds, question, topKPerKb, 10);
-        return merged.stream().map(this::toSearchHit).toList();
-    }
-
-    @Override
-    public List<Map<String, Object>> searchRerankTest(Long knowledgeBaseId, String question,
-            int topK) {
-        AiRagService ragService = ragServiceProvider.getIfAvailable();
-        if (ragService == null) {
-            return List.of();
-        }
-        requireKb(knowledgeBaseId);
-        List<Document> reranked = ragService.searchWithRerank(
-            String.valueOf(knowledgeBaseId), question, topK);
-        return reranked.stream().map(this::toSearchHit).toList();
-    }
-
-    @Override
-    public KbQueryResult queryWithSources(Long knowledgeBaseId, String question) {
-        // 1. 先检索召回片段
-        AiRagService ragService = ragServiceProvider.getIfAvailable();
-        List<KbQueryResult.SourceFragment> sources = new ArrayList<>();
-        if (ragService != null) {
-            requireKb(knowledgeBaseId);
-            List<Document> docs = ragService.searchWithRerank(
-                String.valueOf(knowledgeBaseId), question, 5);
-            for (Document doc : docs) {
-                KbQueryResult.SourceFragment frag = new KbQueryResult.SourceFragment();
-                frag.setSource(String.valueOf(doc.getMetadata().getOrDefault("source", "")));
-                frag.setContent(doc.getText());
-                frag.setMetadata(doc.getMetadata());
-                sources.add(frag);
-            }
-        }
-        // 2. 生成答案（复用 query）
-        String answer = query(knowledgeBaseId, question);
-        KbQueryResult result = new KbQueryResult();
-        result.setAnswer(answer);
-        result.setSources(sources);
-        return result;
-    }
-
-    @Override
-    public String getDocumentContent(Long knowledgeBaseId, Long docId) {
-        AiDocument doc = requireDoc(knowledgeBaseId, docId);
-        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
-            return "";
-        }
-        Path path = Paths.get(doc.getFilePath());
-        if (!Files.exists(path)) {
-            return "";
-        }
-        try {
-            return Files.readString(path, java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("[ypbin-ai] 读取文档内容失败: docId={}", docId, e);
-            return "";
-        }
-    }
-
-    /**
-     * 将召回 Document 转为前端检索测试器展示用的 Map。
-     */
-    private Map<String, Object> toSearchHit(Document doc) {
-        Map<String, Object> item = new HashMap<>();
-        item.put("content", doc.getText());
-        item.put("metadata", doc.getMetadata());
-        item.put("source", doc.getMetadata().get("source"));
-        return item;
-    }
-
-    /**
-     * 将上传的原始文件落盘到本地 data 目录，供失败重试时重新向量化。
-     *
-     * @return 落盘后的绝对路径；落盘失败时返回 {@code null}（向量化仍可继续，仅无法重试）
-     */
-    private String persistOriginalFile(Long knowledgeBaseId, Long docId,
-            String filename, byte[] bytes) {
-        try {
-            Path dir = Paths.get(userDir(), "data", "ai-files", String.valueOf(knowledgeBaseId));
-            Files.createDirectories(dir);
-            String safeName = filename == null || filename.isBlank()
-                ? "document" : filename.replaceAll("[\\\\/:*?\"<>|]", "_");
-            Path target = dir.resolve(docId + "-" + safeName);
-            Files.write(target, bytes);
-            return target.toAbsolutePath().toString();
-        } catch (IOException e) {
-            log.error("[ypbin-ai] 文档原文落盘失败: docId={}", docId, e);
-            return null;
-        }
-    }
-
-    /**
-     * 用户目录（与 SimpleVectorStore 持久化同一根目录，避免绝对路径硬编码）。
-     */
-    private static String userDir() {
-        return System.getProperty("user.dir");
     }
 
     @Override
@@ -325,30 +195,140 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         }
         try {
             byte[] bytes = Files.readAllBytes(path);
-            // 重置状态为"处理中"，异步重新向量化
             AiDocument update = new AiDocument();
             update.setId(docId);
             update.setStatus(0);
             update.setErrorMsg(null);
-            update.setUpdateTime(java.time.LocalDateTime.now());
+            update.setUpdateTime(LocalDateTime.now());
             documentMapper.updateById(update);
-            documentVectorizer.vectorizeAsync(docId, knowledgeBaseId,
-                doc.getTenantId(), doc.getFilename(), bytes);
+            documentVectorizer.vectorizeAsync(
+                docId, knowledgeBaseId, doc.getTenantId(), doc.getFilename(), bytes);
         } catch (IOException e) {
             throw new BusinessException("读取原文件失败：" + e.getMessage());
         }
     }
 
-    /**
-     * 校验知识库下的文档存在。
-     */
-    private AiDocument requireDoc(Long knowledgeBaseId, Long docId) {
-        AiDocument doc = documentMapper.selectById(docId);
-        if (doc == null
-            || !java.util.Objects.equals(doc.getKnowledgeBaseId(), knowledgeBaseId)) {
-            throw new BusinessException("文档不存在");
+    // ------------------------------------------------------------------ 问答 & 检索
+
+    @Override
+    public String query(Long knowledgeBaseId, String question) {
+        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
+        if (aiChatService == null) {
+            throw new BusinessException("AI 对话服务未配置，请在【AI 配置】中添加对话模型");
         }
-        return doc;
+        List<String> tokens = aiChatService.chatWithKnowledge(
+                "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
+            .collectList()
+            .block(QUERY_BLOCK_TIMEOUT);
+        return tokens == null ? "" : String.join("", tokens);
+    }
+
+    @Override
+    public KbQueryResult queryWithSources(Long knowledgeBaseId, String question) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            throw new BusinessException("RAG 服务未配置，请在【AI 配置】中添加向量化模型");
+        }
+        requireKb(knowledgeBaseId);
+        List<Document> docs = ragService.searchWithRerank(
+            String.valueOf(knowledgeBaseId), question, 5);
+        List<KbQueryResult.SourceFragment> sources = new ArrayList<>(docs.size());
+        for (Document doc : docs) {
+            KbQueryResult.SourceFragment frag = new KbQueryResult.SourceFragment();
+            frag.setSource(String.valueOf(doc.getMetadata().getOrDefault("source", "")));
+            frag.setContent(doc.getText());
+            frag.setMetadata(doc.getMetadata());
+            sources.add(frag);
+        }
+        String answer = query(knowledgeBaseId, question);
+        KbQueryResult result = new KbQueryResult();
+        result.setAnswer(answer);
+        result.setSources(sources);
+        return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> searchTest(Long knowledgeBaseId, String question, int topK) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            throw new BusinessException("RAG 服务未配置，请在【AI 配置】中添加向量化模型");
+        }
+        requireKb(knowledgeBaseId);
+        int k = topK > 0 && topK <= 20 ? topK : 5;
+        return ragService.search(String.valueOf(knowledgeBaseId), question, k)
+            .stream().map(this::toSearchHit).toList();
+    }
+
+    @Override
+    public List<Map<String, Object>> searchMultipleTest(List<Long> knowledgeBaseIds,
+            String question, int topKPerKb) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            throw new BusinessException("RAG 服务未配置，请在【AI 配置】中添加向量化模型");
+        }
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> kbIds = knowledgeBaseIds.stream().map(String::valueOf).toList();
+        return ragService.searchMultiple(kbIds, question, topKPerKb, 10)
+            .stream().map(this::toSearchHit).toList();
+    }
+
+    @Override
+    public List<Map<String, Object>> searchRerankTest(Long knowledgeBaseId, String question,
+            int topK) {
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            throw new BusinessException("RAG 服务未配置，请在【AI 配置】中添加向量化模型");
+        }
+        requireKb(knowledgeBaseId);
+        return ragService.searchWithRerank(String.valueOf(knowledgeBaseId), question, topK)
+            .stream().map(this::toSearchHit).toList();
+    }
+
+    @Override
+    public String getDocumentContent(Long knowledgeBaseId, Long docId) {
+        AiDocument doc = requireDoc(knowledgeBaseId, docId);
+        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
+            throw new BusinessException("文档未落盘，无法读取内容");
+        }
+        Path path = Paths.get(doc.getFilePath());
+        if (!Files.exists(path)) {
+            throw new BusinessException("文档文件不存在（可能已被清理）");
+        }
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("[ypbin-ai] 读取文档内容失败: docId={}", docId, e);
+            throw new BusinessException("读取文档内容失败：" + e.getMessage());
+        }
+    }
+
+    // ------------------------------------------------------------------ 内部工具
+
+    private Map<String, Object> toSearchHit(Document doc) {
+        Map<String, Object> item = new HashMap<>();
+        item.put("content", doc.getText());
+        item.put("metadata", doc.getMetadata());
+        item.put("source", doc.getMetadata().get("source"));
+        return item;
+    }
+
+    private String persistOriginalFile(Long knowledgeBaseId, Long docId,
+            String filename, byte[] bytes) {
+        try {
+            Path dir = Paths.get(System.getProperty("user.dir"),
+                "data", "ai-files", String.valueOf(knowledgeBaseId));
+            Files.createDirectories(dir);
+            String safeName = (filename == null || filename.isBlank())
+                ? "document" : filename.replaceAll("[\\\\/:*?\"<>|]", "_");
+            Path target = dir.resolve(docId + "-" + safeName);
+            Files.write(target, bytes);
+            return target.toAbsolutePath().toString();
+        } catch (IOException e) {
+            log.error("[ypbin-ai] 文档原文落盘失败: docId={}", docId, e);
+            return null;
+        }
     }
 
     private void markDocFailed(Long docId, String errorMsg) {
@@ -357,7 +337,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         update.setStatus(2);
         update.setErrorMsg(errorMsg != null && errorMsg.length() > 490
             ? errorMsg.substring(0, 490) : errorMsg);
-        update.setUpdateTime(java.time.LocalDateTime.now());
+        update.setUpdateTime(LocalDateTime.now());
         documentMapper.updateById(update);
     }
 
@@ -369,9 +349,14 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         return kb;
     }
 
-    /**
-     * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
-     */
+    private AiDocument requireDoc(Long knowledgeBaseId, Long docId) {
+        AiDocument doc = documentMapper.selectById(docId);
+        if (doc == null || !Objects.equals(doc.getKnowledgeBaseId(), knowledgeBaseId)) {
+            throw new BusinessException("文档不存在");
+        }
+        return doc;
+    }
+
     private static Long currentTenantId() {
         return UserContext.getTenantId()
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
