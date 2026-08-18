@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.ai.model.req.KbQueryReq;
 import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
+import cn.ypbin.admin.system.ai.service.AiWidgetService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
@@ -49,6 +50,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class AiKnowledgeBaseController extends BaseController {
 
     private final AiKnowledgeBizService knowledgeBizService;
+    private final AiWidgetService widgetService;
 
     @PostMapping
     @SaCheckPermission("ai:knowledge:create")
@@ -191,6 +193,19 @@ public class AiKnowledgeBaseController extends BaseController {
             @PathVariable Long id,
             @Valid @RequestBody KbQueryReq req) {
         return ok(knowledgeBizService.queryWithSources(id, req.getQuestion()));
+    }
+
+    /**
+     * 启用/停用知识库网页挂件。
+     *
+     * @param enabled true 启用（生成新令牌，返回令牌），false 停用（清除令牌）
+     */
+    @PutMapping("/{id}/widget")
+    @SaCheckPermission("ai:knowledge:create")
+    public R<String> setWidgetEnabled(
+            @PathVariable Long id,
+            @RequestParam boolean enabled) {
+        return ok(widgetService.setWidgetEnabled(id, enabled));
     }
 
     /** 读取文档原文内容（Wiki 阅读页渲染用） */

@@ -43,4 +43,10 @@ public class AiKnowledgeBase extends TenantBaseEntity {
 
     /** 备注 */
     private String remark;
+
+    /** 网页挂件令牌（非空=启用对外公开问答；重置即轮换新令牌） */
+    private String widgetToken;
+
+    /** 挂件是否启用（0 未启用 / 1 已启用） */
+    private Integer widgetEnabled;
 }

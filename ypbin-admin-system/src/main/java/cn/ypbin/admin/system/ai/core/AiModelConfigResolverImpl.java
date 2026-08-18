@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.starter.ai.chat.AiModelConfigResolver;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -36,8 +37,10 @@ public class AiModelConfigResolverImpl implements AiModelConfigResolver {
 
     @Override
     public AiModelInfo resolve() {
-        // 请求线程必有登录上下文；缺失时明确失败，禁止静默回退默认租户
+        // 优先登录上下文；匿名场景（如网页挂件）已由调用方显式绑定 TenantContext 租户，
+        // 此处回退取之。两者皆无才失败，禁止静默回退默认租户。
         Long tenantId = UserContext.getTenantId()
+            .or(() -> TenantContext.getTenantId())
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
         AiModelConfig config = modelConfigMapper.selectOne(
             new LambdaQueryWrapper<AiModelConfig>()
