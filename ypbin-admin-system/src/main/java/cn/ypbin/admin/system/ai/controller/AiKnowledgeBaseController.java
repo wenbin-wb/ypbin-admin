@@ -14,10 +14,12 @@ import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
+import cn.ypbin.admin.system.ai.model.req.AiShareSettingReq;
 import cn.ypbin.admin.system.ai.model.req.KbQueryReq;
 import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
+import cn.ypbin.admin.system.ai.service.AiShareService;
 import cn.ypbin.admin.system.ai.service.AiWidgetService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
@@ -51,6 +53,7 @@ public class AiKnowledgeBaseController extends BaseController {
 
     private final AiKnowledgeBizService knowledgeBizService;
     private final AiWidgetService widgetService;
+    private final AiShareService shareService;
 
     @PostMapping
     @SaCheckPermission("ai:knowledge:create")
@@ -206,6 +209,20 @@ public class AiKnowledgeBaseController extends BaseController {
             @PathVariable Long id,
             @RequestParam boolean enabled) {
         return ok(widgetService.setWidgetEnabled(id, enabled));
+    }
+
+    /**
+     * 保存知识库公开分享设置。
+     *
+     * <p>启用时返回分享令牌（已有令牌保留，轮换需先关闭再开启），可配置有效期与访问密码；
+     * 停用时清除全部分享配置。</p>
+     */
+    @PutMapping("/{id}/share")
+    @SaCheckPermission("ai:knowledge:create")
+    public R<String> setShareSetting(
+            @PathVariable Long id,
+            @Valid @RequestBody AiShareSettingReq req) {
+        return ok(shareService.setShareSetting(id, req));
     }
 
     /** 读取文档原文内容（Wiki 阅读页渲染用） */

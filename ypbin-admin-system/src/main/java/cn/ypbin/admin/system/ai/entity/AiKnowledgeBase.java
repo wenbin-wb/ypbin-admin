@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.ai.entity;
 import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
+import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -49,4 +50,16 @@ public class AiKnowledgeBase extends TenantBaseEntity {
 
     /** 挂件是否启用（0 未启用 / 1 已启用） */
     private Integer widgetEnabled;
+
+    /** 公开分享令牌（非空=启用公开分享；关闭再开启即轮换新令牌） */
+    private String shareToken;
+
+    /** 分享是否启用（0 未启用 / 1 已启用） */
+    private Integer shareEnabled;
+
+    /** 分享过期时间（NULL=永不过期） */
+    private LocalDateTime shareExpireTime;
+
+    /** 访问密码 SHA-256 哈希（Hex；NULL=无需密码） */
+    private String sharePassword;
 }

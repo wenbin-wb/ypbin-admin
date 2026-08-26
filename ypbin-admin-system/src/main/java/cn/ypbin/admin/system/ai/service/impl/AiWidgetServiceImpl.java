@@ -16,6 +16,7 @@ import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
@@ -53,18 +54,22 @@ public class AiWidgetServiceImpl implements AiWidgetService {
         if (kb == null) {
             throw new BusinessException("知识库不存在");
         }
-        AiKnowledgeBase update = new AiKnowledgeBase();
-        update.setId(knowledgeBaseId);
+        // 用 UpdateWrapper 显式 set（含 null），否则 MyBatis-Plus 默认字段策略会忽略
+        // null 字段，导致停用时令牌不被清除（残留旧值）。
+        LambdaUpdateWrapper<AiKnowledgeBase> uw = new LambdaUpdateWrapper<>();
+        uw.eq(AiKnowledgeBase::getId, knowledgeBaseId);
+        String token = null;
         if (enabled) {
-            update.setWidgetToken(generateToken());
-            update.setWidgetEnabled(1);
+            token = generateToken();
+            uw.set(AiKnowledgeBase::getWidgetToken, token);
+            uw.set(AiKnowledgeBase::getWidgetEnabled, 1);
         } else {
-            update.setWidgetToken(null);
-            update.setWidgetEnabled(0);
+            uw.set(AiKnowledgeBase::getWidgetToken, null);
+            uw.set(AiKnowledgeBase::getWidgetEnabled, 0);
         }
-        update.setUpdateTime(LocalDateTime.now());
-        kbMapper.updateById(update);
-        return enabled ? update.getWidgetToken() : null;
+        uw.set(AiKnowledgeBase::getUpdateTime, LocalDateTime.now());
+        kbMapper.update(null, uw);
+        return token;
     }
 
     @Override
@@ -81,13 +86,19 @@ public class AiWidgetServiceImpl implements AiWidgetService {
         if (aiChatService == null) {
             throw new BusinessException("AI 对话服务未配置，请先配置对话模型");
         }
-        // 匿名请求无登录上下文：显式绑定知识库所属租户，保证 RAG 检索与 AI 调用在正确租户内
-        List<String> tokens = TenantContext.executeWithTenant(kb.getTenantId(),
-            () -> aiChatService.chatWithKnowledge(
-                    "widget-" + kb.getId(), question, String.valueOf(kb.getId()))
-                .collectList()
-                .block());
-        return tokens == null ? "" : String.join("", tokens);
+        try {
+            // 匿名请求无登录上下文：显式绑定知识库所属租户，保证 RAG 检索与 AI 调用在正确租户内
+            List<String> tokens = TenantContext.executeWithTenant(kb.getTenantId(),
+                () -> aiChatService.chatWithKnowledge(
+                        "widget-" + kb.getId(), question, String.valueOf(kb.getId()))
+                    .collectList()
+                    .block());
+            return tokens == null ? "" : String.join("", tokens);
+        } catch (IllegalStateException e) {
+            // 模型未配置/密钥缺失等环境问题：记录日志并向调用方暴露明确的业务错误（非静默降级）
+            log.warn("[ypbin-ai] 挂件问答失败: token={} err={}", token, e.getMessage());
+            throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加对话模型");
+        }
     }
 
     /**
