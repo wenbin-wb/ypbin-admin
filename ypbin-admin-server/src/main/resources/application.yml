@@ -200,6 +200,10 @@ ypbin:
       simple-store-path: ${AI_SIMPLE_STORE_PATH:data/ai/simple-vector-store.json}  # 向量持久化文件（重启不丢）
     model-config:
       secret-key: ${AI_MODEL_SECRET_KEY:}      # API Key 加密密钥（16/24/32 字节），生产必须注入
+    rate-limit:                                 # 匿名公开接口（分享/挂件）限流：按客户端 IP 独立计数
+      enabled: ${AI_RATE_LIMIT_ENABLED:true}
+      limit: ${AI_RATE_LIMIT_LIMIT:10}          # 窗口内允许的最大请求数（ask 问答）
+      window-seconds: ${AI_RATE_LIMIT_WINDOW:60}  # 窗口时长（秒）
 
 # tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
 captcha:

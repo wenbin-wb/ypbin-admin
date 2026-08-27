@@ -16,7 +16,9 @@
 package cn.ypbin.admin.system.ai.service;
 
 import cn.ypbin.admin.system.ai.entity.AiDocument;
+import cn.ypbin.admin.system.ai.entity.AiDocumentChunk;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.system.ai.mapper.AiDocumentChunkMapper;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.starter.ai.rag.AiRagService;
@@ -50,6 +52,7 @@ public class AiDocumentVectorizer {
 
     private final AiDocumentMapper documentMapper;
     private final AiKnowledgeBaseMapper kbMapper;
+    private final AiDocumentChunkMapper chunkMapper;
     private final ObjectProvider<AiRagService> ragServiceProvider;
 
     @Async
@@ -64,6 +67,8 @@ public class AiDocumentVectorizer {
             try {
                 List<Document> chunks = parseAndChunk(bytes, filename, docId, knowledgeBaseId);
                 ragService.ingest(String.valueOf(knowledgeBaseId), chunks);
+                // 分块落库（供分块可视化）：先清历史再批量插入，保证与向量库一致
+                persistChunks(docId, knowledgeBaseId, chunks);
                 // 更新文档状态为"就绪"
                 AiDocument update = new AiDocument();
                 update.setId(docId);
@@ -90,6 +95,41 @@ public class AiDocumentVectorizer {
             "documentId", String.valueOf(docId),
             "filename", filename);
         return DocumentLoader.loadAndChunk(bytes, filename, metadata);
+    }
+
+    /**
+     * 分块落库：删除该文档旧分块后按顺序批量插入。
+     *
+     * <p>向量化重试时会重新切片，必须先清旧数据再写入，避免与向量库不一致。
+     * 落库失败仅记录日志不阻断向量化主流程（分块可视化是诊断旁路）。</p>
+     */
+    private void persistChunks(Long docId, Long knowledgeBaseId, List<Document> chunks) {
+        try {
+            chunkMapper.delete(new LambdaUpdateWrapper<AiDocumentChunk>()
+                .eq(AiDocumentChunk::getDocumentId, docId));
+            for (int i = 0; i < chunks.size(); i++) {
+                Document chunk = chunks.get(i);
+                String text = chunk.getText() == null ? "" : chunk.getText();
+                AiDocumentChunk row = new AiDocumentChunk();
+                row.setTenantId(tenantIdOf(knowledgeBaseId));
+                row.setKnowledgeBaseId(knowledgeBaseId);
+                row.setDocumentId(docId);
+                row.setChunkIndex(i);
+                row.setContent(text);
+                row.setCharCount(text.length());
+                row.setCreateTime(java.time.LocalDateTime.now());
+                chunkMapper.insert(row);
+            }
+            log.debug("[ypbin-ai] 分块落库完成: docId={}, chunks={}", docId, chunks.size());
+        } catch (Exception e) {
+            log.warn("[ypbin-ai] 分块落库失败（不影响向量化）: docId={} err={}", docId, e.getMessage());
+        }
+    }
+
+    /** 从知识库实体取租户 ID（向量化线程内无请求上下文） */
+    private Long tenantIdOf(Long knowledgeBaseId) {
+        AiKnowledgeBase kb = kbMapper.selectById(knowledgeBaseId);
+        return kb != null && kb.getTenantId() != null ? kb.getTenantId() : 0L;
     }
 
     private void markDocFailed(Long docId, String errorMsg) {

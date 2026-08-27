@@ -56,8 +56,9 @@ public interface AiKnowledgeBizService {
      */
     List<AiDocumentVO> batchUploadDocuments(Long knowledgeBaseId, MultipartFile[] files);
 
-    /** 知识库文档分页列表（返回 VO，不暴露内部路径） */
-    PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query);
+    /** 知识库文档分页列表（返回 VO，不暴露内部路径）；keyword 非空时按文件名模糊过滤 */
+    PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query,
+            String keyword);
 
     /** 删除文档（同时清理向量数据） */
     void deleteDocument(Long knowledgeBaseId, Long docId);
@@ -108,4 +109,14 @@ public interface AiKnowledgeBizService {
      * 仅支持落盘（file_path 非空）且文件存在的文档。
      */
     String getDocumentContent(Long knowledgeBaseId, Long docId);
+
+    /**
+     * 文档全量分块列表（按分块序号升序），供分块可视化与检索诊断。
+     * 仅就绪（向量化成功）的文档有分块数据。
+     *
+     * @param knowledgeBaseId 知识库 ID
+     * @param docId           文档 ID
+     * @return 分块列表（chunkIndex/content/charCount）
+     */
+    List<Map<String, Object>> listDocumentChunks(Long knowledgeBaseId, Long docId);
 }

@@ -96,8 +96,9 @@ public class AiKnowledgeBaseController extends BaseController {
     @GetMapping("/{id}/documents")
     @SaCheckPermission("ai:knowledge:list")
     public R<PageResult<AiDocumentVO>> pageDocuments(
-            @PathVariable Long id, PageQuery query) {
-        return ok(knowledgeBizService.pageDocuments(id, query));
+            @PathVariable Long id, PageQuery query,
+            @RequestParam(required = false) String keyword) {
+        return ok(knowledgeBizService.pageDocuments(id, query, keyword));
     }
 
     @DeleteMapping("/{id}/documents/{docId}")
@@ -231,5 +232,13 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<String> getDocumentContent(
             @PathVariable Long id, @PathVariable Long docId) {
         return ok(knowledgeBizService.getDocumentContent(id, docId));
+    }
+
+    /** 文档全量分块列表（分块可视化） */
+    @GetMapping("/{id}/documents/{docId}/chunks")
+    @SaCheckPermission("ai:knowledge:list")
+    public R<List<Map<String, Object>>> listDocumentChunks(
+            @PathVariable Long id, @PathVariable Long docId) {
+        return ok(knowledgeBizService.listDocumentChunks(id, docId));
     }
 }

@@ -10,8 +10,10 @@
 package cn.ypbin.admin.system.ai.service.impl;
 
 import cn.ypbin.admin.system.ai.entity.AiDocument;
+import cn.ypbin.admin.system.ai.entity.AiDocumentChunk;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.entity.AiQueryLog;
+import cn.ypbin.admin.system.ai.mapper.AiDocumentChunkMapper;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.system.ai.mapper.AiQueryLogMapper;
@@ -79,6 +81,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     private final AiKnowledgeBaseMapper kbMapper;
     private final AiDocumentMapper documentMapper;
+    private final AiDocumentChunkMapper chunkMapper;
     private final AiQueryLogMapper queryLogMapper;
     private final AiDocumentVectorizer documentVectorizer;
     private final ObjectProvider<AiRagService> ragServiceProvider;
@@ -131,6 +134,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         kbMapper.deleteById(id);
         documentMapper.delete(new LambdaQueryWrapper<AiDocument>()
             .eq(AiDocument::getKnowledgeBaseId, id));
+        chunkMapper.delete(new LambdaQueryWrapper<AiDocumentChunk>()
+            .eq(AiDocumentChunk::getKnowledgeBaseId, id));
     }
 
     // ------------------------------------------------------------------ 文档管理
@@ -200,12 +205,16 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     @Override
-    public PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query) {
+    public PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query,
+            String keyword) {
+        LambdaQueryWrapper<AiDocument> wrapper = new LambdaQueryWrapper<AiDocument>()
+            .eq(AiDocument::getKnowledgeBaseId, knowledgeBaseId);
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like(AiDocument::getFilename, keyword.trim());
+        }
+        wrapper.orderByDesc(AiDocument::getCreateTime);
         Page<AiDocument> page = documentMapper.selectPage(
-            new Page<>(query.getPage(), query.getPageSize()),
-            new LambdaQueryWrapper<AiDocument>()
-                .eq(AiDocument::getKnowledgeBaseId, knowledgeBaseId)
-                .orderByDesc(AiDocument::getCreateTime));
+            new Page<>(query.getPage(), query.getPageSize()), wrapper);
         List<AiDocumentVO> vos = page.getRecords().stream()
             .map(AiDocumentVO::from).toList();
         return PageResult.of(vos, page.getTotal(), page.getCurrent(), page.getSize());
@@ -219,6 +228,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             ragService.deleteDocument(String.valueOf(knowledgeBaseId), String.valueOf(docId));
         }
         documentMapper.deleteById(docId);
+        chunkMapper.delete(new LambdaQueryWrapper<AiDocumentChunk>()
+            .eq(AiDocumentChunk::getDocumentId, docId));
         kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
             .eq(AiKnowledgeBase::getId, knowledgeBaseId)
             .gt(AiKnowledgeBase::getDocCount, 0)
@@ -515,6 +526,22 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             log.error("[ypbin-ai] 读取文档内容失败: docId={}", docId, e);
             throw new BusinessException("读取文档内容失败：" + e.getMessage());
         }
+    }
+
+    @Override
+    public List<Map<String, Object>> listDocumentChunks(Long knowledgeBaseId, Long docId) {
+        requireDoc(knowledgeBaseId, docId);
+        List<AiDocumentChunk> chunks = chunkMapper.selectList(
+            new LambdaQueryWrapper<AiDocumentChunk>()
+                .eq(AiDocumentChunk::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(AiDocumentChunk::getDocumentId, docId)
+                .orderByAsc(AiDocumentChunk::getChunkIndex));
+        return chunks.stream()
+            .map(c -> Map.<String, Object>of(
+                "chunkIndex", c.getChunkIndex(),
+                "content", c.getContent() == null ? "" : c.getContent(),
+                "charCount", c.getCharCount() != null ? c.getCharCount() : 0))
+            .toList();
     }
 
     // ------------------------------------------------------------------ 内部工具

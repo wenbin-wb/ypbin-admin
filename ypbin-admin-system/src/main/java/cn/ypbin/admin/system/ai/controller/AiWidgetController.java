@@ -9,9 +9,12 @@
  */
 package cn.ypbin.admin.system.ai.controller;
 
+import cn.ypbin.admin.system.ai.core.AiAnonymousRateLimiter;
 import cn.ypbin.admin.system.ai.service.AiWidgetService;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.tools.support.RequestUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -41,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiWidgetController extends BaseController {
 
     private final AiWidgetService widgetService;
+    private final AiAnonymousRateLimiter rateLimiter;
 
     /** 查询挂件配置（知识库名称等），供挂件脚本初始化 */
     @GetMapping("/{token}/config")
@@ -52,6 +56,10 @@ public class AiWidgetController extends BaseController {
     @PostMapping("/{token}/ask")
     public R<String> ask(@PathVariable String token,
             @RequestBody Map<String, String> body) {
+        // 匿名公开接口限流：按客户端 IP 独立计数，防止滥用消耗模型资源
+        if (!rateLimiter.tryAcquire("widget:ask:" + RequestUtils.getClientIp())) {
+            throw new BusinessException("请求过于频繁，请稍后再试");
+        }
         return ok(widgetService.ask(token, body.getOrDefault("question", "")));
     }
 
