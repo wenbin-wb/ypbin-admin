@@ -47,6 +47,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -465,8 +466,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         requireKb(knowledgeBaseId);
         recordQuery(knowledgeBaseId, question, "SEARCH");
         int k = topK > 0 && topK <= 20 ? topK : 5;
-        return ragService.search(String.valueOf(knowledgeBaseId), question, k)
-            .stream().map(this::toSearchHit).toList();
+        return execSearch(() -> ragService.search(String.valueOf(knowledgeBaseId), question, k)
+            .stream().map(doc -> toSearchHit(doc, question)).toList());
     }
 
     @Override
@@ -481,8 +482,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         }
         recordQuery(knowledgeBaseIds.get(0), question, "MULTIPLE");
         List<String> kbIds = knowledgeBaseIds.stream().map(String::valueOf).toList();
-        return ragService.searchMultiple(kbIds, question, topKPerKb, 10)
-            .stream().map(this::toSearchHit).toList();
+        return execSearch(() -> ragService.searchMultiple(kbIds, question, topKPerKb, 10)
+            .stream().map(doc -> toSearchHit(doc, question)).toList());
     }
 
     @Override
@@ -494,8 +495,8 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         }
         requireKb(knowledgeBaseId);
         recordQuery(knowledgeBaseId, question, "RERANK");
-        return ragService.searchWithRerank(String.valueOf(knowledgeBaseId), question, topK)
-            .stream().map(this::toSearchHit).toList();
+        return execSearch(() -> ragService.searchWithRerank(String.valueOf(knowledgeBaseId), question, topK)
+            .stream().map(doc -> toSearchHit(doc, question)).toList());
     }
 
     @Override
@@ -542,12 +543,104 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         }
     }
 
-    private Map<String, Object> toSearchHit(Document doc) {
+    /**
+     * 执行一次向量检索并做友好错误转换：向量化模型未配置时底层懒加载向量库
+     * 会抛 {@link IllegalStateException}，这里转为业务异常（HTTP 200 + R.code 409），
+     * 避免直接 500 且返回可读提示。
+     */
+    private <T> T execSearch(java.util.function.Supplier<T> supplier) {
+        try {
+            return supplier.get();
+        } catch (IllegalStateException e) {
+            log.warn("[ypbin-ai] 检索执行失败: {}", e.getMessage());
+            throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加向量化模型");
+        }
+    }
+
+    /**
+     * 检索片段转前端展示结构，并附加启发式评估字段（关键词相关度）。
+     *
+     * @param doc   检索命中的分块
+     * @param query 检索问题（用于计算关键词相关度）
+     */
+    private Map<String, Object> toSearchHit(Document doc, String query) {
         Map<String, Object> item = new HashMap<>();
-        item.put("content", doc.getText());
-        item.put("metadata", doc.getMetadata());
-        item.put("source", doc.getMetadata().get("source"));
+        Map<String, Object> meta = doc.getMetadata() == null ? Map.of() : doc.getMetadata();
+        String text = doc.getText() == null ? "" : doc.getText();
+        item.put("content", text);
+        item.put("metadata", meta);
+        item.put("source", meta.get("source"));
+        item.put("docId", meta.get("documentId"));
+        item.put("docName", meta.get("filename") != null ? meta.get("filename") : meta.get("source"));
+        item.put("charCount", text.length());
+        Map<String, Object> relevance = keywordRelevance(query, text);
+        item.put("score", relevance.get("score"));
+        item.put("hitKeywords", relevance.get("hitKeywords"));
+        item.put("maxHitLen", relevance.get("maxHitLen"));
         return item;
+    }
+
+    /**
+     * 轻量关键词相关度评估（0-100）：query 分词后与片段文本的关键词命中比 + 最长连续命中占比。
+     *
+     * <p>说明：这是检索测试器用于可视化召回质量的启发式评估分，不代表向量相似度
+     * （embedding 相似度由向量库内部计算，当前不对外暴露）。</p>
+     */
+    private static Map<String, Object> keywordRelevance(String query, String text) {
+        if (query == null || text == null || query.isBlank() || text.isBlank()) {
+            return Map.of("score", 0, "hitKeywords", List.of(), "maxHitLen", 0);
+        }
+        String lowerQuery = query.toLowerCase(Locale.ROOT);
+        String lowerText = text.toLowerCase(Locale.ROOT);
+        List<String> tokens = splitQueryTokens(lowerQuery);
+        List<String> hits = new ArrayList<>();
+        int maxHitLen = 0;
+        for (String token : tokens) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (lowerText.contains(token)) {
+                hits.add(token);
+                if (token.length() > maxHitLen) {
+                    maxHitLen = token.length();
+                }
+            }
+        }
+        if (tokens.isEmpty()) {
+            return Map.of("score", 0, "hitKeywords", hits, "maxHitLen", maxHitLen);
+        }
+        double hitRatio = (double) hits.size() / tokens.size();
+        double lenRatio = Math.min(1.0, (double) maxHitLen / lowerQuery.length());
+        int score = (int) Math.round(100 * (0.6 * hitRatio + 0.4 * lenRatio));
+        return Map.of(
+            "score", Math.max(0, Math.min(100, score)),
+            "hitKeywords", hits,
+            "maxHitLen", maxHitLen);
+    }
+
+    /**
+     * 查询分词：英文/数字按非字母数字切分；连续中文按 2 字滑动窗口切分
+     * （避免整句作为单一关键词在片段中难以精确命中），同时保留整词用于最长命中评估。
+     */
+    private static List<String> splitQueryTokens(String query) {
+        List<String> tokens = new ArrayList<>();
+        for (String part : query.split("[^\\p{L}\\p{N}]+")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (part.matches(".*[\\u4e00-\\u9fa5].*")) {
+                for (int i = 0; i + 2 <= part.length(); i++) {
+                    String gram = part.substring(i, i + 2);
+                    if (!tokens.contains(gram)) {
+                        tokens.add(gram);
+                    }
+                }
+                tokens.add(part);
+            } else {
+                tokens.add(part);
+            }
+        }
+        return tokens;
     }
 
     private String persistOriginalFile(Long knowledgeBaseId, Long docId,
