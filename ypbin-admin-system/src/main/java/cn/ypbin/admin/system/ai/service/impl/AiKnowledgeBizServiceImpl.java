@@ -11,8 +11,10 @@ package cn.ypbin.admin.system.ai.service.impl;
 
 import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.system.ai.entity.AiQueryLog;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.system.ai.mapper.AiKnowledgeBaseMapper;
+import cn.ypbin.admin.system.ai.mapper.AiQueryLogMapper;
 import cn.ypbin.admin.system.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
@@ -76,6 +78,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     private final AiKnowledgeBaseMapper kbMapper;
     private final AiDocumentMapper documentMapper;
+    private final AiQueryLogMapper queryLogMapper;
     private final AiDocumentVectorizer documentVectorizer;
     private final ObjectProvider<AiRagService> ragServiceProvider;
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
@@ -421,6 +424,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         if (aiChatService == null) {
             throw new BusinessException("AI 对话服务未配置，请在【AI 配置】中添加对话模型");
         }
+        recordQuery(knowledgeBaseId, question, "QUERY");
         List<String> tokens = aiChatService.chatWithKnowledge(
                 "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
             .collectList()
@@ -459,6 +463,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             throw new BusinessException("RAG 服务未配置，请在【AI 配置】中添加向量化模型");
         }
         requireKb(knowledgeBaseId);
+        recordQuery(knowledgeBaseId, question, "SEARCH");
         int k = topK > 0 && topK <= 20 ? topK : 5;
         return ragService.search(String.valueOf(knowledgeBaseId), question, k)
             .stream().map(this::toSearchHit).toList();
@@ -474,6 +479,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
             return List.of();
         }
+        recordQuery(knowledgeBaseIds.get(0), question, "MULTIPLE");
         List<String> kbIds = knowledgeBaseIds.stream().map(String::valueOf).toList();
         return ragService.searchMultiple(kbIds, question, topKPerKb, 10)
             .stream().map(this::toSearchHit).toList();
@@ -487,6 +493,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
             throw new BusinessException("RAG 服务未配置，请在【AI 配置】中添加向量化模型");
         }
         requireKb(knowledgeBaseId);
+        recordQuery(knowledgeBaseId, question, "RERANK");
         return ragService.searchWithRerank(String.valueOf(knowledgeBaseId), question, topK)
             .stream().map(this::toSearchHit).toList();
     }
@@ -510,6 +517,30 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     // ------------------------------------------------------------------ 内部工具
+
+    /**
+     * 记录一次检索/问答日志（统计搜索热词与趋势）。
+     *
+     * <p>统计旁路：写入失败不影响主流程（检索/问答仍正常返回），但必须记录日志暴露问题，
+     * 不允许静默吞掉。</p>
+     */
+    private void recordQuery(Long knowledgeBaseId, String query, String source) {
+        if (query == null || query.isBlank() || knowledgeBaseId == null) {
+            return;
+        }
+        try {
+            AiQueryLog log = new AiQueryLog();
+            log.setTenantId(currentTenantId());
+            log.setKnowledgeBaseId(knowledgeBaseId);
+            log.setQuery(query.trim());
+            log.setSource(source);
+            log.setCreateTime(LocalDateTime.now());
+            queryLogMapper.insert(log);
+        } catch (Exception e) {
+            log.warn("[ypbin-ai] 记录检索日志失败: kbId={} query={} err={}",
+                knowledgeBaseId, query, e.getMessage());
+        }
+    }
 
     private Map<String, Object> toSearchHit(Document doc) {
         Map<String, Object> item = new HashMap<>();
