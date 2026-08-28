@@ -69,6 +69,7 @@ public class SysDictController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除字典", module = "字典管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:dict:delete")

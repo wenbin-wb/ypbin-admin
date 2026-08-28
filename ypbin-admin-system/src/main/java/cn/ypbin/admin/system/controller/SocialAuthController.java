@@ -16,6 +16,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.social.core.SocialService;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,8 @@ public class SocialAuthController extends BaseController {
     /**
      * 授权回调 → 用 code 换用户信息 → 绑定已有账号或自动注册并登录。
      */
+    @Idempotent
+    @Log(value = "第三方登录回调", module = "第三方登录")
     @PostMapping("/callback/{source}")
     public R<LoginResp> callback(@PathVariable String source, SocialCallbackReq req) {
         return ok(socialLoginService.login(source, req));
@@ -66,8 +69,9 @@ public class SocialAuthController extends BaseController {
     /**
      * 已登录用户绑定第三方账号。
      */
-    @PostMapping("/bind/{source}")
+    @Idempotent
     @Log(value = "绑定第三方账号", module = "第三方登录")
+    @PostMapping("/bind/{source}")
     public R<Void> bind(@PathVariable String source, SocialCallbackReq req) {
         socialLoginService.bind(source, req);
         return ok();
@@ -76,8 +80,9 @@ public class SocialAuthController extends BaseController {
     /**
      * 已登录用户解绑第三方账号。
      */
-    @PostMapping("/unbind/{source}")
+    @Idempotent
     @Log(value = "解绑第三方账号", module = "第三方登录")
+    @PostMapping("/unbind/{source}")
     public R<Void> unbind(@PathVariable String source) {
         socialLoginService.unbind(source);
         return ok();

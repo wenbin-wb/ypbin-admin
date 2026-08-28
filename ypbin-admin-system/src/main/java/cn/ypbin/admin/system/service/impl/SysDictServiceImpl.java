@@ -52,6 +52,7 @@ public class SysDictServiceImpl extends BaseServiceImpl<SysDictMapper, SysDict> 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createDict(DictSaveReq req) {
         checkCodeUnique(req.getCode(), null);
         SysDict dict = new SysDict();
@@ -60,6 +61,7 @@ public class SysDictServiceImpl extends BaseServiceImpl<SysDictMapper, SysDict> 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateDict(Long id, DictSaveReq req) {
         if (getById(id) == null) {
             throw new BusinessException("字典不存在");

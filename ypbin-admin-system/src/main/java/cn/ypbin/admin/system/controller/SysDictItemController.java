@@ -19,6 +19,7 @@ import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.json.dict.DictItem;
 import cn.ypbin.starter.json.dict.DictUtils;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,7 @@ public class SysDictItemController extends BaseController {
         return ok(DictUtils.getItems(dictCode));
     }
 
+    @Idempotent
     @Log(value = "新增字典项", module = "字典管理")
     @PostMapping
     @SaCheckPermission("system:dict:add")
@@ -68,6 +70,7 @@ public class SysDictItemController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改字典项", module = "字典管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:dict:edit")
@@ -76,6 +79,7 @@ public class SysDictItemController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除字典项", module = "字典管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:dict:delete")

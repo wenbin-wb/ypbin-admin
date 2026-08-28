@@ -16,6 +16,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.messaging.mail.MailService;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,6 +38,7 @@ public class MailController extends BaseController {
 
     private final MailService mailService;
 
+    @Idempotent
     @PostMapping("/test")
     @SaCheckPermission("system:mail:test")
     @Log(value = "发送测试邮件", module = "邮件配置")

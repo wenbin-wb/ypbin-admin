@@ -100,6 +100,7 @@ public class SysUserController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改用户状态", module = "用户管理")
     @PutMapping("/{id}/status")
     @SaCheckPermission("system:user:edit")
@@ -108,6 +109,7 @@ public class SysUserController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除用户", module = "用户管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:user:delete")

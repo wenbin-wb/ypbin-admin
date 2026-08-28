@@ -100,7 +100,11 @@ public class AiChatController extends BaseController {
 
     /**
      * 发送消息（流式 SSE）。
+     *
+     * <p>SSE 长连接由前端唯一触发、请求与响应同生命周期，防重组件不适用于流式语义；
+     * 消息落库由 {@link AiChatSessionService#sendMessageStream} 内部保障幂等。</p>
      */
+    @Log(value = "发送对话消息（流式）", module = "AI 对话")
     @PostMapping("/stream")
     @SaCheckPermission("ai:chat:send")
     public SseEmitter sendMessageStream(@Valid @RequestBody AiChatSendReq req) {

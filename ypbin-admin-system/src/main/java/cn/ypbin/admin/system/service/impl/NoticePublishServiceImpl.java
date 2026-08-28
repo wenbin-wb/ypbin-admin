@@ -53,6 +53,13 @@ public class NoticePublishServiceImpl implements NoticePublishService {
     private static final int BATCH_SIZE = 100;
     private static final Set<String> CHANNELS = Set.of("site", "email", "sms");
 
+    /** 投递状态：待投递 */
+    private static final String DELIVERY_PENDING = "PENDING";
+    /** 投递状态：待重试 */
+    private static final String DELIVERY_RETRY = "RETRY";
+    /** 投递状态：已失败 */
+    private static final String DELIVERY_FAILED = "FAILED";
+
     private final NoticeTargetResolver targetResolver;
     private final SysNoticeMapper noticeMapper;
     private final SysNoticeDeliveryMapper deliveryMapper;
@@ -88,7 +95,7 @@ public class NoticePublishServiceImpl implements NoticePublishService {
                 delivery.setReceiverUserId(user.getId());
                 delivery.setChannel(channel);
                 delivery.setTargetAddress(targetAddress(channel, user));
-                delivery.setDeliveryStatus("PENDING");
+                delivery.setDeliveryStatus(DELIVERY_PENDING);
                 delivery.setRetryCount(0);
                 delivery.setNextRetryTime(now);
                 delivery.setCreateTime(now);
@@ -109,7 +116,7 @@ public class NoticePublishServiceImpl implements NoticePublishService {
         LocalDateTime now = LocalDateTime.now();
         List<SysNoticeDelivery> due = TenantContext.executeIgnore(() -> deliveryMapper.selectList(
             new LambdaQueryWrapper<SysNoticeDelivery>()
-                .in(SysNoticeDelivery::getDeliveryStatus, "PENDING", "RETRY")
+                .in(SysNoticeDelivery::getDeliveryStatus, DELIVERY_PENDING, DELIVERY_RETRY)
                 .le(SysNoticeDelivery::getNextRetryTime, now)
                 .orderByAsc(SysNoticeDelivery::getNextRetryTime)
                 .last("LIMIT " + BATCH_SIZE)));
@@ -220,7 +227,7 @@ public class NoticePublishServiceImpl implements NoticePublishService {
         boolean exhausted = retryCount >= MAX_RETRIES;
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime nextRetryTime = exhausted ? null : now.plusMinutes(retryCount);
-        int affected = deliveryMapper.markFailure(delivery.getId(), exhausted ? "FAILED" : "RETRY",
+        int affected = deliveryMapper.markFailure(delivery.getId(), exhausted ? DELIVERY_FAILED : DELIVERY_RETRY,
             retryCount, nextRetryTime, errorMessage(error), now);
         if (affected != 1) {
             log.error("公告投递失败状态持久化失败，deliveryId={}", delivery.getId(), error);

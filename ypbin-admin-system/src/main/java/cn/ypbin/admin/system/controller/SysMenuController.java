@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,7 @@ public class SysMenuController extends BaseController {
         return ok(menuService.isPathExists(path, id));
     }
 
+    @Idempotent
     @Log(value = "新增菜单", module = "菜单管理")
     @PostMapping
     @SaCheckPermission("system:menu:add")
@@ -70,6 +72,7 @@ public class SysMenuController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改菜单", module = "菜单管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:menu:edit")
@@ -78,6 +81,7 @@ public class SysMenuController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除菜单", module = "菜单管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:menu:delete")

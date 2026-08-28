@@ -19,6 +19,7 @@ import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.storage.model.FileInfo;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -44,6 +45,7 @@ public class SysFileController extends BaseController {
 
     private final SysFileService fileService;
 
+    @Idempotent
     @Log(value = "上传文件", module = "文件管理")
     @PostMapping("/upload")
     @SaCheckPermission("system:file:upload")
@@ -59,6 +61,7 @@ public class SysFileController extends BaseController {
         return ok(fileService.pageFiles(query));
     }
 
+    @Idempotent
     @Log(value = "删除文件", module = "文件管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:file:delete")

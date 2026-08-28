@@ -70,6 +70,7 @@ public class SysTenantController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除租户", module = "租户管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:tenant:delete")

@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.service.SysAppService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class SysAppController extends BaseController {
         return ok(appService.listApps());
     }
 
+    @Idempotent
     @Log(value = "新增开放应用", module = "开放应用")
     @PostMapping
     @SaCheckPermission("system:app:add")
@@ -57,6 +59,7 @@ public class SysAppController extends BaseController {
         return ok(appService.createApp(req));
     }
 
+    @Idempotent
     @Log(value = "重置应用密钥", module = "开放应用")
     @PutMapping("/{id}/reset-secret")
     @SaCheckPermission("system:app:reset-secret")
@@ -64,6 +67,7 @@ public class SysAppController extends BaseController {
         return ok(appService.resetSecret(id));
     }
 
+    @Idempotent
     @Log(value = "修改开放应用", module = "开放应用")
     @PutMapping("/{id}")
     @SaCheckPermission("system:app:edit")
@@ -72,6 +76,7 @@ public class SysAppController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除开放应用", module = "开放应用")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:app:delete")

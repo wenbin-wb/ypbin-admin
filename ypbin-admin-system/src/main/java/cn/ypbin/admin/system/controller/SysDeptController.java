@@ -66,6 +66,7 @@ public class SysDeptController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除部门", module = "部门管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:dept:delete")

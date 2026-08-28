@@ -66,6 +66,7 @@ public class SysPostController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除岗位", module = "岗位管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:post:delete")

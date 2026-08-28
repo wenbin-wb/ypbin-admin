@@ -18,6 +18,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.log.enums.Include;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,7 @@ public class SocialConfigController extends BaseController {
         return ok(socialConfigService.getConfig(source));
     }
 
+    @Idempotent
     @Log(value = "修改第三方登录配置", module = "系统参数",
         excludes = {Include.REQUEST_PARAM, Include.REQUEST_BODY})
     @PutMapping("/{source}")

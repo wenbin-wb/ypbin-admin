@@ -20,6 +20,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class SysConfigController extends BaseController {
         return ok(configService.listByGroup(configGroup));
     }
 
+    @Idempotent
     @Log(value = "新增参数", module = "系统参数")
     @PostMapping
     @SaCheckPermission("system:config:add")
@@ -66,6 +68,7 @@ public class SysConfigController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改参数", module = "系统参数")
     @PutMapping("/{id}")
     @SaCheckPermission("system:config:edit")
@@ -74,6 +77,7 @@ public class SysConfigController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "批量保存参数", module = "系统参数")
     @PutMapping("/group/{configGroup}")
     @SaCheckPermission("system:config:edit")
@@ -83,6 +87,7 @@ public class SysConfigController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除参数", module = "系统参数")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:config:delete")

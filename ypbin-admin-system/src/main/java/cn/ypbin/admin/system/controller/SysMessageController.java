@@ -72,6 +72,7 @@ public class SysMessageController extends BaseController {
      * 标记单条已读。
      */
     @Idempotent
+    @Log(value = "标记站内信已读", module = "站内信")
     @PutMapping("/{id}/read")
     public R<Void> markRead(@PathVariable Long id) {
         messageService.markRead(currentUserId(), id);
@@ -82,6 +83,7 @@ public class SysMessageController extends BaseController {
      * 删除站内信。仅能删除当前登录用户自己的消息。
      */
     @Idempotent
+    @Log(value = "删除站内信", module = "站内信")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         messageService.delete(currentUserId(), id);
@@ -92,6 +94,7 @@ public class SysMessageController extends BaseController {
      * 全部标记已读。
      */
     @Idempotent
+    @Log(value = "站内信全部标记已读", module = "站内信")
     @PutMapping("/read-all")
     public R<Void> markAllRead() {
         messageService.markAllRead(currentUserId());

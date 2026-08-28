@@ -18,6 +18,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.storage.model.FileInfo;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,12 +50,14 @@ public class UserProfileController extends BaseController {
         return ok(userService.getProfile());
     }
 
+    @Idempotent
     @Log(value = "上传个人头像", module = "个人中心")
     @PostMapping("/avatar")
     public R<FileInfo> uploadAvatar(@RequestParam("file") MultipartFile file) {
         return ok(fileService.uploadFile(file, "avatar"));
     }
 
+    @Idempotent
     @Log(value = "修改个人信息", module = "个人中心")
     @PutMapping
     public R<Void> update(@Valid @RequestBody ProfileUpdateReq req) {
@@ -62,6 +65,7 @@ public class UserProfileController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改密码", module = "个人中心")
     @PutMapping("/password")
     public R<Void> changePassword(@Valid @RequestBody ChangePasswordReq req) {

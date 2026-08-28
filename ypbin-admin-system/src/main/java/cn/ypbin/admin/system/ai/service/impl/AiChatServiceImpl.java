@@ -20,6 +20,7 @@ import cn.ypbin.admin.system.ai.model.req.AiChatSessionCreateReq;
 import cn.ypbin.admin.system.ai.model.resp.AiChatMessageResp;
 import cn.ypbin.admin.system.ai.model.resp.AiChatSessionResp;
 import cn.ypbin.admin.system.ai.service.AiChatSessionService;
+import cn.ypbin.admin.system.ai.support.AiChatSseSupport;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
@@ -29,6 +30,9 @@ import cn.ypbin.starter.tenant.core.TenantThreadLocalAccessor;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -57,6 +61,21 @@ public class AiChatServiceImpl implements AiChatSessionService {
 
     private static final Logger log = LoggerFactory.getLogger(AiChatServiceImpl.class);
 
+    /** 消息角色：用户 */
+    private static final String ROLE_USER = "user";
+
+    /** 消息角色：助手 */
+    private static final String ROLE_ASSISTANT = "assistant";
+
+    /** 新会话默认标题 */
+    private static final String DEFAULT_TITLE = "新对话";
+
+    /** 自动截取标题的最大长度（字符） */
+    private static final int TITLE_MAX_LENGTH = 50;
+
+    /** 单轮对话落库消息数（用户消息 + 助手回复） */
+    private static final int MESSAGES_PER_TURN = 2;
+
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
     private final AiChatRoleMapper roleMapper;
@@ -83,7 +102,18 @@ public class AiChatServiceImpl implements AiChatSessionService {
                 .eq(AiChatSession::getStatus, 1)
                 .orderByDesc(AiChatSession::getIsPinned)
                 .orderByDesc(AiChatSession::getLastMessageAt));
-        return sessions.stream().map(this::toSessionResp).toList();
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+        // 批量预取角色，避免逐个会话查角色表（N+1）
+        Set<Long> roleIds = sessions.stream()
+            .map(AiChatSession::getRoleId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<Long, AiChatRole> roleById = roleIds.isEmpty() ? Map.of()
+            : roleMapper.selectBatchIds(roleIds).stream()
+                .collect(Collectors.toMap(AiChatRole::getId, role -> role));
+        return sessions.stream().map(session -> toSessionResp(session, roleById)).toList();
     }
 
     @Override
@@ -95,7 +125,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         AiChatSession session = new AiChatSession();
         session.setUserId(userId);
         session.setTenantId(tenantId);
-        session.setTitle(req.getTitle() != null ? req.getTitle() : "新对话");
+        session.setTitle(req.getTitle() != null ? req.getTitle() : DEFAULT_TITLE);
         session.setRoleId(req.getRoleId());
         session.setModelId(req.getModelId());
         session.setContextWindow(10);
@@ -160,7 +190,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         }
 
         // 落库用户消息
-        insertMessage(finalSessionId, userId, tenantId, "user", req.getContent(), null);
+        insertMessage(finalSessionId, userId, tenantId, ROLE_USER, req.getContent(), null);
 
         // 构造对话流：优先 RAG > 角色人设 > 默认
         String convId = String.valueOf(finalSessionId);
@@ -216,9 +246,9 @@ public class AiChatServiceImpl implements AiChatSessionService {
                 // 落库助手回复 + 更新会话统计
                 String assistantContent = contentBuffer.get().toString();
                 int tokens = tokenCount.get();
-                insertMessage(finalSessionId, userId, tenantId, "assistant",
+                insertMessage(finalSessionId, userId, tenantId, ROLE_ASSISTANT,
                     assistantContent, modelName());
-                updateSessionStats(finalSessionId, tokens, 2);
+                updateSessionStats(finalSessionId, tokens, MESSAGES_PER_TURN);
                 // 首条消息自动生成标题
                 if (messageCount.incrementAndGet() == 1) {
                     autoTitleIfNew(finalSessionId, req.getContent());
@@ -251,11 +281,11 @@ public class AiChatServiceImpl implements AiChatSessionService {
         AiChatMessage lastAssistant = null;
         for (int i = messages.size() - 1; i >= 0; i--) {
             AiChatMessage msg = messages.get(i);
-            if ("assistant".equals(msg.getRole()) && lastAssistant == null) {
+            if (ROLE_ASSISTANT.equals(msg.getRole()) && lastAssistant == null) {
                 lastAssistant = msg;
                 continue;
             }
-            if ("user".equals(msg.getRole())) {
+            if (ROLE_USER.equals(msg.getRole())) {
                 lastUserContent = msg.getContent();
                 break;
             }
@@ -282,7 +312,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         newReply.setSessionId(sessionId);
         newReply.setUserId(userId);
         newReply.setTenantId(tenantId);
-        newReply.setRole("assistant");
+        newReply.setRole(ROLE_ASSISTANT);
         newReply.setContent(reply);
         newReply.setModelName(modelName());
         newReply.setCreateTime(LocalDateTime.now());
@@ -348,14 +378,15 @@ public class AiChatServiceImpl implements AiChatSessionService {
         });
     }
 
-    /** 新会话首条消息后自动截取标题（前 50 字），避免长期"新对话" */
+    /** 新会话首条消息后自动截取标题（前 {@link #TITLE_MAX_LENGTH} 字），避免长期"新对话" */
     private void autoTitleIfNew(Long sessionId, String firstUserMsg) {
         AiChatSession session = TenantContext.executeIgnore(() -> sessionMapper.selectById(sessionId));
-        if (session == null || !"新对话".equals(session.getTitle())) {
+        if (session == null || !DEFAULT_TITLE.equals(session.getTitle())) {
             return;
         }
-        String title = firstUserMsg == null || firstUserMsg.isBlank() ? "新对话"
-            : (firstUserMsg.length() > 50 ? firstUserMsg.substring(0, 50) + "…" : firstUserMsg);
+        String title = firstUserMsg == null || firstUserMsg.isBlank() ? DEFAULT_TITLE
+            : (firstUserMsg.length() > TITLE_MAX_LENGTH
+                ? firstUserMsg.substring(0, TITLE_MAX_LENGTH) + "…" : firstUserMsg);
         session.setTitle(title);
         TenantContext.executeIgnore(() -> {
             sessionMapper.updateById(session);
@@ -381,10 +412,14 @@ public class AiChatServiceImpl implements AiChatSessionService {
     }
 
     private AiChatSessionResp toSessionResp(AiChatSession session) {
+        return toSessionResp(session, Map.of());
+    }
+
+    private AiChatSessionResp toSessionResp(AiChatSession session, Map<Long, AiChatRole> roleById) {
         AiChatSessionResp resp = new AiChatSessionResp();
         BeanUtils.copyProperties(session, resp);
         if (session.getRoleId() != null) {
-            AiChatRole role = roleMapper.selectById(session.getRoleId());
+            AiChatRole role = roleById.get(session.getRoleId());
             if (role != null) {
                 resp.setRoleName(role.getName());
                 resp.setRoleAvatar(role.getAvatar());
@@ -403,29 +438,14 @@ public class AiChatServiceImpl implements AiChatSessionService {
     }
 
     private static SseEmitter errorEmitter(String message) {
-        SseEmitter emitter = new SseEmitter(0L);
-        try {
-            emitter.send(SseEmitter.event().name("error").data(message));
-        } catch (Exception e) {
-            log.warn("[ypbin-ai] 发送错误提示失败", e);
-        }
-        emitter.complete();
-        return emitter;
+        return AiChatSseSupport.errorEmitter(message);
     }
 
     private static void disposeQuietly(AtomicReference<Disposable> ref) {
-        Disposable d = ref.get();
-        if (d != null) {
-            d.dispose();
-        }
+        AiChatSseSupport.disposeQuietly(ref);
     }
 
     private static String rootMessage(Throwable e) {
-        Throwable cur = e;
-        while (cur.getCause() != null) {
-            cur = cur.getCause();
-        }
-        String msg = cur.getMessage();
-        return msg == null || msg.isBlank() ? cur.getClass().getSimpleName() : msg;
+        return AiChatSseSupport.rootMessage(e);
     }
 }

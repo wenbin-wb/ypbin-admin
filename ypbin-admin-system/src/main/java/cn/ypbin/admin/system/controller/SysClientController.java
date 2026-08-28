@@ -67,6 +67,7 @@ public class SysClientController extends BaseController {
         return ok(clientService.resetSecret(id));
     }
 
+    @Idempotent
     @Log(value = "修改客户端", module = "客户端管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:client:edit")
@@ -75,6 +76,7 @@ public class SysClientController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除客户端", module = "客户端管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:client:delete")

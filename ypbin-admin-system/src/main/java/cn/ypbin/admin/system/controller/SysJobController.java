@@ -22,6 +22,7 @@ import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +73,7 @@ public class SysJobController extends BaseController {
         return ok(jobService.previewCron(req.getCron()));
     }
 
+    @Idempotent
     @Log(value = "新增定时任务", module = "定时任务")
     @PostMapping
     @SaCheckPermission("system:job:add")
@@ -80,6 +82,7 @@ public class SysJobController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改定时任务", module = "定时任务")
     @PutMapping("/{id}")
     @SaCheckPermission("system:job:edit")
@@ -88,6 +91,7 @@ public class SysJobController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除定时任务", module = "定时任务")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:job:delete")
@@ -96,6 +100,7 @@ public class SysJobController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "启动定时任务", module = "定时任务")
     @PostMapping("/{id}/start")
     @SaCheckPermission("system:job:edit")
@@ -104,6 +109,7 @@ public class SysJobController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "停止定时任务", module = "定时任务")
     @PostMapping("/{id}/stop")
     @SaCheckPermission("system:job:edit")
@@ -112,6 +118,7 @@ public class SysJobController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "执行定时任务", module = "定时任务")
     @PostMapping("/{id}/run")
     @SaCheckPermission("system:job:edit")

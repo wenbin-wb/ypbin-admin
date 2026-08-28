@@ -75,6 +75,7 @@ public class SysRoleController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改角色状态", module = "角色管理")
     @PutMapping("/{id}/status")
     @SaCheckPermission("system:role:edit")
@@ -83,6 +84,7 @@ public class SysRoleController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除角色", module = "角色管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:role:delete")

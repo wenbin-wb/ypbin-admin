@@ -14,7 +14,9 @@ import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.PushTestReq;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.messaging.push.PushService;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +40,8 @@ public class PushController extends BaseController {
     /**
      * 推送测试（仅 admin 可见的调试端点）。
      */
+    @Idempotent
+    @Log(value = "推送测试", module = "消息推送")
     @PostMapping("/system/push/test")
     @SaCheckPermission("system:push:test")
     public R<Void> pushTest(@Valid @RequestBody PushTestReq req) {

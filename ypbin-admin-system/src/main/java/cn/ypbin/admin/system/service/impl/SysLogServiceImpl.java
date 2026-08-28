@@ -43,6 +43,15 @@ import jakarta.servlet.http.HttpServletResponse;
 @Service
 public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> implements SysLogService {
 
+    /** 操作成功标识（与 LogRecord.success 语义一致） */
+    private static final int SUCCESS_FLAG = 1;
+
+    /** 导出状态文案：成功 */
+    private static final String STATUS_SUCCESS_TEXT = "成功";
+
+    /** 导出状态文案：失败 */
+    private static final String STATUS_FAIL_TEXT = "失败";
+
     @Override
     public PageResult<LogResp> pageLogs(LogQuery query) {
         PageResult<SysLog> source = page(query, new LambdaQueryWrapper<SysLog>()
@@ -77,7 +86,8 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
             vo.setOperatorName(l.getOperateUserId() != null ? String.valueOf(l.getOperateUserId()) : "");
             vo.setIp(l.getIp());
             vo.setLocation(l.getLocation());
-            vo.setStatus(Integer.valueOf(1).equals(l.getSuccess()) ? "成功" : "失败");
+            vo.setStatus(Integer.valueOf(SUCCESS_FLAG).equals(l.getSuccess())
+                ? STATUS_SUCCESS_TEXT : STATUS_FAIL_TEXT);
             vo.setCostTime(l.getTimeTaken());
             vo.setCreateTime(l.getOperateTime() != null ? l.getOperateTime().format(formatter) : "");
             return vo;

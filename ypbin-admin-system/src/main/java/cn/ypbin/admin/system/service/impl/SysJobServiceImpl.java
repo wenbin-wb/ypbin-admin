@@ -32,6 +32,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 定时任务服务实现。
@@ -48,6 +49,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     private final CronService cronService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public synchronized void createJob(JobSaveReq req) {
         SysJob job = new SysJob();
         BeanUtils.copyProperties(req, job);
@@ -59,6 +61,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public synchronized void updateJob(Long id, JobSaveReq req) {
         SysJob existing = requireJob(id);
         boolean previouslyScheduled = isEnabled(existing);
@@ -82,6 +85,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public synchronized void deleteJob(Long id) {
         SysJob job = requireJob(id);
         boolean previouslyScheduled = isEnabled(job);
@@ -135,6 +139,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public synchronized void start(Long id) {
         SysJob job = requireJob(id);
         boolean previouslyScheduled = isEnabled(job);
@@ -152,6 +157,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public synchronized void stop(Long id) {
         SysJob job = requireJob(id);
         boolean previouslyScheduled = isEnabled(job);

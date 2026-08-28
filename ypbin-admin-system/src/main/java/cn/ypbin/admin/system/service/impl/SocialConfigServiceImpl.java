@@ -51,6 +51,9 @@ public class SocialConfigServiceImpl implements SocialConfigService {
     private static final String REDIRECT_URI_SUFFIX = "_REDIRECT_URI";
     private static final String PUBLIC_KEY_SUFFIX = "_PUBLIC_KEY";
 
+    /** 支付宝平台标识（需公钥配置的平台） */
+    private static final String ALIPAY_SOURCE = "alipay";
+
     private final SysConfigService configService;
     private final SocialAuthRequestFactory requestFactory;
     private final ApplicationEventPublisher eventPublisher;
@@ -79,7 +82,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         String clientSecret = StringUtils.hasText(req.getClientSecret()) ? req.getClientSecret().trim() : oldSecret;
         String clientId = trimToEmpty(req.getClientId());
         String redirectUri = trimToEmpty(req.getRedirectUri());
-        String publicKey = "alipay".equals(normalizedSource) ? trimToEmpty(req.getPublicKey()) : "";
+        String publicKey = ALIPAY_SOURCE.equals(normalizedSource) ? trimToEmpty(req.getPublicKey()) : "";
 
         validateRedirectUri(redirectUri);
         AuthRequest request = null;
@@ -93,7 +96,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         updates.put(prefix + CLIENT_ID_SUFFIX, clientId);
         updates.put(prefix + CLIENT_SECRET_SUFFIX, clientSecret);
         updates.put(prefix + REDIRECT_URI_SUFFIX, redirectUri);
-        if ("alipay".equals(normalizedSource)) {
+        if (ALIPAY_SOURCE.equals(normalizedSource)) {
             updates.put(prefix + PUBLIC_KEY_SUFFIX, publicKey);
         }
         updates.forEach((key, configValue) -> updateRequired(configs.get(key), configValue));
@@ -112,7 +115,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         String clientId = value(configs, prefix + CLIENT_ID_SUFFIX);
         String clientSecret = value(configs, prefix + CLIENT_SECRET_SUFFIX);
         String redirectUri = value(configs, prefix + REDIRECT_URI_SUFFIX);
-        String publicKey = "alipay".equals(normalizedSource)
+        String publicKey = ALIPAY_SOURCE.equals(normalizedSource)
             ? value(configs, prefix + PUBLIC_KEY_SUFFIX) : "";
         validateEnabled(normalizedSource, clientId, clientSecret, redirectUri, publicKey);
         return createRequest(normalizedSource, clientId, clientSecret, redirectUri, publicKey);
@@ -156,7 +159,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         resp.setClientId(value(configs, prefix + CLIENT_ID_SUFFIX));
         resp.setClientSecretConfigured(StringUtils.hasText(value(configs, prefix + CLIENT_SECRET_SUFFIX)));
         resp.setRedirectUri(value(configs, prefix + REDIRECT_URI_SUFFIX));
-        resp.setPublicKey("alipay".equals(source) ? value(configs, prefix + PUBLIC_KEY_SUFFIX) : "");
+        resp.setPublicKey(ALIPAY_SOURCE.equals(source) ? value(configs, prefix + PUBLIC_KEY_SUFFIX) : "");
         return resp;
     }
 
@@ -195,7 +198,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
             throw new BusinessException("回调地址不能为空：" + source);
         }
         validateRedirectUri(redirectUri);
-        if ("alipay".equals(source) && !StringUtils.hasText(publicKey)) {
+        if (ALIPAY_SOURCE.equals(source) && !StringUtils.hasText(publicKey)) {
             throw new BusinessException("支付宝公钥不能为空");
         }
     }
@@ -242,7 +245,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
     }
 
     private static Set<String> platformKeys(String source, String prefix) {
-        if ("alipay".equals(source)) {
+        if (ALIPAY_SOURCE.equals(source)) {
             return Set.of(prefix + ENABLED_SUFFIX, prefix + CLIENT_ID_SUFFIX, prefix + CLIENT_SECRET_SUFFIX,
                 prefix + REDIRECT_URI_SUFFIX, prefix + PUBLIC_KEY_SUFFIX);
         }

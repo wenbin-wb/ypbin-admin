@@ -102,11 +102,13 @@ public class AiDocumentVectorizer {
         try {
             chunkMapper.delete(new LambdaUpdateWrapper<AiDocumentChunk>()
                 .eq(AiDocumentChunk::getDocumentId, docId));
+            // 向量化线程内无请求上下文，租户 ID 只查一次供全部分块复用，避免循环内查库
+            Long tenantId = tenantIdOf(knowledgeBaseId);
             for (int i = 0; i < chunks.size(); i++) {
                 Document chunk = chunks.get(i);
                 String text = chunk.getText() == null ? "" : chunk.getText();
                 AiDocumentChunk row = new AiDocumentChunk();
-                row.setTenantId(tenantIdOf(knowledgeBaseId));
+                row.setTenantId(tenantId);
                 row.setKnowledgeBaseId(knowledgeBaseId);
                 row.setDocumentId(docId);
                 row.setChunkIndex(i);

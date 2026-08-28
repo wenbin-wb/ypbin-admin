@@ -25,6 +25,7 @@ import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.security.core.LoginHelper;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -70,6 +71,7 @@ public class SysLicenseController extends BaseController {
         return ok(licenseService.getLicense(id));
     }
 
+    @Idempotent
     @Log(value = "新增授权草稿", module = "授权管理")
     @PostMapping
     @SaCheckPermission("system:license:add")
@@ -77,6 +79,7 @@ public class SysLicenseController extends BaseController {
         return ok(licenseService.createDraft(req));
     }
 
+    @Idempotent
     @Log(value = "修改授权草稿", module = "授权管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:license:edit")
@@ -85,6 +88,7 @@ public class SysLicenseController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "提交授权审批", module = "授权管理")
     @PutMapping("/{id}/submit")
     @SaCheckPermission("system:license:submit")
@@ -93,6 +97,7 @@ public class SysLicenseController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "审批授权", module = "授权管理")
     @PutMapping("/{id}/approve")
     @SaCheckPermission("system:license:approve")
@@ -100,6 +105,7 @@ public class SysLicenseController extends BaseController {
         return ok(licenseService.approve(id, req, LoginHelper.getUserId()));
     }
 
+    @Idempotent
     @Log(value = "吊销授权", module = "授权管理")
     @PutMapping("/{id}/revoke")
     @SaCheckPermission("system:license:revoke")
@@ -108,6 +114,7 @@ public class SysLicenseController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除授权", module = "授权管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:license:delete")
@@ -116,6 +123,7 @@ public class SysLicenseController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "生成签发密钥对", module = "授权管理")
     @PostMapping("/generate-key")
     @SaCheckPermission("system:license:genkey")

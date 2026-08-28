@@ -66,6 +66,7 @@ public class SysNoticeController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "撤回公告", module = "公告管理")
     @PutMapping("/{id}/revoke")
     @SaCheckPermission("system:notice:edit")
@@ -74,6 +75,7 @@ public class SysNoticeController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "发布公告", module = "公告管理")
     @PutMapping("/{id}/publish")
     @SaCheckPermission("system:notice:edit")
@@ -82,6 +84,7 @@ public class SysNoticeController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "删除公告", module = "公告管理")
     @DeleteMapping("/{id}")
     @SaCheckPermission("system:notice:delete")
