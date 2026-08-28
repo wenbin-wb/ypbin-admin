@@ -7,6 +7,7 @@
 Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 [![CI](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml/badge.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/Coverage-32%20Tests%20Passed-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
