@@ -26,12 +26,13 @@ VALUES (1, 1, 0, '长沙词云信息科技', 1, '张伟', '0731-88888888', 'hr@c
        (9, 1, 5, '人事部', 1, '陈静', NULL, NULL, NULL, 1, NOW(), 1, 0),
        (10, 1, 5, '财务部', 2, '杨丽', NULL, NULL, NULL, 1, NOW(), 1, 0);
 
--- 用户（平台用户：admin/approver；密码统一 123456）
+-- 用户（平台用户：admin/approver 密码统一 pt5aQ5E6t8dkVkMp（与前端演示登录默认一致）；
+--      租户测试用户密码统一 123456）
 INSERT INTO sys_user (id, tenant_id, username, user_type, password, real_name, nickname, dept_id, phone, email, gender,
                       remark, pwd_reset_time, create_user, create_time, status, is_deleted)
-VALUES (1, 1, 'admin', 'PLATFORM', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
+VALUES (1, 1, 'admin', 'PLATFORM', '$2a$10$4Yo3GSCsw0TwHl9xYrvPyO0iEu97Fov2uX8hHz3Z1Izfb6ETFKyFO',
         '超级管理员', '超级管理员', 1, NULL, NULL, 1, '系统内置超级管理员', NOW(), NULL, NOW(), 1, 0),
-       (6, 1, 'approver', 'PLATFORM', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
+       (6, 1, 'approver', 'PLATFORM', '$2a$10$4Yo3GSCsw0TwHl9xYrvPyO0iEu97Fov2uX8hHz3Z1Izfb6ETFKyFO',
         '授权审批员', '审批员', 1, NULL, NULL, 1, '授权双人复核的第二审批人', NOW(), 1, NOW(), 1, 0),
        (2, 1, 'lilei', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
         '李强', '强哥', 2, '13900000001', 'liqiang@ciyun.com', 1, '研发中心负责人', NOW(), 1, NOW(), 1, 0),
