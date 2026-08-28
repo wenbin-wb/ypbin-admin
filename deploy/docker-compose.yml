@@ -34,13 +34,24 @@ services:
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_DB: 0
       ADMIN_BOOTSTRAP_ENABLED: "true"
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?请在 .env 设置初始管理员密码}
       ADMIN_BOOTSTRAP_REAL_NAME: 平台管理员
+      ADMIN_BOOTSTRAP_TENANT_ID: 1
+      ADMIN_JOB_RECONCILE_DELAY: ${ADMIN_JOB_RECONCILE_DELAY:-30000}
+      API_CRYPTO_KEY: ${API_CRYPTO_KEY:-}
+      AI_MODEL_SECRET_KEY: ${AI_MODEL_SECRET_KEY:?请在 .env 设置 AI_MODEL_SECRET_KEY（16/24/32 字节）}
+      AI_SIMPLE_STORE_PATH: ${AI_SIMPLE_STORE_PATH:-data/ai/simple-vector-store.json}
+      LICENSE_ISSUER_PUBLIC_KEY: ${LICENSE_ISSUER_PUBLIC_KEY:-}
+      LICENSE_ISSUER_PRIVATE_KEY: ${LICENSE_ISSUER_PRIVATE_KEY:-}
+      LICENSE_ISSUER_SM4_KEY: ${LICENSE_ISSUER_SM4_KEY:-}
       YPBIN_WEB_CORS_ENABLED: "${YPBIN_CORS_ENABLED:-false}"
       YPBIN_WEB_CORS_ALLOWED_ORIGIN_PATTERNS: "${YPBIN_CORS_ORIGINS:-http://localhost:*}"
       TZ: Asia/Shanghai
+    volumes:
+      - admin-data:/opt/ypbin/ypbin-admin/data
     ports:
       - "${ADMIN_PORT:-8080}:8080"
     depends_on:
@@ -62,3 +73,4 @@ services:
 
 volumes:
   mysql-data:
+  admin-data:

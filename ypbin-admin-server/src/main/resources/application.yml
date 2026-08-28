@@ -1,12 +1,22 @@
+# ============================================================
+# ypbin-admin 主配置
+# 说明：
+#  1. 所有敏感/环境相关配置均通过环境变量注入（${VAR:default}），
+#     完整变量清单见 .env.example / deploy/.env.example。
+#  2. 各 ypbin.* 段对应 ypbin-starter 模块配置，全部可覆盖、可开关。
+#  3. 带「可选」标记的配置为默认值即合理的项，按需调整。
+# ============================================================
+
+# ---------- HTTP 服务 ----------
 server:
-  port: 8080
+  port: 8080                    # 服务端口（可选；部署时可用 ADMIN_PORT 映射覆盖）
 
 spring:
   application:
-    name: ypbin-admin
+    name: ypbin-admin           # 应用名（日志/监控/注册中心标识）
   threads:
     virtual:
-      enabled: true   # JDK 21 虚拟线程：Tomcat 请求线程池切换为虚拟线程，提升 I/O 密集场景并发吞吐
+      enabled: true             # JDK 21 虚拟线程：Tomcat 请求线程池切换为虚拟线程，提升 I/O 密集场景并发吞吐
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -19,48 +29,53 @@ spring:
       database: ${REDIS_DB:0}
       password: ${REDIS_PASSWORD:}
   flyway:
-    enabled: true
-    baseline-on-migrate: true
-    validate-on-migrate: true
+    enabled: true               # 开启 Flyway 数据库迁移
+    baseline-on-migrate: true   # 对已有 schema 的库执行 baseline（空库无影响）
+    validate-on-migrate: true   # 校验已执行迁移的 checksum，防历史迁移被篡改
     locations: classpath:db/migration
     encoding: UTF-8
 
-# Sa-Token 配置
+# ---------- Sa-Token 认证配置 ----------
 sa-token:
-  token-name: Authorization
-  token-prefix: Bearer
-  timeout: 2592000          # 固定有效期 30 天
-  active-timeout: 1800      # 活跃超时 30 分钟
-  auto-renew: true          # 活跃用户自动续期
-  is-read-cookie: false     # 不从 cookie 读 token
-  is-print: false
+  token-name: Authorization     # Token 请求头名
+  token-prefix: Bearer          # Token 前缀
+  timeout: 2592000              # 固定有效期 30 天（秒）
+  active-timeout: 1800          # 活跃超时 30 分钟（秒）
+  auto-renew: true              # 活跃用户自动续期
+  is-read-cookie: false         # 不从 cookie 读 token（前后端分离）
+  is-print: false               # 关闭启动 banner 打印
 
+# ============================================================
 # ypbin-starter 配置
+# ============================================================
 ypbin:
+  # ---------- admin 业务扩展配置 ----------
   admin:
-    bootstrap:
-      enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
-      username: ${ADMIN_BOOTSTRAP_USERNAME:}
-      password: ${ADMIN_BOOTSTRAP_PASSWORD:}
-      real-name: ${ADMIN_BOOTSTRAP_REAL_NAME:平台管理员}
-      tenant-id: ${ADMIN_BOOTSTRAP_TENANT_ID:1}
+    bootstrap:                  # 平台管理员首次初始化（CAS 抢占，防多实例重复创建）
+      enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}   # 是否启用（true=首次启动创建管理员；完成后建议关）
+      username: ${ADMIN_BOOTSTRAP_USERNAME:}       # 初始管理员用户名
+      password: ${ADMIN_BOOTSTRAP_PASSWORD:}       # 初始管理员密码
+      real-name: ${ADMIN_BOOTSTRAP_REAL_NAME:平台管理员}  # 初始管理员真实姓名
+      tenant-id: ${ADMIN_BOOTSTRAP_TENANT_ID:1}    # 初始管理员归属租户
     job:
-      reconcile-delay: ${ADMIN_JOB_RECONCILE_DELAY:30000}
+      reconcile-delay: ${ADMIN_JOB_RECONCILE_DELAY:30000}  # 通知投递对账延迟（毫秒）
+
+  # ---------- Web 层 ----------
   web:
     repeatable-read:
-      enabled: true           # 启用签名模块需读取请求体，必须开启
+      enabled: true             # 可重复读请求体（签名/加解密模块需读取请求体，必须开启）
     cors:
-      enabled: false
-      # 默认关闭 CORS,同源访问(nginx 代理/同端口)无需跨域,保证一键部署可用
-      # 如需跨域,通过环境变量 YPBIN_WEB_CORS_ENABLED=true + YPBIN_WEB_CORS_ALLOWED_ORIGIN_PATTERNS 开启
-      allowed-origin-patterns:
+      enabled: false            # 跨域开关（默认关：同源/nginx 代理无需跨域；需跨域用环境变量开启）
+      allowed-origin-patterns:  # 允许的来源（可用环境变量 YPBIN_WEB_CORS_ALLOWED_ORIGIN_PATTERNS 覆盖）
         - "http://localhost:*"
     xss:
-      enabled: true
-      excludes: ["/webhook/**"]
+      enabled: true             # XSS 过滤
+      excludes: ["/webhook/**"] # 过滤豁免路径（如接收第三方回调原文）
+
+  # ---------- 安全（登录拦截） ----------
   security:
     interceptor: true
-    excludes:               # 放行路径（无需登录）
+    excludes:                   # 放行路径（无需登录）
       - /auth/login
       - /auth/sms/send
       - /auth/sms/login
@@ -70,12 +85,14 @@ ypbin:
       - /captcha
       - /captcha/verify
       - /open/license/**
-      - /actuator/health   # 健康检查放行（仅此低危端点，不放 env/beans 等）
+      - /actuator/health        # 健康检查放行（仅此低危端点，不放 env/beans 等）
       - /error
+
+  # ---------- 多租户 ----------
   tenant:
-    enabled: true
-    column: tenant_id
-    ignore-tables:          # 不做租户隔离的全局表
+    enabled: true               # 行级租户隔离
+    column: tenant_id           # 租户列名
+    ignore-tables:              # 不做租户隔离的全局表
       - sys_menu
       - sys_tenant
       - sys_user_role
@@ -96,41 +113,55 @@ ypbin:
       - sys_auth_template
       - sys_template_menu
       - sys_license
+
+  # ---------- 接口签名 ----------
   sign:
-    enabled: true              # 开启接口签名
-    mode: ANNOTATION           # 仅 @ApiSign 标注的接口校验签名
+    enabled: true               # 开启接口签名
+    mode: ANNOTATION            # 仅 @ApiSign 标注的接口校验签名（可选：ALL 全量）
+
+  # ---------- 商业授权（签发端） ----------
   license:
-    enabled: false             # 本应用是授权签发端（供应方），自身不做 License 自保护
-    issuer:                    # 签发密钥经环境变量注入，不落库；首次可调用 /system/license/generate-key 生成
+    enabled: false              # 本应用是授权签发端（供应方），自身不做 License 自保护
+    issuer:                     # 签发密钥经环境变量注入，不落库；首次可调用 /system/license/generate-key 生成
       public-key: ${LICENSE_ISSUER_PUBLIC_KEY:}
       private-key: ${LICENSE_ISSUER_PRIVATE_KEY:}
       sm4-key: ${LICENSE_ISSUER_SM4_KEY:}
+
+  # ---------- 操作日志 / 访问日志 ----------
   log:
-    includes:                  # 操作日志全局采集项：默认(参数/IP/客户端) + 浏览器/操作系统
+    includes:                   # 操作日志全局采集项：默认(参数/IP/客户端) + 浏览器/操作系统
       - REQUEST_PARAM
       - IP
       - CLIENT
       - BROWSER
       - OS
     access:
-      enabled: true            # 全量访问日志（打印到应用日志，非落库），与 @Log 操作日志互补
-      exclude-path-patterns:   # 不记流水的路径：健康检查、接口文档、静态资源
+      enabled: true             # 全量访问日志（打印到应用日志，非落库），与 @Log 操作日志互补
+      exclude-path-patterns:    # 不记流水的路径：健康检查、接口文档、静态资源
         - /actuator/**
         - /doc.html
         - /swagger-ui/**
         - /v3/api-docs/**
         - /webjars/**
         - /favicon.ico
+
+  # ---------- 数据权限 ----------
   data-permission:
-    enabled: true
+    enabled: true               # 数据权限（仅 @DataPermission 标注的方法生效）
+
+  # ---------- 异步 ----------
   async:
-    enabled: true
+    enabled: true               # 异步线程池（@Async 支持，线程上下文透传）
+
+  # ---------- SSE 推送 ----------
   sse:
-    enabled: true
+    enabled: true               # SSE 长连接推送（站内信实时通知等）
+
+  # ---------- 敏感词过滤 ----------
   sensitive-words:
-    enabled: true               # 启用敏感词过滤（替换字符见下）
+    enabled: true               # 启用敏感词过滤（@SensitiveWordFilter 注解驱动）
     replacement: '*'            # 敏感词替换字符
-    words:                      # 敏感词库（演示/测试用，可按需增删；DFA 匹配，命中即替换为 *)
+    words:                      # 敏感词库（演示/测试用，可按需增删；DFA 匹配，命中即替换为 *）
       - 赌博
       - 色情
       - 裸聊
@@ -163,10 +194,16 @@ ypbin:
       - 台独
       - 藏独
       - 疆独
+
+  # ---------- 国际化 ----------
   i18n:
     enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
+
+  # ---------- 接口加解密 ----------
   api-crypto:
-    key: ${API_CRYPTO_KEY:}     # 接口加解密 AES 密钥由部署环境注入
+    key: ${API_CRYPTO_KEY:}     # 接口加解密 AES 密钥由部署环境注入（16/24/32 字节）
+
+  # ---------- API 文档（SpringDoc） ----------
   api-doc:
     enabled: true
     title: ypbin-admin API
@@ -174,49 +211,81 @@ ypbin:
     version: 1.0.0
     contact:
       name: wenbin
+
+  # ---------- 可观测性（预留） ----------
   # TODO 待部署阶段接入：当前 admin 未引入 ypbin-starter-cloud-observability 模块，
   # 以下 observability 配置无自动配置支撑（空配，不生效）。反哺 starter 提供单体可用的可观测性能力后再启用。
   observability:
     enabled: true
     request-id-header: X-Request-Id
     mdc-key: requestId
-  # ypbin AI 能力配置：模型经「AI 配置」页管理（默认模型动态构建 OpenAI 兼容客户端），
-  # 无需在 yml 配置模型 starter；ypbin.ai.enabled=true 启用对话/记忆/RAG 等能力
+
+  # ---------- AI 能力（对话/记忆/RAG） ----------
+  # 模型经「AI 配置」页管理（默认模型动态构建 OpenAI 兼容客户端），无需在 yml 配置模型 starter；
+  # ypbin.ai.enabled=true 启用对话/记忆/RAG 等能力
   ai:
     enabled: true                              # 启用 AI 模块
     chat:
       enabled: true
-      default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"
+      default-system-prompt: "你是 ypbin-admin 的 AI 助手，请用简洁清晰的中文回答。"  # 默认系统提示词（无角色/无知识库时使用）
       rag-enabled: false                       # 全局 RAG（普通对话也检索向量库），需 rag.enabled=true
       # 历史消息窗口统一由 memory.window-size 控制（AiChatProperties 无 windowSize 字段，勿在此添加死键）
     memory:
-      type: jdbc                               # jdbc 持久化会话（推荐），或 in-memory
-      window-size: 10                          # 记忆窗口大小
+      type: jdbc                               # 会话记忆持久化：jdbc（推荐，落 SPRING_AI_CHAT_MEMORY 表）或 in-memory
+      window-size: 10                          # 记忆窗口大小（每次请求携带的历史消息条数）
     rag:
       enabled: true                            # SimpleVectorStore 内存向量库（无外部依赖）
-      top-k: 5
-      similarity-threshold: 0.5               # 中文语义向量建议 0.5（0.7 过高会过滤掉有效召回）
+      top-k: 5                                 # 检索召回条数
+      similarity-threshold: 0.5                # 相似度阈值（中文语义向量建议 0.5；0.7 过高会过滤掉有效召回）
       max-context-length: 8000                 # 检索上下文最大字符数
       simple-store-path: ${AI_SIMPLE_STORE_PATH:data/ai/simple-vector-store.json}  # 向量持久化文件（重启不丢）
     model-config:
-      secret-key: ${AI_MODEL_SECRET_KEY:}      # API Key 加密密钥（16/24/32 字节），生产必须注入
+      secret-key: ${AI_MODEL_SECRET_KEY:}      # API Key 加密密钥（16/24/32 字节，必填；未配置则 AI 模块拒绝启动）
 
-# tianai-captcha 原生配置：验证码有效期（默认 20 秒太短，拉长到 60 秒）
+  # ---------- 验证码（可选配置示例） ----------
+  # captcha:
+  #   enabled: true                              # 行为验证码开关（默认开）
+  #   background-resources:                      # 自定义背景图（classpath 相对路径，如 captcha/bg/1.jpg）；默认用 tianai 内置
+  #     - captcha/bg/1.jpg
+
+  # ---------- 文件存储（可选配置示例） ----------
+  # 默认零配置自动启用一个本地存储源；多源/OSS 按需配置（platform 为唯一键）
+  # storage:
+  #   enabled: true
+  #   max-file-size: 104857600                   # 单次上传最大字节数（默认 100MB，-1 不限）
+  #   default-platform: local                    # 默认存储平台
+  #   local:
+  #     - platform: local
+  #       base-path: ./data/file                 # 本地存储根目录
+  #       domain: ""                             # 访问域名前缀（拼接生成 URL）
+  #   oss:
+  #     - platform: oss-main
+  #       endpoint: https://oss-cn-hangzhou.aliyuncs.com
+  #       region: cn-hangzhou
+  #       access-key: ${OSS_ACCESS_KEY:}
+  #       secret-key: ${OSS_SECRET_KEY:}
+  #       bucket: your-bucket
+  #       path-style-access: false               # MinIO 等需 true
+
+# ---------- 验证码有效期（tianai-captcha 原生配置） ----------
 captcha:
   expire:
-    default: 60000
+    default: 60000              # 验证码有效期（毫秒，默认 20 秒太短，拉长到 60 秒）
 
+# ---------- MyBatis-Plus ----------
 mybatis-plus:
   configuration:
-    map-underscore-to-camel-case: true
+    map-underscore-to-camel-case: true   # 下划线转驼峰映射（DB 列 <-> 实体字段）
 
+# ---------- 日志 ----------
 logging:
   pattern:
-    level: "%5p [${spring.application.name:},%X{requestId:-}]"
+    level: "%5p [${spring.application.name:},%X{requestId:-}]"   # 日志级别格式（含应用名 + 链路 requestId）
   level:
-    cn.ypbin.admin: debug
+    cn.ypbin.admin: debug        # admin 包日志级别（生产可调为 info）
 
-# Spring Boot Actuator：健康检查与应用信息。仅暴露 health/info 两个低危端点，
+# ---------- Spring Boot Actuator ----------
+# 健康检查与应用信息。仅暴露 health/info 两个低危端点，
 # 不放 env/beans/heapdump 等敏感端点。health 需登录放行（见 ypbin.security.excludes）。
 management:
   endpoints:
@@ -228,7 +297,8 @@ management:
       show-details: when_authorized
 
 # ============================================================
-# Spring AI 2.0 配置（按需解注释接入对应模型）
+# Spring AI 2.0 配置（可选：直连模型 Starter，替代「AI 配置」页动态模型）
+# 默认推荐使用「AI 配置」页管理模型；以下为直连方案，按需解注释接入
 # ============================================================
 
 # 方案 A：DeepSeek V4（推荐，国内低成本，OpenAI 兼容协议）
