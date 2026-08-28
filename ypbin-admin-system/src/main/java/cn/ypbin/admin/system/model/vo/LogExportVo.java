@@ -9,10 +9,10 @@
  */
 package cn.ypbin.admin.system.model.vo;
 
-import cn.idev.excel.annotation.ExcelProperty;
-import cn.idev.excel.annotation.write.style.ColumnWidth;
 import java.io.Serializable;
 import lombok.Data;
+import org.apache.fesod.sheet.annotation.ExcelProperty;
+import org.apache.fesod.sheet.annotation.write.style.ColumnWidth;
 
 /**
  * 操作日志导出 Excel 数据模型。

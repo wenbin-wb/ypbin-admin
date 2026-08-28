@@ -15,6 +15,8 @@ import cn.ypbin.admin.system.ai.model.req.AiPromptTemplateSaveReq;
 import cn.ypbin.admin.system.ai.service.AiPromptTemplateService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
+import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +48,8 @@ public class AiPromptTemplateController extends BaseController {
         return ok(promptTemplateService.listTemplates());
     }
 
+    @Log(value = "新增提示词模板", module = "Prompt模板")
+    @Idempotent
     @PostMapping
     @SaCheckPermission("ai:prompt:create")
     public R<Void> create(@Valid @RequestBody AiPromptTemplateSaveReq req) {
@@ -53,6 +57,8 @@ public class AiPromptTemplateController extends BaseController {
         return ok();
     }
 
+    @Log(value = "修改提示词模板", module = "Prompt模板")
+    @Idempotent
     @PutMapping("/{id}")
     @SaCheckPermission("ai:prompt:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody AiPromptTemplateSaveReq req) {
@@ -60,6 +66,8 @@ public class AiPromptTemplateController extends BaseController {
         return ok();
     }
 
+    @Log(value = "删除提示词模板", module = "Prompt模板")
+    @Idempotent
     @DeleteMapping("/{id}")
     @SaCheckPermission("ai:prompt:delete")
     public R<Void> delete(@PathVariable Long id) {
@@ -68,6 +76,8 @@ public class AiPromptTemplateController extends BaseController {
     }
 
     /** 更新状态（启用/停用）*/
+    @Log(value = "更新提示词模板状态", module = "Prompt模板")
+    @Idempotent
     @PutMapping("/{id}/status/{status}")
     @SaCheckPermission("ai:prompt:edit")
     public R<Void> updateStatus(@PathVariable Long id, @PathVariable Integer status) {

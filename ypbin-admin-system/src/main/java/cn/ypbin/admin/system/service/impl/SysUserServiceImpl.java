@@ -28,6 +28,7 @@ import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.req.ChangePasswordReq;
 import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
+import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserExportVo;
@@ -42,6 +43,8 @@ import cn.ypbin.starter.datapermission.annotation.DataPermission;
 import cn.ypbin.starter.excel.util.ExcelUtils;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.security.online.OnlineUser;
+import cn.ypbin.starter.security.online.OnlineUserService;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import cn.ypbin.starter.security.password.policy.PasswordCheckResult;
 import cn.ypbin.starter.security.password.policy.PasswordValidator;
@@ -54,6 +57,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -81,6 +85,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     private final SysUserPasswordHistoryMapper passwordHistoryMapper;
     private final SysConfigService configService;
     private final PasswordValidator passwordValidator;
+    private final OnlineUserService onlineUserService;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -494,13 +499,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     @Override
     public void downloadImportTemplate(HttpServletResponse response) {
-        UserImportVo sample = new UserImportVo();
-        sample.setUsername("zhangsan");
-        sample.setRealName("张三");
-        sample.setPhone("13800000000");
-        sample.setEmail("zhangsan@example.com");
-        sample.setPassword("123456");
-        ExcelUtils.export(response, "用户批量导入模板", UserImportVo.class, List.of(sample));
+        ExcelUtils.exportTemplate(response, "用户批量导入模板", UserImportVo.class);
     }
 
     @Override
@@ -588,5 +587,24 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             result.setSuccessCount(result.getSuccessCount() + 1);
         }
         return result;
+    }
+
+    @Override
+    public List<OnlineUserResp> listOnlineUsers(String keyword) {
+        List<OnlineUser> users = StringUtils.hasText(keyword)
+            ? onlineUserService.list(keyword)
+            : onlineUserService.list();
+        if (users.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = users.stream().map(OnlineUser::getUserId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, String> realNameById = ids.isEmpty() ? Map.of()
+            : listByIds(ids).stream().collect(Collectors.toMap(SysUser::getId, SysUser::getRealName, (a, b) -> a));
+        return users.stream().map(u -> {
+            OnlineUserResp r = new OnlineUserResp();
+            BeanUtils.copyProperties(u, r);
+            r.setRealName(realNameById.get(u.getUserId()));
+            return r;
+        }).toList();
     }
 }

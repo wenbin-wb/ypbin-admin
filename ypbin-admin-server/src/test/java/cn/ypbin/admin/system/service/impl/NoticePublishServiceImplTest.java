@@ -22,13 +22,11 @@ import static org.mockito.Mockito.when;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.entity.SysNoticeDelivery;
 import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.mapper.SysDeptMapper;
 import cn.ypbin.admin.system.mapper.SysMessageMapper;
 import cn.ypbin.admin.system.mapper.SysNoticeDeliveryMapper;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
-import cn.ypbin.admin.system.mapper.SysRoleMapper;
-import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.support.NoticeTargetResolver;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.messaging.mail.MailService;
 import cn.ypbin.starter.messaging.push.PushService;
@@ -48,7 +46,7 @@ import org.springframework.dao.DuplicateKeyException;
  */
 class NoticePublishServiceImplTest {
 
-    private SysUserService userService;
+    private NoticeTargetResolver targetResolver;
     private SysNoticeMapper noticeMapper;
     private SysNoticeDeliveryMapper deliveryMapper;
     private SysMessageMapper messageMapper;
@@ -60,7 +58,7 @@ class NoticePublishServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        userService = mock(SysUserService.class);
+        targetResolver = mock(NoticeTargetResolver.class);
         noticeMapper = mock(SysNoticeMapper.class);
         deliveryMapper = mock(SysNoticeDeliveryMapper.class);
         messageMapper = mock(SysMessageMapper.class);
@@ -68,8 +66,7 @@ class NoticePublishServiceImplTest {
         pushService = mock(PushService.class);
         smsProvider = mock(ObjectProvider.class);
         smsService = mock(SmsService.class);
-        service = new NoticePublishServiceImpl(userService, mock(SysRoleMapper.class),
-            mock(SysDeptMapper.class), mock(SysUserRoleMapper.class), noticeMapper,
+        service = new NoticePublishServiceImpl(targetResolver, noticeMapper,
             deliveryMapper, messageMapper, mailService, pushService, smsProvider);
     }
 

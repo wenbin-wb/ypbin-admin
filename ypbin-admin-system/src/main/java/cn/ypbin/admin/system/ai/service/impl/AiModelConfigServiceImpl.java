@@ -90,13 +90,15 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateModel(Long id, AiModelConfigSaveReq req) {
-        AiModelConfig existing = requireModel(id);
-        BeanUtils.copyProperties(req, existing, "id", "tenantId", "isDefault", "status", "apiKey");
+        requireModel(id);
+        AiModelConfig config = new AiModelConfig();
+        BeanUtils.copyProperties(req, config, "id", "tenantId", "isDefault", "status", "apiKey");
+        config.setId(id);
         // 留空表示不修改，非空则重新加密
         if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
-            existing.setApiKey(keyCipher.encrypt(req.getApiKey()));
+            config.setApiKey(keyCipher.encrypt(req.getApiKey()));
         }
-        modelConfigMapper.updateById(existing);
+        modelConfigMapper.updateById(config);
     }
 
     @Override

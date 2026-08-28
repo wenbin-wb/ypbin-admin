@@ -32,8 +32,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -52,10 +52,10 @@ import reactor.core.publisher.Flux;
  * @author wenbin
  * @since 2026-08-16
  */
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class AiChatServiceImpl implements AiChatSessionService {
+
+    private static final Logger log = LoggerFactory.getLogger(AiChatServiceImpl.class);
 
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
@@ -63,6 +63,16 @@ public class AiChatServiceImpl implements AiChatSessionService {
 
     /** starter AI 对话服务（可选注入：AI 未启用时不影响服务启动） */
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
+
+    public AiChatServiceImpl(AiChatSessionMapper sessionMapper,
+                             AiChatMessageMapper messageMapper,
+                             AiChatRoleMapper roleMapper,
+                             ObjectProvider<AiChatService> aiChatServiceProvider) {
+        this.sessionMapper = sessionMapper;
+        this.messageMapper = messageMapper;
+        this.roleMapper = roleMapper;
+        this.aiChatServiceProvider = aiChatServiceProvider;
+    }
 
     @Override
     public List<AiChatSessionResp> listSessions() {

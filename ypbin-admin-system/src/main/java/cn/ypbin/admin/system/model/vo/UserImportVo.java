@@ -9,9 +9,9 @@
  */
 package cn.ypbin.admin.system.model.vo;
 
-import cn.idev.excel.annotation.ExcelProperty;
 import java.io.Serializable;
 import lombok.Data;
+import org.apache.fesod.sheet.annotation.ExcelProperty;
 
 /**
  * 用户批量导入 Excel 模板数据模型。

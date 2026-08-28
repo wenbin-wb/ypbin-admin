@@ -24,6 +24,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 字典项服务实现。
@@ -47,6 +48,7 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createItem(DictItemSaveReq req) {
         checkValueUnique(req.getDictId(), req.getValue(), null);
         SysDictItem item = new SysDictItem();
@@ -56,6 +58,7 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateItem(Long id, DictItemSaveReq req) {
         if (getById(id) == null) {
             throw new BusinessException("字典项不存在");
@@ -69,6 +72,7 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteItem(Long id) {
         SysDictItem item = getById(id);
         if (item == null) {

@@ -56,5 +56,5 @@ public interface SysLogService extends BaseService<SysLog> {
      * @param query    查询条件
      * @param response HTTP 响应
      */
-    void exportLogs(LogQuery query, jakarta.servlet.http.HttpServletResponse response);
+    void exportLogs(LogQuery query, HttpServletResponse response);
 }

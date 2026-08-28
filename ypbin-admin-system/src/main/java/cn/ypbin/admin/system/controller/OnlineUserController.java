@@ -11,20 +11,15 @@ package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.annotation.PlatformAccess;
-import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
-import cn.ypbin.starter.security.online.OnlineUser;
 import cn.ypbin.starter.security.online.OnlineUserService;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,30 +45,10 @@ public class OnlineUserController extends BaseController {
     @GetMapping("/list")
     @SaCheckPermission("system:online-user:list")
     public R<List<OnlineUserResp>> list(@RequestParam(required = false) String keyword) {
-        List<OnlineUser> users = keyword != null && !keyword.isBlank()
-            ? onlineUserService.list(keyword)
-            : onlineUserService.list();
-        // 按 userId 批量查真实姓名补充展示
-        Map<Long, String> realNameById = resolveRealNames(users);
-        List<OnlineUserResp> resp = users.stream().map(u -> {
-            OnlineUserResp r = new OnlineUserResp();
-            BeanUtils.copyProperties(u, r);
-            r.setRealName(realNameById.get(u.getUserId()));
-            return r;
-        }).toList();
-        return ok(resp);
+        return ok(userService.listOnlineUsers(keyword));
     }
 
-    private Map<Long, String> resolveRealNames(List<OnlineUser> users) {
-        List<Long> ids = users.stream().map(OnlineUser::getUserId).filter(Objects::nonNull)
-            .distinct().toList();
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return userService.listByIds(ids).stream()
-            .collect(Collectors.toMap(SysUser::getId, SysUser::getRealName, (a, b) -> a));
-    }
-
+    @Idempotent
     @DeleteMapping("/{token}")
     @SaCheckPermission("system:online-user:kickout")
     @Log(value = "强制下线用户", module = "会话管理")

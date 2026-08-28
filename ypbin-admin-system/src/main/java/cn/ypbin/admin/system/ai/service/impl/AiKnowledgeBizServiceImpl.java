@@ -283,7 +283,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         String content;
         String title;
         try {
-            org.jsoup.nodes.Document htmlDoc = Jsoup.connect(url)
+            var htmlDoc = Jsoup.connect(url)
                 .userAgent("Mozilla/5.0 (compatible; ypbin-knowledge-bot/1.0)")
                 .timeout(15_000)
                 .get();
@@ -311,7 +311,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
         int limit = (maxUrls == null || maxUrls < 1) ? 10 : Math.min(maxUrls, 100);
         List<String> urls;
         try {
-            org.jsoup.nodes.Document xml = Jsoup.connect(sitemapUrl)
+            var xml = Jsoup.connect(sitemapUrl)
                 .userAgent("Mozilla/5.0 (compatible; ypbin-knowledge-bot/1.0)")
                 .timeout(15_000)
                 .ignoreContentType(true)
@@ -325,7 +325,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
                         break;
                     }
                     try {
-                        org.jsoup.nodes.Document subXml = Jsoup.connect(sub.text())
+                        var subXml = Jsoup.connect(sub.text())
                             .userAgent("Mozilla/5.0 (compatible; ypbin-knowledge-bot/1.0)")
                             .timeout(15_000)
                             .ignoreContentType(true)

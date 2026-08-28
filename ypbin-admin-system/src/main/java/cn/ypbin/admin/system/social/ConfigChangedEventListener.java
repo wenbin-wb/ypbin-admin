@@ -12,8 +12,8 @@ package cn.ypbin.admin.system.social;
 import cn.ypbin.admin.system.config.sms.SmsReadConfigDbImpl;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.starter.social.core.SocialRequestRegistry;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -24,14 +24,22 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * @author wenbin
  * @since 2026-08-08
  */
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class ConfigChangedEventListener {
+
+    private static final Logger log = LoggerFactory.getLogger(ConfigChangedEventListener.class);
 
     private final SysConfigService configService;
     private final SmsReadConfigDbImpl smsReadConfigDb;
     private final SocialRequestRegistry socialRequestRegistry;
+
+    public ConfigChangedEventListener(SysConfigService configService,
+                                     SmsReadConfigDbImpl smsReadConfigDb,
+                                     SocialRequestRegistry socialRequestRegistry) {
+        this.configService = configService;
+        this.smsReadConfigDb = smsReadConfigDb;
+        this.socialRequestRegistry = socialRequestRegistry;
+    }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onConfigChanged(ConfigChangedEvent event) {

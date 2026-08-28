@@ -12,11 +12,11 @@ package cn.ypbin.admin.system.controller;
 import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.model.query.MessageQuery;
 import cn.ypbin.admin.system.service.SysMessageService;
-import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
-import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.crud.model.PageResult;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
+import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -71,6 +71,7 @@ public class SysMessageController extends BaseController {
     /**
      * 标记单条已读。
      */
+    @Idempotent
     @PutMapping("/{id}/read")
     public R<Void> markRead(@PathVariable Long id) {
         messageService.markRead(currentUserId(), id);
@@ -80,6 +81,7 @@ public class SysMessageController extends BaseController {
     /**
      * 删除站内信。仅能删除当前登录用户自己的消息。
      */
+    @Idempotent
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
         messageService.delete(currentUserId(), id);
@@ -89,17 +91,10 @@ public class SysMessageController extends BaseController {
     /**
      * 全部标记已读。
      */
+    @Idempotent
     @PutMapping("/read-all")
     public R<Void> markAllRead() {
         messageService.markAllRead(currentUserId());
         return ok();
-    }
-
-    private Long currentUserId() {
-        Long userId = LoginHelper.getUserId();
-        if (userId == null) {
-            throw new BusinessException("当前用户未登录");
-        }
-        return userId;
     }
 }

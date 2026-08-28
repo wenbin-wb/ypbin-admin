@@ -16,6 +16,7 @@ import cn.ypbin.admin.system.ai.service.AiModelConfigService;
 import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -52,6 +53,7 @@ public class AiModelConfigController extends BaseController {
         return ok(modelConfigService.listModels(modelType));
     }
 
+    @Idempotent
     @PostMapping
     @SaCheckPermission("ai:model:create")
     @Log(value = "新增模型配置", module = "AI 配置")
@@ -60,6 +62,7 @@ public class AiModelConfigController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @PutMapping("/{id}")
     @SaCheckPermission("ai:model:edit")
     @Log(value = "修改模型配置", module = "AI 配置")
@@ -70,6 +73,7 @@ public class AiModelConfigController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @DeleteMapping("/{id}")
     @SaCheckPermission("ai:model:delete")
     @Log(value = "删除模型配置", module = "AI 配置")
@@ -79,6 +83,7 @@ public class AiModelConfigController extends BaseController {
     }
 
     /** 设为默认模型 */
+    @Idempotent
     @PutMapping("/{id}/default")
     @SaCheckPermission("ai:model:edit")
     @Log(value = "设置默认模型", module = "AI 配置")
@@ -88,6 +93,7 @@ public class AiModelConfigController extends BaseController {
     }
 
     /** 启用/停用模型 */
+    @Idempotent
     @PutMapping("/{id}/status/{status}")
     @SaCheckPermission("ai:model:edit")
     @Log(value = "切换模型状态", module = "AI 配置")
@@ -97,6 +103,7 @@ public class AiModelConfigController extends BaseController {
     }
 
     /** 复制模型配置 */
+    @Idempotent
     @PostMapping("/{id}/duplicate")
     @SaCheckPermission("ai:model:create")
     @Log(value = "复制模型配置", module = "AI 配置")

@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.req.ChangePasswordReq;
 import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
+import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
@@ -64,4 +65,6 @@ public interface SysUserService extends BaseService<SysUser> {
     void downloadImportTemplate(HttpServletResponse response);
 
     UserImportResult importUsers(MultipartFile file);
+
+    List<OnlineUserResp> listOnlineUsers(String keyword);
 }

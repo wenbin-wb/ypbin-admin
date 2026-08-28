@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.ai.model.resp.AiChatSessionResp;
 import cn.ypbin.admin.system.ai.service.AiChatSessionService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -36,7 +37,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * AI 对话接口。
  *
  * @author wenbin
- * @since 2026-08-16
+ * @since 2026-08-15
  */
 @RestController
 @RequestMapping("/ai/chat")
@@ -46,7 +47,7 @@ public class AiChatController extends BaseController {
     private final AiChatSessionService chatSessionService;
 
     /**
-     * 获取会话列表。
+     * 获取当前用户的所有会话列表。
      */
     @GetMapping("/sessions")
     @SaCheckPermission("ai:chat:list")
@@ -57,6 +58,7 @@ public class AiChatController extends BaseController {
     /**
      * 创建新会话。
      */
+    @Idempotent
     @PostMapping("/sessions")
     @SaCheckPermission("ai:chat:create")
     @Log(value = "创建对话会话", module = "AI 对话")
@@ -67,6 +69,7 @@ public class AiChatController extends BaseController {
     /**
      * 删除会话。
      */
+    @Idempotent
     @DeleteMapping("/sessions/{id}")
     @SaCheckPermission("ai:chat:delete")
     @Log(value = "删除对话会话", module = "AI 对话")
@@ -87,6 +90,7 @@ public class AiChatController extends BaseController {
     /**
      * 发送消息（同步）。
      */
+    @Idempotent
     @PostMapping("/send")
     @SaCheckPermission("ai:chat:send")
     @Log(value = "发送对话消息", module = "AI 对话")
@@ -106,6 +110,7 @@ public class AiChatController extends BaseController {
     /**
      * 重新生成最后一条响应。
      */
+    @Idempotent
     @PostMapping("/sessions/{id}/regenerate")
     @SaCheckPermission("ai:chat:send")
     @Log(value = "重新生成响应", module = "AI 对话")
@@ -116,8 +121,10 @@ public class AiChatController extends BaseController {
     /**
      * 更新会话标题。
      */
+    @Idempotent
     @PutMapping("/sessions/{id}/title")
     @SaCheckPermission("ai:chat:edit")
+    @Log(value = "修改会话标题", module = "AI 对话")
     public R<Void> updateTitle(@PathVariable Long id, @RequestParam String title) {
         chatSessionService.updateSessionTitle(id, title);
         return ok();
@@ -126,8 +133,10 @@ public class AiChatController extends BaseController {
     /**
      * 置顶/取消置顶会话。
      */
+    @Idempotent
     @PutMapping("/sessions/{id}/pin")
     @SaCheckPermission("ai:chat:edit")
+    @Log(value = "切换会话置顶状态", module = "AI 对话")
     public R<Void> togglePin(@PathVariable Long id) {
         chatSessionService.toggleSessionPin(id);
         return ok();

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 部门服务实现。
@@ -39,6 +40,7 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createDept(DeptSaveReq req) {
         SysDept dept = new SysDept();
         BeanUtils.copyProperties(req, dept);
@@ -49,6 +51,7 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateDept(Long id, DeptSaveReq req) {
         if (getById(id) == null) {
             throw new BusinessException("部门不存在");
@@ -66,6 +69,7 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteDept(Long id) {
         boolean hasChildren = exists(new LambdaQueryWrapper<SysDept>().eq(SysDept::getPid, id));
         if (hasChildren) {

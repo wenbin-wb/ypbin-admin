@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.ai.model.resp.AiChatRoleResp;
 import cn.ypbin.admin.system.ai.service.AiChatRoleService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -47,6 +48,7 @@ public class AiChatRoleController extends BaseController {
         return ok(roleService.listRoles());
     }
 
+    @Idempotent
     @PostMapping
     @SaCheckPermission("ai:role:create")
     @Log(value = "创建自定义角色", module = "AI 角色")
@@ -54,6 +56,7 @@ public class AiChatRoleController extends BaseController {
         return ok(roleService.createRole(req));
     }
 
+    @Idempotent
     @PutMapping("/{id}")
     @SaCheckPermission("ai:role:edit")
     @Log(value = "修改角色", module = "AI 角色")
@@ -62,6 +65,7 @@ public class AiChatRoleController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @DeleteMapping("/{id}")
     @SaCheckPermission("ai:role:delete")
     @Log(value = "删除角色", module = "AI 角色")
@@ -70,8 +74,10 @@ public class AiChatRoleController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @PutMapping("/{id}/favorite")
     @SaCheckPermission("ai:role:list")
+    @Log(value = "收藏/取消收藏角色", module = "AI 角色")
     public R<Void> toggleFavorite(@PathVariable Long id) {
         roleService.toggleFavorite(id);
         return ok();

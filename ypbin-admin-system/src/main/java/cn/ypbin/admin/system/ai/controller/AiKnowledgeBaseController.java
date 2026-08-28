@@ -15,7 +15,9 @@ import cn.ypbin.admin.system.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.system.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.system.ai.model.req.AiShareSettingReq;
+import cn.ypbin.admin.system.ai.model.req.KbMultiSearchTestReq;
 import cn.ypbin.admin.system.ai.model.req.KbQueryReq;
+import cn.ypbin.admin.system.ai.model.req.KbSearchTestReq;
 import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
@@ -25,6 +27,8 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
+import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +59,8 @@ public class AiKnowledgeBaseController extends BaseController {
     private final AiWidgetService widgetService;
     private final AiShareService shareService;
 
+    @Log(value = "创建知识库", module = "AI知识库")
+    @Idempotent
     @PostMapping
     @SaCheckPermission("ai:knowledge:create")
     public R<AiKnowledgeBase> createKnowledgeBase(
@@ -62,6 +68,8 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok(knowledgeBizService.createKnowledgeBase(req));
     }
 
+    @Log(value = "更新知识库", module = "AI知识库")
+    @Idempotent
     @PutMapping("/{id}")
     @SaCheckPermission("ai:knowledge:create")
     public R<Void> updateKnowledgeBase(
@@ -77,6 +85,8 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok(knowledgeBizService.listKnowledgeBases());
     }
 
+    @Log(value = "删除知识库", module = "AI知识库")
+    @Idempotent
     @DeleteMapping("/{id}")
     @SaCheckPermission("ai:knowledge:delete")
     public R<Void> deleteKnowledgeBase(@PathVariable Long id) {
@@ -85,6 +95,8 @@ public class AiKnowledgeBaseController extends BaseController {
     }
 
     /** 上传文档（PDF / Markdown / TXT），异步向量化，返回 VO（不含本地路径） */
+    @Log(value = "上传文档", module = "AI知识库")
+    @Idempotent
     @PostMapping("/{id}/documents")
     @SaCheckPermission("ai:document:upload")
     public R<AiDocumentVO> uploadDocument(
@@ -101,6 +113,8 @@ public class AiKnowledgeBaseController extends BaseController {
         return ok(knowledgeBizService.pageDocuments(id, query, keyword));
     }
 
+    @Log(value = "删除文档", module = "AI知识库")
+    @Idempotent
     @DeleteMapping("/{id}/documents/{docId}")
     @SaCheckPermission("ai:document:delete")
     public R<Void> deleteDocument(
@@ -110,6 +124,8 @@ public class AiKnowledgeBaseController extends BaseController {
     }
 
     /** 批量上传文档（最多 20 个），逐一异步向量化，返回成功创建的文档 VO 列表 */
+    @Log(value = "批量上传文档", module = "AI知识库")
+    @Idempotent
     @PostMapping("/{id}/documents/batch")
     @SaCheckPermission("ai:document:upload")
     public R<List<AiDocumentVO>> batchUploadDocuments(
@@ -120,13 +136,9 @@ public class AiKnowledgeBaseController extends BaseController {
 
     /**
      * 从 URL / Sitemap / RSS 导入文档（异步向量化）。
-     *
-     * <ul>
-     *   <li>URL — 单页抓取，sourceType=URL</li>
-     *   <li>SITEMAP — 按 sitemap.xml 批量导入，sourceType=SITEMAP，maxUrls 控制上限</li>
-     *   <li>RSS — 订阅源，sourceType=RSS</li>
-     * </ul>
      */
+    @Log(value = "导入网络文档", module = "AI知识库")
+    @Idempotent
     @PostMapping("/{id}/import-url")
     @SaCheckPermission("ai:document:upload")
     public R<List<AiDocumentVO>> importFromUrl(
@@ -136,6 +148,8 @@ public class AiKnowledgeBaseController extends BaseController {
     }
 
     /** 重试向量化：对失败文档重新解析与入库 */
+    @Log(value = "重试向量化", module = "AI知识库")
+    @Idempotent
     @PostMapping("/{id}/documents/{docId}/retry")
     @SaCheckPermission("ai:document:upload")
     public R<Void> retryVectorize(
@@ -158,10 +172,8 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchTest(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
-        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
-        int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
-        return ok(knowledgeBizService.searchTest(id, question, topK));
+            @Valid @RequestBody KbSearchTestReq req) {
+        return ok(knowledgeBizService.searchTest(id, req.getQuestion(), req.getTopK()));
     }
 
     /** 关键词重叠重排测试 */
@@ -169,25 +181,16 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchRerankTest(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
-        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
-        int topK = body.get("topK") == null ? 5 : Integer.parseInt(String.valueOf(body.get("topK")));
-        return ok(knowledgeBizService.searchRerankTest(id, question, topK));
+            @Valid @RequestBody KbSearchTestReq req) {
+        return ok(knowledgeBizService.searchRerankTest(id, req.getQuestion(), req.getTopK()));
     }
 
     /** 多知识库联合检索测试（跨库 RRF 合并） */
     @PostMapping("/search-multiple-test")
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchMultipleTest(
-            @RequestBody Map<String, Object> body) {
-        @SuppressWarnings("unchecked")
-        List<?> rawIds = (List<?>) body.get("knowledgeBaseIds");
-        List<Long> kbIds = rawIds == null ? List.of()
-            : rawIds.stream().map(x -> Long.valueOf(String.valueOf(x))).toList();
-        String question = body.get("question") == null ? "" : String.valueOf(body.get("question"));
-        int topKPerKb = body.get("topKPerKb") == null
-            ? 5 : Integer.parseInt(String.valueOf(body.get("topKPerKb")));
-        return ok(knowledgeBizService.searchMultipleTest(kbIds, question, topKPerKb));
+            @Valid @RequestBody KbMultiSearchTestReq req) {
+        return ok(knowledgeBizService.searchMultipleTest(req.getKnowledgeBaseIds(), req.getQuestion(), req.getTopKPerKb()));
     }
 
     /** 带溯源的问答（答案 + 召回片段列表） */
@@ -201,9 +204,9 @@ public class AiKnowledgeBaseController extends BaseController {
 
     /**
      * 启用/停用知识库网页挂件。
-     *
-     * @param enabled true 启用（生成新令牌，返回令牌），false 停用（清除令牌）
      */
+    @Log(value = "设置挂件状态", module = "AI知识库")
+    @Idempotent
     @PutMapping("/{id}/widget")
     @SaCheckPermission("ai:knowledge:create")
     public R<String> setWidgetEnabled(
@@ -214,10 +217,9 @@ public class AiKnowledgeBaseController extends BaseController {
 
     /**
      * 保存知识库公开分享设置。
-     *
-     * <p>启用时返回分享令牌（已有令牌保留，轮换需先关闭再开启），可配置有效期与访问密码；
-     * 停用时清除全部分享配置。</p>
      */
+    @Log(value = "保存分享设置", module = "AI知识库")
+    @Idempotent
     @PutMapping("/{id}/share")
     @SaCheckPermission("ai:knowledge:create")
     public R<String> setShareSetting(

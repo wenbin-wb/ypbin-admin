@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -84,6 +85,7 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteFile(Long id) {
         SysFile file = getById(id);
         if (file == null) {
