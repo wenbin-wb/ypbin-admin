@@ -1,0 +1,29 @@
+changelog:
+  categories:
+    - title: "✨ 新特性 / Features"
+      labels:
+        - "enhancement"
+        - "feature"
+    - title: "🐛 问题修复 / Bug Fixes"
+      labels:
+        - "bug"
+        - "fix"
+    - title: "🛡️ 安全与依赖加固 / Security"
+      labels:
+        - "security"
+    - title: "⚡ 性能优化与架构重构 / Performance & Refactor"
+      labels:
+        - "performance"
+        - "refactor"
+    - title: "🔧 依赖与工程化 / Dependencies & CI"
+      labels:
+        - "dependencies"
+        - "ci"
+        - "chore"
+    - title: "📝 文档更新 / Documentation"
+      labels:
+        - "documentation"
+        - "docs"
+  exclude:
+    labels:
+      - "ignore-for-release"
