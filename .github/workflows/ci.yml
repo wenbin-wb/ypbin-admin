@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feature/spring-ai ]
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
   build:
