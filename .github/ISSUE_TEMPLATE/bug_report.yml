@@ -1,0 +1,38 @@
+name: "🐛 Bug 报告 (ypbin-admin)"
+description: 发现接口异常、鉴权问题或业务逻辑缺陷？请提交报告。
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提交 Bug 反馈！在提交前请先确认该问题在最新主分支代码中是否依然存在。
+  - type: dropdown
+    id: module
+    attributes:
+      label: 涉及业务模块
+      options:
+        - "组织与权限 (User/Role/Menu/Dept/Post)"
+        - "多租户与数据权限"
+        - "AI 对话与知识库 (Chat/Knowledge/Model/Prompt)"
+        - "通知公告与站内信 (Notice/Message/SSE)"
+        - "系统运维 (Log/Dict/Config/Job/Storage)"
+        - "商业授权 (License)"
+        - "认证与登录 (Auth/Captcha/Social/Sms)"
+        - "其他"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤与请求参数
+      description: 请提供请求路径、请求参数或异常重现过程。
+      placeholder: "1. 请求接口 POST /system/user ...\n2. 携带参数 ...\n3. 得到响应或报错 ..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 异常堆栈与日志
+      description: 请粘贴后端完整报错堆栈日志。
+      render: shell

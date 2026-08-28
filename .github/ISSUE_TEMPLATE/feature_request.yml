@@ -1,0 +1,45 @@
+name: "✨ 新特性 / 需求建议"
+description: 有新的功能需求、扩展点建议或架构优化想法？
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提出改进建议！请尽量详细描述应用场景与设计构想。
+  - type: dropdown
+    id: module
+    attributes:
+      label: 目标模块
+      options:
+        - "ypbin-starter-ai"
+        - "ypbin-starter-security"
+        - "ypbin-starter-data"
+        - "ypbin-starter-cache"
+        - "ypbin-starter-log"
+        - "ypbin-starter-tools"
+        - "ypbin-starter-excel"
+        - "ypbin-starter-messaging"
+        - "ypbin-starter-captcha"
+        - "ypbin-starter-sensitive-words"
+        - "ypbin-starter-license"
+        - "ypbin-starter-cloud-*"
+        - "新增独立 Starter 模块"
+        - "其他"
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 需求背景与解决的痛点
+      description: 为什么需要这个特性？它解决了什么业务场景下的痛点？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的设计方案 / API 形式
+      description: 您期望的配置项、注解形式、接口签名或用法示例。
+      placeholder: "例如：新增 @RateLimit 注解支持 SpEL 动态 Key 解析..."
+    validations:
+      required: false
