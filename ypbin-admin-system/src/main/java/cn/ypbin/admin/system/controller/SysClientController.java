@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.service.SysClientService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class SysClientController extends BaseController {
         return ok(clientService.listClients());
     }
 
+    @Idempotent
     @Log(value = "新增客户端", module = "客户端管理")
     @PostMapping
     @SaCheckPermission("system:client:add")
@@ -57,6 +59,7 @@ public class SysClientController extends BaseController {
         return ok(clientService.createClient(req));
     }
 
+    @Idempotent
     @Log(value = "重置客户端密钥", module = "客户端管理")
     @PutMapping("/{id}/reset-secret")
     @SaCheckPermission("system:client:reset-secret")

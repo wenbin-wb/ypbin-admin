@@ -19,6 +19,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -50,6 +51,7 @@ public class SysDictController extends BaseController {
         return ok(dictService.pageDicts(query));
     }
 
+    @Idempotent
     @Log(value = "新增字典", module = "字典管理")
     @PostMapping
     @SaCheckPermission("system:dict:add")
@@ -58,6 +60,7 @@ public class SysDictController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改字典", module = "字典管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:dict:edit")

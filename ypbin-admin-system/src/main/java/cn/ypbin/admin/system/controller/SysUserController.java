@@ -68,6 +68,7 @@ public class SysUserController extends BaseController {
         userService.downloadImportTemplate(response);
     }
 
+    @Idempotent
     @Log(value = "批量导入用户", module = "用户管理")
     @PostMapping("/import")
     @SaCheckPermission("system:user:add")
