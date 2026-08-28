@@ -20,11 +20,11 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: 检出 ypbin-starter（提供 SNAPSHOT 依赖）
+      - name: 检出 ypbin-starter（提供 1.4.0 依赖）
         uses: actions/checkout@v4
         with:
           repository: wenbin-wb/ypbin-starter
-          ref: feature/spring-ai
+          ref: master
           path: ypbin-starter
 
       - name: 本地安装 ypbin-starter
