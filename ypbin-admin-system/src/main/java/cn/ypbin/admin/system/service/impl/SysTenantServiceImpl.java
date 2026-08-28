@@ -10,8 +10,16 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.system.entity.SysAuthTemplate;
+import cn.ypbin.admin.system.entity.SysDept;
+import cn.ypbin.admin.system.entity.SysPost;
+import cn.ypbin.admin.system.entity.SysRole;
 import cn.ypbin.admin.system.entity.SysTenant;
+import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.mapper.SysDeptMapper;
+import cn.ypbin.admin.system.mapper.SysPostMapper;
+import cn.ypbin.admin.system.mapper.SysRoleMapper;
 import cn.ypbin.admin.system.mapper.SysTenantMapper;
+import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.model.req.TenantSaveReq;
 import cn.ypbin.admin.system.model.resp.TenantResp;
 import cn.ypbin.admin.system.service.SysAuthTemplateService;
@@ -36,6 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTenant> implements SysTenantService {
 
     private final SysAuthTemplateService authTemplateService;
+    private final SysUserMapper userMapper;
+    private final SysRoleMapper roleMapper;
+    private final SysDeptMapper deptMapper;
+    private final SysPostMapper postMapper;
 
     @Override
     public List<TenantResp> listTenants() {
@@ -76,6 +88,21 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteTenant(Long id) {
+        SysTenant tenant = getById(id);
+        if (tenant == null) {
+            throw new BusinessException("租户不存在");
+        }
+        if (Long.valueOf(1L).equals(id)) {
+            throw new BusinessException("内置默认租户不允许删除");
+        }
+        // 删除前校验租户下无业务数据，避免产生孤儿数据
+        long userCount = userMapper.selectCount(new LambdaQueryWrapper<SysUser>().eq(SysUser::getTenantId, id));
+        long roleCount = roleMapper.selectCount(new LambdaQueryWrapper<SysRole>().eq(SysRole::getTenantId, id));
+        long deptCount = deptMapper.selectCount(new LambdaQueryWrapper<SysDept>().eq(SysDept::getTenantId, id));
+        long postCount = postMapper.selectCount(new LambdaQueryWrapper<SysPost>().eq(SysPost::getTenantId, id));
+        if (userCount + roleCount + deptCount + postCount > 0) {
+            throw new BusinessException("该租户下存在用户/角色/部门/岗位数据，请先清空后再删除");
+        }
         if (!removeById(id)) {
             throw new BusinessException("租户删除失败");
         }

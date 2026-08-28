@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.ai.model.resp;
 
 import java.util.List;
+import java.util.Map;
 import lombok.Data;
 
 /**
@@ -40,6 +41,6 @@ public class KbQueryResult {
         private String content;
 
         /** 其它元数据（如 docId、chunkIndex 等） */
-        private java.util.Map<String, Object> metadata;
+        private Map<String, Object> metadata;
     }
 }

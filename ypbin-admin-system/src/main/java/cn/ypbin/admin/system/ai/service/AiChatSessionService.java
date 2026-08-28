@@ -17,12 +17,15 @@ import java.util.List;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * AI 对话服务接口。
+ * AI 会话服务接口（会话与消息管理）。
+ *
+ * <p>负责 {@code ai_chat_session}/{@code ai_chat_message} 的 CRUD 与对话编排；
+ * 底层 AI 调用委托 starter 的 {@code cn.ypbin.starter.ai.chat.AiChatService}。</p>
  *
  * @author wenbin
  * @since 2026-08-16
  */
-public interface AiChatService {
+public interface AiChatSessionService {
 
     /**
      * 获取当前用户的会话列表（按最后消息时间倒序）。

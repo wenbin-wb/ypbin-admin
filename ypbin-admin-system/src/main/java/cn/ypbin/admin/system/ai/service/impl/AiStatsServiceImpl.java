@@ -53,11 +53,12 @@ public class AiStatsServiceImpl implements AiStatsService {
             new LambdaQueryWrapper<AiKnowledgeBase>().eq(AiKnowledgeBase::getTenantId, tenantId));
         long docTotal = documentMapper.selectCount(
             new LambdaQueryWrapper<AiDocument>().eq(AiDocument::getTenantId, tenantId));
-        List<AiUsageLog> usageLogs = usageLogMapper.selectList(
-            new LambdaQueryWrapper<AiUsageLog>().eq(AiUsageLog::getTenantId, tenantId));
-        long chatCount = usageLogs.size();
-        long tokenTotal = usageLogs.stream()
-            .mapToLong(l -> l.getTotalTokens() == null ? 0L : l.getTotalTokens().longValue()).sum();
+        // SQL 聚合对话数与 Token 总量，避免全表拉取
+        Map<String, Object> usage = usageLogMapper.selectSummaryByTenant(tenantId);
+        long chatCount = usage == null || usage.get("chatCount") == null
+            ? 0L : ((Number) usage.get("chatCount")).longValue();
+        long tokenTotal = usage == null || usage.get("tokenTotal") == null
+            ? 0L : ((Number) usage.get("tokenTotal")).longValue();
         long queryCount = queryLogMapper.selectCount(
             new LambdaQueryWrapper<AiQueryLog>().eq(AiQueryLog::getTenantId, tenantId));
         return Map.of(

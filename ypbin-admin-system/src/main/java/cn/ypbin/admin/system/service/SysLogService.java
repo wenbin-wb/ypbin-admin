@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.model.resp.LogResp;
 import cn.ypbin.admin.system.model.resp.LogTrendResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
 /**
@@ -48,4 +49,12 @@ public interface SysLogService extends BaseService<SysLog> {
      * @return 每天一条 {date, count}，按日期升序，长度恒为 days
      */
     List<LogTrendResp> logTrend(int days);
+
+    /**
+     * 导出操作日志到 Excel。
+     *
+     * @param query    查询条件
+     * @param response HTTP 响应
+     */
+    void exportLogs(LogQuery query, jakarta.servlet.http.HttpServletResponse response);
 }

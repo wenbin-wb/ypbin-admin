@@ -19,7 +19,8 @@ import cn.ypbin.admin.system.ai.model.req.AiChatSendReq;
 import cn.ypbin.admin.system.ai.model.req.AiChatSessionCreateReq;
 import cn.ypbin.admin.system.ai.model.resp.AiChatMessageResp;
 import cn.ypbin.admin.system.ai.model.resp.AiChatSessionResp;
-import cn.ypbin.admin.system.ai.service.AiChatService;
+import cn.ypbin.admin.system.ai.service.AiChatSessionService;
+import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
@@ -30,6 +31,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -41,10 +43,10 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 /**
- * AI 对话服务实现。
+ * AI 会话服务实现。
  *
  * <p>以 {@code ai_chat_session} 为唯一会话载体，负责会话/消息 CRUD；流式对话直接基于
- * Spring AI 的 {@code AiChatService}（以 sessionId 作为 conversationId 维护记忆），
+ * starter 的 {@link AiChatService}（以 sessionId 作为 conversationId 维护记忆），
  * 消息落库到 {@code ai_chat_message}。无 conversation 表冗余，架构统一。
  *
  * @author wenbin
@@ -53,14 +55,14 @@ import reactor.core.publisher.Flux;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AiChatServiceImpl implements AiChatService {
+public class AiChatServiceImpl implements AiChatSessionService {
 
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
     private final AiChatRoleMapper roleMapper;
 
-    /** Spring AI 对话服务（可选注入：AI 未启用时优雅降级，不影响服务启动） */
-    private final ObjectProvider<cn.ypbin.starter.ai.chat.AiChatService> aiChatServiceProvider;
+    /** starter AI 对话服务（可选注入：AI 未启用时不影响服务启动） */
+    private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
     @Override
     public List<AiChatSessionResp> listSessions() {
@@ -103,7 +105,7 @@ public class AiChatServiceImpl implements AiChatService {
         messageMapper.delete(new LambdaQueryWrapper<AiChatMessage>()
             .eq(AiChatMessage::getSessionId, sessionId));
         // 清除 Spring AI 记忆
-        cn.ypbin.starter.ai.chat.AiChatService svc = aiChatServiceProvider.getIfAvailable();
+        AiChatService svc = aiChatServiceProvider.getIfAvailable();
         if (svc != null) {
             svc.clearMemory(String.valueOf(sessionId));
         }
@@ -142,7 +144,7 @@ public class AiChatServiceImpl implements AiChatService {
             () -> new BusinessException("无法获取当前租户上下文"));
 
         // AI 未启用：推送错误帧
-        cn.ypbin.starter.ai.chat.AiChatService aiSvc = aiChatServiceProvider.getIfAvailable();
+        AiChatService aiSvc = aiChatServiceProvider.getIfAvailable();
         if (aiSvc == null) {
             return errorEmitter("AI 模块未启用，请配置 ypbin.ai.enabled=true");
         }
@@ -222,7 +224,60 @@ public class AiChatServiceImpl implements AiChatService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiChatMessageResp regenerateLastMessage(Long sessionId) {
-        throw new BusinessException("重新生成功能即将上线");
+        requireSession(sessionId);
+        AiChatService aiSvc = aiChatServiceProvider.getIfAvailable();
+        if (aiSvc == null) {
+            throw new BusinessException("AI 模块未启用，请配置 ypbin.ai.enabled=true");
+        }
+        List<AiChatMessage> messages = messageMapper.selectList(
+            new LambdaQueryWrapper<AiChatMessage>()
+                .eq(AiChatMessage::getSessionId, sessionId)
+                .orderByAsc(AiChatMessage::getCreateTime));
+        if (messages.isEmpty()) {
+            throw new BusinessException("会话暂无消息，无法重新生成");
+        }
+        // 删除最后一条助手回复（若是助手消息），取最后一条用户消息作为重生成输入
+        String lastUserContent = null;
+        AiChatMessage lastAssistant = null;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            AiChatMessage msg = messages.get(i);
+            if ("assistant".equals(msg.getRole()) && lastAssistant == null) {
+                lastAssistant = msg;
+                continue;
+            }
+            if ("user".equals(msg.getRole())) {
+                lastUserContent = msg.getContent();
+                break;
+            }
+        }
+        if (lastAssistant == null || lastUserContent == null) {
+            throw new BusinessException("缺少可重新生成的对话消息");
+        }
+        messageMapper.deleteById(lastAssistant.getId());
+
+        Long userId = LoginHelper.getUserId();
+        Long tenantId = UserContext.getTenantId().orElseThrow(
+            () -> new BusinessException("无法获取当前租户上下文"));
+        String convId = String.valueOf(sessionId);
+        String rolePrompt = resolveRoleSystemPrompt(sessionId);
+        String reply;
+        if (rolePrompt != null) {
+            reply = aiSvc.chatWithSystemPrompt(convId, rolePrompt, lastUserContent)
+                .collectList().blockOptional().orElse(List.of())
+                .stream().collect(Collectors.joining());
+        } else {
+            reply = aiSvc.chat(convId, lastUserContent);
+        }
+        AiChatMessage newReply = new AiChatMessage();
+        newReply.setSessionId(sessionId);
+        newReply.setUserId(userId);
+        newReply.setTenantId(tenantId);
+        newReply.setRole("assistant");
+        newReply.setContent(reply);
+        newReply.setModelName(modelName());
+        newReply.setCreateTime(LocalDateTime.now());
+        messageMapper.insert(newReply);
+        return toMessageResp(newReply);
     }
 
     @Override

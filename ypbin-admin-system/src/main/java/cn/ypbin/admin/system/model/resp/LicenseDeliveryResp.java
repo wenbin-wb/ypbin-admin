@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.Data;
 
 /**
@@ -26,6 +28,7 @@ public class LicenseDeliveryResp {
     private String authCode;
 
     /** 联机开放应用 ID（可为空表示未建联机应用） */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long appId;
 
     /** 联机应用名称（= 被授权方） */

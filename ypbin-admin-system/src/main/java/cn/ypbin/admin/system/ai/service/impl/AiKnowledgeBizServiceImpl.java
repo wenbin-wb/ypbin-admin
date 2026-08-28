@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
@@ -575,7 +576,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
      * 会抛 {@link IllegalStateException}，这里转为业务异常（HTTP 200 + R.code 409），
      * 避免直接 500 且返回可读提示。
      */
-    private <T> T execSearch(java.util.function.Supplier<T> supplier) {
+    private <T> T execSearch(Supplier<T> supplier) {
         try {
             return supplier.get();
         } catch (IllegalStateException e) {
@@ -585,7 +586,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     /**
-     * 检索片段转前端展示结构，并附加启发式评估字段（关键词相关度）。
+     * 检索片段组装为响应结构，并附加启发式评估字段（关键词相关度）。
      *
      * @param doc   检索命中的分块
      * @param query 检索问题（用于计算关键词相关度）

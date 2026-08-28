@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.Data;
 
@@ -22,6 +24,7 @@ import lombok.Data;
 public class OnlineUserResp {
 
     /** 用户 ID */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     /** 登录账号 */
@@ -34,6 +37,7 @@ public class OnlineUserResp {
     private String realName;
 
     /** 租户 ID */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long tenantId;
 
     /** 会话 token */

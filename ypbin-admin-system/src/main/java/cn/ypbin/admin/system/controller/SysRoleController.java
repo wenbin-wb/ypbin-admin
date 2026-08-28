@@ -19,6 +19,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +57,7 @@ public class SysRoleController extends BaseController {
         return ok(roleService.listAll());
     }
 
+    @Idempotent
     @Log(value = "新增角色", module = "角色管理")
     @PostMapping
     @SaCheckPermission("system:role:add")
@@ -64,6 +66,7 @@ public class SysRoleController extends BaseController {
         return ok();
     }
 
+    @Idempotent
     @Log(value = "修改角色", module = "角色管理")
     @PutMapping("/{id}")
     @SaCheckPermission("system:role:edit")

@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.system.ai.model.resp;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.Data;
 
@@ -21,12 +23,14 @@ import lombok.Data;
 @Data
 public class AiChatSessionResp {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 会话标题 */
     private String title;
 
     /** 绑定角色 ID */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long roleId;
 
     /** 角色名称 */

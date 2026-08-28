@@ -16,9 +16,12 @@ import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
+import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 用户服务。
@@ -55,4 +58,10 @@ public interface SysUserService extends BaseService<SysUser> {
     void updateProfile(ProfileUpdateReq req);
 
     void changePassword(ChangePasswordReq req);
+
+    void exportUsers(UserQuery query, HttpServletResponse response);
+
+    void downloadImportTemplate(HttpServletResponse response);
+
+    UserImportResult importUsers(MultipartFile file);
 }

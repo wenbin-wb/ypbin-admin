@@ -53,6 +53,7 @@ public class LogResp {
 
     private LocalDateTime operateTime;
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long timeTaken;
 
     private Integer success;

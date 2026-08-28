@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.service.SysLogService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,5 +42,11 @@ public class SysLogController extends BaseController {
     @SaCheckPermission("system:log:list")
     public R<PageResult<LogResp>> list(@Valid LogQuery query) {
         return ok(logService.pageLogs(query));
+    }
+
+    @GetMapping("/export")
+    @SaCheckPermission("system:log:list")
+    public void export(@Valid LogQuery query, HttpServletResponse response) {
+        logService.exportLogs(query, response);
     }
 }

@@ -35,6 +35,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-datapermission</artifactId>
         </dependency>
+        <!-- Excel 导入导出 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-excel</artifactId>
+        </dependency>
         <!-- 行为验证码 -->
         <dependency>
             <groupId>cn.ypbin</groupId>

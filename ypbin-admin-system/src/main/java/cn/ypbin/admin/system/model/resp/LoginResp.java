@@ -24,6 +24,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LoginResp {
 
-    /** 访问令牌（Sa-Token token 值，前端加 Bearer 前缀后放入 Authorization 头） */
+    /** 访问令牌（Sa-Token token 值） */
     private String accessToken;
 }

@@ -10,9 +10,8 @@
 package cn.ypbin.admin;
 
 import cn.ypbin.admin.bootstrap.SecurityBootstrapProperties;
-import org.mybatis.spring.annotation.MapperScan;
 import cn.ypbin.admin.common.config.LicenseIssuerProperties;
-import cn.ypbin.admin.bootstrap.SecurityBootstrapProperties;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

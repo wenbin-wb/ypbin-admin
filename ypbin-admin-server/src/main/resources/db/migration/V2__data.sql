@@ -319,6 +319,54 @@ INSERT INTO sys_app (id, access_key, secret_key, app_name, enabled, create_user,
 VALUES (1, '0a1b2c3d4e5f60718293a4b5c6d7e8f9', '98a7b6c5d4e3f2019a8b7c6d5e4f3021', 'ypbin-license-demo 联机校验', 1, 1, NOW(), 1, 0);
 
 -- =============================================================
+-- AI 菜单树（5000-5099 段；platform_only=1 为平台专用）
+-- 说明：菜单与系统菜单统一在此管理，下方"菜单授权"全量授权自动覆盖
+-- =============================================================
+
+-- AI 顶级目录
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES (5000, 0, 'AiManage', 'catalog', 0, '/ai', 'BasicLayout', 'page.ai.title', 'carbon:machine-learning', 9, NOW(), 1, 0);
+
+-- AI 一级菜单
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES
+(5001, 5000, 'AiChat',      'menu', 0, '/ai/chat',      '/ai/chat/index',      'page.ai.chat.title',      'carbon:chat-bot',          1, NOW(), 1, 0),
+(5002, 5000, 'AiKnowledge', 'menu', 0, '/ai/knowledge', '/ai/knowledge/index', 'page.ai.knowledge.title', 'carbon:data-base',          2, NOW(), 1, 0),
+(5003, 5000, 'AiConfig',    'menu', 1, '/ai/config',    '/ai/config/index',    'page.ai.config.title',    'carbon:settings-services',  3, NOW(), 1, 0),
+(5040, 5000, 'AiPrompt',    'menu', 0, '/ai/prompt',    '/ai/prompt/index',    'page.ai.prompt.title',    'carbon:template',           4, NOW(), 1, 0),
+(5050, 5000, 'AiUsage',     'menu', 1, '/ai/usage',     '/ai/usage/index',     'page.ai.usage.title',     'carbon:analytics',          5, NOW(), 1, 0),
+(5007, 5000, 'AiWiki',      'menu', 0, '/ai/wiki',      '/ai/wiki/index',      'page.ai.wiki.title',      'carbon:document',           6, NOW(), 1, 0),
+(5060, 5000, 'AiRole',      'menu', 0, '/ai/role',      '/ai/role/index',      'page.ai.role.title',      'carbon:user-role',          7, NOW(), 1, 0);
+
+-- AI 权限按钮
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+VALUES
+(5011, 5001, 'AiChatSend',         'button', 0, 'ai:chat:send',           'page.ai.chat.send',          1, NOW(), 1, 0),
+(5012, 5001, 'AiChatList',         'button', 0, 'ai:chat:list',           'page.ai.chat.title',         2, NOW(), 1, 0),
+(5013, 5001, 'AiChatCreate',       'button', 0, 'ai:chat:create',         'page.ai.chat.title',         3, NOW(), 1, 0),
+(5014, 5001, 'AiChatDelete',       'button', 0, 'ai:chat:delete',         'page.ai.chat.title',         4, NOW(), 1, 0),
+(5015, 5001, 'AiChatEdit',         'button', 0, 'ai:chat:edit',           'page.ai.chat.title',         5, NOW(), 1, 0),
+(5021, 5002, 'AiKnowledgeList',    'button', 0, 'ai:knowledge:list',      'page.ai.knowledge.list',     1, NOW(), 1, 0),
+(5022, 5002, 'AiKnowledgeCreate',  'button', 0, 'ai:knowledge:create',    'page.ai.knowledge.create',   2, NOW(), 1, 0),
+(5023, 5002, 'AiKnowledgeDelete',  'button', 0, 'ai:knowledge:delete',    'page.ai.knowledge.delete',   3, NOW(), 1, 0),
+(5024, 5002, 'AiDocumentUpload',   'button', 0, 'ai:document:upload',     'page.ai.document.upload',    4, NOW(), 1, 0),
+(5025, 5002, 'AiDocumentDelete',   'button', 0, 'ai:document:delete',     'page.ai.document.delete',    5, NOW(), 1, 0),
+(5031, 5003, 'AiModelList',        'button', 1, 'ai:model:list',          'page.ai.model.list',         1, NOW(), 1, 0),
+(5032, 5003, 'AiModelCreate',      'button', 1, 'ai:model:create',        'page.ai.model.create',       2, NOW(), 1, 0),
+(5033, 5003, 'AiModelEdit',        'button', 1, 'ai:model:edit',          'page.ai.model.edit',         3, NOW(), 1, 0),
+(5034, 5003, 'AiModelDelete',      'button', 1, 'ai:model:delete',        'page.ai.model.delete',       4, NOW(), 1, 0),
+(5041, 5040, 'AiPromptList',       'button', 0, 'ai:prompt:list',         'page.ai.prompt.list',        1, NOW(), 1, 0),
+(5042, 5040, 'AiPromptCreate',     'button', 0, 'ai:prompt:create',       'page.ai.prompt.create',      2, NOW(), 1, 0),
+(5043, 5040, 'AiPromptEdit',       'button', 0, 'ai:prompt:edit',         'page.ai.prompt.edit',        3, NOW(), 1, 0),
+(5044, 5040, 'AiPromptDelete',     'button', 0, 'ai:prompt:delete',       'page.ai.prompt.delete',      4, NOW(), 1, 0),
+(5051, 5050, 'AiUsageView',        'button', 1, 'ai:usage:view',          'page.ai.usage.view',         1, NOW(), 1, 0),
+(5071, 5007, 'AiWikiView',         'button', 0, 'ai:knowledge:list',      'page.ai.wiki.view',          1, NOW(), 1, 0),
+(5061, 5060, 'AiRoleList',         'button', 0, 'ai:role:list',           'page.ai.role.title',         1, NOW(), 1, 0),
+(5062, 5060, 'AiRoleCreate',       'button', 0, 'ai:role:create',         'page.ai.role.title',         2, NOW(), 1, 0),
+(5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'page.ai.role.title',         3, NOW(), 1, 0),
+(5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'page.ai.role.title',         4, NOW(), 1, 0);
+
+-- =============================================================
 -- 菜单授权
 -- =============================================================
 -- 全部权限模板只授权租户可见菜单

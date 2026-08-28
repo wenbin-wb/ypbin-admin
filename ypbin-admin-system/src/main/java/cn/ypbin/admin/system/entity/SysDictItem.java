@@ -38,7 +38,7 @@ public class SysDictItem extends BaseEntity {
     /** 字典项值（存储值） */
     private String value;
 
-    /** 展示颜色/标签类型（供前端渲染 tag） */
+    /** 展示颜色/标签类型 */
     private String color;
 
     /** 显示排序 */

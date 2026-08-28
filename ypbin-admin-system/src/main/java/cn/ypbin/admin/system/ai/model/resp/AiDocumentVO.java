@@ -10,6 +10,8 @@
 package cn.ypbin.admin.system.ai.model.resp;
 
 import cn.ypbin.admin.system.ai.entity.AiDocument;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,9 +26,12 @@ import lombok.Setter;
 @Setter
 public class AiDocumentVO {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeBaseId;
     private String filename;
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long fileSize;
     private Integer chunkCount;
     /**

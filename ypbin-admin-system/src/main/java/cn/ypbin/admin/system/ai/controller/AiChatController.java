@@ -14,7 +14,7 @@ import cn.ypbin.admin.system.ai.model.req.AiChatSendReq;
 import cn.ypbin.admin.system.ai.model.req.AiChatSessionCreateReq;
 import cn.ypbin.admin.system.ai.model.resp.AiChatMessageResp;
 import cn.ypbin.admin.system.ai.model.resp.AiChatSessionResp;
-import cn.ypbin.admin.system.ai.service.AiChatService;
+import cn.ypbin.admin.system.ai.service.AiChatSessionService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
@@ -43,7 +43,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public class AiChatController extends BaseController {
 
-    private final AiChatService chatService;
+    private final AiChatSessionService chatSessionService;
 
     /**
      * 获取会话列表。
@@ -51,7 +51,7 @@ public class AiChatController extends BaseController {
     @GetMapping("/sessions")
     @SaCheckPermission("ai:chat:list")
     public R<List<AiChatSessionResp>> listSessions() {
-        return ok(chatService.listSessions());
+        return ok(chatSessionService.listSessions());
     }
 
     /**
@@ -61,7 +61,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:create")
     @Log(value = "创建对话会话", module = "AI 对话")
     public R<Long> createSession(@Valid @RequestBody AiChatSessionCreateReq req) {
-        return ok(chatService.createSession(req));
+        return ok(chatSessionService.createSession(req));
     }
 
     /**
@@ -71,7 +71,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:delete")
     @Log(value = "删除对话会话", module = "AI 对话")
     public R<Void> deleteSession(@PathVariable Long id) {
-        chatService.deleteSession(id);
+        chatSessionService.deleteSession(id);
         return ok();
     }
 
@@ -81,7 +81,7 @@ public class AiChatController extends BaseController {
     @GetMapping("/sessions/{id}/messages")
     @SaCheckPermission("ai:chat:list")
     public R<List<AiChatMessageResp>> listMessages(@PathVariable Long id) {
-        return ok(chatService.listMessages(id));
+        return ok(chatSessionService.listMessages(id));
     }
 
     /**
@@ -91,7 +91,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:send")
     @Log(value = "发送对话消息", module = "AI 对话")
     public R<AiChatMessageResp> sendMessage(@Valid @RequestBody AiChatSendReq req) {
-        return ok(chatService.sendMessage(req));
+        return ok(chatSessionService.sendMessage(req));
     }
 
     /**
@@ -100,7 +100,7 @@ public class AiChatController extends BaseController {
     @PostMapping("/stream")
     @SaCheckPermission("ai:chat:send")
     public SseEmitter sendMessageStream(@Valid @RequestBody AiChatSendReq req) {
-        return chatService.sendMessageStream(req);
+        return chatSessionService.sendMessageStream(req);
     }
 
     /**
@@ -110,7 +110,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:send")
     @Log(value = "重新生成响应", module = "AI 对话")
     public R<AiChatMessageResp> regenerate(@PathVariable Long id) {
-        return ok(chatService.regenerateLastMessage(id));
+        return ok(chatSessionService.regenerateLastMessage(id));
     }
 
     /**
@@ -119,7 +119,7 @@ public class AiChatController extends BaseController {
     @PutMapping("/sessions/{id}/title")
     @SaCheckPermission("ai:chat:edit")
     public R<Void> updateTitle(@PathVariable Long id, @RequestParam String title) {
-        chatService.updateSessionTitle(id, title);
+        chatSessionService.updateSessionTitle(id, title);
         return ok();
     }
 
@@ -129,7 +129,7 @@ public class AiChatController extends BaseController {
     @PutMapping("/sessions/{id}/pin")
     @SaCheckPermission("ai:chat:edit")
     public R<Void> togglePin(@PathVariable Long id) {
-        chatService.toggleSessionPin(id);
+        chatSessionService.toggleSessionPin(id);
         return ok();
     }
 }

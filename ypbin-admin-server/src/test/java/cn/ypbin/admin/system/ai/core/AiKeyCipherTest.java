@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link AiKeyCipher} 验证：默认开发密钥长度、加密/解密往返、非法密钥拒绝。
+ * {@link AiKeyCipher} 验证：未配置密钥拒绝启动、加密/解密往返、非法密钥拒绝。
  *
  * @author wenbin
  * @since 2026-08-15
@@ -23,12 +23,14 @@ import org.junit.jupiter.api.Test;
 class AiKeyCipherTest {
 
     @Test
-    void devKeyIsValidAesLength() {
-        // 未配置密钥时回退内置开发密钥，必须满足 AES 密钥长度要求（否则服务启动失败）
-        AiKeyCipher cipher = new AiKeyCipher("");
-        String encrypted = cipher.encrypt("sk-test-123456");
-        assertThat(encrypted).isNotBlank();
-        assertThat(cipher.decrypt(encrypted)).isEqualTo("sk-test-123456");
+    void missingKeyRejected() {
+        // 未配置密钥时启动失败（不允许内置默认密钥兜底）
+        assertThatThrownBy(() -> new AiKeyCipher(""))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("secret-key");
+        assertThatThrownBy(() -> new AiKeyCipher(null))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("secret-key");
     }
 
     @Test

@@ -6,12 +6,6 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 package cn.ypbin.admin.system.ai.service;
 
@@ -25,6 +19,7 @@ import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.ai.rag.DocumentLoader;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +69,7 @@ public class AiDocumentVectorizer {
                 update.setId(docId);
                 update.setChunkCount(chunks.size());
                 update.setStatus(1);
-                update.setUpdateTime(java.time.LocalDateTime.now());
+                update.setUpdateTime(LocalDateTime.now());
                 documentMapper.updateById(update);
                 // 更新知识库文档计数（原子 SQL，避免并发读改写漂移）
                 kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
@@ -117,7 +112,7 @@ public class AiDocumentVectorizer {
                 row.setChunkIndex(i);
                 row.setContent(text);
                 row.setCharCount(text.length());
-                row.setCreateTime(java.time.LocalDateTime.now());
+                row.setCreateTime(LocalDateTime.now());
                 chunkMapper.insert(row);
             }
             log.debug("[ypbin-ai] 分块落库完成: docId={}, chunks={}", docId, chunks.size());
@@ -138,7 +133,7 @@ public class AiDocumentVectorizer {
         update.setStatus(2);
         update.setErrorMsg(errorMsg != null && errorMsg.length() > 490
             ? errorMsg.substring(0, 490) : errorMsg);
-        update.setUpdateTime(java.time.LocalDateTime.now());
+        update.setUpdateTime(LocalDateTime.now());
         documentMapper.updateById(update);
     }
 }

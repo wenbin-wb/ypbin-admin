@@ -9,7 +9,6 @@
  */
 package cn.ypbin.admin.system.ai.controller;
 
-import cn.ypbin.admin.system.ai.core.AiAnonymousRateLimiter;
 import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.service.AiShareService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -17,7 +16,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
-import cn.ypbin.starter.tools.support.RequestUtils;
+import cn.ypbin.starter.tools.limiter.RateLimit;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -46,7 +45,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiShareController extends BaseController {
 
     private final AiShareService shareService;
-    private final AiAnonymousRateLimiter rateLimiter;
 
     /** 查询分享配置（知识库名称、是否需要密码、是否过期等），供分享阅读页初始化 */
     @GetMapping("/{token}/config")
@@ -72,16 +70,13 @@ public class AiShareController extends BaseController {
         return ok(shareService.getDocumentContent(token, docId, password));
     }
 
-    /** 对分享知识库提问（非流式，RAG 增强） */
+    /** 对分享知识库提问（非流式，RAG 增强）；按客户端 IP 限流，防止滥用消耗模型资源 */
     @PostMapping("/{token}/ask")
+    @RateLimit(key = "share:ask", window = 60, count = 10, message = "请求过于频繁，请稍后再试")
     public R<String> ask(
             @PathVariable String token,
             @RequestHeader(value = "X-Share-Password", required = false) String password,
             @RequestBody Map<String, String> body) {
-        // 匿名公开接口限流：按客户端 IP 独立计数，防止滥用消耗模型资源
-        if (!rateLimiter.tryAcquire("share:ask:" + RequestUtils.getClientIp())) {
-            throw new BusinessException("请求过于频繁，请稍后再试");
-        }
         return ok(shareService.ask(token, body.getOrDefault("question", ""), password));
     }
 }

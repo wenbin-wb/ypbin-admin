@@ -59,13 +59,6 @@ public class SmsLoginController extends BaseController {
     @Log(value = "手机验证码登录", module = "认证")
     @PostMapping("/auth/sms/login")
     public R<LoginResp> smsLogin(@Valid @RequestBody PhoneLoginReq req) {
-        try {
-            return ok(loginStrategyFactory.get("PHONE").login(req, ip()));
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            String detail = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            throw new BusinessException("登录失败：" + detail);
-        }
+        return ok(loginStrategyFactory.get("PHONE").login(req, ip()));
     }
 }

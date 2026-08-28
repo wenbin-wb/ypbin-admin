@@ -29,5 +29,5 @@ public interface LoginStrategy {
      * @param clientIp 客户端 IP
      * @return 登录结果
      */
-    LoginResp login(Object req, String clientIp) throws Exception;
+    LoginResp login(Object req, String clientIp);
 }

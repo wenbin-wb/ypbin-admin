@@ -35,6 +35,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -70,8 +71,46 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
             .like(StringUtils.hasText(query.getCode()), SysRole::getCode, query.getCode())
             .eq(query.getStatus() != null, SysRole::getStatus, query.getStatus())
             .orderByAsc(SysRole::getSort));
-        List<RoleResp> items = source.getItems().stream().map(this::toRespWithMenus).toList();
-        return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
+        List<SysRole> items = source.getItems();
+        // 批量预加载本页全部角色的菜单/部门映射，避免逐行 N+1
+        Map<Long, List<Long>> menuMap = batchMenuIds(items);
+        Map<Long, List<Long>> deptMap = batchDeptIds(items);
+        List<RoleResp> respItems = items.stream()
+            .map(role -> toRespWithMenus(role, menuMap.get(role.getId()), deptMap.get(role.getId())))
+            .toList();
+        return PageResult.of(respItems, source.getTotal(), source.getPage(), source.getPageSize());
+    }
+
+    /**
+     * 批量查询本页角色的菜单 ID 映射。
+     *
+     * @param roles 角色列表
+     * @return roleId -> menuId 列表
+     */
+    private Map<Long, List<Long>> batchMenuIds(List<SysRole> roles) {
+        if (roles.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> roleIds = roles.stream().map(SysRole::getId).toList();
+        return roleMenuMapper.selectMenuIdsByRoleIds(roleIds).stream()
+            .collect(Collectors.groupingBy(SysRoleMenu::getRoleId,
+                Collectors.mapping(SysRoleMenu::getMenuId, Collectors.toList())));
+    }
+
+    /**
+     * 批量查询本页角色的部门 ID 映射。
+     *
+     * @param roles 角色列表
+     * @return roleId -> deptId 列表
+     */
+    private Map<Long, List<Long>> batchDeptIds(List<SysRole> roles) {
+        if (roles.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> roleIds = roles.stream().map(SysRole::getId).toList();
+        return roleDeptMapper.selectDeptIdsByRoleIds(roleIds).stream()
+            .collect(Collectors.groupingBy(SysRoleDept::getRoleId,
+                Collectors.mapping(SysRoleDept::getDeptId, Collectors.toList())));
     }
 
     @Override
@@ -244,9 +283,15 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
     }
 
     private RoleResp toRespWithMenus(SysRole role) {
+        return toRespWithMenus(role,
+            roleMenuMapper.selectMenuIdsByRoleId(role.getId()),
+            roleDeptMapper.selectDeptIdsByRoleId(role.getId()));
+    }
+
+    private RoleResp toRespWithMenus(SysRole role, List<Long> menuIds, List<Long> deptIds) {
         RoleResp resp = toResp(role);
-        resp.setPermissions(roleMenuMapper.selectMenuIdsByRoleId(role.getId()));
-        resp.setDeptIds(roleDeptMapper.selectDeptIdsByRoleId(role.getId()));
+        resp.setPermissions(menuIds == null ? List.of() : menuIds);
+        resp.setDeptIds(deptIds == null ? List.of() : deptIds);
         return resp;
     }
 }

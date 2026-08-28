@@ -30,6 +30,10 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import cn.ypbin.admin.system.model.vo.LogExportVo;
+import cn.ypbin.starter.excel.util.ExcelUtils;
+import jakarta.servlet.http.HttpServletResponse;
+
 /**
  * 系统日志服务实现（只读）。
  *
@@ -51,6 +55,35 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
             .orderByDesc(SysLog::getOperateTime));
         List<LogResp> items = source.getItems().stream().map(this::toResp).toList();
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
+    }
+
+    @Override
+    public void exportLogs(LogQuery query, HttpServletResponse response) {
+        LambdaQueryWrapper<SysLog> wrapper = new LambdaQueryWrapper<SysLog>()
+            .eq(StringUtils.hasText(query.getModule()), SysLog::getModule, query.getModule())
+            .like(StringUtils.hasText(query.getDescription()), SysLog::getDescription, query.getDescription())
+            .eq(query.getSuccess() != null, SysLog::getSuccess, query.getSuccess())
+            .eq(query.getOperateUserId() != null, SysLog::getOperateUserId, query.getOperateUserId())
+            .ge(StringUtils.hasText(query.getStartTime()), SysLog::getOperateTime, query.getStartTime())
+            .le(StringUtils.hasText(query.getEndTime()), SysLog::getOperateTime, query.getEndTime())
+            .orderByDesc(SysLog::getOperateTime);
+
+        List<SysLog> logs = list(wrapper);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        List<LogExportVo> list = logs.stream().map(l -> {
+            LogExportVo vo = new LogExportVo();
+            vo.setModule(l.getModule());
+            vo.setValue(l.getDescription());
+            vo.setOperatorName(l.getOperateUserId() != null ? String.valueOf(l.getOperateUserId()) : "");
+            vo.setIp(l.getIp());
+            vo.setLocation(l.getLocation());
+            vo.setStatus(Integer.valueOf(1).equals(l.getSuccess()) ? "成功" : "失败");
+            vo.setCostTime(l.getTimeTaken());
+            vo.setCreateTime(l.getOperateTime() != null ? l.getOperateTime().format(formatter) : "");
+            return vo;
+        }).toList();
+
+        ExcelUtils.export(response, "系统操作日志", LogExportVo.class, list);
     }
 
     @Override
