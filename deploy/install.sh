@@ -252,15 +252,17 @@ else
     hash -r
   fi
   if command -v pnpm >/dev/null 2>&1; then
-    info "构建 admin-ui（pnpm，约 2-5 分钟）"
+    info "构建 admin-ui（pnpm，约 2-10 分钟，依赖多时更久）..."
     export PATH="/usr/local/lib/nodejs/bin:$PATH"
     # 配置 npmmirror 源加速依赖下载
     pnpm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
-    (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install >/dev/null 2>&1)
-    (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build >/dev/null 2>&1) \
+    # 显示输出（不吞掉），失败时用户能看到真实错误
+    (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1) \
+      || { warn "pnpm install 失败，请看上方输出"; die "依赖安装失败（网络/源问题？）"; }
+    (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build 2>&1) \
       && mkdir -p "$DIST_DIR" \
       && cp -r "$ROOT/ypbin-admin-ui/apps/web-antd/dist/"* "$DIST_DIR/" \
-      || { warn "前端构建失败（npm 网络问题？）"; die "可改用 SKIP_FRONTEND=1 + 本地构建上传"; }
+      || { warn "前端构建失败，请看上方输出"; die "可改用 SKIP_FRONTEND=1 + 本地构建上传"; }
   else
     warn "node/pnpm 安装失败，前端需本地构建上传"
     info "  本机: cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
