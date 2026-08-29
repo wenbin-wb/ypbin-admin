@@ -104,6 +104,29 @@ if ! command -v mvn >/dev/null 2>&1; then
 fi
 ok "Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
 
+# Maven 镜像：国内服务器访问 repo.maven.apache.org 常被 403/超时，
+# 自动写入阿里云镜像（若 ~/.m2/settings.xml 不存在），可显著提升构建成功率
+if [ ! -f /root/.m2/settings.xml ]; then
+  info "配置 Maven 阿里云镜像（国内加速）"
+  mkdir -p /root/.m2
+  cat > /root/.m2/settings.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyun</id>
+      <mirrorOf>central</mirrorOf>
+      <name>Aliyun Maven Mirror</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+    </mirror>
+  </mirrors>
+</settings>
+EOF
+  ok "Maven 阿里云镜像已配置（/root/.m2/settings.xml）"
+fi
+
 # ---------- [1/8] 磁盘检测 ----------
 step "[1/8] 磁盘检测"
 AVAIL=$(df -m / | awk 'NR==2 {print $4}')
