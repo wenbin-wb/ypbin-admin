@@ -60,6 +60,18 @@ Spring Boot · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue
 
 ## 快速开始
 
+### 一键部署（Docker，推荐）
+
+新服务器零配置一键安装（自动装依赖、构建、启动全部容器）：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+```
+
+交互模式会询问：操作模式（完整部署/只更新后端/只更新前端/手动上传前端包）、端口（默认 MySQL 3307 / Redis 6380 / 后端 8080 / 前端 18080）、部署目录等；加 `-y` 全自动跳过所有询问（CI/无头环境）。详细见 [部署文档](https://ypbin.cn/guide/admin/deployment)。
+
+### 本地开发
+
 ```bash
 # 后端（默认 8080，Flyway 自动建表灌种子；连接信息用环境变量覆盖）
 mvn -f ypbin-admin-server/pom.xml spring-boot:run
