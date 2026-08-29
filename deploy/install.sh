@@ -53,7 +53,23 @@ echo "====================================================="
 # ---------- [0/8] 环境检测 ----------
 step "[0/8] 环境检测"
 [ "$(uname -s)" = "Linux" ] || die "本脚本仅支持 Linux"
-[ "$(id -u)" = "0" ] || die "请用 root 运行：sudo bash <(curl -fsSL ...)"
+
+# 非 root 自动提权：sudo bash <(curl ...) 的进程替换在 sudo 下会 /dev/fd 失效，
+# 这里先把自身落到 /tmp 再用 sudo 执行（只需输入一次 sudo 密码）
+if [ "$(id -u)" != "0" ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SELF="/tmp/ypbin-install.sh"
+    # 若脚本来自管道/进程替换（无真实文件），先下载到 /tmp
+    if [ ! -f "$SELF" ] || ! grep -q "ypbin-admin 一键部署" "$SELF" 2>/dev/null; then
+      SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
+      info "非 root 用户，自动下载脚本并用 sudo 提权执行..."
+      curl -fsSL -o "$SELF" "$SCRIPT_URL" || die "下载脚本失败（网络？）"
+    fi
+    exec sudo -E bash "$SELF" "$@"
+  fi
+  die "请用 root 或 sudo 运行本脚本"
+fi
+ok "以 root 运行"
 
 command -v curl >/dev/null 2>&1 || { info "安装 curl"; apt-get update -y && apt-get install -y curl; }
 command -v git >/dev/null 2>&1 || { info "安装 git"; apt-get install -y git; }
