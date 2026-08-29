@@ -5,16 +5,21 @@
 --       公告、消息、任务、日志等），让界面看起来数据丰富、正式。
 --
 -- 用法（手动执行，不进 Flyway 迁移）：
---   mysql -u<user> -p<pass> ypbin_admin < deploy/demo-data.sql
---   # 或容器内：docker exec -i deploy-mysql-1 mysql -uroot -p<pass> ypbin_admin < deploy/demo-data.sql
+--   mysql --default-character-set=utf8mb4 -u<user> -p<pass> ypbin_admin < deploy/demo-data.sql
+--   # 或容器内：
+--   docker exec -i deploy-mysql-1 mysql --default-character-set=utf8mb4 -uroot -p<pass> ypbin_admin < deploy/demo-data.sql
 --
 -- 特性：
 --   · 幂等：可重复执行，执行前自动清理本脚本产生的数据
 --   · 主键范围 1000+，与种子数据（<100）不冲突
 --   · 演示用户统一密码 123456（BCrypt，与种子用户一致）
+--   · 内置 SET NAMES utf8mb4，避免中文乱码
 --
 -- 注意：仅用于演示/截图环境，生产环境请勿执行。
 -- ============================================================
+
+-- 强制 utf8mb4 字符集（防止中文乱码）
+SET NAMES utf8mb4;
 
 -- ============ 0. 幂等清理（按演示主键范围） ============
 DELETE FROM sys_user_role       WHERE user_id >= 1000;
