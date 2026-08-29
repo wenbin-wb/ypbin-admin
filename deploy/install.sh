@@ -86,8 +86,89 @@ BOOTSTRAP_USER="${ADMIN_BOOTSTRAP_USERNAME:-admin}"
 DIST_DIR="$ROOT/admin-ui-dist"
 DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
 
+# ---------- 交互模式 ----------
+# 默认交互（人工确认关键步骤）；-y/--yes 全自动跳过所有确认（CI/无头环境）
+ASSUME_YES="${ASSUME_YES:-0}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -y|--yes) ASSUME_YES=1; shift ;;
+    *) shift ;;
+  esac
+done
+
+# 交互询问：读入值；非交互或 ASSUME_YES 时直接返回默认值
+ask() {
+  # $1=提示  $2=默认值  $3=校验正则(可选)
+  local prompt="$1" default="$2" pattern="${3:-}"
+  local answer
+  if [ "$ASSUME_YES" = "1" ]; then
+    echo "$default"
+    return 0
+  fi
+  while true; do
+    read -rp "  ${prompt} [${default}]: " answer
+    answer="${answer:-$default}"
+    if [ -z "$pattern" ] || echo "$answer" | grep -qE "$pattern"; then
+      echo "$answer"
+      return 0
+    fi
+    warn "输入无效（需匹配: $pattern），请重试"
+  done
+}
+
+# 交互确认：Y/n；非交互或 ASSUME_YES 时直接 yes
+confirm() {
+  # $1=提示
+  local answer
+  if [ "$ASSUME_YES" = "1" ]; then
+    return 0
+  fi
+  while true; do
+    read -rp "  ${1} [Y/n]: " answer
+    case "${answer:-Y}" in
+      Y|y|yes|YES) return 0 ;;
+      N|n|no|NO) return 1 ;;
+      *) warn "请输入 y 或 n" ;;
+    esac
+  done
+}
+
+# 模式选择：菜单询问（全新部署 / 只后端 / 只前端 / 手动上传前端 / 退出）
+MODE="full"   # full | backend | frontend | upload-frontend
+if [ "$ASSUME_YES" != "1" ]; then
+  echo ""
+  echo "  请选择操作模式:"
+  echo "    1) 全新部署/完整更新（环境 + 后端 + 前端）"
+  echo "    2) 只更新后端（构建 jar + 重启 admin）"
+  echo "    3) 只更新前端（构建 dist + 重启 admin-ui）"
+  echo "    4) 手动上传前端包（跳过构建，等 dist 就绪后继续）"
+  echo "    5) 退出"
+  while true; do
+    read -rp "  输入序号 [1]: " mode_choice
+    case "${mode_choice:-1}" in
+      1) MODE="full"; break ;;
+      2) MODE="backend"; break ;;
+      3) MODE="frontend"; break ;;
+      4) MODE="upload-frontend"; break ;;
+      5) echo "  已退出"; exit 0 ;;
+      *) warn "请输入 1-5" ;;
+    esac
+  done
+  case "$MODE" in
+    backend) echo "  → 模式: 只更新后端" ;;
+    frontend) echo "  → 模式: 只更新前端" ;;
+    upload-frontend) echo "  → 模式: 手动上传前端包" ;;
+    *) echo "  → 模式: 完整部署" ;;
+  esac
+fi
+
 echo "====================================================="
 echo "  ypbin-admin 一键部署 @ $(date '+%F %T')"
+if [ "$ASSUME_YES" = "1" ]; then
+  echo "  模式: 全自动（-y，跳过人工确认）"
+else
+  echo "  模式: 交互（关键步骤会询问，回车用默认值）"
+fi
 echo "====================================================="
 
 # ============================================================
@@ -169,9 +250,9 @@ else
 fi
 
 # --- Node 22.18+ / pnpm（vben 5.7 要求 node ^22.18.0 || ^24.12.0）---
-# 只在需要构建前端时安装（SKIP_FRONTEND=1 或已有 dist 则跳过）
+# 仅在需要服务器构建前端时安装（full/frontend 模式）；backend 模式不装
 NEED_NODE=0
-if [ "$SKIP_FRONTEND" != "1" ] && [ ! -f "$DIST_DIR/index.html" ]; then
+if { [ "$MODE" = "full" ] || [ "$MODE" = "frontend" ]; } && [ "$SKIP_FRONTEND" != "1" ] && [ ! -f "$DIST_DIR/index.html" ]; then
   if ! command -v node >/dev/null 2>&1; then
     NEED_NODE=1
   else
@@ -206,7 +287,7 @@ if [ "$NEED_NODE" = "1" ]; then
 elif command -v node >/dev/null 2>&1; then
   ok "Node $(node -v) + pnpm $(pnpm -v 2>/dev/null || echo '无')"
 else
-  ok "跳过 Node 安装（SKIP_FRONTEND 或已有前端产物）"
+  ok "跳过 Node 安装（backend 模式或无需服务器构建前端）"
 fi
 
 # --- 网络预检查 ---
@@ -233,11 +314,18 @@ echo "  可用磁盘: ${AVAIL}MB"
 [ "$AVAIL" -lt 3000 ] && warn "磁盘不足 3GB，构建可能失败（建议 ≥5GB）"
 
 # ============================================================
-# [3/7] 拉取代码（starter / admin / admin-ui）
+# [3/7] 拉取代码（按模式拉取所需仓库）
 # ============================================================
-step "[3/7] 拉取代码（starter / admin / admin-ui）"
+step "[3/7] 拉取代码"
 mkdir -p "$ROOT" && cd "$ROOT"
-for repo in ypbin-starter ypbin-admin ypbin-admin-ui; do
+# 模式 → 需要拉取的仓库
+REPOS_TO_PULL="ypbin-admin"
+case "$MODE" in
+  full) REPOS_TO_PULL="ypbin-starter ypbin-admin ypbin-admin-ui" ;;
+  backend) REPOS_TO_PULL="ypbin-starter ypbin-admin" ;;
+  frontend|upload-frontend) REPOS_TO_PULL="ypbin-admin ypbin-admin-ui" ;;
+esac
+for repo in $REPOS_TO_PULL; do
   if [ ! -d "$repo/.git" ]; then
     info "clone $repo"
     git clone --quiet "$REPO_BASE/$repo.git"
@@ -249,58 +337,138 @@ for repo in ypbin-starter ypbin-admin ypbin-admin-ui; do
 done
 
 # ============================================================
-# [4/7] 构建后端
+# [4/7] 构建后端（full / backend 模式）
 # ============================================================
-step "[4/7] 构建 admin 后端 jar（首次约 3-6 分钟）"
-mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests install -q || die "starter 构建失败（网络/依赖问题？）"
-mvn -f "$ROOT/ypbin-admin/pom.xml" -DskipTests install -q || die "admin 构建失败"
-JAR="$ROOT/ypbin-admin/ypbin-admin-server/target/ypbin-admin.jar"
-[ -f "$JAR" ] || die "未找到构建产物 $JAR"
-ok "jar 构建完成: $(du -h "$JAR" | cut -f1)"
-
-# ============================================================
-# [5/7] 构建前端
-# ============================================================
-step "[5/7] 前端处理"
-if [ "$SKIP_FRONTEND" = "1" ] || [ -f "$DIST_DIR/index.html" ]; then
-  if [ -f "$DIST_DIR/index.html" ]; then
-    ok "使用已有前端产物 $DIST_DIR"
-  else
-    warn "SKIP_FRONTEND=1 但 $DIST_DIR 无 index.html"
-    info "请本地构建后上传：cd ypbin-admin-ui && pnpm -F @vben/web-antd build && scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
-    die "缺少前端产物"
+if [ "$MODE" = "full" ] || [ "$MODE" = "backend" ]; then
+  step "[4/7] 构建 admin 后端 jar（首次约 3-6 分钟）"
+  # starter 构建策略：询问是否重新构建（仅交互模式）；-y 或已有 .m2 包时可选跳过
+  BUILD_STARTER="yes"
+  if [ "$ASSUME_YES" != "1" ]; then
+    if confirm "重新构建 starter（最新代码，约 3-6 分钟）？选 n 则用 .m2/Central 已有包"; then
+      BUILD_STARTER="yes"
+    else
+      BUILD_STARTER="no"
+    fi
   fi
-else
-  if command -v pnpm >/dev/null 2>&1; then
-    info "构建 admin-ui（pnpm，约 2-10 分钟，依赖多时更久）..."
-    export PATH="/usr/local/lib/nodejs/bin:$PATH"
-    pnpm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
-    # 显示输出（不吞掉），失败时用户能看到真实错误
-    (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1) \
-      || { warn "pnpm install 失败，请看上方输出"; die "依赖安装失败（网络/源问题？）"; }
-    (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build 2>&1) \
-      && mkdir -p "$DIST_DIR" \
-      && cp -r "$ROOT/ypbin-admin-ui/apps/web-antd/dist/"* "$DIST_DIR/" \
-      || { warn "前端构建失败，请看上方输出"; die "可改用 SKIP_FRONTEND=1 + 本地构建上传"; }
-    ok "前端构建完成"
+  if [ "$BUILD_STARTER" = "yes" ]; then
+    mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests install -q || die "starter 构建失败（网络/依赖问题？）"
   else
-    warn "node/pnpm 不可用，前端需本地构建上传"
-    info "  本机: cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
-    info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
-    die "缺少前端产物（可先跑 SKIP_FRONTEND=1 部署后端，前端稍后上传再重跑）"
+    info "跳过 starter 构建（使用 .m2/Central 已有版本）"
   fi
+  mvn -f "$ROOT/ypbin-admin/pom.xml" -DskipTests install -q || die "admin 构建失败"
+  JAR="$ROOT/ypbin-admin/ypbin-admin-server/target/ypbin-admin.jar"
+  [ -f "$JAR" ] || die "未找到构建产物 $JAR"
+  ok "jar 构建完成: $(du -h "$JAR" | cut -f1)"
 fi
 
-# ⚠️ 权限修复（scp 上传会保留 700 目录权限，nginx worker 读不了 → js 返回 text/html）
-find "$DIST_DIR" -type d -exec chmod 755 {} \;
-find "$DIST_DIR" -type f -exec chmod 644 {} \;
-ok "前端目录权限已修复（755/644）"
+# ============================================================
+# [5/7] 构建前端（full / frontend / upload-frontend 模式）
+# ============================================================
+if [ "$MODE" = "full" ] || [ "$MODE" = "frontend" ] || [ "$MODE" = "upload-frontend" ]; then
+  step "[5/7] 前端处理"
+  if [ "$MODE" = "upload-frontend" ]; then
+    # 手动上传模式：等待用户上传 dist 到 $DIST_DIR
+    mkdir -p "$DIST_DIR"
+    if [ ! -f "$DIST_DIR/index.html" ]; then
+      info "请在另一个终端把前端构建产物上传到 $DIST_DIR/:"
+      info "  本机: cd ypbin-admin-ui && pnpm -F @vben/web-antd build"
+      info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
+      while true; do
+        if [ -f "$DIST_DIR/index.html" ]; then
+          ok "检测到前端产物已上传"
+          break
+        fi
+        echo "  等待 index.html 出现...（10 秒后重查，Ctrl+C 取消）"
+        sleep 10
+      done
+    else
+      ok "已有前端产物 $DIST_DIR"
+    fi
+  elif [ "$SKIP_FRONTEND" = "1" ] || [ -f "$DIST_DIR/index.html" ]; then
+    if [ -f "$DIST_DIR/index.html" ]; then
+      ok "使用已有前端产物 $DIST_DIR"
+    else
+      warn "SKIP_FRONTEND=1 但 $DIST_DIR 无 index.html"
+      info "请本地构建后上传：cd ypbin-admin-ui && pnpm -F @vben/web-antd build && scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
+      die "缺少前端产物"
+    fi
+  else
+    # 前端构建方式选择（仅交互模式、full 且需构建时）
+    FRONTEND_BUILD="server"
+    if [ "$ASSUME_YES" != "1" ]; then
+      echo "  前端构建方式:"
+      echo "    1) 服务器自动构建（需 node/pnpm，约 2-10 分钟）"
+      echo "    2) 手动上传（本机构建后 scp 到 $DIST_DIR/）"
+      while true; do
+        read -rp "  输入序号 [1]: " fe_choice
+        case "${fe_choice:-1}" in
+          1) FRONTEND_BUILD="server"; break ;;
+          2) FRONTEND_BUILD="manual"; break ;;
+          *) warn "请输入 1 或 2" ;;
+        esac
+      done
+    fi
+    if [ "$FRONTEND_BUILD" = "manual" ]; then
+      info "请手动上传前端产物到 $DIST_DIR/:"
+      info "  本机: cd ypbin-admin-ui && pnpm -F @vben/web-antd build"
+      info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
+      while true; do
+        if [ -f "$DIST_DIR/index.html" ]; then
+          ok "检测到前端产物已上传"
+          break
+        fi
+        echo "  等待 index.html 出现...（10 秒后重查，Ctrl+C 取消）"
+        sleep 10
+      done
+    elif command -v pnpm >/dev/null 2>&1; then
+      info "构建 admin-ui（pnpm，约 2-10 分钟，依赖多时更久）..."
+      export PATH="/usr/local/lib/nodejs/bin:$PATH"
+      pnpm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
+      (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1) \
+        || { warn "pnpm install 失败，请看上方输出"; die "依赖安装失败（网络/源问题？）"; }
+      (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build 2>&1) \
+        && mkdir -p "$DIST_DIR" \
+        && cp -r "$ROOT/ypbin-admin-ui/apps/web-antd/dist/"* "$DIST_DIR/" \
+        || { warn "前端构建失败，请看上方输出"; die "可改用手动上传方式"; }
+      ok "前端构建完成"
+    else
+      warn "node/pnpm 不可用，前端需手动上传"
+      info "  本机: cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
+      info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
+      die "缺少前端产物（可选模式 4 手动上传后重跑）"
+    fi
+  fi
+
+  # ⚠️ 权限修复（scp 上传会保留 700 目录权限，nginx worker 读不了 → js 返回 text/html）
+  find "$DIST_DIR" -type d -exec chmod 755 {} \;
+  find "$DIST_DIR" -type f -exec chmod 644 {} \;
+  ok "前端目录权限已修复（755/644）"
+fi
 
 # ============================================================
-# [6/7] 生成凭据 + 启动服务
+# [6/7] 生成凭据 + 启动服务（按模式重启对应容器）
 # ============================================================
-step "[6/7] 生成 .env 凭据并启动容器"
+step "[6/7] 凭据与启动"
+
+# --- 端口交互（仅 full 模式询问；backend/frontend 沿用已有 .env）---
+if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
+  info "端口配置（回车用默认值）:"
+  MYSQL_PORT=$(ask "MySQL 映射端口" "$MYSQL_PORT" '^[0-9]+$')
+  REDIS_PORT=$(ask "Redis 映射端口" "$REDIS_PORT" '^[0-9]+$')
+  ADMIN_PORT=$(ask "admin 后端端口" "$ADMIN_PORT" '^[0-9]+$')
+  ADMIN_UI_PORT=$(ask "admin-ui 前端端口" "$ADMIN_UI_PORT" '^[0-9]+$')
+fi
+
+# --- 部署目录确认（仅 full 模式询问）---
+if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
+  ROOT=$(ask "部署根目录" "$ROOT" '^/')
+  DIST_DIR="$ROOT/admin-ui-dist"
+  DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
+fi
+
 mkdir -p "$DEPLOY_DIR"
+
+# --- .env 生成 / 复用 ---
 if [ ! -f "$DEPLOY_DIR/.env" ]; then
   # .env.example 已填好可用默认值，直接复制即启动；敏感三项再随机化增强安全
   cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
@@ -311,43 +479,87 @@ if [ ! -f "$DEPLOY_DIR/.env" ]; then
   sed -i "s/^ADMIN_BOOTSTRAP_USERNAME=.*/ADMIN_BOOTSTRAP_USERNAME=$BOOTSTRAP_USER/" "$DEPLOY_DIR/.env"
   sed -i "s/^ADMIN_BOOTSTRAP_PASSWORD=.*/ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS/" "$DEPLOY_DIR/.env"
   sed -i "s/^AI_MODEL_SECRET_KEY=.*/AI_MODEL_SECRET_KEY=$AI_KEY/" "$DEPLOY_DIR/.env"
-  # 应用用户自定义端口参数（若与环境变量不同）
-  sed -i "s/^MYSQL_PORT=.*/MYSQL_PORT=$MYSQL_PORT/" "$DEPLOY_DIR/.env"
-  sed -i "s/^REDIS_PORT=.*/REDIS_PORT=$REDIS_PORT/" "$DEPLOY_DIR/.env"
-  sed -i "s/^ADMIN_PORT=.*/ADMIN_PORT=$ADMIN_PORT/" "$DEPLOY_DIR/.env"
-  sed -i "s/^ADMIN_UI_PORT=.*/ADMIN_UI_PORT=$ADMIN_UI_PORT/" "$DEPLOY_DIR/.env"
   ok "凭据已生成（复制 .env.example + 随机化密码/密钥）"
   info "License 签发密钥（LICENSE_ISSUER_*）留空可正常启动，签发前在系统内生成后填入"
 else
   ok "使用已有 .env（保留原凭据）"
+  # 交互模式询问是否重新生成凭据
+  if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
+    if confirm "重新生成 .env 凭据（会丢失原密码）？选 n 保留现有凭据"; then
+      info "重新生成 .env..."
+      MYSQL_PASS="$(openssl rand -hex 16)"
+      ADMIN_PASS="$(openssl rand -base64 12 | tr '+/' 'Aa')"
+      AI_KEY="$(openssl rand -base64 24 | tr '+/' 'Aa' | cut -c1-32)"
+      sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$MYSQL_PASS/" "$DEPLOY_DIR/.env"
+      sed -i "s/^ADMIN_BOOTSTRAP_PASSWORD=.*/ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS/" "$DEPLOY_DIR/.env"
+      sed -i "s/^AI_MODEL_SECRET_KEY=.*/AI_MODEL_SECRET_KEY=$AI_KEY/" "$DEPLOY_DIR/.env"
+      ok "凭据已重新生成"
+    fi
+  fi
 fi
 
-# 端口参数无条件应用（新老 .env 都对齐当前默认值，避免老 .env 残留旧端口导致冲突）
+# 端口参数无条件应用（新老 .env 都对齐当前值，避免残留旧端口导致冲突）
 sed -i "s/^MYSQL_PORT=.*/MYSQL_PORT=$MYSQL_PORT/" "$DEPLOY_DIR/.env"
 sed -i "s/^REDIS_PORT=.*/REDIS_PORT=$REDIS_PORT/" "$DEPLOY_DIR/.env"
 sed -i "s/^ADMIN_PORT=.*/ADMIN_PORT=$ADMIN_PORT/" "$DEPLOY_DIR/.env"
 sed -i "s/^ADMIN_UI_PORT=.*/ADMIN_UI_PORT=$ADMIN_UI_PORT/" "$DEPLOY_DIR/.env"
 
+# --- 启动前最终确认（full 模式）---
+if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
+  echo ""
+  echo "  ┌────── 部署配置摘要 ──────┐"
+  echo "  │ 模式:      完整部署"
+  echo "  │ 根目录:    $ROOT"
+  echo "  │ MySQL:     端口 $MYSQL_PORT"
+  echo "  │ Redis:     端口 $REDIS_PORT"
+  echo "  │ 后端:      端口 $ADMIN_PORT"
+  echo "  │ 前端:      端口 $ADMIN_UI_PORT"
+  echo "  │ 管理员:    $BOOTSTRAP_USER"
+  echo "  └──────────────────────────┘"
+  confirm "确认以上配置并启动？" || { echo "  已取消"; exit 1; }
+fi
+
+# --- 启动（按模式）---
 cd "$DEPLOY_DIR"
-docker compose up -d --build 2>&1 | tail -5 || die "容器启动失败"
+case "$MODE" in
+  full)
+    docker compose up -d --build 2>&1 | tail -5 || die "容器启动失败"
+    ;;
+  backend)
+    # 只重建 admin 容器（后端 jar 已更新）
+    docker compose up -d --build admin 2>&1 | tail -5 || die "admin 容器启动失败"
+    ;;
+  frontend|upload-frontend)
+    # 前端是 bind 挂载静态文件，nginx 直接读新文件；仅需重启 admin-ui 确保配置生效
+    docker compose up -d admin-ui 2>&1 | tail -5 || die "admin-ui 容器启动失败"
+    ;;
+esac
 ok "容器已启动"
 
 # ============================================================
-# [7/7] 健康检查 + 输出凭据
+# [7/7] 健康检查 + 输出凭据（按模式检查对应服务）
 # ============================================================
-step "[7/7] 健康检查（等待 admin 启动，最多 90s）"
-ADMIN_OK=0
-for i in $(seq 1 18); do
-  sleep 5
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$ADMIN_PORT/actuator/health" 2>/dev/null || echo "000")
-  if [ "$CODE" = "200" ]; then ADMIN_OK=1; break; fi
-  echo "  等待 admin 启动... ($i/18, HTTP $CODE)"
-done
-[ "$ADMIN_OK" = "1" ] || { warn "admin 未在预期时间内健康，查看日志:"; docker logs "$(docker ps --filter name=deploy-admin --format '{{.Names}}' | head -1)" --tail 30 2>&1 | tail -30; die "admin 启动失败"; }
-ok "admin 后端健康（HTTP 200）"
+step "[7/7] 健康检查"
 
-UI_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$ADMIN_UI_PORT/" 2>/dev/null || echo "000")
-[ "$UI_CODE" = "200" ] && ok "admin-ui 前端可访问（HTTP 200）" || warn "前端未就绪（HTTP $UI_CODE）"
+# 后端健康（full / backend 模式）
+if [ "$MODE" = "full" ] || [ "$MODE" = "backend" ]; then
+  echo "  等待 admin 启动（最多 90s）..."
+  ADMIN_OK=0
+  for i in $(seq 1 18); do
+    sleep 5
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$ADMIN_PORT/actuator/health" 2>/dev/null || echo "000")
+    if [ "$CODE" = "200" ]; then ADMIN_OK=1; break; fi
+    echo "  等待 admin 启动... ($i/18, HTTP $CODE)"
+  done
+  [ "$ADMIN_OK" = "1" ] || { warn "admin 未在预期时间内健康，查看日志:"; docker logs "$(docker ps --filter name=deploy-admin --format '{{.Names}}' | head -1)" --tail 30 2>&1 | tail -30; die "admin 启动失败"; }
+  ok "admin 后端健康（HTTP 200）"
+fi
+
+# 前端健康（full / frontend / upload-frontend 模式）
+if [ "$MODE" = "full" ] || [ "$MODE" = "frontend" ] || [ "$MODE" = "upload-frontend" ]; then
+  UI_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$ADMIN_UI_PORT/" 2>/dev/null || echo "000")
+  [ "$UI_CODE" = "200" ] && ok "admin-ui 前端可访问（HTTP 200）" || warn "前端未就绪（HTTP $UI_CODE）"
+fi
 
 # --- 输出凭据 ---
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
