@@ -5,6 +5,10 @@
 # 用法（新服务器一键安装）：
 #   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 #
+# 说明：raw.githubusercontent.com 走 Fastly CDN，有 max-age=300（5 分钟）缓存；
+#       刚 push 完立即执行可能拉到旧版。本脚本自带版本号与自更新检测，
+#       发现远程版本更新时会自动重新拉取并执行，无需人工处理。
+#
 # 自定义参数（可选，通过环境变量覆盖）：
 #   YPBIN_ROOT=/opt/ypbin          部署根目录（默认 /opt/ypbin）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
@@ -26,6 +30,39 @@
 # ============================================================
 
 set -euo pipefail
+
+# ============================================================
+# 脚本版本与自更新检测
+# raw.githubusercontent.com 走 Fastly CDN（max-age=300，5 分钟缓存），
+# push 后立即执行可能拉到旧版。这里每次运行先比对远程最新版本号，
+# 若远程更新则自动重新拉取（带 cache-buster 强制绕过 CDN 缓存）并执行。
+# 用法不变：bash <(curl -fsSL ...)
+# ============================================================
+SCRIPT_VERSION="2026.08.29.3"
+SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
+
+if [ "${YPBIN_SKIP_SELF_UPDATE:-0}" != "1" ]; then
+  # 仅当脚本来自管道/进程替换（无真实文件）或文件版本与当前不符时才检查更新
+  if [ ! -f /tmp/ypbin-install.sh ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" /tmp/ypbin-install.sh 2>/dev/null; then
+    # 拉取远程最新版本号（带 cache-buster，绕过 CDN 缓存）
+    REMOTE_VER=""
+    REMOTE_VER=$(curl -fsSL --max-time 15 "${SCRIPT_URL}?_=$(date +%s)" 2>/dev/null \
+      | grep -m1 'SCRIPT_VERSION=' | sed 's/SCRIPT_VERSION="\([^"]*\)"/\1/' || true)
+    if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$SCRIPT_VERSION" ]; then
+      echo ""
+      echo "  检测到脚本新版本 ($REMOTE_VER > $SCRIPT_VERSION)，自动更新..."
+      # 重新下载最新版（cache-buster）并执行
+      curl -fsSL --max-time 30 -o /tmp/ypbin-install.sh "${SCRIPT_URL}?_=$(date +%s)"
+      chmod +x /tmp/ypbin-install.sh
+      exec bash /tmp/ypbin-install.sh "$@"
+    fi
+    # 缓存当前版到 /tmp，后续同名文件直接复用（避免重复检查）
+    if [ ! -f /tmp/ypbin-install.sh ]; then
+      curl -fsSL --max-time 30 -o /tmp/ypbin-install.sh "${SCRIPT_URL}?_=$(date +%s)"
+      chmod +x /tmp/ypbin-install.sh
+    fi
+  fi
+fi
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
