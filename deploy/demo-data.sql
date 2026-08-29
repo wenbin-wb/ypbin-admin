@@ -44,6 +44,17 @@ DELETE FROM sys_app             WHERE id >= 1000;
 DELETE FROM sys_user_social     WHERE id >= 1000;
 DELETE FROM sys_tenant          WHERE id >= 100;
 DELETE FROM sys_license         WHERE id >= 1000;
+DELETE FROM ai_model_config     WHERE id >= 100;
+DELETE FROM ai_knowledge_base   WHERE id >= 100;
+DELETE FROM ai_document         WHERE id >= 100;
+DELETE FROM ai_document_chunk   WHERE id >= 100;
+DELETE FROM ai_prompt_template  WHERE id >= 100;
+DELETE FROM ai_usage_log        WHERE id >= 100;
+DELETE FROM ai_query_log        WHERE id >= 100;
+DELETE FROM ai_chat_session     WHERE id >= 100;
+DELETE FROM ai_chat_message     WHERE id >= 100;
+DELETE FROM ai_chat_role        WHERE id >= 100;
+DELETE FROM ai_chat_role_favorite WHERE id >= 100;
 
 -- ============ 1. 部门（扩展组织树） ============
 INSERT INTO sys_dept (id, tenant_id, pid, name, sort, leader, phone, email, remark, create_user, create_time, status, is_deleted) VALUES
@@ -76,13 +87,13 @@ INSERT INTO sys_role_dept (role_id, dept_id) VALUES
 -- 角色-菜单（复用种子菜单，保证演示角色有完整菜单可见）
 -- 目录：1 Dashboard / 3001 组织 / 3002 认证 / 3003 系统 / 3004 监控 / 3005 租户 / 3006 任务 / 3007 消息 / 3008 授权 / 5000 AI
 INSERT INTO sys_role_menu (role_id, menu_id) VALUES
--- 研发工程师：Dashboard + 组织 + 系统 + 任务 + AI
+-- 研发工程师：Dashboard + 组织 + 系统 + 任务 + AI（含 AI 按钮级权限）
 (100, 1), (100, 101), (100, 102), (100, 3001), (100, 210), (100, 21001), (100, 21002), (100, 21003),
 (100, 220), (100, 240), (100, 250), (100, 260), (100, 3003), (100, 270), (100, 280),
-(100, 3006), (100, 2800), (100, 2951), (100, 5000), (100, 5001), (100, 5011), (100, 5002),
+(100, 3006), (100, 2800), (100, 2951), (100, 5000), (100, 5001), (100, 5011), (100, 5012), (100, 5013), (100, 5014), (100, 5015), (100, 5002), (100, 5021), (100, 5022), (100, 5023), (100, 5024), (100, 5025), (100, 5003), (100, 5031), (100, 5032), (100, 5033), (100, 5034),
 -- 产品经理：Dashboard + 组织 + 系统 + AI 对话
 (101, 1), (101, 101), (101, 102), (101, 3001), (101, 210), (101, 220), (101, 240), (101, 250),
-(101, 3003), (101, 270), (101, 5000), (101, 5001), (101, 5011), (101, 5002),
+(101, 3003), (101, 270), (101, 5000), (101, 5001), (101, 5011), (101, 5012), (101, 5002),
 -- 测试工程师：Dashboard + 系统 + 任务
 (102, 1), (102, 101), (102, 3001), (102, 210), (102, 3003), (102, 270), (102, 3006), (102, 2800), (102, 2951),
 -- 运营专员：Dashboard + 消息 + 公告
@@ -270,5 +281,82 @@ INSERT INTO sys_license (id, license_id, subject, remark, fingerprints, tenant_i
 (1001, 'YPBIN-2026-0002', '星辰网络', '演示授权记录：标准版', NULL, 'xingchen', DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_ADD(NOW(), INTERVAL 200 DAY), 7, NULL, NULL, NULL, 'CODE', 'manual', 1001, NULL, 'ISSUED', 6, DATE_SUB(NOW(), INTERVAL 28 DAY), NULL, 1, DATE_SUB(NOW(), INTERVAL 30 DAY), 1, 0),
 (1002, NULL, '测试科技有限公司', '演示授权记录：审批中', NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'CODE', 'manual', NULL, NULL, 'PENDING', NULL, NULL, NULL, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), 1, 0);
 
+-- ============ 16. AI 模型配置（api_key 为演示值） ============
+INSERT INTO ai_model_config (id, tenant_id, name, provider, model_type, api_key, base_url, model_name, is_default, remark, create_user, create_time, status, is_deleted) VALUES
+(100, 1, 'DeepSeek-V4 对话', 'deepseek', 'chat', 'demo-deepseek-api-key-0001', 'https://api.deepseek.com', 'deepseek-chat', 1, '默认对话模型', 1, NOW(), 1, 0),
+(101, 1, 'DeepSeek-V4 推理', 'deepseek', 'chat', 'demo-deepseek-api-key-0002', 'https://api.deepseek.com', 'deepseek-reasoner', 0, '深度推理模型', 1, NOW(), 1, 0),
+(102, 1, 'OpenAI GPT-5.6', 'openai', 'chat', 'demo-openai-api-key-0003', 'https://api.openai.com/v1', 'gpt-5.6', 0, '备用海外模型', 1, NOW(), 1, 0);
+
+-- ============ 17. AI 知识库与文档 ============
+INSERT INTO ai_knowledge_base (id, tenant_id, name, description, doc_count, icon, remark, widget_token, widget_enabled, share_token, share_enabled, share_expire_time, share_password, create_user, create_time, status, is_deleted) VALUES
+(100, 1, '产品帮助中心', '平台使用帮助文档知识库，供 AI 助手检索回答', 2, 'book', '帮助文档', 'demo-widget-token-001', 1, 'demo-share-token-001', 1, DATE_ADD(NOW(), INTERVAL 90 DAY), NULL, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), 1, 0),
+(101, 1, '研发规范库', '团队研发规范与最佳实践，供代码助手检索', 1, 'code', '研发规范', NULL, 0, NULL, 0, NULL, NULL, 1, DATE_SUB(NOW(), INTERVAL 8 DAY), 1, 0);
+
+INSERT INTO ai_document (id, tenant_id, knowledge_base_id, filename, file_size, chunk_count, status, error_msg, file_path, source_type, source_url, create_user, create_time, is_deleted) VALUES
+(100, 1, 100, '如何创建用户与分配角色.md', 2048, 3, 1, NULL, 'kb/2026/08/help-user-role.md', 'upload', NULL, 1, DATE_SUB(NOW(), INTERVAL 9 DAY), 0),
+(101, 1, 100, '公告发布操作指南.md', 1536, 2, 1, NULL, 'kb/2026/08/help-notice.md', 'upload', NULL, 1, DATE_SUB(NOW(), INTERVAL 8 DAY), 0),
+(102, 1, 101, '后端代码规范.md', 4096, 5, 1, NULL, 'kb/2026/08/dev-backend-style.md', 'upload', NULL, 1, DATE_SUB(NOW(), INTERVAL 7 DAY), 0);
+
+INSERT INTO ai_document_chunk (id, tenant_id, knowledge_base_id, document_id, chunk_index, content, char_count, create_user, create_time, status, is_deleted) VALUES
+(100, 1, 100, 100, 0, '创建用户：进入系统管理-用户管理，点击新增，填写登录账号、姓名、部门、角色后保存。', 40, 1, NOW(), 1, 0),
+(101, 1, 100, 100, 1, '分配角色：在用户列表勾选用户，点击分配角色，选择角色后确认。', 28, 1, NOW(), 1, 0),
+(102, 1, 100, 100, 2, '角色权限：角色关联菜单与数据范围，修改后即时生效。', 24, 1, NOW(), 1, 0),
+(103, 1, 100, 101, 0, '发布公告：进入消息中心-公告管理，编写内容后选择发布方式（立即/定时）。', 34, 1, NOW(), 1, 0),
+(104, 1, 100, 101, 1, '公告范围：支持全体、指定角色、指定部门、指定用户四种范围。', 28, 1, NOW(), 1, 0),
+(105, 1, 101, 102, 0, '命名规范：类名 UpperCamelCase，方法 lowerCamelCase，常量全大写。', 30, 1, NOW(), 1, 0),
+(106, 1, 101, 102, 1, '事务规范：写操作必须标注 @Transactional(rollbackFor = Exception.class)。', 34, 1, NOW(), 1, 0),
+(107, 1, 101, 102, 2, '异常规范：业务异常统一 HTTP 200，通过 R.code 区分业务码。', 30, 1, NOW(), 1, 0);
+
+-- ============ 18. AI 提示词模板 ============
+INSERT INTO ai_prompt_template (id, tenant_id, name, category, template, description, create_user, create_time, status, is_deleted) VALUES
+(100, 1, '周报生成', 'writing', '请根据以下工作内容生成一份周报，要求结构清晰、重点突出：\n{content}', '自动生成周报', 1, NOW(), 1, 0),
+(101, 1, '会议纪要', 'writing', '请将以下会议记录整理成结构化纪要，包含议题、结论、待办事项：\n{content}', '会议纪要整理', 1, NOW(), 1, 0),
+(102, 1, 'SQL 优化建议', 'coding', '请分析以下 SQL 的执行效率并给出优化建议：\n{content}', 'SQL 性能优化', 1, NOW(), 1, 0),
+(103, 1, '代码 Review', 'coding', '请 Review 以下代码，指出问题并给出改进建议：\n{content}', '代码评审助手', 1, NOW(), 1, 0);
+
+-- ============ 19. AI 对话会话与消息 ============
+INSERT INTO ai_chat_session (id, tenant_id, user_id, title, role_id, model_id, context_window, total_tokens, message_count, is_pinned, last_message_at, create_time, update_time, create_user, update_user, status, is_deleted) VALUES
+(100, 1, 1007, '平台功能咨询', 1, 100, 8, 1450, 6, 1, DATE_SUB(NOW(), INTERVAL 2 HOUR), DATE_SUB(NOW(), INTERVAL 3 HOUR), DATE_SUB(NOW(), INTERVAL 2 HOUR), 1007, 1007, 1, 0),
+(101, 1, 1000, '接口性能优化讨论', 3, 100, 8, 2380, 8, 0, DATE_SUB(NOW(), INTERVAL 5 HOUR), DATE_SUB(NOW(), INTERVAL 6 HOUR), DATE_SUB(NOW(), INTERVAL 5 HOUR), 1000, 1000, 1, 0),
+(102, 1, 1003, '前端组件改造方案', 3, 100, 8, 1890, 5, 0, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), 1003, 1003, 1, 0);
+
+INSERT INTO ai_chat_message (id, session_id, tenant_id, user_id, parent_id, role, content, tokens, model_name, finish_reason, tool_calls, images, metadata, create_time, create_user, status, is_deleted) VALUES
+(100, 100, 1, 1007, NULL, 'user', '你好，请介绍一下平台的主要功能', 12, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 3 HOUR), 1007, 1, 0),
+(101, 100, 1, 1007, 100, 'assistant', '你好！这是一个企业级后台管理系统，主要功能包括：\n\n1. **组织权限**：用户、角色、部门、菜单的 RBAC 权限模型\n2. **多租户**：行级数据隔离与权限模板\n3. **消息中心**：站内信 SSE 实时推送\n4. **任务调度**：动态定时任务\n5. **AI 对话**：配置驱动的智能助手\n6. **商业授权**：License 授权管理\n\n你可以通过左侧菜单体验这些功能，有什么想深入了解的吗？', 128, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 3 HOUR), 1007, 1, 0),
+(102, 100, 1, 1007, 101, 'user', 'AI 对话功能是怎么配置的？', 10, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 2 HOUR), 1007, 1, 0),
+(103, 100, 1, 1007, 102, 'assistant', 'AI 对话采用**模型配置表驱动**设计：\n\n- 在「AI 管理-模型配置」中添加模型（地址、密钥、型号）\n- 支持多模型动态切换，默认模型在参数配置中指定\n- 对话支持流式输出（SSE）与多轮记忆\n- 每次对话自动记录 Token 用量，可在用量统计中查看\n\n模型密钥在后台配置，不写死在 yml 文件中，更安全。', 110, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 2 HOUR), 1007, 1, 0),
+(104, 101, 1, 1000, NULL, 'user', '我们的列表接口响应慢，如何优化？', 12, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 6 HOUR), 1000, 1, 0),
+(105, 101, 1, 1000, 104, 'assistant', '列表接口慢通常有几个方向：\n\n1. **N+1 查询**：检查循环内查库，批量收集 ID 一次查询\n2. **缓存**：热点数据加缓存（平台已内置多级缓存）\n3. **分页 SQL**：确认使用索引、避免大偏移量\n4. **序列化**：大对象关注 JSON 序列化耗时\n\n平台内置的 @RefText 引用翻译会自动预加载避免 N+1，建议先确认是否命中此场景。', 98, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 6 HOUR), 1000, 1, 0),
+(106, 102, 1, 1003, NULL, 'user', 'Vue3 组件如何做性能优化？', 10, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), 1003, 1, 0),
+(107, 102, 1, 1003, 106, 'assistant', 'Vue3 组件性能优化建议：\n\n- 使用 `computed` 缓存派生数据，避免重复计算\n- 列表项用 `v-memo` 或 `key` 优化 diff\n- 大数据量列表考虑虚拟滚动\n- 组件懒加载（`defineAsyncComponent`）\n- 避免不必要的响应式深度监听\n\n结合 Vben 框架，优先用 `useVbenForm`、`vxe-table` 的高效渲染。', 85, 'deepseek-chat', 'stop', NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), 1003, 1, 0);
+
+-- ============ 20. AI 用量日志 ============
+INSERT INTO ai_usage_log (id, tenant_id, user_id, conversation_id, model_id, model_name, input_tokens, output_tokens, total_tokens, latency_ms, create_user, create_time, status, is_deleted) VALUES
+(100, 1, 1007, 100, 100, 'deepseek-chat', 512, 128, 640, 1240, 1007, DATE_SUB(NOW(), INTERVAL 3 HOUR), 1, 0),
+(101, 1, 1007, 100, 100, 'deepseek-chat', 380, 110, 490, 980, 1007, DATE_SUB(NOW(), INTERVAL 2 HOUR), 1, 0),
+(102, 1, 1000, 101, 100, 'deepseek-chat', 720, 98, 818, 1520, 1000, DATE_SUB(NOW(), INTERVAL 6 HOUR), 1, 0),
+(103, 1, 1000, 101, 100, 'deepseek-chat', 850, 132, 982, 1680, 1000, DATE_SUB(NOW(), INTERVAL 5 HOUR), 1, 0),
+(104, 1, 1003, 102, 100, 'deepseek-chat', 420, 85, 505, 890, 1003, DATE_SUB(NOW(), INTERVAL 1 DAY), 1, 0),
+(105, 1, 1007, NULL, 100, 'deepseek-chat', 210, 45, 255, 560, 1007, DATE_SUB(NOW(), INTERVAL 2 DAY), 1, 0),
+(106, 1, 1000, NULL, 100, 'deepseek-chat', 660, 118, 778, 1430, 1000, DATE_SUB(NOW(), INTERVAL 3 DAY), 1, 0),
+(107, 1, 1007, NULL, 101, 'deepseek-reasoner', 980, 256, 1236, 4100, 1007, DATE_SUB(NOW(), INTERVAL 4 DAY), 1, 0);
+
+-- ============ 21. AI 查询日志（知识库检索） ============
+INSERT INTO ai_query_log (id, tenant_id, knowledge_base_id, query, source, create_user, create_time, status, is_deleted) VALUES
+(100, 1, 100, '如何创建用户并分配角色', 'ai_chat', 1007, DATE_SUB(NOW(), INTERVAL 3 HOUR), 1, 0),
+(101, 1, 100, '公告怎么定时发布', 'ai_chat', 1007, DATE_SUB(NOW(), INTERVAL 2 DAY), 1, 0),
+(102, 1, 101, '事务注解怎么写', 'ai_chat', 1000, DATE_SUB(NOW(), INTERVAL 1 DAY), 1, 0),
+(103, 1, 101, '代码命名规范', 'ai_chat', 1000, DATE_SUB(NOW(), INTERVAL 4 DAY), 1, 0);
+
+-- ============ 22. AI 角色（补充演示角色 + 收藏） ============
+INSERT INTO ai_chat_role (id, tenant_id, name, description, avatar, system_prompt, category, model_preference, temperature, is_builtin, sort, create_time, create_user, status, is_deleted) VALUES
+(100, 1, '企业顾问', '擅长企业管理咨询、制度设计与流程优化', NULL, '你是一位资深企业管理顾问，擅长组织架构、流程优化与制度建设。回答时结合中国企业实际，给出可落地的建议。', 'business', 'deepseek-chat', 0.60, 0, 10, DATE_SUB(NOW(), INTERVAL 5 DAY), 1, 1, 0),
+(101, 1, '营销文案专家', '擅长撰写营销文案、产品介绍与推广方案', NULL, '你是一位资深营销文案专家，擅长撰写吸引人的营销文案、产品介绍和推广方案。文案要求：1) 抓住卖点 2) 语言生动 3) 适合目标受众 4) 有明确的行动号召。', 'marketing', 'deepseek-chat', 0.80, 0, 11, DATE_SUB(NOW(), INTERVAL 5 DAY), 1, 1, 0);
+
+INSERT INTO ai_chat_role_favorite (id, tenant_id, user_id, role_id, create_time, create_user, status, is_deleted) VALUES
+(100, 1, 1007, 2, DATE_SUB(NOW(), INTERVAL 4 DAY), 1007, 1, 0),
+(101, 1, 1007, 100, DATE_SUB(NOW(), INTERVAL 3 DAY), 1007, 1, 0),
+(102, 1, 1000, 3, DATE_SUB(NOW(), INTERVAL 2 DAY), 1000, 1, 0);
+
 -- ============ 完成提示 ============
-SELECT '✅ 演示数据已导入：15 个部门、15 个用户、6 个角色、5 类字典、5 条公告、8 条消息、5 个任务、14 条任务日志、11 条操作日志、5 个文件、2 个租户、3 个开放应用' AS result;
+SELECT '✅ 演示数据已导入：15 个部门、15 个用户、6 个角色、5 类字典、6 条公告、9 条消息、4 个任务、14 条任务日志、12 条操作日志、5 个文件、2 个租户、3 个开放应用、3 个 AI 模型、2 个知识库、3 个文档、4 个提示词、3 个会话、8 条对话消息、8 条用量日志、4 条查询日志、6 个 AI 角色' AS result;
