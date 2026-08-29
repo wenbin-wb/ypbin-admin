@@ -58,7 +58,13 @@ scp -r apps/web-antd/dist/* root@<服务器IP>:/opt/ypbin/admin-ui-dist/
 
 ## 配置 `.env`
 
-编辑 `/opt/ypbin/ypbin-admin/deploy/.env`:
+`.env.example` 已填好全部可用默认值，手动部署直接复制即可：
+
+```bash
+cp /opt/ypbin/ypbin-admin/deploy/.env.example /opt/ypbin/ypbin-admin/deploy/.env
+```
+
+生产环境建议修改敏感项（密码/密钥），然后编辑 `/opt/ypbin/ypbin-admin/deploy/.env`:
 
 | 变量 | 说明 |
 |---|---|

@@ -172,29 +172,21 @@ step "[5/8] 生成 .env 凭据"
 DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
 mkdir -p "$DEPLOY_DIR"
 if [ ! -f "$DEPLOY_DIR/.env" ]; then
+  # .env.example 已填好可用默认值，直接复制即启动；敏感三项再随机化增强安全
+  cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
   MYSQL_PASS="$(openssl rand -hex 16)"
   ADMIN_PASS="$(openssl rand -base64 12 | tr '+/' 'Aa')"
   AI_KEY="$(openssl rand -base64 24 | tr '+/' 'Aa' | cut -c1-32)"
-  cat > "$DEPLOY_DIR/.env" <<EOF
-# ypbin-admin Docker 部署环境变量（install.sh 自动生成，可手动修改）
-MYSQL_ROOT_PASSWORD=$MYSQL_PASS
-MYSQL_PORT=$MYSQL_PORT
-REDIS_PORT=$REDIS_PORT
-ADMIN_BOOTSTRAP_USERNAME=$BOOTSTRAP_USER
-ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS
-ADMIN_PORT=$ADMIN_PORT
-ADMIN_UI_PORT=$ADMIN_UI_PORT
-ADMIN_JOB_RECONCILE_DELAY=30000
-API_CRYPTO_KEY=
-AI_MODEL_SECRET_KEY=$AI_KEY
-AI_SIMPLE_STORE_PATH=data/ai/simple-vector-store.json
-LICENSE_ISSUER_PUBLIC_KEY=
-LICENSE_ISSUER_PRIVATE_KEY=
-LICENSE_ISSUER_SM4_KEY=
-YPBIN_CORS_ENABLED=false
-YPBIN_CORS_ORIGINS=http://localhost:*
-EOF
-  ok "凭据已生成并写入 $DEPLOY_DIR/.env"
+  sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$MYSQL_PASS/" "$DEPLOY_DIR/.env"
+  sed -i "s/^ADMIN_BOOTSTRAP_USERNAME=.*/ADMIN_BOOTSTRAP_USERNAME=$BOOTSTRAP_USER/" "$DEPLOY_DIR/.env"
+  sed -i "s/^ADMIN_BOOTSTRAP_PASSWORD=.*/ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS/" "$DEPLOY_DIR/.env"
+  sed -i "s/^AI_MODEL_SECRET_KEY=.*/AI_MODEL_SECRET_KEY=$AI_KEY/" "$DEPLOY_DIR/.env"
+  # 应用用户自定义端口参数（若与环境变量不同）
+  sed -i "s/^MYSQL_PORT=.*/MYSQL_PORT=$MYSQL_PORT/" "$DEPLOY_DIR/.env"
+  sed -i "s/^REDIS_PORT=.*/REDIS_PORT=$REDIS_PORT/" "$DEPLOY_DIR/.env"
+  sed -i "s/^ADMIN_PORT=.*/ADMIN_PORT=$ADMIN_PORT/" "$DEPLOY_DIR/.env"
+  sed -i "s/^ADMIN_UI_PORT=.*/ADMIN_UI_PORT=$ADMIN_UI_PORT/" "$DEPLOY_DIR/.env"
+  ok "凭据已生成（复制 .env.example + 随机化密码/密钥）并写入 $DEPLOY_DIR/.env"
   info "License 签发密钥（LICENSE_ISSUER_*）留空可正常启动，签发前在系统内生成后填入"
 else
   ok "使用已有 .env（保留原凭据）"
