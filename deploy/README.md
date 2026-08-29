@@ -25,7 +25,26 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 ```
 
-脚本自动完成：环境检测（Linux/Docker/JDK21/Maven/Git）→ 拉取三仓代码 → 构建 admin 后端 jar → 构建 admin-ui 前端（pnpm，国内网络不可达时可跳过用本地构建）→ 生成凭据 `.env`（随机密码）→ docker compose 启动 → 健康检查 + 凭据输出。
+脚本自动完成：环境检测（Linux/Docker/JDK21/Maven/Node）→ 拉取代码 → 构建 admin 后端 jar → 构建 admin-ui 前端 → 生成凭据 `.env` → docker compose 启动 → 健康检查 + 凭据输出。
+
+### 交互模式（默认）
+
+运行时会询问关键步骤（回车用默认值）：
+
+1. **操作模式**：①完整部署 ②只更新后端 ③只更新前端 ④手动上传前端包 ⑤退出
+2. **端口配置**：MySQL/Redis/后端/前端端口（默认 3307/6380/8080/18080）
+3. **部署根目录**（默认 `/opt/ypbin`）
+4. **前端构建方式**：服务器构建 / 手动上传（自动检测）
+5. **starter 构建策略**：重新构建 / 用 .m2 已有包
+6. **.env 复用**：保留原凭据 / 重新生成
+7. **启动前确认**：配置摘要 + Y/n
+
+### 全自动模式（CI / 无头环境）
+
+```bash
+# -y 跳过所有询问
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -y
+```
 
 自定义参数（环境变量覆盖）：
 
