@@ -19,8 +19,8 @@
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
 #   ADMIN_PORT=8080                admin 后端端口
 #   ADMIN_UI_PORT=18080            admin-ui 前端端口
-#   MYSQL_PORT=3306                MySQL 映射端口
-#   REDIS_PORT=6379                Redis 映射端口
+#   MYSQL_PORT=3307                MySQL 映射端口（默认 3307，避开本机 3306）
+#   REDIS_PORT=6380                Redis 映射端口（默认 6380，避开常见 6379）
 #   SKIP_FRONTEND=1                跳过前端构建（使用已上传的 admin-ui-dist）
 #   ADMIN_BOOTSTRAP_USERNAME=admin 初始管理员账号
 # ============================================================
@@ -79,8 +79,8 @@ ROOT="${YPBIN_ROOT:-/opt/ypbin}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 ADMIN_PORT="${ADMIN_PORT:-8080}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-18080}"
-MYSQL_PORT="${MYSQL_PORT:-3306}"
-REDIS_PORT="${REDIS_PORT:-6379}"
+MYSQL_PORT="${MYSQL_PORT:-3307}"
+REDIS_PORT="${REDIS_PORT:-6380}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 BOOTSTRAP_USER="${ADMIN_BOOTSTRAP_USERNAME:-admin}"
 DIST_DIR="$ROOT/admin-ui-dist"
