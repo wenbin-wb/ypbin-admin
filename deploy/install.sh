@@ -34,31 +34,37 @@ set -euo pipefail
 # ============================================================
 # 脚本版本与自更新检测
 # raw.githubusercontent.com 走 Fastly CDN（max-age=300，5 分钟缓存），
-# push 后立即执行可能拉到旧版。这里每次运行先比对远程最新版本号，
-# 若远程更新则自动重新拉取（带 cache-buster 强制绕过 CDN 缓存）并执行。
+# push 后立即执行可能拉到旧版。这里每次运行优先用 GitHub API
+# （contents 端点不经 Fastly 缓存）比对远程最新版本号，更新则自动重拉执行。
 # 用法不变：bash <(curl -fsSL ...)
 # ============================================================
-SCRIPT_VERSION="2026.08.29.3"
+SCRIPT_VERSION="2026.08.29.4"
 SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
+SCRIPT_API_URL="${YPBIN_SCRIPT_API_URL:-https://api.github.com/repos/wenbin-wb/ypbin-admin/contents/deploy/install.sh}"
 
 if [ "${YPBIN_SKIP_SELF_UPDATE:-0}" != "1" ]; then
   # 仅当脚本来自管道/进程替换（无真实文件）或文件版本与当前不符时才检查更新
   if [ ! -f /tmp/ypbin-install.sh ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" /tmp/ypbin-install.sh 2>/dev/null; then
-    # 拉取远程最新版本号（带 cache-buster，绕过 CDN 缓存）
+    # 优先用 GitHub API 拉取远程最新版本（不经 CDN 缓存）
     REMOTE_VER=""
-    REMOTE_VER=$(curl -fsSL --max-time 15 "${SCRIPT_URL}?_=$(date +%s)" 2>/dev/null \
-      | grep -m1 'SCRIPT_VERSION=' | sed 's/SCRIPT_VERSION="\([^"]*\)"/\1/' || true)
+    REMOTE_VER=$(curl -fsSL --max-time 20 -H "Accept: application/vnd.github+json" "${SCRIPT_API_URL}" 2>/dev/null \
+      | grep -oE '"content": "[A-Za-z0-9+/=]+"' | head -1 | sed 's/"content": "//;s/"//' \
+      | base64 -d 2>/dev/null | grep -m1 'SCRIPT_VERSION=' | sed 's/SCRIPT_VERSION="\([^"]*\)"/\1/' || true)
     if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$SCRIPT_VERSION" ]; then
       echo ""
       echo "  检测到脚本新版本 ($REMOTE_VER > $SCRIPT_VERSION)，自动更新..."
-      # 重新下载最新版（cache-buster）并执行
-      curl -fsSL --max-time 30 -o /tmp/ypbin-install.sh "${SCRIPT_URL}?_=$(date +%s)"
+      # 用 GitHub API 重新下载最新版并执行
+      curl -fsSL --max-time 30 -H "Accept: application/vnd.github+json" "${SCRIPT_API_URL}" \
+        | grep -oE '"content": "[A-Za-z0-9+/=]+"' | head -1 | sed 's/"content": "//;s/"//' \
+        | base64 -d > /tmp/ypbin-install.sh
       chmod +x /tmp/ypbin-install.sh
       exec bash /tmp/ypbin-install.sh "$@"
     fi
     # 缓存当前版到 /tmp，后续同名文件直接复用（避免重复检查）
     if [ ! -f /tmp/ypbin-install.sh ]; then
-      curl -fsSL --max-time 30 -o /tmp/ypbin-install.sh "${SCRIPT_URL}?_=$(date +%s)"
+      curl -fsSL --max-time 30 -H "Accept: application/vnd.github+json" "${SCRIPT_API_URL}" \
+        | grep -oE '"content": "[A-Za-z0-9+/=]+"' | head -1 | sed 's/"content": "//;s/"//' \
+        | base64 -d > /tmp/ypbin-install.sh
       chmod +x /tmp/ypbin-install.sh
     fi
   fi
