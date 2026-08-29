@@ -322,6 +322,12 @@ else
   ok "使用已有 .env（保留原凭据）"
 fi
 
+# 端口参数无条件应用（新老 .env 都对齐当前默认值，避免老 .env 残留旧端口导致冲突）
+sed -i "s/^MYSQL_PORT=.*/MYSQL_PORT=$MYSQL_PORT/" "$DEPLOY_DIR/.env"
+sed -i "s/^REDIS_PORT=.*/REDIS_PORT=$REDIS_PORT/" "$DEPLOY_DIR/.env"
+sed -i "s/^ADMIN_PORT=.*/ADMIN_PORT=$ADMIN_PORT/" "$DEPLOY_DIR/.env"
+sed -i "s/^ADMIN_UI_PORT=.*/ADMIN_UI_PORT=$ADMIN_UI_PORT/" "$DEPLOY_DIR/.env"
+
 cd "$DEPLOY_DIR"
 docker compose up -d --build 2>&1 | tail -5 || die "容器启动失败"
 ok "容器已启动"
