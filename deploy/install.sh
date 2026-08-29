@@ -105,8 +105,8 @@ fi
 ok "Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
 
 # Maven 镜像：国内服务器访问 repo.maven.apache.org 常被 403/超时，
-# 自动写入阿里云镜像（若 ~/.m2/settings.xml 不存在），可显著提升构建成功率
-if [ ! -f /root/.m2/settings.xml ]; then
+# 自动写入阿里云镜像（settings.xml 不存在或未含 aliyun 时写入），可显著提升构建成功率
+if [ ! -f /root/.m2/settings.xml ] || ! grep -q "maven.aliyun.com" /root/.m2/settings.xml 2>/dev/null; then
   info "配置 Maven 阿里云镜像（国内加速）"
   mkdir -p /root/.m2
   cat > /root/.m2/settings.xml <<'EOF'
@@ -125,6 +125,23 @@ if [ ! -f /root/.m2/settings.xml ]; then
 </settings>
 EOF
   ok "Maven 阿里云镜像已配置（/root/.m2/settings.xml）"
+else
+  ok "Maven 阿里云镜像已存在"
+fi
+
+# 网络预检查：构建前验证 Maven Central / 阿里云镜像可达，给出明确诊断而非构建时 403
+step "[0.5/8] 网络预检查"
+CENTRAL_OK=0; MIRROR_OK=0
+curl -s -o /dev/null --max-time 10 \
+  "https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-dependencies/4.1.0/spring-boot-dependencies-4.1.0.pom" \
+  && CENTRAL_OK=1 || CENTRAL_OK=0
+curl -s -o /dev/null --max-time 10 \
+  "https://maven.aliyun.com/repository/public/org/springframework/boot/spring-boot-dependencies/4.1.0/spring-boot-dependencies-4.1.0.pom" \
+  && MIRROR_OK=1 || MIRROR_OK=0
+[ "$CENTRAL_OK" = "1" ] && ok "Maven Central 可达" || warn "Maven Central 不可达（403/超时）——已配阿里云镜像兜底"
+[ "$MIRROR_OK" = "1" ] && ok "阿里云镜像可达" || warn "阿里云镜像不可达——请检查服务器网络/DNS/防火墙（见下方诊断）"
+if [ "$CENTRAL_OK" != "1" ] && [ "$MIRROR_OK" != "1" ]; then
+  die "Maven 仓库全部不可达。请先排查网络：curl -v https://repo.maven.apache.org/ 看具体报错；检查 DNS(nslookup repo.maven.apache.org)、防火墙、代理设置"
 fi
 
 # ---------- [1/8] 磁盘检测 ----------
