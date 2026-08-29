@@ -27,12 +27,13 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     environment:
-      DB_HOST: mysql
+      # 默认走 Docker 内嵌 DNS 用容器名互连；若内嵌 DNS 异常可覆写为容器 IP（.env 配 DB_HOST/REDIS_HOST）
+      DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: 3306
       DB_NAME: ypbin_admin
       DB_USER: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      REDIS_HOST: redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: 6379
       REDIS_DB: 0
       ADMIN_BOOTSTRAP_ENABLED: "true"
