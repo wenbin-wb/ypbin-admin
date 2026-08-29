@@ -13,11 +13,11 @@ import cn.ypbin.starter.json.dict.DictText;
 import cn.ypbin.starter.json.ref.RefText;
 import cn.ypbin.starter.json.sensitive.Sensitive;
 import cn.ypbin.starter.json.sensitive.SensitiveType;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Data;
+import tools.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 用户列表/详情响应。密码字段不输出。

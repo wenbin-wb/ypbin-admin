@@ -11,11 +11,11 @@ package cn.ypbin.admin.system.ai.entity;
 
 import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.io.Serial;
 import lombok.Getter;
 import lombok.Setter;
+import tools.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * AI 文档分块（向量化切片落库，供分块可视化与检索诊断）。

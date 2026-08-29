@@ -11,7 +11,6 @@ package cn.ypbin.admin.system.config.sms;
 
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.starter.core.exception.BusinessException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +22,7 @@ import org.dromara.sms4j.provider.factory.BaseProviderFactory;
 import org.dromara.sms4j.provider.factory.ProviderFactoryHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 短信配置读取：从系统参数（sys_config 的 SMS_* 键）动态构建 sms4j 厂商配置。

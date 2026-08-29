@@ -10,11 +10,11 @@
 package cn.ypbin.admin.system.ai.model.resp;
 
 import cn.ypbin.admin.system.ai.entity.AiDocument;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
+import tools.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 知识库文档视图对象（对外响应，不暴露本地存储路径等敏感字段）。

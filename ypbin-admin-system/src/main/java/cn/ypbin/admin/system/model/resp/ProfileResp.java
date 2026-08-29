@@ -10,11 +10,11 @@
 package cn.ypbin.admin.system.model.resp;
 
 import cn.ypbin.starter.json.dict.DictText;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Data;
+import tools.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 个人中心响应。本人查看本人信息，手机/邮箱不脱敏（供编辑表单原样回填），密码不输出。

@@ -9,10 +9,10 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.Data;
+import tools.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 在线用户响应。在 starter {@code OnlineUser} 基础上补充用户真实姓名（按 userId 关联 sys_user）。

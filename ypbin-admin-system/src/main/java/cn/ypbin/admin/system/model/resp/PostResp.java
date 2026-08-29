@@ -10,10 +10,10 @@
 package cn.ypbin.admin.system.model.resp;
 
 import cn.ypbin.starter.json.ref.RefText;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.Data;
+import tools.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 岗位响应。
