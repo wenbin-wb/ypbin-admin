@@ -17,15 +17,29 @@
 - 网络可访问 GitHub(拉代码)、Maven Central(构建)、Docker Hub(拉镜像)
 - 服务器能出网访问 npm registry(仅构建前端时需要,见下方"前端构建")
 
-## 一键部署
+## 一键部署（推荐）
+
+新服务器零配置一键安装：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/deploy.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 ```
 
-脚本自动:安装依赖(git/maven/JDK/docker)→ 拉取三仓代码 → 构建 admin jar → 生成凭据 `.env` → 启动容器。
+脚本自动完成：环境检测（Linux/Docker/JDK21/Maven/Git）→ 拉取三仓代码 → 构建 admin 后端 jar → 构建 admin-ui 前端（pnpm，国内网络不可达时可跳过用本地构建）→ 生成凭据 `.env`（随机密码）→ docker compose 启动 → 健康检查 + 凭据输出。
 
-之后更新也执行同一条命令。
+自定义参数（环境变量覆盖）：
+
+```bash
+# 前端已本地构建上传时跳过服务器构建（国内 npm 常见）
+SKIP_FRONTEND=1 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+
+# 自定义端口 / 部署目录
+ADMIN_PORT=8080 ADMIN_UI_PORT=18080 YPBIN_ROOT=/opt/ypbin bash <(curl -fsSL ...)
+```
+
+之后更新也执行同一条命令（保留已有 `.env` 凭据，自动重新构建启动）。
+
+> 注：`deploy.sh` 为旧版简化脚本，逻辑已并入 `install.sh`。
 
 ## 前端构建(重要)
 
