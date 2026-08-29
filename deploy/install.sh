@@ -223,15 +223,40 @@ if [ "$SKIP_FRONTEND" = "1" ] || [ -f "$DIST_DIR/index.html" ]; then
     die "缺少前端产物"
   fi
 else
+  # 自动安装 node + pnpm（Node 官方预编译二进制，国内走 npmmirror 源加速）
+  if ! command -v pnpm >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
+    info "服务器无 node/pnpm，自动安装（Node 22 LTS + pnpm）..."
+    NODE_VER="v22.15.0"
+    ARCH=$(uname -m)
+    case "$ARCH" in
+      x86_64) NODE_ARCH="x64" ;;
+      aarch64|arm64) NODE_ARCH="arm64" ;;
+      *) warn "不支持的架构 $ARCH，前端需本地构建上传"; die "缺少前端产物（可用 SKIP_FRONTEND=1）" ;;
+    esac
+    curl -fsSL --max-time 120 -o /tmp/node.tar.xz \
+      "https://npmmirror.com/mirrors/node/${NODE_VER}/node-${NODE_VER}-linux-${NODE_ARCH}.tar.xz" \
+      || { warn "node 下载失败（网络？）"; die "可改用手动方案：SKIP_FRONTEND=1 + 本地构建上传"; }
+    mkdir -p /usr/local/lib/nodejs
+    tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs --strip-components=1
+    rm -f /tmp/node.tar.xz
+    export PATH="/usr/local/lib/nodejs/bin:$PATH"
+    echo 'export PATH="/usr/local/lib/nodejs/bin:$PATH"' > /etc/profile.d/nodejs.sh
+    npm install -g pnpm@latest --registry=https://registry.npmmirror.com >/dev/null 2>&1 \
+      || npm install -g pnpm@latest >/dev/null 2>&1
+    hash -r
+  fi
   if command -v pnpm >/dev/null 2>&1; then
     info "构建 admin-ui（pnpm，约 2-5 分钟）"
+    export PATH="/usr/local/lib/nodejs/bin:$PATH"
+    # 配置 npmmirror 源加速依赖下载
+    pnpm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
     (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install >/dev/null 2>&1)
     (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build >/dev/null 2>&1) \
       && mkdir -p "$DIST_DIR" \
       && cp -r "$ROOT/ypbin-admin-ui/apps/web-antd/dist/"* "$DIST_DIR/" \
       || { warn "前端构建失败（npm 网络问题？）"; die "可改用 SKIP_FRONTEND=1 + 本地构建上传"; }
   else
-    warn "服务器无 pnpm，前端需本地构建上传"
+    warn "node/pnpm 安装失败，前端需本地构建上传"
     info "  本机: cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
     info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
     die "缺少前端产物"
