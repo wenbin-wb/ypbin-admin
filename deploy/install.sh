@@ -230,9 +230,21 @@ if [ "$SKIP_FRONTEND" = "1" ] || [ -f "$DIST_DIR/index.html" ]; then
   fi
 else
   # 自动安装 node + pnpm（Node 官方预编译二进制，国内走 npmmirror 源加速）
-  if ! command -v pnpm >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
-    info "服务器无 node/pnpm，自动安装（Node 22 LTS + pnpm）..."
-    NODE_VER="v22.15.0"
+  # vben 5.7 要求 node ^22.18.0 || ^24.12.0，版本不足会导致 engine 警告跳过 postinstall（unrun 缺失）
+  NEED_NODE=0
+  if ! command -v node >/dev/null 2>&1; then
+    NEED_NODE=1
+  else
+    NODE_MAJOR=$(node -v 2>/dev/null | sed 's/v\([0-9]*\).*/\1/')
+    NODE_MINOR=$(node -v 2>/dev/null | sed 's/v[0-9]*\.\([0-9]*\).*/\1/')
+    # 需 >= 22.18 或 >= 24.12
+    if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" = "22" ] && [ "$NODE_MINOR" -lt 18 ]; } || { [ "$NODE_MAJOR" = "23" ]; } || { [ "$NODE_MAJOR" = "24" ] && [ "$NODE_MINOR" -lt 12 ]; }; then
+      NEED_NODE=1
+    fi
+  fi
+  if [ "$NEED_NODE" = "1" ]; then
+    NODE_VER="v22.18.0"
+    info "安装/升级 Node 至 ${NODE_VER}（vben 要求 ^22.18.0 || ^24.12.0）..."
     ARCH=$(uname -m)
     case "$ARCH" in
       x86_64) NODE_ARCH="x64" ;;
