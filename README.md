@@ -26,23 +26,27 @@
 <div align="center">
 
 ![运行概览](https://ypbin.cn/screenshots/admin-ui/dashboard.png)
-*运行概览 Dashboard*
+*运行概览 Dashboard · 实时运营分析与指标监控*
 
-| 角色权限 | 动态菜单 |
+| 🤖 AI 智能对话工作台 | 👥 用户与组织架构 |
 |---|---|
-| ![角色权限](https://ypbin.cn/screenshots/admin-ui/roles.png) | ![动态菜单](https://ypbin.cn/screenshots/admin-ui/menus.png) |
+| ![AI 智能对话](https://ypbin.cn/screenshots/admin-ui/ai-chat.png) | ![用户组织管理](https://ypbin.cn/screenshots/admin-ui/users.png) |
 
-| 任务调度 | 商业授权 |
+| 🔑 角色与权限分配 | 🧭 动态路由菜单 |
 |---|---|
-| ![任务调度](https://ypbin.cn/screenshots/admin-ui/jobs.png) | ![商业授权](https://ypbin.cn/screenshots/admin-ui/licenses.png) |
+| ![角色权限分配](https://ypbin.cn/screenshots/admin-ui/roles.png) | ![动态菜单管理](https://ypbin.cn/screenshots/admin-ui/menus.png) |
 
-| 登录入口 | AI 对话（截图待补） |
+| 📜 商业授权 License | ⏰ 动态定时任务 |
 |---|---|
-| ![登录入口](https://ypbin.cn/screenshots/admin-ui/login.png) | *AI 对话界面截图即将补充* |
+| ![商业授权管理](https://ypbin.cn/screenshots/admin-ui/licenses.png) | ![定时任务调度](https://ypbin.cn/screenshots/admin-ui/jobs.png) |
+
+| 🛡️ 安全审计操作日志 | 🚪 企业级登录入口 |
+|---|---|
+| ![安全审计日志](https://ypbin.cn/screenshots/admin-ui/logs.png) | ![企业登录入口](https://ypbin.cn/screenshots/admin-ui/login.png) |
 
 </div>
 
-> 📸 截图由真实运行实例自动采集，更多见 [截图清单](https://ypbin.cn/screenshots/admin-ui/manifest.json)。
+> 📸 截图由线上真实运行实例（https://admin.ypbin.cn）自动采集，更多见 [截图清单](https://ypbin.cn/screenshots/admin-ui/manifest.json)。
 
 ## 📌 项目简介
 
