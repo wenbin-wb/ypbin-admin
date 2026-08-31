@@ -40,6 +40,35 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-common-api</artifactId>
         </dependency>
+        <!-- 数据访问（共享库直查用户） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-tenant</artifactId>
+        </dependency>
+        <!-- 安全：sa-token 登录态/密码加密/LoginHelper -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-security</artifactId>
+        </dependency>
+        <!-- 验证码 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-captcha</artifactId>
+        </dependency>
+        <!-- Web 请求工具（WebRequestUtils.ip 等） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-web</artifactId>
+        </dependency>
+        <!-- 参数校验 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
         <!-- Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
