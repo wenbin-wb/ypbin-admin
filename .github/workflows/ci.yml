@@ -21,6 +21,13 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: 校验 starter 依赖版本为最新 Release（防版本漂移）
+        run: |
+          REQ=$(grep -oP '(?<=<ypbin-starter.version>)[^<]+' pom.xml)
+          LATEST=$(curl -fsSL https://api.github.com/repos/wenbin-wb/ypbin-starter/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')
+          echo "admin 依赖 starter ${REQ}，最新 Release v${LATEST}"
+          [ "$REQ" = "$LATEST" ] || { echo "依赖版本落后，请升级至最新 Release"; exit 1; }
+
       - name: 检出 ypbin-starter（版本以 admin pom 的 ypbin-starter.version 为准）
         uses: actions/checkout@v4
         with:
@@ -34,4 +41,3 @@ jobs:
 
       - name: 编译、代码风格校验与测试
         run: mvn -B clean verify
-
