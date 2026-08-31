@@ -133,4 +133,15 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- 微服务版模块：仅 -Pmicroservice 激活，单体构建（默认）不受影响。
+             与 main 分支的单体版并行维护，见 docs/microservice-plan.md -->
+        <profile>
+            <id>microservice</id>
+            <modules>
+                <module>ypbin-microservice</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>

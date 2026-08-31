@@ -1,0 +1,20 @@
+server:
+  port: 18084
+
+spring:
+  application:
+    name: ypbin-job-service
+  cloud:
+    nacos:
+      server-addr: ${NACOS_ADDR:localhost:8848}
+      discovery:
+        enabled: true
+    sentinel:
+      transport:
+        dashboard: ${SENTINEL_ADDR:localhost:8858}
+
+ypbin:
+  tenant:
+    enabled: true
+  data-permission:
+    enabled: true

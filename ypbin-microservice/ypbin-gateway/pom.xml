@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.ypbin.admin</groupId>
+        <artifactId>ypbin-microservice</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>ypbin-gateway</artifactId>
+    <name>${project.artifactId}</name>
+    <description>ypbin-admin 微服务版 API 网关：统一鉴权 + 路由 + 限流熔断 + Swagger 聚合</description>
+
+    <dependencies>
+        <!-- 网关（WebFlux 响应式，不引入 spring-boot-starter-web） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cloud-gateway</artifactId>
+        </dependency>
+        <!-- Nacos 动态路由 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cloud-nacos</artifactId>
+        </dependency>
+        <!-- 限流熔断 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cloud-sentinel</artifactId>
+        </dependency>
+        <!-- 链路可观测 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cloud-observability</artifactId>
+        </dependency>
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

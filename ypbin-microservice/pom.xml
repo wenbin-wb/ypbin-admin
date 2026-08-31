@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.ypbin.admin</groupId>
+        <artifactId>ypbin-admin</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>ypbin-microservice</artifactId>
+    <packaging>pom</packaging>
+    <name>${project.artifactId}</name>
+    <description>ypbin-admin 微服务版聚合模块（与单体版 main 分支并行维护）</description>
+
+    <modules>
+        <module>ypbin-common-api</module>
+        <module>ypbin-gateway</module>
+        <module>ypbin-auth-service</module>
+        <module>ypbin-system-service</module>
+        <module>ypbin-ai-service</module>
+        <module>ypbin-job-service</module>
+    </modules>
+
+    <properties>
+        <!-- 微服务版本与 admin 根 revision 联动 -->
+        <ypbin.microservice.version>${revision}</ypbin.microservice.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>cn.ypbin.admin</groupId>
+                <artifactId>ypbin-common-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

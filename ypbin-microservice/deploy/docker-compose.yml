@@ -1,0 +1,98 @@
+# ypbin-admin 微服务版本地部署环境
+#
+# 用法：
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# 说明：基础设施（Nacos/Redis/MySQL/Sentinel）由 starter 的 deploy 提供或复用；
+# 本文件编排微服务四件套 + 网关。账号密码一律从 .env 注入。
+
+services:
+  ypbin-gateway:
+    build:
+      context: ../ypbin-gateway
+    image: ypbin/ypbin-gateway:local
+    container_name: ypbin-gateway
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+    ports:
+      - "18080:18080"
+    depends_on:
+      - nacos
+    restart: unless-stopped
+
+  ypbin-auth-service:
+    build:
+      context: ../ypbin-auth-service
+    image: ypbin/ypbin-auth-service:local
+    container_name: ypbin-auth-service
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ypbin_admin
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
+    ports:
+      - "18081:18081"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
+
+  ypbin-system-service:
+    build:
+      context: ../ypbin-system-service
+    image: ypbin/ypbin-system-service:local
+    container_name: ypbin-system-service
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ypbin_admin
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
+    ports:
+      - "18082:18082"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
+
+  ypbin-ai-service:
+    build:
+      context: ../ypbin-ai-service
+    image: ypbin/ypbin-ai-service:local
+    container_name: ypbin-ai-service
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ypbin_admin
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
+    ports:
+      - "18083:18083"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
+
+  ypbin-job-service:
+    build:
+      context: ../ypbin-job-service
+    image: ypbin/ypbin-job-service:local
+    container_name: ypbin-job-service
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ypbin_admin
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
+    ports:
+      - "18084:18084"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
