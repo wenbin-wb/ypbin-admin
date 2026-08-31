@@ -1,0 +1,32 @@
+name: Sync starter version
+
+on:
+  repository_dispatch:
+    types: [starter-release]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: 升级 starter 依赖到最新 Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 拉取 starter 最新 Release 版本
+        id: version
+        run: |
+          V=$(curl -fsSL https://api.github.com/repos/wenbin-wb/ypbin-starter/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')
+          echo "VERSION=$V" >> "$GITHUB_OUTPUT"
+          echo "最新 starter 版本：$V"
+
+      - name: 更新 ypbin-starter.version
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          sed -i "s|<ypbin-starter.version>[^<]*</ypbin-starter.version>|<ypbin-starter.version>${VERSION}</ypbin-starter.version>|" pom.xml
+          git add pom.xml
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "chore(deps): ypbin-starter 升级至 v$VERSION" || echo "已是该版本，无变更"
+          git push

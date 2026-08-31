@@ -164,6 +164,8 @@ ypbin-admin-server    启动层：主类、配置、数据库迁移（Flyway）
 
 ## 🤝 贡献指南
 
+欢迎提交 Issue 与 Pull Request，开发与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 项目仍在持续迭代，欢迎：
 
 - 提 [Issue](https://github.com/wenbin-wb/ypbin-admin/issues) —— bug、疑问、吐槽都行
