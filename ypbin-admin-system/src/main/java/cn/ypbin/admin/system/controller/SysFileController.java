@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.entity.SysFile;
 import cn.ypbin.admin.system.model.query.FileQuery;
 import cn.ypbin.admin.system.service.SysFileService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.storage.model.FileInfo;
@@ -41,7 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/system/file")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysFileController extends BaseController {
+public class SysFileController {
 
     private final SysFileService fileService;
 
@@ -52,13 +51,13 @@ public class SysFileController extends BaseController {
     public R<FileInfo> upload(
         @RequestParam("file") MultipartFile file,
         @RequestParam(defaultValue = "default") String module) {
-        return ok(fileService.uploadFile(file, module));
+        return R.ok(fileService.uploadFile(file, module));
     }
 
     @GetMapping("/list")
     @SaCheckPermission("system:file:list")
     public R<PageResult<SysFile>> list(@Valid FileQuery query) {
-        return ok(fileService.pageFiles(query));
+        return R.ok(fileService.pageFiles(query));
     }
 
     @Idempotent
@@ -67,6 +66,6 @@ public class SysFileController extends BaseController {
     @SaCheckPermission("system:file:delete")
     public R<Void> delete(@PathVariable Long id) {
         fileService.deleteFile(id);
-        return ok();
+        return R.ok();
     }
 }

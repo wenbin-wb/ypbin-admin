@@ -10,7 +10,8 @@
 package cn.ypbin.admin.system.model.vo;
 
 import java.io.Serializable;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.fesod.sheet.annotation.ExcelProperty;
 import org.apache.fesod.sheet.annotation.write.style.ColumnWidth;
 
@@ -20,7 +21,8 @@ import org.apache.fesod.sheet.annotation.write.style.ColumnWidth;
  * @author wenbin
  * @since 2026-08-27
  */
-@Data
+@Getter
+@Setter
 public class UserExportVo implements Serializable {
 
     @ColumnWidth(20)

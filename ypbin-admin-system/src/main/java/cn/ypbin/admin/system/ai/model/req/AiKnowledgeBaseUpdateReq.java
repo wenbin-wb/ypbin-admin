@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.ai.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 编辑知识库请求。
  *
  * @author wenbin
  * @since 2026-08-17
  */
-@Data
+@Getter
+@Setter
 public class AiKnowledgeBaseUpdateReq {
 
     @NotBlank(message = "知识库名称不能为空")

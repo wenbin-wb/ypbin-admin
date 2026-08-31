@@ -12,6 +12,8 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.enums.GenderEnum;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.mapper.SysDeptMapper;
 import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.model.query.UserQuery;
@@ -59,6 +61,9 @@ public class UserExcelComponent {
     /** 导入默认初始密码（行内未填密码时使用） */
     private static final String DEFAULT_PASSWORD = "123456";
 
+    /** 导出列时间格式 */
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
 
@@ -84,7 +89,6 @@ public class UserExcelComponent {
             deptMapper.selectBatchIds(deptIds).stream()
                 .collect(Collectors.toMap(SysDept::getId, SysDept::getName, (k1, k2) -> k1));
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         List<UserExportVo> list = users.stream().map(u -> {
             UserExportVo vo = new UserExportVo();
             vo.setUsername(u.getUsername());
@@ -93,9 +97,9 @@ public class UserExcelComponent {
             vo.setDeptName(u.getDeptId() != null ? deptMap.getOrDefault(u.getDeptId(), "-") : "-");
             vo.setPhone(u.getPhone());
             vo.setEmail(u.getEmail());
-            vo.setGender(u.getGender() != null && u.getGender() == 1 ? "男" : (u.getGender() != null && u.getGender() == 2 ? "女" : "未知"));
-            vo.setStatus(u.getStatus() != null && u.getStatus() == 1 ? "正常" : "禁用");
-            vo.setCreateTime(u.getCreateTime() != null ? u.getCreateTime().format(formatter) : "");
+            vo.setGender(GenderEnum.descOf(u.getGender()));
+            vo.setStatus(UserStatusEnum.descOf(u.getStatus()));
+            vo.setCreateTime(u.getCreateTime() != null ? u.getCreateTime().format(DATE_TIME_FORMATTER) : "");
             return vo;
         }).toList();
 
@@ -177,7 +181,7 @@ public class UserExcelComponent {
             user.setPassword(PasswordEncoderUtil.encode(rawPassword));
             user.setUserType(AdminConstants.USER_TYPE_TENANT);
             user.setTenantId(currentTenantId);
-            user.setStatus(1);
+            user.setStatus(UserStatusEnum.ENABLED.getCode());
             user.setPhone(phone);
             if (StringUtils.hasText(vo.getEmail())) {
                 user.setEmail(vo.getEmail().trim());

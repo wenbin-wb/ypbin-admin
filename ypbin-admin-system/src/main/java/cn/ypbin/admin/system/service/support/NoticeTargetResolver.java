@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.support;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.entity.SysRole;
@@ -81,7 +82,7 @@ public class NoticeTargetResolver {
 
     private List<SysUser> resolveRoleUsers(SysNotice notice, List<Long> roleIds) {
         List<SysRole> roles = roleMapper.selectList(new LambdaQueryWrapper<SysRole>()
-            .in(SysRole::getId, roleIds).eq(SysRole::getStatus, 1));
+            .in(SysRole::getId, roleIds).eq(SysRole::getStatus, EntityStatus.ENABLED.getCode()));
         if (roles.size() != new LinkedHashSet<>(roleIds).size()
             || roles.stream().anyMatch(role -> !notice.getTenantId().equals(role.getTenantId()))) {
             throw new BusinessException("指定角色不存在、已禁用或不属于当前租户");
@@ -95,7 +96,7 @@ public class NoticeTargetResolver {
 
     private List<SysUser> resolveDeptUsers(SysNotice notice, List<Long> deptIds) {
         List<SysDept> depts = deptMapper.selectList(new LambdaQueryWrapper<SysDept>()
-            .in(SysDept::getId, deptIds).eq(SysDept::getStatus, 1));
+            .in(SysDept::getId, deptIds).eq(SysDept::getStatus, EntityStatus.ENABLED.getCode()));
         if (depts.size() != new LinkedHashSet<>(deptIds).size()
             || depts.stream().anyMatch(dept -> !notice.getTenantId().equals(dept.getTenantId()))) {
             throw new BusinessException("指定部门不存在、已禁用或不属于当前租户");
@@ -104,7 +105,7 @@ public class NoticeTargetResolver {
     }
 
     private LambdaQueryWrapper<SysUser> enabledUsers() {
-        return new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, 1);
+        return new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, EntityStatus.ENABLED.getCode());
     }
 
     private List<Long> parseTargetIds(String csv) {

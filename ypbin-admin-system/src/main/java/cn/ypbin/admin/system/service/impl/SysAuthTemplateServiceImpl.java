@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.entity.SysAuthTemplate;
 import cn.ypbin.admin.system.entity.SysMenu;
 import cn.ypbin.admin.system.entity.SysTemplateMenu;
@@ -154,7 +155,7 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
         }
         return menuMapper.selectList(new LambdaQueryWrapper<SysMenu>()
             .in(SysMenu::getId, menuIds)
-            .eq(SysMenu::getStatus, 1)
+            .eq(SysMenu::getStatus, EntityStatus.ENABLED.getCode())
             .eq(SysMenu::getIsDeleted, 0)
             .eq(SysMenu::getPlatformOnly, false))
             .stream().map(SysMenu::getId).collect(Collectors.toSet());

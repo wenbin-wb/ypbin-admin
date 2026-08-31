@@ -11,15 +11,16 @@ package cn.ypbin.admin.system.ai.model.req;
 
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 知识库公开分享设置请求。
  *
  * @author wenbin
  * @since 2026-08-18
  */
-@Data
+@Getter
+@Setter
 public class AiShareSettingReq {
 
     /** 是否启用分享（true 启用并生成/保留令牌；false 关闭并清除分享配置） */

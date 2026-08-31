@@ -16,9 +16,9 @@ import cn.ypbin.admin.system.service.SmsCodeService;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.limiter.RateLimit;
+import cn.ypbin.starter.web.util.WebRequestUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
-public class SmsLoginController extends BaseController {
+public class SmsLoginController {
 
     private final SmsCodeService smsCodeService;
     private final SysConfigService configService;
@@ -50,7 +50,7 @@ public class SmsLoginController extends BaseController {
             throw new BusinessException("短信验证码登录未开启");
         }
         smsCodeService.sendCode(phone);
-        return ok();
+        return R.ok();
     }
 
     /**
@@ -59,6 +59,6 @@ public class SmsLoginController extends BaseController {
     @Log(value = "手机验证码登录", module = "认证")
     @PostMapping("/auth/sms/login")
     public R<LoginResp> smsLogin(@Valid @RequestBody PhoneLoginReq req) {
-        return ok(loginStrategyFactory.get("PHONE").login(req, ip()));
+        return R.ok(loginStrategyFactory.get("PHONE").login(req, WebRequestUtils.ip()));
     }
 }

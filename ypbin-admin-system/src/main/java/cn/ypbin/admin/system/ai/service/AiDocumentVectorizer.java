@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service;
 
+import cn.ypbin.admin.system.enums.AiDocumentStatusEnum;
 import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiDocumentChunk;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
@@ -68,7 +69,7 @@ public class AiDocumentVectorizer {
                 AiDocument update = new AiDocument();
                 update.setId(docId);
                 update.setChunkCount(chunks.size());
-                update.setStatus(1);
+                update.setStatus(AiDocumentStatusEnum.READY.getCode());
                 update.setUpdateTime(LocalDateTime.now());
                 documentMapper.updateById(update);
                 // 更新知识库文档计数（原子 SQL，避免并发读改写漂移）

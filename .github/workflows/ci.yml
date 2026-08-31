@@ -21,7 +21,7 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: 检出 ypbin-starter（提供 1.4.0 依赖）
+      - name: 检出 ypbin-starter（版本以 admin pom 的 ypbin-starter.version 为准）
         uses: actions/checkout@v4
         with:
           repository: wenbin-wb/ypbin-starter

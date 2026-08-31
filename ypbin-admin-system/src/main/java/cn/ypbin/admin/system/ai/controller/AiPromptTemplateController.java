@@ -14,7 +14,6 @@ import cn.ypbin.admin.system.ai.entity.AiPromptTemplate;
 import cn.ypbin.admin.system.ai.model.req.AiPromptTemplateSaveReq;
 import cn.ypbin.admin.system.ai.service.AiPromptTemplateService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
@@ -38,14 +37,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/ai/prompt-templates")
 @RequiredArgsConstructor
-public class AiPromptTemplateController extends BaseController {
+public class AiPromptTemplateController {
 
     private final AiPromptTemplateService promptTemplateService;
 
     @GetMapping
     @SaCheckPermission("ai:prompt:list")
     public R<List<AiPromptTemplate>> list() {
-        return ok(promptTemplateService.listTemplates());
+        return R.ok(promptTemplateService.listTemplates());
     }
 
     @Log(value = "新增提示词模板", module = "Prompt模板")
@@ -54,7 +53,7 @@ public class AiPromptTemplateController extends BaseController {
     @SaCheckPermission("ai:prompt:create")
     public R<Void> create(@Valid @RequestBody AiPromptTemplateSaveReq req) {
         promptTemplateService.createTemplate(req);
-        return ok();
+        return R.ok();
     }
 
     @Log(value = "修改提示词模板", module = "Prompt模板")
@@ -63,7 +62,7 @@ public class AiPromptTemplateController extends BaseController {
     @SaCheckPermission("ai:prompt:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody AiPromptTemplateSaveReq req) {
         promptTemplateService.updateTemplate(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Log(value = "删除提示词模板", module = "Prompt模板")
@@ -72,7 +71,7 @@ public class AiPromptTemplateController extends BaseController {
     @SaCheckPermission("ai:prompt:delete")
     public R<Void> delete(@PathVariable Long id) {
         promptTemplateService.deleteTemplate(id);
-        return ok();
+        return R.ok();
     }
 
     /** 更新状态（启用/停用）*/
@@ -82,6 +81,6 @@ public class AiPromptTemplateController extends BaseController {
     @SaCheckPermission("ai:prompt:edit")
     public R<Void> updateStatus(@PathVariable Long id, @PathVariable Integer status) {
         promptTemplateService.updateStatus(id, status);
-        return ok();
+        return R.ok();
     }
 }

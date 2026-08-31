@@ -13,10 +13,10 @@ import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.model.query.MessageQuery;
 import cn.ypbin.admin.system.service.SysMessageService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
-import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/user/messages")
 @RequiredArgsConstructor
-public class SysMessageController extends BaseController {
+public class SysMessageController {
 
     private final SysMessageService messageService;
 
@@ -48,7 +48,7 @@ public class SysMessageController extends BaseController {
      */
     @GetMapping
     public R<PageResult<SysMessage>> list(@Valid MessageQuery query) {
-        return ok(messageService.pageMessages(currentUserId(), query));
+        return R.ok(messageService.pageMessages(UserContext.getUserId(), query));
     }
 
     /**
@@ -56,7 +56,7 @@ public class SysMessageController extends BaseController {
      */
     @GetMapping("/unread-count")
     public R<Long> unreadCount() {
-        return ok(messageService.unreadCount(currentUserId()));
+        return R.ok(messageService.unreadCount(UserContext.getUserId()));
     }
 
     /**
@@ -65,7 +65,7 @@ public class SysMessageController extends BaseController {
     @GetMapping("/recent")
     public R<List<SysMessage>> recent(
         @RequestParam(defaultValue = "10") @Min(1) @Max(100) long limit) {
-        return ok(messageService.recent(currentUserId(), limit));
+        return R.ok(messageService.recent(UserContext.getUserId(), limit));
     }
 
     /**
@@ -75,8 +75,8 @@ public class SysMessageController extends BaseController {
     @Log(value = "标记站内信已读", module = "站内信")
     @PutMapping("/{id}/read")
     public R<Void> markRead(@PathVariable Long id) {
-        messageService.markRead(currentUserId(), id);
-        return ok();
+        messageService.markRead(UserContext.getUserId(), id);
+        return R.ok();
     }
 
     /**
@@ -86,8 +86,8 @@ public class SysMessageController extends BaseController {
     @Log(value = "删除站内信", module = "站内信")
     @DeleteMapping("/{id}")
     public R<Void> delete(@PathVariable Long id) {
-        messageService.delete(currentUserId(), id);
-        return ok();
+        messageService.delete(UserContext.getUserId(), id);
+        return R.ok();
     }
 
     /**
@@ -97,7 +97,7 @@ public class SysMessageController extends BaseController {
     @Log(value = "站内信全部标记已读", module = "站内信")
     @PutMapping("/read-all")
     public R<Void> markAllRead() {
-        messageService.markAllRead(currentUserId());
-        return ok();
+        messageService.markAllRead(UserContext.getUserId());
+        return R.ok();
     }
 }

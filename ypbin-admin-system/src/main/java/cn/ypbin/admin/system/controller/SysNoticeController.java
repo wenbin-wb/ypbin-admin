@@ -14,7 +14,6 @@ import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -38,14 +37,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/notice")
 @RequiredArgsConstructor
-public class SysNoticeController extends BaseController {
+public class SysNoticeController {
 
     private final SysNoticeService noticeService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:notice:list")
     public R<List<SysNotice>> list() {
-        return ok(noticeService.listNotices());
+        return R.ok(noticeService.listNotices());
     }
 
     @Idempotent
@@ -54,7 +53,7 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:add")
     public R<Void> create(@Valid @RequestBody NoticeSaveReq req) {
         noticeService.createNotice(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -63,7 +62,7 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody NoticeSaveReq req) {
         noticeService.updateNotice(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -72,7 +71,7 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:edit")
     public R<Void> revoke(@PathVariable Long id) {
         noticeService.revoke(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -81,7 +80,7 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:edit")
     public R<Void> publish(@PathVariable Long id) {
         noticeService.publish(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -90,6 +89,6 @@ public class SysNoticeController extends BaseController {
     @SaCheckPermission("system:notice:delete")
     public R<Void> delete(@PathVariable Long id) {
         noticeService.deleteNotice(id);
-        return ok();
+        return R.ok();
     }
 }

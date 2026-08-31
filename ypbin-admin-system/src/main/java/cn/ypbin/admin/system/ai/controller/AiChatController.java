@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.ai.model.resp.AiChatMessageResp;
 import cn.ypbin.admin.system.ai.model.resp.AiChatSessionResp;
 import cn.ypbin.admin.system.ai.service.AiChatSessionService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
@@ -42,7 +41,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/ai/chat")
 @RequiredArgsConstructor
-public class AiChatController extends BaseController {
+public class AiChatController {
 
     private final AiChatSessionService chatSessionService;
 
@@ -52,7 +51,7 @@ public class AiChatController extends BaseController {
     @GetMapping("/sessions")
     @SaCheckPermission("ai:chat:list")
     public R<List<AiChatSessionResp>> listSessions() {
-        return ok(chatSessionService.listSessions());
+        return R.ok(chatSessionService.listSessions());
     }
 
     /**
@@ -63,7 +62,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:create")
     @Log(value = "创建对话会话", module = "AI 对话")
     public R<Long> createSession(@Valid @RequestBody AiChatSessionCreateReq req) {
-        return ok(chatSessionService.createSession(req));
+        return R.ok(chatSessionService.createSession(req));
     }
 
     /**
@@ -75,7 +74,7 @@ public class AiChatController extends BaseController {
     @Log(value = "删除对话会话", module = "AI 对话")
     public R<Void> deleteSession(@PathVariable Long id) {
         chatSessionService.deleteSession(id);
-        return ok();
+        return R.ok();
     }
 
     /**
@@ -84,7 +83,7 @@ public class AiChatController extends BaseController {
     @GetMapping("/sessions/{id}/messages")
     @SaCheckPermission("ai:chat:list")
     public R<List<AiChatMessageResp>> listMessages(@PathVariable Long id) {
-        return ok(chatSessionService.listMessages(id));
+        return R.ok(chatSessionService.listMessages(id));
     }
 
     /**
@@ -95,7 +94,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:send")
     @Log(value = "发送对话消息", module = "AI 对话")
     public R<AiChatMessageResp> sendMessage(@Valid @RequestBody AiChatSendReq req) {
-        return ok(chatSessionService.sendMessage(req));
+        return R.ok(chatSessionService.sendMessage(req));
     }
 
     /**
@@ -119,7 +118,7 @@ public class AiChatController extends BaseController {
     @SaCheckPermission("ai:chat:send")
     @Log(value = "重新生成响应", module = "AI 对话")
     public R<AiChatMessageResp> regenerate(@PathVariable Long id) {
-        return ok(chatSessionService.regenerateLastMessage(id));
+        return R.ok(chatSessionService.regenerateLastMessage(id));
     }
 
     /**
@@ -131,7 +130,7 @@ public class AiChatController extends BaseController {
     @Log(value = "修改会话标题", module = "AI 对话")
     public R<Void> updateTitle(@PathVariable Long id, @RequestParam String title) {
         chatSessionService.updateSessionTitle(id, title);
-        return ok();
+        return R.ok();
     }
 
     /**
@@ -143,6 +142,6 @@ public class AiChatController extends BaseController {
     @Log(value = "切换会话置顶状态", module = "AI 对话")
     public R<Void> togglePin(@PathVariable Long id) {
         chatSessionService.toggleSessionPin(id);
-        return ok();
+        return R.ok();
     }
 }

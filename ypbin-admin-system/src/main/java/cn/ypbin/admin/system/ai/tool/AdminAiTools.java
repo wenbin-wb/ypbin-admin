@@ -11,6 +11,8 @@ package cn.ypbin.admin.system.ai.tool;
 
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.enums.JobStatusEnum;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.mapper.SysJobMapper;
 import cn.ypbin.admin.system.mapper.SysUserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -64,7 +66,7 @@ public class AdminAiTools {
         return users.stream()
             .map(u -> String.format("ID=%s 用户名=%s 姓名=%s 状态=%s",
                 u.getId(), u.getUsername(), u.getRealName(),
-                u.getStatus() == null ? "未知" : (u.getStatus() == 1 ? "正常" : "禁用")))
+                UserStatusEnum.descOf(u.getStatus())))
             .collect(Collectors.joining("\n"));
     }
 
@@ -90,7 +92,7 @@ public class AdminAiTools {
             .map(j -> String.format("名称=%s 执行器=%s Cron=%s 状态=%s",
                 j.getName(), j.getExecutor(),
                 j.getCron() != null ? j.getCron() : ("每" + j.getFixedRateSeconds() + "秒"),
-                j.getStatus() == null ? "未知" : (j.getStatus() == 1 ? "运行中" : "已停止")))
+                JobStatusEnum.descOf(j.getStatus())))
             .collect(Collectors.joining("\n"));
     }
 
@@ -103,9 +105,9 @@ public class AdminAiTools {
         description = "获取当前系统基础统计：注册用户总数、已启用任务数")
     public String getSystemStats() {
         long userCount = userMapper.selectCount(
-            new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, 1));
+            new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, UserStatusEnum.ENABLED.getCode()));
         long runningJobs = jobMapper.selectCount(
-            new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, 1));
+            new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, JobStatusEnum.ENABLED.getCode()));
         return String.format("系统统计 - 正常用户数: %d，运行中定时任务: %d", userCount, runningJobs);
     }
 }

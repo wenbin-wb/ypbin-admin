@@ -18,7 +18,6 @@ import cn.ypbin.admin.system.model.resp.CronPreviewResp;
 import cn.ypbin.admin.system.model.resp.JobLogResp;
 import cn.ypbin.admin.system.service.SysJobService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
@@ -45,32 +44,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/job")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysJobController extends BaseController {
+public class SysJobController {
 
     private final SysJobService jobService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:job:list")
     public R<List<SysJob>> list() {
-        return ok(jobService.list());
+        return R.ok(jobService.list());
     }
 
     @GetMapping("/log")
     @SaCheckPermission("system:job:list")
     public R<PageResult<JobLogResp>> allLogs(@Valid PageQuery query) {
-        return ok(jobService.pageLogs(null, query));
+        return R.ok(jobService.pageLogs(null, query));
     }
 
     @GetMapping("/log/{jobId}")
     @SaCheckPermission("system:job:list")
     public R<PageResult<JobLogResp>> logs(@PathVariable Long jobId, @Valid PageQuery query) {
-        return ok(jobService.pageLogs(jobId, query));
+        return R.ok(jobService.pageLogs(jobId, query));
     }
 
     @PostMapping("/cron/preview")
     @SaCheckPermission("system:job:list")
     public R<CronPreviewResp> previewCron(@Valid @RequestBody CronPreviewReq req) {
-        return ok(jobService.previewCron(req.getCron()));
+        return R.ok(jobService.previewCron(req.getCron()));
     }
 
     @Idempotent
@@ -79,7 +78,7 @@ public class SysJobController extends BaseController {
     @SaCheckPermission("system:job:add")
     public R<Void> create(@Valid @RequestBody JobSaveReq req) {
         jobService.createJob(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -88,7 +87,7 @@ public class SysJobController extends BaseController {
     @SaCheckPermission("system:job:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody JobSaveReq req) {
         jobService.updateJob(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -97,7 +96,7 @@ public class SysJobController extends BaseController {
     @SaCheckPermission("system:job:delete")
     public R<Void> delete(@PathVariable Long id) {
         jobService.deleteJob(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -106,7 +105,7 @@ public class SysJobController extends BaseController {
     @SaCheckPermission("system:job:edit")
     public R<Void> start(@PathVariable Long id) {
         jobService.start(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -115,7 +114,7 @@ public class SysJobController extends BaseController {
     @SaCheckPermission("system:job:edit")
     public R<Void> stop(@PathVariable Long id) {
         jobService.stop(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -124,6 +123,6 @@ public class SysJobController extends BaseController {
     @SaCheckPermission("system:job:edit")
     public R<Void> run(@PathVariable Long id) {
         jobService.triggerNow(id);
-        return ok();
+        return R.ok();
     }
 }

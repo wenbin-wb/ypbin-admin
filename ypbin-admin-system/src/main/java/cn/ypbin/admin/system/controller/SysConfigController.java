@@ -17,7 +17,6 @@ import cn.ypbin.admin.system.model.req.ConfigUpdateBatchReq;
 import cn.ypbin.admin.system.model.resp.ConfigResp;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -43,20 +42,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/config")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysConfigController extends BaseController {
+public class SysConfigController {
 
     private final SysConfigService configService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:config:list")
     public R<PageResult<ConfigResp>> list(@Valid ConfigQuery query) {
-        return ok(configService.pageConfigs(query));
+        return R.ok(configService.pageConfigs(query));
     }
 
     @GetMapping("/group/{configGroup}")
     @SaCheckPermission("system:config:list")
     public R<List<ConfigResp>> group(@PathVariable String configGroup) {
-        return ok(configService.listByGroup(configGroup));
+        return R.ok(configService.listByGroup(configGroup));
     }
 
     @Idempotent
@@ -65,7 +64,7 @@ public class SysConfigController extends BaseController {
     @SaCheckPermission("system:config:add")
     public R<Void> create(@Valid @RequestBody ConfigSaveReq req) {
         configService.createConfig(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -74,7 +73,7 @@ public class SysConfigController extends BaseController {
     @SaCheckPermission("system:config:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody ConfigSaveReq req) {
         configService.updateConfig(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -84,7 +83,7 @@ public class SysConfigController extends BaseController {
     public R<Void> updateGroup(@PathVariable String configGroup,
                                @Valid @RequestBody ConfigUpdateBatchReq req) {
         configService.updateGroup(configGroup, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -93,6 +92,6 @@ public class SysConfigController extends BaseController {
     @SaCheckPermission("system:config:delete")
     public R<Void> delete(@PathVariable Long id) {
         configService.deleteConfig(id);
-        return ok();
+        return R.ok();
     }
 }

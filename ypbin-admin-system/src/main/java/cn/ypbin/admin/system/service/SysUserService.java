@@ -11,11 +11,8 @@ package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.model.query.UserQuery;
-import cn.ypbin.admin.system.model.req.ChangePasswordReq;
-import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
-import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -53,12 +50,6 @@ public interface SysUserService extends BaseService<SysUser> {
     void resetPassword(Long id, String password);
 
     void assignRoles(Long id, List<Long> roleIds);
-
-    ProfileResp getProfile();
-
-    void updateProfile(ProfileUpdateReq req);
-
-    void changePassword(ChangePasswordReq req);
 
     void exportUsers(UserQuery query, HttpServletResponse response);
 

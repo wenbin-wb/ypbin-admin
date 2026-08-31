@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.model.req.MenuSaveReq;
 import cn.ypbin.admin.system.model.resp.MenuResp;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -41,26 +40,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/menu")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysMenuController extends BaseController {
+public class SysMenuController {
 
     private final SysMenuService menuService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:menu:list")
     public R<List<MenuResp>> list() {
-        return ok(menuService.tree());
+        return R.ok(menuService.tree());
     }
 
     @GetMapping("/name-exists")
     @SaCheckPermission("system:menu:list")
     public R<Boolean> nameExists(@RequestParam String name, @RequestParam(required = false) Long id) {
-        return ok(menuService.isNameExists(name, id));
+        return R.ok(menuService.isNameExists(name, id));
     }
 
     @GetMapping("/path-exists")
     @SaCheckPermission("system:menu:list")
     public R<Boolean> pathExists(@RequestParam String path, @RequestParam(required = false) Long id) {
-        return ok(menuService.isPathExists(path, id));
+        return R.ok(menuService.isPathExists(path, id));
     }
 
     @Idempotent
@@ -69,7 +68,7 @@ public class SysMenuController extends BaseController {
     @SaCheckPermission("system:menu:add")
     public R<Void> create(@Valid @RequestBody MenuSaveReq req) {
         menuService.createMenu(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -78,7 +77,7 @@ public class SysMenuController extends BaseController {
     @SaCheckPermission("system:menu:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody MenuSaveReq req) {
         menuService.updateMenu(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -87,6 +86,6 @@ public class SysMenuController extends BaseController {
     @SaCheckPermission("system:menu:delete")
     public R<Void> delete(@PathVariable Long id) {
         menuService.deleteMenu(id);
-        return ok();
+        return R.ok();
     }
 }

@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.starter.captcha.core.CaptchaService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/captcha")
 @RequiredArgsConstructor
-public class CaptchaController extends BaseController {
+public class CaptchaController {
 
     private final CaptchaService captchaService;
     private final SysConfigService configService;
@@ -44,10 +43,10 @@ public class CaptchaController extends BaseController {
     @GetMapping
     public R<?> generate() {
         if (!configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false)) {
-            return ok();
+            return R.ok();
         }
         ApiResponse<?> data = captchaService.generate();
-        return ok(data);
+        return R.ok(data);
     }
 
     /**
@@ -59,6 +58,6 @@ public class CaptchaController extends BaseController {
         if (!ok) {
             throw new BusinessException("验证码校验失败");
         }
-        return ok(ok);
+        return R.ok(ok);
     }
 }

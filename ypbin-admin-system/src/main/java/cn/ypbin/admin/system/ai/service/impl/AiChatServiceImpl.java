@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.ai.entity.AiChatMessage;
 import cn.ypbin.admin.system.ai.entity.AiChatRole;
 import cn.ypbin.admin.system.ai.entity.AiChatSession;
@@ -99,7 +100,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         List<AiChatSession> sessions = sessionMapper.selectList(
             new LambdaQueryWrapper<AiChatSession>()
                 .eq(AiChatSession::getUserId, userId)
-                .eq(AiChatSession::getStatus, 1)
+                .eq(AiChatSession::getStatus, EntityStatus.ENABLED.getCode())
                 .orderByDesc(AiChatSession::getIsPinned)
                 .orderByDesc(AiChatSession::getLastMessageAt));
         if (sessions.isEmpty()) {
@@ -132,7 +133,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         session.setTotalTokens(0);
         session.setMessageCount(0);
         session.setIsPinned(0);
-        session.setStatus(1);
+        session.setStatus(EntityStatus.ENABLED.getCode());
         sessionMapper.insert(session);
         return session.getId();
     }

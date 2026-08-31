@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.model.resp.LogTrendResp;
 import cn.ypbin.admin.system.service.DashboardService;
 import cn.ypbin.admin.system.service.SysLogService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.List;
@@ -39,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Validated
 @PlatformAccess
-public class DashboardController extends BaseController {
+public class DashboardController {
 
     private final DashboardService dashboardService;
     private final SysLogService logService;
@@ -50,7 +49,7 @@ public class DashboardController extends BaseController {
     @GetMapping("/stats")
     @SaCheckPermission("system:dashboard:view")
     public R<Map<String, Object>> stats() {
-        return ok(dashboardService.stats());
+        return R.ok(dashboardService.stats());
     }
 
     /**
@@ -62,7 +61,7 @@ public class DashboardController extends BaseController {
     @SaCheckPermission("system:dashboard:view")
     public R<List<LogResp>> latestLogs(
         @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit) {
-        return ok(logService.latestLogs(limit));
+        return R.ok(logService.latestLogs(limit));
     }
 
     /**
@@ -74,6 +73,6 @@ public class DashboardController extends BaseController {
     @SaCheckPermission("system:dashboard:view")
     public R<List<LogTrendResp>> logTrend(
         @RequestParam(defaultValue = "7") @Min(1) @Max(90) int days) {
-        return ok(logService.logTrend(days));
+        return R.ok(logService.logTrend(days));
     }
 }

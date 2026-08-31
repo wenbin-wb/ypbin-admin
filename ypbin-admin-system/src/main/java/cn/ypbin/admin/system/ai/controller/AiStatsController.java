@@ -12,7 +12,6 @@ package cn.ypbin.admin.system.ai.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.ai.service.AiStatsService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/ai/stats")
 @RequiredArgsConstructor
-public class AiStatsController extends BaseController {
+public class AiStatsController {
 
     private final AiStatsService statsService;
 
@@ -38,7 +37,7 @@ public class AiStatsController extends BaseController {
     @GetMapping("/summary")
     @SaCheckPermission("ai:usage:view")
     public R<Map<String, Object>> summary() {
-        return ok(statsService.summary());
+        return R.ok(statsService.summary());
     }
 
     /** 近 N 天问答/检索/Token 趋势（默认 30 天） */
@@ -46,7 +45,7 @@ public class AiStatsController extends BaseController {
     @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> daily(
             @RequestParam(required = false, defaultValue = "30") Integer days) {
-        return ok(statsService.daily(days));
+        return R.ok(statsService.daily(days));
     }
 
     /** 搜索热词 Top N（默认 10） */
@@ -54,13 +53,13 @@ public class AiStatsController extends BaseController {
     @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> hotQueries(
             @RequestParam(required = false, defaultValue = "10") Integer limit) {
-        return ok(statsService.hotQueries(limit));
+        return R.ok(statsService.hotQueries(limit));
     }
 
     /** 各知识库文档数分布 */
     @GetMapping("/kb-docs")
     @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> kbDocDistribution() {
-        return ok(statsService.kbDocDistribution());
+        return R.ok(statsService.kbDocDistribution());
     }
 }

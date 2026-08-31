@@ -12,7 +12,6 @@ package cn.ypbin.admin.system.ai.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.ai.service.AiUsageService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/ai/usage")
 @RequiredArgsConstructor
-public class AiUsageController extends BaseController {
+public class AiUsageController {
 
     private final AiUsageService usageService;
 
@@ -48,7 +47,7 @@ public class AiUsageController extends BaseController {
     public R<List<Map<String, Object>>> dailyUsage(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
-        return ok(usageService.dailyUsage(startDate, endDate));
+        return R.ok(usageService.dailyUsage(startDate, endDate));
     }
 
     /**
@@ -57,7 +56,7 @@ public class AiUsageController extends BaseController {
     @GetMapping("/by-model")
     @SaCheckPermission("ai:usage:view")
     public R<List<Map<String, Object>>> byModel() {
-        return ok(usageService.byModel());
+        return R.ok(usageService.byModel());
     }
 
     /**
@@ -66,6 +65,6 @@ public class AiUsageController extends BaseController {
     @GetMapping("/summary")
     @SaCheckPermission("ai:usage:view")
     public R<Map<String, Object>> summary() {
-        return ok(usageService.summary());
+        return R.ok(usageService.summary());
     }
 }

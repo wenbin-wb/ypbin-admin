@@ -14,7 +14,6 @@ import cn.ypbin.admin.system.model.req.DeptSaveReq;
 import cn.ypbin.admin.system.model.resp.DeptResp;
 import cn.ypbin.admin.system.service.SysDeptService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -38,14 +37,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/dept")
 @RequiredArgsConstructor
-public class SysDeptController extends BaseController {
+public class SysDeptController {
 
     private final SysDeptService deptService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:dept:list")
     public R<List<DeptResp>> list() {
-        return ok(deptService.tree());
+        return R.ok(deptService.tree());
     }
 
     @Idempotent
@@ -54,7 +53,7 @@ public class SysDeptController extends BaseController {
     @SaCheckPermission("system:dept:add")
     public R<Void> create(@Valid @RequestBody DeptSaveReq req) {
         deptService.createDept(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -63,7 +62,7 @@ public class SysDeptController extends BaseController {
     @SaCheckPermission("system:dept:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody DeptSaveReq req) {
         deptService.updateDept(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -72,6 +71,6 @@ public class SysDeptController extends BaseController {
     @SaCheckPermission("system:dept:delete")
     public R<Void> delete(@PathVariable Long id) {
         deptService.deleteDept(id);
-        return ok();
+        return R.ok();
     }
 }

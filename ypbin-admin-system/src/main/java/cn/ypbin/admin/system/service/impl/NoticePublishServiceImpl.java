@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.entity.SysNoticeDelivery;
@@ -176,7 +177,7 @@ public class NoticePublishServiceImpl implements NoticePublishService {
         message.setReadStatus(0);
         message.setCreateTime(LocalDateTime.now());
         message.setUpdateTime(message.getCreateTime());
-        message.setStatus(1);
+        message.setStatus(EntityStatus.ENABLED.getCode());
         message.setIsDeleted(0);
         try {
             messageMapper.insertNoticeMessage(message);

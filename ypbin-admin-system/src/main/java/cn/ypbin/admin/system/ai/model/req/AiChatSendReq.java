@@ -12,15 +12,16 @@ package cn.ypbin.admin.system.ai.model.req;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 发送对话消息请求。
  *
  * @author wenbin
  * @since 2026-08-16
  */
-@Data
+@Getter
+@Setter
 public class AiChatSendReq {
 
     /** 会话 ID（新会话传 null，后端自动创建） */

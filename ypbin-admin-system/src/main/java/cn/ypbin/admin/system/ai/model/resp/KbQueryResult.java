@@ -11,15 +11,16 @@ package cn.ypbin.admin.system.ai.model.resp;
 
 import java.util.List;
 import java.util.Map;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 知识库问答结果（含答案与溯源片段）。
  *
  * @author wenbin
  * @since 2026-08-17
  */
-@Data
+@Getter
+@Setter
 public class KbQueryResult {
 
     /** AI 生成的答案 */
@@ -31,7 +32,9 @@ public class KbQueryResult {
     /**
      * 单条溯源片段。
      */
-    @Data
+    @Getter
+
+    @Setter
     public static class SourceFragment {
 
         /** 来源文档名称 */

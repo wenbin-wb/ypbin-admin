@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.model.resp.ClientCredentialResp;
 import cn.ypbin.admin.system.model.resp.ClientResp;
 import cn.ypbin.admin.system.service.SysClientService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -41,14 +40,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/client")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysClientController extends BaseController {
+public class SysClientController {
 
     private final SysClientService clientService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:client:list")
     public R<List<ClientResp>> list() {
-        return ok(clientService.listClients());
+        return R.ok(clientService.listClients());
     }
 
     @Idempotent
@@ -56,7 +55,7 @@ public class SysClientController extends BaseController {
     @PostMapping
     @SaCheckPermission("system:client:add")
     public R<ClientCredentialResp> create(@Valid @RequestBody SysClientSaveReq req) {
-        return ok(clientService.createClient(req));
+        return R.ok(clientService.createClient(req));
     }
 
     @Idempotent
@@ -64,7 +63,7 @@ public class SysClientController extends BaseController {
     @PutMapping("/{id}/reset-secret")
     @SaCheckPermission("system:client:reset-secret")
     public R<ClientCredentialResp> resetSecret(@PathVariable Long id) {
-        return ok(clientService.resetSecret(id));
+        return R.ok(clientService.resetSecret(id));
     }
 
     @Idempotent
@@ -73,7 +72,7 @@ public class SysClientController extends BaseController {
     @SaCheckPermission("system:client:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody SysClientSaveReq req) {
         clientService.updateClient(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -82,6 +81,6 @@ public class SysClientController extends BaseController {
     @SaCheckPermission("system:client:delete")
     public R<Void> delete(@PathVariable Long id) {
         clientService.deleteClient(id);
-        return ok();
+        return R.ok();
     }
 }

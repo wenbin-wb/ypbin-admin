@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.ai.model.resp.AiModelConfigResp;
 import cn.ypbin.admin.system.ai.service.AiModelConfigService;
 import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
@@ -42,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/ai/models")
 @RequiredArgsConstructor
 @PlatformAccess
-public class AiModelConfigController extends BaseController {
+public class AiModelConfigController {
 
     private final AiModelConfigService modelConfigService;
 
@@ -50,7 +49,7 @@ public class AiModelConfigController extends BaseController {
     @SaCheckPermission("ai:model:list")
     public R<List<AiModelConfigResp>> listModels(
             @RequestParam(value = "modelType", required = false) String modelType) {
-        return ok(modelConfigService.listModels(modelType));
+        return R.ok(modelConfigService.listModels(modelType));
     }
 
     @Idempotent
@@ -59,7 +58,7 @@ public class AiModelConfigController extends BaseController {
     @Log(value = "新增模型配置", module = "AI 配置")
     public R<Void> createModel(@Valid @RequestBody AiModelConfigSaveReq req) {
         modelConfigService.createModel(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -70,7 +69,7 @@ public class AiModelConfigController extends BaseController {
             @PathVariable Long id,
             @Valid @RequestBody AiModelConfigSaveReq req) {
         modelConfigService.updateModel(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -79,7 +78,7 @@ public class AiModelConfigController extends BaseController {
     @Log(value = "删除模型配置", module = "AI 配置")
     public R<Void> deleteModel(@PathVariable Long id) {
         modelConfigService.deleteModel(id);
-        return ok();
+        return R.ok();
     }
 
     /** 设为默认模型 */
@@ -89,7 +88,7 @@ public class AiModelConfigController extends BaseController {
     @Log(value = "设置默认模型", module = "AI 配置")
     public R<Void> setDefault(@PathVariable Long id) {
         modelConfigService.setDefault(id);
-        return ok();
+        return R.ok();
     }
 
     /** 启用/停用模型 */
@@ -99,7 +98,7 @@ public class AiModelConfigController extends BaseController {
     @Log(value = "切换模型状态", module = "AI 配置")
     public R<Void> updateStatus(@PathVariable Long id, @PathVariable Integer status) {
         modelConfigService.updateStatus(id, status);
-        return ok();
+        return R.ok();
     }
 
     /** 复制模型配置 */
@@ -108,7 +107,7 @@ public class AiModelConfigController extends BaseController {
     @SaCheckPermission("ai:model:create")
     @Log(value = "复制模型配置", module = "AI 配置")
     public R<Long> duplicate(@PathVariable Long id) {
-        return ok(modelConfigService.duplicate(id));
+        return R.ok(modelConfigService.duplicate(id));
     }
 
     /** 测试连通性，返回响应耗时 ms */
@@ -116,6 +115,6 @@ public class AiModelConfigController extends BaseController {
     @SaCheckPermission("ai:model:list")
     public R<Map<String, Long>> testConnection(@PathVariable Long id) {
         long latencyMs = modelConfigService.testConnection(id);
-        return ok(Map.of("latencyMs", latencyMs));
+        return R.ok(Map.of("latencyMs", latencyMs));
     }
 }

@@ -16,7 +16,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
 
 /**
@@ -25,7 +26,8 @@ import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 public class NoticeSaveReq {
 
     @SensitiveWordFilter

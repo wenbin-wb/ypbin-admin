@@ -13,7 +13,6 @@ import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.service.SocialLoginService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.social.core.SocialService;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -35,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/auth/social")
 @RequiredArgsConstructor
-public class SocialAuthController extends BaseController {
+public class SocialAuthController {
 
     private final SocialService socialService;
     private final SocialLoginService socialLoginService;
@@ -45,7 +44,7 @@ public class SocialAuthController extends BaseController {
      */
     @GetMapping("/platforms")
     public R<Set<String>> platforms() {
-        return ok(socialService.sources());
+        return R.ok(socialService.sources());
     }
 
     /**
@@ -53,7 +52,7 @@ public class SocialAuthController extends BaseController {
      */
     @GetMapping("/authorize/{source}")
     public R<String> authorize(@PathVariable String source) {
-        return ok(socialService.authorizeUrl(source));
+        return R.ok(socialService.authorizeUrl(source));
     }
 
     /**
@@ -63,7 +62,7 @@ public class SocialAuthController extends BaseController {
     @Log(value = "第三方登录回调", module = "第三方登录")
     @PostMapping("/callback/{source}")
     public R<LoginResp> callback(@PathVariable String source, SocialCallbackReq req) {
-        return ok(socialLoginService.login(source, req));
+        return R.ok(socialLoginService.login(source, req));
     }
 
     /**
@@ -74,7 +73,7 @@ public class SocialAuthController extends BaseController {
     @PostMapping("/bind/{source}")
     public R<Void> bind(@PathVariable String source, SocialCallbackReq req) {
         socialLoginService.bind(source, req);
-        return ok();
+        return R.ok();
     }
 
     /**
@@ -85,7 +84,7 @@ public class SocialAuthController extends BaseController {
     @PostMapping("/unbind/{source}")
     public R<Void> unbind(@PathVariable String source) {
         socialLoginService.unbind(source);
-        return ok();
+        return R.ok();
     }
 
     /**
@@ -93,6 +92,6 @@ public class SocialAuthController extends BaseController {
      */
     @GetMapping("/bindings")
     public R<List<String>> bindings() {
-        return ok(socialLoginService.boundPlatforms());
+        return R.ok(socialLoginService.boundPlatforms());
     }
 }

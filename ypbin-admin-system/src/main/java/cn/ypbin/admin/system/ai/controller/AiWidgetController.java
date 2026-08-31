@@ -11,7 +11,6 @@ package cn.ypbin.admin.system.ai.controller;
 
 import cn.ypbin.admin.system.ai.service.AiWidgetService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.tools.limiter.RateLimit;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -39,14 +38,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/widget")
 @RequiredArgsConstructor
 @CrossOrigin(originPatterns = "*")
-public class AiWidgetController extends BaseController {
+public class AiWidgetController {
 
     private final AiWidgetService widgetService;
 
     /** 查询挂件配置（知识库名称等），供挂件脚本初始化 */
     @GetMapping("/{token}/config")
     public R<Map<String, Object>> config(@PathVariable String token) {
-        return ok(widgetService.getConfig(token));
+        return R.ok(widgetService.getConfig(token));
     }
 
     /** 匿名提问（基于该知识库 RAG 增强）；按客户端 IP 限流，防止滥用消耗模型资源 */
@@ -54,7 +53,7 @@ public class AiWidgetController extends BaseController {
     @RateLimit(key = "widget:ask", window = 60, count = 10, message = "请求过于频繁，请稍后再试")
     public R<String> ask(@PathVariable String token,
             @RequestBody Map<String, String> body) {
-        return ok(widgetService.ask(token, body.getOrDefault("question", "")));
+        return R.ok(widgetService.ask(token, body.getOrDefault("question", "")));
     }
 
     /**

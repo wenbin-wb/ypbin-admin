@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysJobLog;
+import cn.ypbin.admin.system.enums.JobStatusEnum;
 import cn.ypbin.admin.system.mapper.SysJobLogMapper;
 import cn.ypbin.admin.system.mapper.SysJobMapper;
 import cn.ypbin.admin.system.model.req.JobSaveReq;
@@ -54,7 +55,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
         SysJob job = new SysJob();
         BeanUtils.copyProperties(req, job);
         validateDefinition(job);
-        job.setStatus(0);
+        job.setStatus(JobStatusEnum.STOPPED.getCode());
         if (!save(job)) {
             throw new BusinessException("新增任务失败");
         }
@@ -103,7 +104,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
 
     @Override
     public synchronized void reconcileRuntime() {
-        List<SysJob> jobs = list(new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, 1));
+        List<SysJob> jobs = list(new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, JobStatusEnum.ENABLED.getCode()));
         jobs.forEach(this::validateDefinition);
         List<JobDefinition> definitions = jobs.stream().map(this::toDefinition).toList();
         reconcileRuntime(definitions);
@@ -145,7 +146,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
         boolean previouslyScheduled = isEnabled(job);
         JobDefinition definition = toDefinition(job);
         jobManager.replace(definition);
-        job.setStatus(1);
+        job.setStatus(JobStatusEnum.ENABLED.getCode());
         try {
             if (!updateById(job)) {
                 throw new BusinessException("启动任务失败");
@@ -163,7 +164,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
         boolean previouslyScheduled = isEnabled(job);
         JobDefinition definition = toDefinition(job);
         jobManager.unregister(id);
-        job.setStatus(0);
+        job.setStatus(JobStatusEnum.STOPPED.getCode());
         try {
             if (!updateById(job)) {
                 throw new BusinessException("停止任务失败");
@@ -222,7 +223,7 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     }
 
     private boolean isEnabled(SysJob job) {
-        return job.getStatus() != null && job.getStatus() == 1;
+        return JobStatusEnum.ENABLED.getCode().equals(job.getStatus());
     }
 
     private void restoreRuntime(boolean previouslyScheduled, JobDefinition definition,

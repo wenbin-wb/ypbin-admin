@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.auth;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 手机验证码登录请求。
  *
  * @author wenbin
  * @since 2026-08-02
  */
-@Data
+@Getter
+@Setter
 public class PhoneLoginReq {
 
     /** 手机号 */

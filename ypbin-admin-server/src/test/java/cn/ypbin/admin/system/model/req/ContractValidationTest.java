@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.model.req;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.validation.Validation;
@@ -28,7 +29,7 @@ class ContractValidationTest {
     @Test
     void statusAcceptsOnlyZeroOrOne() {
         StatusReq valid = new StatusReq();
-        valid.setStatus(1);
+        valid.setStatus(EntityStatus.ENABLED.getCode());
         StatusReq invalid = new StatusReq();
         invalid.setStatus(2);
 

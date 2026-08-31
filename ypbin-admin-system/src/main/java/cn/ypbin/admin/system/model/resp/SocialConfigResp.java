@@ -9,15 +9,16 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 第三方登录平台配置响应。
  *
  * @author wenbin
  * @since 2026-08-08
  */
-@Data
+@Getter
+@Setter
 public class SocialConfigResp {
 
     private String source;

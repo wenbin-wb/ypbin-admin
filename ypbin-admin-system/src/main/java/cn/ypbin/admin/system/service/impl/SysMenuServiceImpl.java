@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysMenu;
 import cn.ypbin.admin.system.entity.SysRoleMenu;
@@ -273,7 +274,7 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
 
     private LambdaQueryWrapper<SysMenu> enabledMenusOrdered() {
         return new LambdaQueryWrapper<SysMenu>()
-            .eq(SysMenu::getStatus, 1)
+            .eq(SysMenu::getStatus, EntityStatus.ENABLED.getCode())
             .orderByAsc(SysMenu::getSort)
             .orderByAsc(SysMenu::getId);
     }

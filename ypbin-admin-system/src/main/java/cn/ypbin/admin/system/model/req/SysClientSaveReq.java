@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 登录客户端新增/编辑请求。clientSecret 由服务端生成，不接收外部输入。
  *
  * @author wenbin
  * @since 2026-08-03
  */
-@Data
+@Getter
+@Setter
 public class SysClientSaveReq {
 
     /** 客户端 ID */

@@ -6,7 +6,7 @@
 
     <groupId>cn.ypbin.admin</groupId>
     <artifactId>ypbin-admin</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
     <description>基于 ypbin-starter 的企业级后台管理系统</description>
@@ -18,12 +18,14 @@
     </modules>
 
     <properties>
+        <revision>1.0.0-SNAPSHOT</revision>
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>4.1.0</spring-boot.version>
         <ypbin-starter.version>1.4.1</ypbin-starter.version>
         <sms4j.version>3.3.5</sms4j.version>
+        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
         <lombok.version>1.18.46</lombok.version>
     </properties>
 
@@ -94,6 +96,32 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <!-- 统一 ${revision} 版本号，install/deploy 时展开为真实版本 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${flatten-maven-plugin.version}</version>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>resolveCiFriendliesOnly</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten.clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

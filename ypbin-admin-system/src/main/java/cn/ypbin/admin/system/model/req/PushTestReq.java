@@ -13,15 +13,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 推送测试请求。
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 public class PushTestReq {
 
     @NotNull(message = "用户 ID 不能为空")

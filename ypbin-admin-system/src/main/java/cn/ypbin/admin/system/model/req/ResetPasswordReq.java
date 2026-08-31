@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 重置用户密码请求（管理员操作）。
  *
  * @author wenbin
  * @since 2026-08-03
  */
-@Data
+@Getter
+@Setter
 public class ResetPasswordReq {
 
     /** 新密码 */

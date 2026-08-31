@@ -12,15 +12,16 @@ package cn.ypbin.admin.system.model.vo;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 用户批量导入结果。
  *
  * @author wenbin
  * @since 2026-08-27
  */
-@Data
+@Getter
+@Setter
 public class UserImportResult implements Serializable {
 
     /** 总条数 */

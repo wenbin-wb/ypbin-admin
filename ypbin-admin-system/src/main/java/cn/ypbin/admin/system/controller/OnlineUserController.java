@@ -14,7 +14,6 @@ import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.security.online.OnlineUserService;
@@ -37,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/online-user")
 @RequiredArgsConstructor
 @PlatformAccess
-public class OnlineUserController extends BaseController {
+public class OnlineUserController {
 
     private final OnlineUserService onlineUserService;
     private final SysUserService userService;
@@ -45,7 +44,7 @@ public class OnlineUserController extends BaseController {
     @GetMapping("/list")
     @SaCheckPermission("system:online-user:list")
     public R<List<OnlineUserResp>> list(@RequestParam(required = false) String keyword) {
-        return ok(userService.listOnlineUsers(keyword));
+        return R.ok(userService.listOnlineUsers(keyword));
     }
 
     @Idempotent
@@ -54,6 +53,6 @@ public class OnlineUserController extends BaseController {
     @Log(value = "强制下线用户", module = "会话管理")
     public R<Void> kickout(@PathVariable String token) {
         onlineUserService.kickoutByToken(token);
-        return ok();
+        return R.ok();
     }
 }

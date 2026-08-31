@@ -12,8 +12,8 @@ package cn.ypbin.admin.system.model.resp;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 路由节点：顶层为路由字段（name/path/component/redirect/children），展示相关字段收进嵌套 {@link Meta}。
  *
@@ -22,7 +22,8 @@ import lombok.Data;
  * @author wenbin
  * @since 2026-08-01
  */
-@Data
+@Getter
+@Setter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RouteResp {
 
@@ -54,7 +55,9 @@ public class RouteResp {
     /**
      * 路由元信息。
      */
-    @Data
+    @Getter
+
+    @Setter
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Meta {
 

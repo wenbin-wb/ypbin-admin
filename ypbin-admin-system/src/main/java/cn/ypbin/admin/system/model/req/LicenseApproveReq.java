@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.model.req;
 
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 商业授权审批请求。
  *
  * @author wenbin
  * @since 2026-08-05
  */
-@Data
+@Getter
+@Setter
 public class LicenseApproveReq {
 
     /** 是否通过：true 通过并签发、false 驳回 */

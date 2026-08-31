@@ -21,7 +21,6 @@ import cn.ypbin.admin.system.model.resp.LicenseKeyPairResp;
 import cn.ypbin.admin.system.model.resp.LicenseResp;
 import cn.ypbin.admin.system.service.SysLicenseService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.security.core.LoginHelper;
@@ -55,20 +54,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/license")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysLicenseController extends BaseController {
+public class SysLicenseController {
 
     private final SysLicenseService licenseService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:license:list")
     public R<PageResult<LicenseResp>> list(@Valid LicenseQuery query) {
-        return ok(licenseService.pageLicense(query));
+        return R.ok(licenseService.pageLicense(query));
     }
 
     @GetMapping("/{id}")
     @SaCheckPermission("system:license:list")
     public R<LicenseResp> detail(@PathVariable Long id) {
-        return ok(licenseService.getLicense(id));
+        return R.ok(licenseService.getLicense(id));
     }
 
     @Idempotent
@@ -76,7 +75,7 @@ public class SysLicenseController extends BaseController {
     @PostMapping
     @SaCheckPermission("system:license:add")
     public R<Long> create(@Valid @RequestBody LicenseSaveReq req) {
-        return ok(licenseService.createDraft(req));
+        return R.ok(licenseService.createDraft(req));
     }
 
     @Idempotent
@@ -85,7 +84,7 @@ public class SysLicenseController extends BaseController {
     @SaCheckPermission("system:license:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody LicenseSaveReq req) {
         licenseService.updateDraft(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -94,7 +93,7 @@ public class SysLicenseController extends BaseController {
     @SaCheckPermission("system:license:submit")
     public R<Void> submit(@PathVariable Long id) {
         licenseService.submit(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -102,7 +101,7 @@ public class SysLicenseController extends BaseController {
     @PutMapping("/{id}/approve")
     @SaCheckPermission("system:license:approve")
     public R<LicenseIssueResp> approve(@PathVariable Long id, @Valid @RequestBody LicenseApproveReq req) {
-        return ok(licenseService.approve(id, req, LoginHelper.getUserId()));
+        return R.ok(licenseService.approve(id, req, LoginHelper.getUserId()));
     }
 
     @Idempotent
@@ -111,7 +110,7 @@ public class SysLicenseController extends BaseController {
     @SaCheckPermission("system:license:revoke")
     public R<Void> revoke(@PathVariable Long id) {
         licenseService.revoke(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -120,7 +119,7 @@ public class SysLicenseController extends BaseController {
     @SaCheckPermission("system:license:delete")
     public R<Void> delete(@PathVariable Long id) {
         licenseService.deleteLicense(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -128,7 +127,7 @@ public class SysLicenseController extends BaseController {
     @PostMapping("/generate-key")
     @SaCheckPermission("system:license:genkey")
     public R<LicenseKeyPairResp> generateKey() {
-        return ok(licenseService.generateKeyPair());
+        return R.ok(licenseService.generateKeyPair());
     }
 
     /**
@@ -162,6 +161,6 @@ public class SysLicenseController extends BaseController {
     @GetMapping("/{id}/delivery")
     @SaCheckPermission("system:license:delivery")
     public R<LicenseDeliveryResp> delivery(@PathVariable Long id) {
-        return ok(licenseService.getDelivery(id));
+        return R.ok(licenseService.getDelivery(id));
     }
 }

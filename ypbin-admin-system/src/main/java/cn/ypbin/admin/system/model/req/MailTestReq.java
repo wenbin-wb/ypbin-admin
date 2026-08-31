@@ -11,15 +11,16 @@ package cn.ypbin.admin.system.model.req;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 邮件测试请求。
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 public class MailTestReq {
 
     @NotBlank(message = "收件邮箱不能为空")

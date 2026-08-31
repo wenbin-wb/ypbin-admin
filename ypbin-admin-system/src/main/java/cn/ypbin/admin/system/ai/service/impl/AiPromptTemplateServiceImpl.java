@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.ai.entity.AiPromptTemplate;
 import cn.ypbin.admin.system.ai.mapper.AiPromptTemplateMapper;
 import cn.ypbin.admin.system.ai.model.req.AiPromptTemplateSaveReq;
@@ -40,7 +41,7 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
         return templateMapper.selectList(
             new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(AiPromptTemplate::getTenantId, tenantId)
-                .eq(AiPromptTemplate::getStatus, 1)
+                .eq(AiPromptTemplate::getStatus, EntityStatus.ENABLED.getCode())
                 .orderByDesc(AiPromptTemplate::getCreateTime));
     }
 

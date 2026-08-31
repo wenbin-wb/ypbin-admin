@@ -9,15 +9,16 @@
  */
 package cn.ypbin.admin.system.ai.model.req;
 
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 创建对话会话请求。
  *
  * @author wenbin
  * @since 2026-08-16
  */
-@Data
+@Getter
+@Setter
 public class AiChatSessionCreateReq {
 
     /** 会话标题（可选，默认"新对话"） */

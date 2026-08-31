@@ -11,15 +11,16 @@ package cn.ypbin.admin.system.model.req;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 开放应用新增/编辑请求。accessKey/secretKey 由服务端生成，不接收外部输入。
  *
  * @author wenbin
  * @since 2026-08-02
  */
-@Data
+@Getter
+@Setter
 public class SysAppSaveReq {
 
     /** 应用名称 */

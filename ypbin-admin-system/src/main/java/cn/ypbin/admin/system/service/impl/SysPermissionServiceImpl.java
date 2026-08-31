@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysMenu;
 import cn.ypbin.admin.system.entity.SysRole;
@@ -77,7 +78,7 @@ public class SysPermissionServiceImpl implements SysPermissionService {
         return TenantContext.executeIgnore(() -> userMapper.selectCount(new LambdaQueryWrapper<SysUser>()
             .eq(SysUser::getId, userId)
             .eq(SysUser::getUserType, "PLATFORM")
-            .eq(SysUser::getStatus, 1)
+            .eq(SysUser::getStatus, EntityStatus.ENABLED.getCode())
             .eq(SysUser::getIsDeleted, 0)) > 0);
     }
 

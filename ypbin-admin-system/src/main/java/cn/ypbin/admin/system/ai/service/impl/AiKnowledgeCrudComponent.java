@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.admin.system.enums.AiDocumentStatusEnum;
 import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiDocumentChunk;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
@@ -120,7 +121,7 @@ public class AiKnowledgeCrudComponent {
         doc.setFilename(filename);
         doc.setFileSize(file.getSize());
         doc.setChunkCount(0);
-        doc.setStatus(0);
+        doc.setStatus(AiDocumentStatusEnum.PROCESSING.getCode());
         doc.setSourceType("UPLOAD");
         doc.setCreateTime(LocalDateTime.now());
         documentMapper.insert(doc);
@@ -214,7 +215,7 @@ public class AiKnowledgeCrudComponent {
             byte[] bytes = Files.readAllBytes(path);
             AiDocument update = new AiDocument();
             update.setId(docId);
-            update.setStatus(0);
+            update.setStatus(AiDocumentStatusEnum.PROCESSING.getCode());
             update.setErrorMsg(null);
             update.setUpdateTime(LocalDateTime.now());
             documentMapper.updateById(update);
@@ -266,7 +267,7 @@ public class AiKnowledgeCrudComponent {
         doc.setFilename(filename);
         doc.setFileSize((long) bytes.length);
         doc.setChunkCount(0);
-        doc.setStatus(0);
+        doc.setStatus(AiDocumentStatusEnum.PROCESSING.getCode());
         doc.setSourceType(sourceType);
         doc.setSourceUrl(sourceUrl);
         doc.setCreateTime(LocalDateTime.now());

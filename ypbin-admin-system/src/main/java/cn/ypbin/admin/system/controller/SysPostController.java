@@ -14,7 +14,6 @@ import cn.ypbin.admin.system.model.req.PostSaveReq;
 import cn.ypbin.admin.system.model.resp.PostResp;
 import cn.ypbin.admin.system.service.SysPostService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -38,14 +37,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/post")
 @RequiredArgsConstructor
-public class SysPostController extends BaseController {
+public class SysPostController {
 
     private final SysPostService postService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:post:list")
     public R<List<PostResp>> list() {
-        return ok(postService.listPosts());
+        return R.ok(postService.listPosts());
     }
 
     @Idempotent
@@ -54,7 +53,7 @@ public class SysPostController extends BaseController {
     @SaCheckPermission("system:post:add")
     public R<Void> create(@Valid @RequestBody PostSaveReq req) {
         postService.createPost(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -63,7 +62,7 @@ public class SysPostController extends BaseController {
     @SaCheckPermission("system:post:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody PostSaveReq req) {
         postService.updatePost(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -72,6 +71,6 @@ public class SysPostController extends BaseController {
     @SaCheckPermission("system:post:delete")
     public R<Void> delete(@PathVariable Long id) {
         postService.deletePost(id);
-        return ok();
+        return R.ok();
     }
 }

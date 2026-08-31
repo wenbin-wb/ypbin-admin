@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.admin.system.enums.AiDocumentStatusEnum;
 import cn.ypbin.admin.system.ai.entity.AiDocument;
 import cn.ypbin.admin.system.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.system.ai.mapper.AiDocumentMapper;
@@ -117,7 +118,7 @@ public class AiShareServiceImpl implements AiShareService {
                 new Page<>(query.getPage(), query.getPageSize()),
                 new LambdaQueryWrapper<AiDocument>()
                     .eq(AiDocument::getKnowledgeBaseId, kb.getId())
-                    .eq(AiDocument::getStatus, 1)
+                    .eq(AiDocument::getStatus, AiDocumentStatusEnum.READY.getCode())
                     .orderByDesc(AiDocument::getCreateTime));
             List<AiDocumentVO> vos = page.getRecords().stream()
                 .map(AiDocumentVO::from).toList();

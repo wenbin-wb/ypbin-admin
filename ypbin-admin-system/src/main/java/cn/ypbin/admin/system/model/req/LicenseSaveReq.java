@@ -13,8 +13,8 @@ import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 商业授权草稿新增/编辑请求。
  *
@@ -23,7 +23,8 @@ import lombok.Data;
  * @author wenbin
  * @since 2026-08-05
  */
-@Data
+@Getter
+@Setter
 public class LicenseSaveReq {
 
     /** 被授权方名称 */

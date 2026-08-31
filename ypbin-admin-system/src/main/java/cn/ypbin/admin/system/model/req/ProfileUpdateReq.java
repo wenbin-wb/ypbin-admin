@@ -9,15 +9,16 @@
  */
 package cn.ypbin.admin.system.model.req;
 
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 个人信息修改请求。仅允许修改本人的展示类信息。
  *
  * @author wenbin
  * @since 2026-08-01
  */
-@Data
+@Getter
+@Setter
 public class ProfileUpdateReq {
 
     /** 真实姓名 */

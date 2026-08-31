@@ -10,7 +10,6 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.sign.annotation.ApiSign;
 import java.util.Map;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,11 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/open-api")
-public class OpenApiDemoController extends BaseController {
+public class OpenApiDemoController {
 
     @ApiSign
     @PostMapping("/demo")
     public R<Map<String, Object>> demo(@RequestBody Map<String, Object> params) {
-        return ok(Map.of("echo", params, "message", "开放 API 签名校验通过"));
+        return R.ok(Map.of("echo", params, "message", "开放 API 签名校验通过"));
     }
 }

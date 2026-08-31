@@ -9,15 +9,16 @@
  */
 package cn.ypbin.admin.system.model.req;
 
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 第三方登录回调请求。
  *
  * @author wenbin
  * @since 2026-08-08
  */
-@Data
+@Getter
+@Setter
 public class SocialCallbackReq {
 
     private String code;

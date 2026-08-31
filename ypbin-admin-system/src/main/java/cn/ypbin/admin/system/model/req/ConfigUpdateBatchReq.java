@@ -12,15 +12,16 @@ package cn.ypbin.admin.system.model.req;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 系统参数批量更新请求。按 key-value 批量保存同一分组的配置项。
  *
  * @author wenbin
  * @since 2026-08-01
  */
-@Data
+@Getter
+@Setter
 public class ConfigUpdateBatchReq {
 
     /** 参数键值对（configKey -> configValue） */

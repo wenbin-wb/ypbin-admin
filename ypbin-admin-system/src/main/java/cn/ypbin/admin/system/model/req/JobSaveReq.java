@@ -14,15 +14,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 定时任务新增/编辑请求。
  *
  * @author wenbin
  * @since 2026-08-07
  */
-@Data
+@Getter
+@Setter
 public class JobSaveReq {
 
     /** 任务名称 */

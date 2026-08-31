@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.auth.LoginSupport;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.model.req.LoginReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -70,7 +71,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("用户名或密码错误");
         }
         // 3. 校验账号状态
-        if (user.getStatus() != null && user.getStatus() == 0) {
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
         // 4. 登录成功：清除错误计数

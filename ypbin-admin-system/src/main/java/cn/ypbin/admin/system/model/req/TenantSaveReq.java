@@ -14,15 +14,16 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 租户新增/编辑请求。
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 public class TenantSaveReq {
 
     @NotBlank(message = "租户名称不能为空")

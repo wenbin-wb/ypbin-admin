@@ -13,36 +13,31 @@ import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysPost;
 import cn.ypbin.admin.system.entity.SysRole;
 import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserPasswordHistory;
 import cn.ypbin.admin.system.entity.SysUserPost;
 import cn.ypbin.admin.system.entity.SysUserRole;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserMapper;
-import cn.ypbin.admin.system.mapper.SysUserPasswordHistoryMapper;
 import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.model.query.UserQuery;
-import cn.ypbin.admin.system.model.req.ChangePasswordReq;
-import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
-import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
-import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.datapermission.annotation.DataPermission;
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUser;
 import cn.ypbin.starter.security.online.OnlineUserService;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
-import cn.ypbin.starter.security.password.policy.PasswordCheckResult;
-import cn.ypbin.starter.security.password.policy.PasswordValidator;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -75,11 +70,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     private final SysUserPostMapper userPostMapper;
     private final SysRoleMapper roleMapper;
     private final SysPostMapper postMapper;
-    private final SysUserPasswordHistoryMapper passwordHistoryMapper;
-    private final SysConfigService configService;
-    private final PasswordValidator passwordValidator;
     private final OnlineUserService onlineUserService;
     private final UserExcelComponent userExcelComponent;
+    private final UserAccountSupport accountSupport;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -90,7 +83,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     @Override
     public SysUser getByPhone(String phone) {
-        String normalizedPhone = normalizePhone(phone);
+        String normalizedPhone = accountSupport.normalizePhone(phone);
         if (normalizedPhone == null) {
             throw new BusinessException("手机号不能为空");
         }
@@ -135,12 +128,12 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Transactional(rollbackFor = Exception.class)
     public void createUser(UserSaveReq req) {
         checkUsernameUnique(req.getUsername(), null);
-        String phone = normalizePhone(req.getPhone());
-        checkPhoneUnique(phone, null);
+        String phone = accountSupport.normalizePhone(req.getPhone());
+        accountSupport.checkPhoneUnique(phone, null);
         if (!StringUtils.hasText(req.getPassword())) {
             throw new BusinessException("新增用户必须设置密码");
         }
-        validatePassword(req.getPassword(), req.getUsername());
+        accountSupport.validatePassword(req.getPassword(), req.getUsername());
         SysUser user = new SysUser();
         BeanUtils.copyProperties(req, user, "roleIds", "postIds", "password", "phone");
         user.setPhone(phone);
@@ -152,7 +145,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         user.setPwdResetTime(LocalDateTime.now());
         validateAssignments(user, req.getRoleIds(), req.getPostIds());
         save(user);
-        recordPasswordHistory(user.getId(), encoded);
+        accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
     }
@@ -163,8 +156,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     public void updateUser(Long id, UserSaveReq req) {
         SysUser existing = getManageableUser(id);
         checkUsernameUnique(req.getUsername(), id);
-        String phone = normalizePhone(req.getPhone());
-        checkPhoneUnique(phone, id);
+        String phone = accountSupport.normalizePhone(req.getPhone());
+        accountSupport.checkPhoneUnique(phone, id);
         validateAssignments(existing, req.getRoleIds(), req.getPostIds());
         SysUser user = new SysUser();
         BeanUtils.copyProperties(req, user, "roleIds", "postIds", "password", "phone");
@@ -172,7 +165,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         // 密码留空表示不修改
         String encoded = null;
         if (StringUtils.hasText(req.getPassword())) {
-            validatePassword(req.getPassword(), req.getUsername());
+            accountSupport.validatePassword(req.getPassword(), req.getUsername());
             encoded = PasswordEncoderUtil.encode(req.getPassword());
             user.setPassword(encoded);
             user.setPwdResetTime(LocalDateTime.now());
@@ -184,7 +177,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             throw new BusinessException("用户更新失败");
         }
         if (encoded != null) {
-            recordPasswordHistory(id, encoded);
+            accountSupport.recordPasswordHistory(id, encoded);
         }
         // 仅当显式传入 roleIds 时才重分配角色（null=不改动角色，空列表=清空角色）
         if (req.getRoleIds() != null) {
@@ -202,7 +195,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Transactional(rollbackFor = Exception.class)
     public void updateStatus(Long id, Integer status) {
         SysUser user = getManageableUser(id);
-        if (id.equals(LoginHelper.getUserId()) && Integer.valueOf(0).equals(status)) {
+        if (id.equals(LoginHelper.getUserId()) && UserStatusEnum.DISABLED.getCode().equals(status)) {
             throw new BusinessException("不允许禁用当前用户");
         }
         boolean updated = update(new LambdaUpdateWrapper<SysUser>()
@@ -237,15 +230,15 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (!StringUtils.hasText(password)) {
             throw new BusinessException("新密码不能为空");
         }
-        validatePassword(password, user.getUsername());
-        checkPasswordHistory(id, password);
+        accountSupport.validatePassword(password, user.getUsername());
+        accountSupport.checkPasswordHistory(id, password);
         String encoded = PasswordEncoderUtil.encode(password);
         SysUser update = new SysUser();
         update.setId(id);
         update.setPassword(encoded);
         update.setPwdResetTime(LocalDateTime.now());
         updateById(update);
-        recordPasswordHistory(id, encoded);
+        accountSupport.recordPasswordHistory(id, encoded);
     }
 
     @Override
@@ -258,83 +251,12 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         assignRolesInternal(id, roleIds);
     }
 
-    @Override
-    public ProfileResp getProfile() {
-        Long userId = LoginHelper.getUserId();
-        SysUser user = getById(userId);
-        if (user == null) {
-            throw new BusinessException("用户不存在");
-        }
-        // 本人查看本人：手机/邮箱不脱敏，供编辑表单原样回填
-        ProfileResp resp = new ProfileResp();
-        BeanUtils.copyProperties(user, resp);
-        resp.setRoleIds(userRoleMapper.selectRoleIdsByUserId(userId));
-        resp.setPostIds(userPostMapper.selectPostIdsByUserId(userId));
-        return resp;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void updateProfile(ProfileUpdateReq req) {
-        Long userId = LoginHelper.getUserId();
-        String phone = normalizePhone(req.getPhone());
-        checkPhoneUnique(phone, userId);
-        SysUser user = new SysUser();
-        BeanUtils.copyProperties(req, user, "phone");
-        user.setId(userId);
-        boolean updated = update(user, new LambdaUpdateWrapper<SysUser>()
-            .eq(SysUser::getId, userId)
-            .set(SysUser::getPhone, phone));
-        if (!updated) {
-            throw new BusinessException("个人资料更新失败");
-        }
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void changePassword(ChangePasswordReq req) {
-        Long userId = LoginHelper.getUserId();
-        SysUser user = getById(userId);
-        if (user == null) {
-            throw new BusinessException("用户不存在");
-        }
-        if (!PasswordEncoderUtil.matches(req.getOldPassword(), user.getPassword())) {
-            throw new BusinessException("原密码错误");
-        }
-        validatePassword(req.getNewPassword(), user.getUsername());
-        checkPasswordHistory(userId, req.getNewPassword());
-
-        String encoded = PasswordEncoderUtil.encode(req.getNewPassword());
-        SysUser update = new SysUser();
-        update.setId(userId);
-        update.setPassword(encoded);
-        update.setPwdResetTime(LocalDateTime.now());
-        updateById(update);
-        recordPasswordHistory(userId, encoded);
-    }
-
     private void checkUsernameUnique(String username, Long excludeId) {
         boolean exists = exists(new LambdaQueryWrapper<SysUser>()
             .eq(SysUser::getUsername, username)
             .ne(excludeId != null, SysUser::getId, excludeId));
         if (exists) {
             throw new BusinessException("用户名已存在：" + username);
-        }
-    }
-
-    private String normalizePhone(String phone) {
-        return StringUtils.hasText(phone) ? phone.trim() : null;
-    }
-
-    private void checkPhoneUnique(String phone, Long excludeId) {
-        if (phone == null) {
-            return;
-        }
-        boolean exists = TenantContext.executeIgnore(() -> exists(new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getPhone, phone)
-            .ne(excludeId != null, SysUser::getId, excludeId)));
-        if (exists) {
-            throw new BusinessException("手机号已存在：" + phone);
         }
     }
 
@@ -350,7 +272,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         Set<Long> requestedIds = new HashSet<>(roleIds);
         List<SysRole> roles = roleMapper.selectList(new LambdaQueryWrapper<SysRole>()
             .in(SysRole::getId, requestedIds)
-            .eq(SysRole::getStatus, 1));
+            .eq(SysRole::getStatus, EntityStatus.ENABLED.getCode()));
         Set<Long> existingIds = roles.stream().map(SysRole::getId).collect(Collectors.toSet());
         boolean invalid = !existingIds.equals(requestedIds) || roles.stream().anyMatch(role ->
             !user.getTenantId().equals(role.getTenantId())
@@ -367,7 +289,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         Set<Long> requestedIds = new HashSet<>(postIds);
         List<SysPost> posts = postMapper.selectList(new LambdaQueryWrapper<SysPost>()
             .in(SysPost::getId, requestedIds)
-            .eq(SysPost::getStatus, 1));
+            .eq(SysPost::getStatus, EntityStatus.ENABLED.getCode()));
         Set<Long> existingIds = posts.stream().map(SysPost::getId).collect(Collectors.toSet());
         boolean invalid = !existingIds.equals(requestedIds)
             || posts.stream().anyMatch(post -> !user.getTenantId().equals(post.getTenantId()));
@@ -402,46 +324,6 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         for (Long postId : new HashSet<>(postIds)) {
             userPostMapper.insert(new SysUserPost(userId, postId));
         }
-    }
-
-    /**
-     * 按密码策略校验密码复杂度，不通过抛业务异常。
-     */
-    private void validatePassword(String rawPassword, String username) {
-        PasswordCheckResult result = passwordValidator.check(rawPassword, username);
-        if (!result.passed()) {
-            throw new BusinessException(result.message());
-        }
-    }
-
-    /**
-     * 校验新密码是否与最近 N 次历史密码重复（N 由 PASSWORD_HISTORY_COUNT 控制，0 不校验）。
-     */
-    private void checkPasswordHistory(Long userId, String rawPassword) {
-        int historyCount = configService.getInt("PASSWORD_HISTORY_COUNT", 0);
-        if (historyCount <= 0) {
-            return;
-        }
-        List<SysUserPasswordHistory> histories = passwordHistoryMapper.selectList(
-            new LambdaQueryWrapper<SysUserPasswordHistory>()
-                .eq(SysUserPasswordHistory::getUserId, userId)
-                .orderByDesc(SysUserPasswordHistory::getCreateTime)
-                .last("LIMIT " + historyCount));
-        boolean reused = histories.stream()
-            .anyMatch(h -> PasswordEncoderUtil.matches(rawPassword, h.getPassword()));
-        if (reused) {
-            throw new BusinessException("新密码不能与最近 " + historyCount + " 次使用过的密码相同");
-        }
-    }
-
-    /**
-     * 记录一条历史密码。
-     */
-    private void recordPasswordHistory(Long userId, String encodedPassword) {
-        SysUserPasswordHistory history = new SysUserPasswordHistory();
-        history.setUserId(userId);
-        history.setPassword(encodedPassword);
-        passwordHistoryMapper.insert(history);
     }
 
     private UserResp toResp(SysUser user) {

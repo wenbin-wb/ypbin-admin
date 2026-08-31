@@ -11,7 +11,8 @@ package cn.ypbin.admin.system.ai.model.resp;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import tools.jackson.databind.annotation.JsonSerialize;
 import tools.jackson.databind.ser.std.ToStringSerializer;
 
@@ -21,7 +22,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
  * @author wenbin
  * @since 2026-08-16
  */
-@Data
+@Getter
+@Setter
 public class AiChatMessageResp {
 
     @JsonSerialize(using = ToStringSerializer.class)

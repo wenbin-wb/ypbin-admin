@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.core;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.ai.entity.AiModelConfig;
 import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.starter.ai.chat.AiEmbeddingConfigResolver;
@@ -43,7 +44,7 @@ public class AiEmbeddingConfigResolverImpl implements AiEmbeddingConfigResolver 
                 // 向量化模型只取 EMBEDDING 类型
                 .eq(AiModelConfig::getModelType, "EMBEDDING")
                 .eq(AiModelConfig::getIsDefault, 1)
-                .eq(AiModelConfig::getStatus, 1)
+                .eq(AiModelConfig::getStatus, EntityStatus.ENABLED.getCode())
                 .last("LIMIT 1"));
         if (config == null || config.getBaseUrl() == null || config.getBaseUrl().isBlank()) {
             return null;

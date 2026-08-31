@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.core;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.ai.entity.AiModelConfig;
 import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.starter.ai.chat.AiModelConfigResolver;
@@ -48,7 +49,7 @@ public class AiModelConfigResolverImpl implements AiModelConfigResolver {
                 // 对话默认模型只取 CHAT 类型，避免 embedding 模型被误用为对话模型
                 .eq(AiModelConfig::getModelType, "CHAT")
                 .eq(AiModelConfig::getIsDefault, 1)
-                .eq(AiModelConfig::getStatus, 1)
+                .eq(AiModelConfig::getStatus, EntityStatus.ENABLED.getCode())
                 .last("LIMIT 1"));
         if (config == null || config.getBaseUrl() == null || config.getBaseUrl().isBlank()) {
             return null;

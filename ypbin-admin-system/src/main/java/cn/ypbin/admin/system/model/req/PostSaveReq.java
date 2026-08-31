@@ -13,15 +13,16 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 岗位新增/编辑请求。
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 public class PostSaveReq {
 
     @NotBlank(message = "岗位名称不能为空")

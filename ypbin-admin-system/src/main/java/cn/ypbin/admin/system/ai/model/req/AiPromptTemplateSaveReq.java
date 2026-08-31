@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.ai.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 新增/编辑 Prompt 模板请求。
  *
  * @author wenbin
  * @since 2026-08-15
  */
-@Data
+@Getter
+@Setter
 public class AiPromptTemplateSaveReq {
 
     @NotBlank(message = "模板名称不能为空")

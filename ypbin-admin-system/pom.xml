@@ -7,7 +7,7 @@
     <parent>
         <groupId>cn.ypbin.admin</groupId>
         <artifactId>ypbin-admin</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>ypbin-admin-system</artifactId>

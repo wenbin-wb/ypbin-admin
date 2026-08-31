@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.model.req.DictItemSaveReq;
 import cn.ypbin.admin.system.model.resp.DictItemResp;
 import cn.ypbin.admin.system.service.SysDictItemService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.json.dict.DictItem;
 import cn.ypbin.starter.json.dict.DictUtils;
 import cn.ypbin.starter.log.annotation.Log;
@@ -43,14 +42,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/dict-item")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysDictItemController extends BaseController {
+public class SysDictItemController {
 
     private final SysDictItemService dictItemService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:dict:list")
     public R<List<DictItemResp>> list(@RequestParam Long dictId) {
-        return ok(dictItemService.listByDictId(dictId));
+        return R.ok(dictItemService.listByDictId(dictId));
     }
 
     /**
@@ -58,7 +57,7 @@ public class SysDictItemController extends BaseController {
      */
     @GetMapping("/options/{dictCode}")
     public R<List<DictItem>> options(@PathVariable String dictCode) {
-        return ok(DictUtils.getItems(dictCode));
+        return R.ok(DictUtils.getItems(dictCode));
     }
 
     @Idempotent
@@ -67,7 +66,7 @@ public class SysDictItemController extends BaseController {
     @SaCheckPermission("system:dict:add")
     public R<Void> create(@Valid @RequestBody DictItemSaveReq req) {
         dictItemService.createItem(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -76,7 +75,7 @@ public class SysDictItemController extends BaseController {
     @SaCheckPermission("system:dict:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody DictItemSaveReq req) {
         dictItemService.updateItem(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -85,6 +84,6 @@ public class SysDictItemController extends BaseController {
     @SaCheckPermission("system:dict:delete")
     public R<Void> delete(@PathVariable Long id) {
         dictItemService.deleteItem(id);
-        return ok();
+        return R.ok();
     }
 }

@@ -13,7 +13,6 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.model.req.PushTestReq;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.messaging.push.PushService;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -33,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @PlatformAccess
-public class PushController extends BaseController {
+public class PushController {
 
     private final PushService pushService;
 
@@ -46,6 +45,6 @@ public class PushController extends BaseController {
     @SaCheckPermission("system:push:test")
     public R<Void> pushTest(@Valid @RequestBody PushTestReq req) {
         pushService.sendToUser(req.getUserId().toString(), "test-message", Map.of("message", req.getMessage()));
-        return ok();
+        return R.ok();
     }
 }

@@ -15,9 +15,9 @@ import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.system.service.AuthService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.limiter.RateLimit;
+import cn.ypbin.starter.web.util.WebRequestUtils;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
-public class AuthController extends BaseController {
+public class AuthController {
 
     private final AuthService authService;
 
@@ -45,7 +45,7 @@ public class AuthController extends BaseController {
     @RateLimit(count = 10, window = 60, message = "登录过于频繁，请稍后再试")
     @PostMapping("/auth/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
-        return ok(authService.login(req, ip()));
+        return R.ok(authService.login(req, WebRequestUtils.ip()));
     }
 
     /**
@@ -55,7 +55,7 @@ public class AuthController extends BaseController {
     @PostMapping("/auth/logout")
     public R<Void> logout() {
         authService.logout();
-        return ok();
+        return R.ok();
     }
 
     /**
@@ -63,7 +63,7 @@ public class AuthController extends BaseController {
      */
     @GetMapping("/user/info")
     public R<UserInfoResp> userInfo() {
-        return ok(authService.currentUserInfo());
+        return R.ok(authService.currentUserInfo());
     }
 
     /**
@@ -71,7 +71,7 @@ public class AuthController extends BaseController {
      */
     @GetMapping("/auth/codes")
     public R<List<String>> codes() {
-        return ok(authService.currentPermissions());
+        return R.ok(authService.currentPermissions());
     }
 
     /**
@@ -79,6 +79,6 @@ public class AuthController extends BaseController {
      */
     @GetMapping("/menu/all")
     public R<List<RouteResp>> menuAll() {
-        return ok(authService.currentRoutes());
+        return R.ok(authService.currentRoutes());
     }
 }

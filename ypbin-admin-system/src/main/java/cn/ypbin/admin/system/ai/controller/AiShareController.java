@@ -13,7 +13,6 @@ import cn.ypbin.admin.system.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.system.ai.service.AiShareService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.tools.limiter.RateLimit;
@@ -42,14 +41,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/share")
 @RequiredArgsConstructor
 @CrossOrigin(originPatterns = "*")
-public class AiShareController extends BaseController {
+public class AiShareController {
 
     private final AiShareService shareService;
 
     /** 查询分享配置（知识库名称、是否需要密码、是否过期等），供分享阅读页初始化 */
     @GetMapping("/{token}/config")
     public R<Map<String, Object>> config(@PathVariable String token) {
-        return ok(shareService.getConfig(token));
+        return R.ok(shareService.getConfig(token));
     }
 
     /** 分页查询分享知识库的就绪文档列表 */
@@ -58,7 +57,7 @@ public class AiShareController extends BaseController {
             @PathVariable String token,
             @RequestHeader(value = "X-Share-Password", required = false) String password,
             PageQuery query) {
-        return ok(shareService.listDocuments(token, query, password));
+        return R.ok(shareService.listDocuments(token, query, password));
     }
 
     /** 读取分享文档原文内容 */
@@ -67,7 +66,7 @@ public class AiShareController extends BaseController {
             @PathVariable String token,
             @PathVariable Long docId,
             @RequestHeader(value = "X-Share-Password", required = false) String password) {
-        return ok(shareService.getDocumentContent(token, docId, password));
+        return R.ok(shareService.getDocumentContent(token, docId, password));
     }
 
     /** 对分享知识库提问（非流式，RAG 增强）；按客户端 IP 限流，防止滥用消耗模型资源 */
@@ -77,6 +76,6 @@ public class AiShareController extends BaseController {
             @PathVariable String token,
             @RequestHeader(value = "X-Share-Password", required = false) String password,
             @RequestBody Map<String, String> body) {
-        return ok(shareService.ask(token, body.getOrDefault("question", ""), password));
+        return R.ok(shareService.ask(token, body.getOrDefault("question", ""), password));
     }
 }

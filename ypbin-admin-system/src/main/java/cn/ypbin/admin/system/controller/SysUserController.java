@@ -19,7 +19,6 @@ import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -46,14 +45,14 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/system/user")
 @RequiredArgsConstructor
-public class SysUserController extends BaseController {
+public class SysUserController {
 
     private final SysUserService userService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:user:list")
     public R<PageResult<UserResp>> list(@Valid UserQuery query) {
-        return ok(userService.pageUsers(query));
+        return R.ok(userService.pageUsers(query));
     }
 
     @GetMapping("/export")
@@ -73,13 +72,13 @@ public class SysUserController extends BaseController {
     @PostMapping("/import")
     @SaCheckPermission("system:user:add")
     public R<UserImportResult> importUsers(@RequestParam("file") MultipartFile file) {
-        return ok(userService.importUsers(file));
+        return R.ok(userService.importUsers(file));
     }
 
     @GetMapping("/{id}")
     @SaCheckPermission("system:user:list")
     public R<UserResp> get(@PathVariable Long id) {
-        return ok(userService.getUserDetail(id));
+        return R.ok(userService.getUserDetail(id));
     }
 
     @Idempotent
@@ -88,7 +87,7 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:add")
     public R<Void> create(@Valid @RequestBody UserSaveReq req) {
         userService.createUser(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -97,7 +96,7 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody UserSaveReq req) {
         userService.updateUser(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -106,7 +105,7 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:edit")
     public R<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody StatusReq req) {
         userService.updateStatus(id, req.getStatus());
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -115,7 +114,7 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:delete")
     public R<Void> delete(@PathVariable Long id) {
         userService.deleteUser(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -124,7 +123,7 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:edit")
     public R<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordReq req) {
         userService.resetPassword(id, req.getPassword());
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -133,6 +132,6 @@ public class SysUserController extends BaseController {
     @SaCheckPermission("system:user:edit")
     public R<Void> assignRoles(@PathVariable Long id, @Valid @RequestBody AssignRolesReq req) {
         userService.assignRoles(id, req.getRoleIds());
-        return ok();
+        return R.ok();
     }
 }

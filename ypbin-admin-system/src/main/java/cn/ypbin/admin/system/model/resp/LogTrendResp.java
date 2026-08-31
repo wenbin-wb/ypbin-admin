@@ -9,15 +9,16 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 操作日志按天趋势响应。
  *
  * @author wenbin
  * @since 2026-08-05
  */
-@Data
+@Getter
+@Setter
 public class LogTrendResp {
 
     /**

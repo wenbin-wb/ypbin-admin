@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.model.req.TenantSaveReq;
 import cn.ypbin.admin.system.model.resp.TenantResp;
 import cn.ypbin.admin.system.service.SysTenantService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tenant.annotation.TenantIgnore;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -42,14 +41,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @TenantIgnore
 @PlatformAccess
-public class SysTenantController extends BaseController {
+public class SysTenantController {
 
     private final SysTenantService tenantService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:tenant:list")
     public R<List<TenantResp>> list() {
-        return ok(tenantService.listTenants());
+        return R.ok(tenantService.listTenants());
     }
 
     @Idempotent
@@ -58,7 +57,7 @@ public class SysTenantController extends BaseController {
     @SaCheckPermission("system:tenant:add")
     public R<Void> create(@Valid @RequestBody TenantSaveReq req) {
         tenantService.createTenant(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -67,7 +66,7 @@ public class SysTenantController extends BaseController {
     @SaCheckPermission("system:tenant:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody TenantSaveReq req) {
         tenantService.updateTenant(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -76,6 +75,6 @@ public class SysTenantController extends BaseController {
     @SaCheckPermission("system:tenant:delete")
     public R<Void> delete(@PathVariable Long id) {
         tenantService.deleteTenant(id);
-        return ok();
+        return R.ok();
     }
 }

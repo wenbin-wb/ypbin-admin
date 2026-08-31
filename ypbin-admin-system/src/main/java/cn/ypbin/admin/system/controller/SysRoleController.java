@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.model.req.StatusReq;
 import cn.ypbin.admin.system.model.resp.RoleResp;
 import cn.ypbin.admin.system.service.SysRoleService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -41,20 +40,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/system/role")
 @RequiredArgsConstructor
-public class SysRoleController extends BaseController {
+public class SysRoleController {
 
     private final SysRoleService roleService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:role:list")
     public R<PageResult<RoleResp>> list(@Valid RoleQuery query) {
-        return ok(roleService.pageRoles(query));
+        return R.ok(roleService.pageRoles(query));
     }
 
     @GetMapping("/all")
     @SaCheckPermission("system:role:list")
     public R<List<RoleResp>> all() {
-        return ok(roleService.listAll());
+        return R.ok(roleService.listAll());
     }
 
     @Idempotent
@@ -63,7 +62,7 @@ public class SysRoleController extends BaseController {
     @SaCheckPermission("system:role:add")
     public R<Void> create(@Valid @RequestBody RoleSaveReq req) {
         roleService.createRole(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -72,7 +71,7 @@ public class SysRoleController extends BaseController {
     @SaCheckPermission("system:role:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody RoleSaveReq req) {
         roleService.updateRole(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -81,7 +80,7 @@ public class SysRoleController extends BaseController {
     @SaCheckPermission("system:role:edit")
     public R<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody StatusReq req) {
         roleService.updateStatus(id, req.getStatus());
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -90,6 +89,6 @@ public class SysRoleController extends BaseController {
     @SaCheckPermission("system:role:delete")
     public R<Void> delete(@PathVariable Long id) {
         roleService.deleteRole(id);
-        return ok();
+        return R.ok();
     }
 }

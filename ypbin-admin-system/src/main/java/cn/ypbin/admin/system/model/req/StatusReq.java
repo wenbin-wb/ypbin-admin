@@ -12,15 +12,16 @@ package cn.ypbin.admin.system.model.req;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 状态更新请求。
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 public class StatusReq {
 
     /** 状态：1 正常、0 禁用 */

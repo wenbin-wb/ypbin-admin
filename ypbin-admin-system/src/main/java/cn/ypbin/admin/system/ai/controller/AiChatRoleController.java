@@ -14,7 +14,6 @@ import cn.ypbin.admin.system.ai.model.req.AiChatRoleSaveReq;
 import cn.ypbin.admin.system.ai.model.resp.AiChatRoleResp;
 import cn.ypbin.admin.system.ai.service.AiChatRoleService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import jakarta.validation.Valid;
@@ -38,14 +37,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/ai/roles")
 @RequiredArgsConstructor
-public class AiChatRoleController extends BaseController {
+public class AiChatRoleController {
 
     private final AiChatRoleService roleService;
 
     @GetMapping
     @SaCheckPermission("ai:role:list")
     public R<List<AiChatRoleResp>> listRoles() {
-        return ok(roleService.listRoles());
+        return R.ok(roleService.listRoles());
     }
 
     @Idempotent
@@ -53,7 +52,7 @@ public class AiChatRoleController extends BaseController {
     @SaCheckPermission("ai:role:create")
     @Log(value = "创建自定义角色", module = "AI 角色")
     public R<Long> createRole(@Valid @RequestBody AiChatRoleSaveReq req) {
-        return ok(roleService.createRole(req));
+        return R.ok(roleService.createRole(req));
     }
 
     @Idempotent
@@ -62,7 +61,7 @@ public class AiChatRoleController extends BaseController {
     @Log(value = "修改角色", module = "AI 角色")
     public R<Void> updateRole(@PathVariable Long id, @Valid @RequestBody AiChatRoleSaveReq req) {
         roleService.updateRole(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -71,7 +70,7 @@ public class AiChatRoleController extends BaseController {
     @Log(value = "删除角色", module = "AI 角色")
     public R<Void> deleteRole(@PathVariable Long id) {
         roleService.deleteRole(id);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -80,6 +79,6 @@ public class AiChatRoleController extends BaseController {
     @Log(value = "收藏/取消收藏角色", module = "AI 角色")
     public R<Void> toggleFavorite(@PathVariable Long id) {
         roleService.toggleFavorite(id);
-        return ok();
+        return R.ok();
     }
 }

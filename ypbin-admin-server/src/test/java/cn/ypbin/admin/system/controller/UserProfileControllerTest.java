@@ -16,7 +16,7 @@ import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.annotation.PlatformAccess;
 import cn.ypbin.admin.system.service.SysFileService;
-import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.UserProfileService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.storage.model.FileInfo;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class UserProfileControllerTest {
     @Test
     void uploadAvatarUsesAvatarModuleAndSkipsPlatformGuard() {
         SysFileService fileService = mock(SysFileService.class);
-        UserProfileController controller = new UserProfileController(mock(SysUserService.class), fileService);
+        UserProfileController controller = new UserProfileController(mock(UserProfileService.class), fileService);
         MultipartFile file = new MockMultipartFile("file", "a.png", "image/png", new byte[] {1});
         FileInfo info = new FileInfo();
         when(fileService.uploadFile(file, "avatar")).thenReturn(info);

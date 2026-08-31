@@ -24,7 +24,6 @@ import cn.ypbin.admin.system.ai.service.AiKnowledgeBizService;
 import cn.ypbin.admin.system.ai.service.AiShareService;
 import cn.ypbin.admin.system.ai.service.AiWidgetService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -53,7 +52,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/ai/knowledge-bases")
 @RequiredArgsConstructor
-public class AiKnowledgeBaseController extends BaseController {
+public class AiKnowledgeBaseController {
 
     private final AiKnowledgeBizService knowledgeBizService;
     private final AiWidgetService widgetService;
@@ -65,7 +64,7 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:create")
     public R<AiKnowledgeBase> createKnowledgeBase(
             @Valid @RequestBody AiKnowledgeBaseSaveReq req) {
-        return ok(knowledgeBizService.createKnowledgeBase(req));
+        return R.ok(knowledgeBizService.createKnowledgeBase(req));
     }
 
     @Log(value = "更新知识库", module = "AI知识库")
@@ -76,13 +75,13 @@ public class AiKnowledgeBaseController extends BaseController {
             @PathVariable Long id,
             @Valid @RequestBody AiKnowledgeBaseUpdateReq req) {
         knowledgeBizService.updateKnowledgeBase(id, req);
-        return ok();
+        return R.ok();
     }
 
     @GetMapping
     @SaCheckPermission("ai:knowledge:list")
     public R<List<AiKnowledgeBase>> listKnowledgeBases() {
-        return ok(knowledgeBizService.listKnowledgeBases());
+        return R.ok(knowledgeBizService.listKnowledgeBases());
     }
 
     @Log(value = "删除知识库", module = "AI知识库")
@@ -91,7 +90,7 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:delete")
     public R<Void> deleteKnowledgeBase(@PathVariable Long id) {
         knowledgeBizService.deleteKnowledgeBase(id);
-        return ok();
+        return R.ok();
     }
 
     /** 上传文档（PDF / Markdown / TXT），异步向量化，返回 VO（不含本地路径） */
@@ -102,7 +101,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<AiDocumentVO> uploadDocument(
             @PathVariable Long id,
             @RequestParam MultipartFile file) {
-        return ok(knowledgeBizService.uploadDocument(id, file));
+        return R.ok(knowledgeBizService.uploadDocument(id, file));
     }
 
     @GetMapping("/{id}/documents")
@@ -110,7 +109,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<PageResult<AiDocumentVO>> pageDocuments(
             @PathVariable Long id, PageQuery query,
             @RequestParam(required = false) String keyword) {
-        return ok(knowledgeBizService.pageDocuments(id, query, keyword));
+        return R.ok(knowledgeBizService.pageDocuments(id, query, keyword));
     }
 
     @Log(value = "删除文档", module = "AI知识库")
@@ -120,7 +119,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<Void> deleteDocument(
             @PathVariable Long id, @PathVariable Long docId) {
         knowledgeBizService.deleteDocument(id, docId);
-        return ok();
+        return R.ok();
     }
 
     /** 批量上传文档（最多 20 个），逐一异步向量化，返回成功创建的文档 VO 列表 */
@@ -131,7 +130,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<List<AiDocumentVO>> batchUploadDocuments(
             @PathVariable Long id,
             @RequestParam MultipartFile[] files) {
-        return ok(knowledgeBizService.batchUploadDocuments(id, files));
+        return R.ok(knowledgeBizService.batchUploadDocuments(id, files));
     }
 
     /**
@@ -144,7 +143,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<List<AiDocumentVO>> importFromUrl(
             @PathVariable Long id,
             @Valid @RequestBody AiDocumentImportReq req) {
-        return ok(knowledgeBizService.importFromUrl(id, req));
+        return R.ok(knowledgeBizService.importFromUrl(id, req));
     }
 
     /** 重试向量化：对失败文档重新解析与入库 */
@@ -155,7 +154,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<Void> retryVectorize(
             @PathVariable Long id, @PathVariable Long docId) {
         knowledgeBizService.retryVectorize(id, docId);
-        return ok();
+        return R.ok();
     }
 
     /** 知识库问答（非流式） */
@@ -164,7 +163,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<String> query(
             @PathVariable Long id,
             @Valid @RequestBody KbQueryReq req) {
-        return ok(knowledgeBizService.query(id, req.getQuestion()));
+        return R.ok(knowledgeBizService.query(id, req.getQuestion()));
     }
 
     /** 检索测试：返回召回片段，供调优检索策略 */
@@ -173,7 +172,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<List<Map<String, Object>>> searchTest(
             @PathVariable Long id,
             @Valid @RequestBody KbSearchTestReq req) {
-        return ok(knowledgeBizService.searchTest(id, req.getQuestion(), req.getTopK()));
+        return R.ok(knowledgeBizService.searchTest(id, req.getQuestion(), req.getTopK()));
     }
 
     /** 关键词重叠重排测试 */
@@ -182,7 +181,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<List<Map<String, Object>>> searchRerankTest(
             @PathVariable Long id,
             @Valid @RequestBody KbSearchTestReq req) {
-        return ok(knowledgeBizService.searchRerankTest(id, req.getQuestion(), req.getTopK()));
+        return R.ok(knowledgeBizService.searchRerankTest(id, req.getQuestion(), req.getTopK()));
     }
 
     /** 多知识库联合检索测试（跨库 RRF 合并） */
@@ -190,7 +189,7 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchMultipleTest(
             @Valid @RequestBody KbMultiSearchTestReq req) {
-        return ok(knowledgeBizService.searchMultipleTest(req.getKnowledgeBaseIds(), req.getQuestion(), req.getTopKPerKb()));
+        return R.ok(knowledgeBizService.searchMultipleTest(req.getKnowledgeBaseIds(), req.getQuestion(), req.getTopKPerKb()));
     }
 
     /** 带溯源的问答（答案 + 召回片段列表） */
@@ -199,7 +198,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<KbQueryResult> queryWithSources(
             @PathVariable Long id,
             @Valid @RequestBody KbQueryReq req) {
-        return ok(knowledgeBizService.queryWithSources(id, req.getQuestion()));
+        return R.ok(knowledgeBizService.queryWithSources(id, req.getQuestion()));
     }
 
     /**
@@ -212,7 +211,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<String> setWidgetEnabled(
             @PathVariable Long id,
             @RequestParam boolean enabled) {
-        return ok(widgetService.setWidgetEnabled(id, enabled));
+        return R.ok(widgetService.setWidgetEnabled(id, enabled));
     }
 
     /**
@@ -225,7 +224,7 @@ public class AiKnowledgeBaseController extends BaseController {
     public R<String> setShareSetting(
             @PathVariable Long id,
             @Valid @RequestBody AiShareSettingReq req) {
-        return ok(shareService.setShareSetting(id, req));
+        return R.ok(shareService.setShareSetting(id, req));
     }
 
     /** 读取文档原文内容（Wiki 阅读页渲染用） */
@@ -233,7 +232,7 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:list")
     public R<String> getDocumentContent(
             @PathVariable Long id, @PathVariable Long docId) {
-        return ok(knowledgeBizService.getDocumentContent(id, docId));
+        return R.ok(knowledgeBizService.getDocumentContent(id, docId));
     }
 
     /** 文档全量分块列表（分块可视化） */
@@ -241,6 +240,6 @@ public class AiKnowledgeBaseController extends BaseController {
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> listDocumentChunks(
             @PathVariable Long id, @PathVariable Long docId) {
-        return ok(knowledgeBizService.listDocumentChunks(id, docId));
+        return R.ok(knowledgeBizService.listDocumentChunks(id, docId));
     }
 }

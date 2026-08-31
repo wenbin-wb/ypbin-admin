@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.model.resp.AppCredentialResp;
 import cn.ypbin.admin.system.model.resp.AppResp;
 import cn.ypbin.admin.system.service.SysAppService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -41,14 +40,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/app")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysAppController extends BaseController {
+public class SysAppController {
 
     private final SysAppService appService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:app:list")
     public R<List<AppResp>> list() {
-        return ok(appService.listApps());
+        return R.ok(appService.listApps());
     }
 
     @Idempotent
@@ -56,7 +55,7 @@ public class SysAppController extends BaseController {
     @PostMapping
     @SaCheckPermission("system:app:add")
     public R<AppCredentialResp> create(@Valid @RequestBody SysAppSaveReq req) {
-        return ok(appService.createApp(req));
+        return R.ok(appService.createApp(req));
     }
 
     @Idempotent
@@ -64,7 +63,7 @@ public class SysAppController extends BaseController {
     @PutMapping("/{id}/reset-secret")
     @SaCheckPermission("system:app:reset-secret")
     public R<AppCredentialResp> resetSecret(@PathVariable Long id) {
-        return ok(appService.resetSecret(id));
+        return R.ok(appService.resetSecret(id));
     }
 
     @Idempotent
@@ -73,7 +72,7 @@ public class SysAppController extends BaseController {
     @SaCheckPermission("system:app:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody SysAppSaveReq req) {
         appService.updateApp(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -82,6 +81,6 @@ public class SysAppController extends BaseController {
     @SaCheckPermission("system:app:delete")
     public R<Void> delete(@PathVariable Long id) {
         appService.deleteApp(id);
-        return ok();
+        return R.ok();
     }
 }

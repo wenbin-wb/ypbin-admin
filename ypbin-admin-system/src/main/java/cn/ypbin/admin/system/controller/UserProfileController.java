@@ -13,9 +13,8 @@ import cn.ypbin.admin.system.model.req.ChangePasswordReq;
 import cn.ypbin.admin.system.model.req.ProfileUpdateReq;
 import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.service.SysFileService;
-import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.UserProfileService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.storage.model.FileInfo;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -39,37 +38,37 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/user/profile")
 @RequiredArgsConstructor
-public class UserProfileController extends BaseController {
+public class UserProfileController {
 
-    private final SysUserService userService;
+    private final UserProfileService profileService;
 
     private final SysFileService fileService;
 
     @GetMapping
     public R<ProfileResp> profile() {
-        return ok(userService.getProfile());
+        return R.ok(profileService.getProfile());
     }
 
     @Idempotent
     @Log(value = "上传个人头像", module = "个人中心")
     @PostMapping("/avatar")
     public R<FileInfo> uploadAvatar(@RequestParam("file") MultipartFile file) {
-        return ok(fileService.uploadFile(file, "avatar"));
+        return R.ok(fileService.uploadFile(file, "avatar"));
     }
 
     @Idempotent
     @Log(value = "修改个人信息", module = "个人中心")
     @PutMapping
     public R<Void> update(@Valid @RequestBody ProfileUpdateReq req) {
-        userService.updateProfile(req);
-        return ok();
+        profileService.updateProfile(req);
+        return R.ok();
     }
 
     @Idempotent
     @Log(value = "修改密码", module = "个人中心")
     @PutMapping("/password")
     public R<Void> changePassword(@Valid @RequestBody ChangePasswordReq req) {
-        userService.changePassword(req);
-        return ok();
+        profileService.changePassword(req);
+        return R.ok();
     }
 }

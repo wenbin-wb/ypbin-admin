@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.auth;
 
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.service.SmsCodeService;
 import cn.ypbin.admin.system.service.SysConfigService;
@@ -61,7 +62,7 @@ public class PhoneLoginStrategy implements LoginStrategy {
             attemptLimiter.recordFailure(phone, clientIp);
             throw new BusinessException("手机号未注册");
         }
-        if (user.getStatus() != null && user.getStatus() == 0) {
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
         attemptLimiter.reset(phone, clientIp);

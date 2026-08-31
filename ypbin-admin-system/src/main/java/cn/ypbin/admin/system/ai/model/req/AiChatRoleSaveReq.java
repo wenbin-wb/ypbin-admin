@@ -11,15 +11,16 @@ package cn.ypbin.admin.system.ai.model.req;
 
 import jakarta.validation.constraints.NotBlank;
 import java.math.BigDecimal;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 角色新增/修改请求。
  *
  * @author wenbin
  * @since 2026-08-16
  */
-@Data
+@Getter
+@Setter
 public class AiChatRoleSaveReq {
 
     @NotBlank(message = "角色名称不能为空")

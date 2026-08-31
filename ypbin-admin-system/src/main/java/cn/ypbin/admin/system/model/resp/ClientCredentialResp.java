@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.model.resp;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 登录客户端一次性凭据响应。
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 public class ClientCredentialResp {
 

@@ -12,15 +12,16 @@ package cn.ypbin.admin.system.model.resp;
 import java.time.ZonedDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * Cron 表达式预览响应。
  *
  * @author wenbin
  * @since 2026-08-07
  */
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 public class CronPreviewResp {
 

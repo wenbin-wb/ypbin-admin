@@ -11,7 +11,8 @@ package cn.ypbin.admin.system.model.req;
 
 import cn.ypbin.starter.log.annotation.LogMask;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
 
 /**
@@ -20,7 +21,8 @@ import lombok.ToString;
  * @author wenbin
  * @since 2026-08-08
  */
-@Data
+@Getter
+@Setter
 public class SocialConfigUpdateReq {
 
     @NotNull(message = "启用状态不能为空")

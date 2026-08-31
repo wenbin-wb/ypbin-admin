@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.model.req.AuthTemplateSaveReq;
 import cn.ypbin.admin.system.model.resp.AuthTemplateResp;
 import cn.ypbin.admin.system.service.SysAuthTemplateService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -40,14 +39,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/auth-template")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysAuthTemplateController extends BaseController {
+public class SysAuthTemplateController {
 
     private final SysAuthTemplateService templateService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:auth-template:list")
     public R<List<AuthTemplateResp>> list() {
-        return ok(templateService.listTemplates());
+        return R.ok(templateService.listTemplates());
     }
 
     @Idempotent
@@ -56,7 +55,7 @@ public class SysAuthTemplateController extends BaseController {
     @SaCheckPermission("system:auth-template:add")
     public R<Void> create(@Valid @RequestBody AuthTemplateSaveReq req) {
         templateService.createTemplate(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -65,7 +64,7 @@ public class SysAuthTemplateController extends BaseController {
     @SaCheckPermission("system:auth-template:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody AuthTemplateSaveReq req) {
         templateService.updateTemplate(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -74,6 +73,6 @@ public class SysAuthTemplateController extends BaseController {
     @SaCheckPermission("system:auth-template:delete")
     public R<Void> delete(@PathVariable Long id) {
         templateService.deleteTemplate(id);
-        return ok();
+        return R.ok();
     }
 }

@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.ai.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 知识库问答请求。
  *
  * @author wenbin
  * @since 2026-08-17
  */
-@Data
+@Getter
+@Setter
 public class KbQueryReq {
 
     @NotBlank(message = "问题不能为空")

@@ -9,8 +9,8 @@
  */
 package cn.ypbin.admin.system.model.resp;
 
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 联机校验响应。
  *
@@ -20,7 +20,8 @@ import lombok.Data;
  * @author wenbin
  * @since 2026-08-06
  */
-@Data
+@Getter
+@Setter
 public class LicenseRemoteResp {
 
     /** 授权当前是否有效可用 */

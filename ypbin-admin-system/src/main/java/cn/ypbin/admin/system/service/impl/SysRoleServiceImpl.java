@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysMenu;
@@ -117,7 +118,7 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
     public List<RoleResp> listAll() {
         return list(new LambdaQueryWrapper<SysRole>()
             .eq(SysRole::getRoleType, AdminConstants.ROLE_TYPE_TENANT)
-            .eq(SysRole::getStatus, 1)
+            .eq(SysRole::getStatus, EntityStatus.ENABLED.getCode())
             .orderByAsc(SysRole::getSort))
             .stream().map(this::toResp).toList();
     }
@@ -218,7 +219,7 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         Set<Long> requestedIds = new HashSet<>(menuIds);
         List<SysMenu> menus = menuMapper.selectList(new LambdaQueryWrapper<SysMenu>()
             .in(SysMenu::getId, requestedIds)
-            .eq(SysMenu::getStatus, 1));
+            .eq(SysMenu::getStatus, EntityStatus.ENABLED.getCode()));
         Set<Long> existingIds = menus.stream().map(SysMenu::getId).collect(Collectors.toSet());
         if (!existingIds.equals(requestedIds)) {
             throw new BusinessException("角色授权包含不存在或已禁用的菜单");
@@ -243,7 +244,7 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         Set<Long> requestedIds = new HashSet<>(deptIds);
         List<SysDept> departments = deptMapper.selectList(new LambdaQueryWrapper<SysDept>()
             .in(SysDept::getId, requestedIds)
-            .eq(SysDept::getStatus, 1));
+            .eq(SysDept::getStatus, EntityStatus.ENABLED.getCode()));
         Set<Long> existingIds = departments.stream().map(SysDept::getId).collect(Collectors.toSet());
         Long tenantId = currentTenantId();
         boolean invalid = !existingIds.equals(requestedIds)

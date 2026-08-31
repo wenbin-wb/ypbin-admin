@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.model.req.DictSaveReq;
 import cn.ypbin.admin.system.model.resp.DictResp;
 import cn.ypbin.admin.system.service.SysDictService;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.crud.controller.BaseController;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -41,14 +40,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/system/dict")
 @RequiredArgsConstructor
 @PlatformAccess
-public class SysDictController extends BaseController {
+public class SysDictController {
 
     private final SysDictService dictService;
 
     @GetMapping("/list")
     @SaCheckPermission("system:dict:list")
     public R<PageResult<DictResp>> list(@Valid DictQuery query) {
-        return ok(dictService.pageDicts(query));
+        return R.ok(dictService.pageDicts(query));
     }
 
     @Idempotent
@@ -57,7 +56,7 @@ public class SysDictController extends BaseController {
     @SaCheckPermission("system:dict:add")
     public R<Void> create(@Valid @RequestBody DictSaveReq req) {
         dictService.createDict(req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -66,7 +65,7 @@ public class SysDictController extends BaseController {
     @SaCheckPermission("system:dict:edit")
     public R<Void> update(@PathVariable Long id, @Valid @RequestBody DictSaveReq req) {
         dictService.updateDict(id, req);
-        return ok();
+        return R.ok();
     }
 
     @Idempotent
@@ -75,6 +74,6 @@ public class SysDictController extends BaseController {
     @SaCheckPermission("system:dict:delete")
     public R<Void> delete(@PathVariable Long id) {
         dictService.deleteDict(id);
-        return ok();
+        return R.ok();
     }
 }

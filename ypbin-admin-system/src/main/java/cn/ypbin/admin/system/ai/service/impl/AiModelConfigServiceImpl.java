@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.system.ai.core.AiKeyCipher;
 import cn.ypbin.admin.system.ai.entity.AiModelConfig;
 import cn.ypbin.admin.system.ai.mapper.AiModelConfigMapper;
@@ -60,7 +61,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         Long tenantId = currentTenantId();
         LambdaQueryWrapper<AiModelConfig> wrapper = new LambdaQueryWrapper<AiModelConfig>()
             .eq(AiModelConfig::getTenantId, tenantId)
-            .eq(AiModelConfig::getStatus, 1);
+            .eq(AiModelConfig::getStatus, EntityStatus.ENABLED.getCode());
         if (modelType != null && !modelType.isBlank()) {
             wrapper.eq(AiModelConfig::getModelType, modelType);
         }
@@ -153,7 +154,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             "createTime", "updateTime", "createUser", "updateUser");
         copy.setName(source.getName() + "（副本）");
         copy.setIsDefault(0);
-        copy.setStatus(1);
+        copy.setStatus(EntityStatus.ENABLED.getCode());
         // API Key 密文可直接复用（同一把密钥加密，解密语义不变）
         modelConfigMapper.insert(copy);
         return copy.getId();
@@ -244,7 +245,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
                 .eq(AiModelConfig::getTenantId, tenantId)
                 .eq(AiModelConfig::getModelType, type)
                 .eq(AiModelConfig::getIsDefault, 1)
-                .eq(AiModelConfig::getStatus, 1)
+                .eq(AiModelConfig::getStatus, EntityStatus.ENABLED.getCode())
                 .last("LIMIT 1"));
     }
 

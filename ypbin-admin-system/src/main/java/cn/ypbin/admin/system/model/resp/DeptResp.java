@@ -13,7 +13,8 @@ import cn.ypbin.starter.json.ref.RefText;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDateTime;
 import java.util.List;
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import tools.jackson.databind.annotation.JsonSerialize;
 import tools.jackson.databind.ser.std.ToStringSerializer;
 
@@ -23,7 +24,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
  * @author wenbin
  * @since 2026-08-01
  */
-@Data
+@Getter
+@Setter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DeptResp {
 

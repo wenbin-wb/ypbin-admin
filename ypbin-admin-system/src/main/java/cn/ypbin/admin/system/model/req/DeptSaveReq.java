@@ -10,15 +10,16 @@
 package cn.ypbin.admin.system.model.req;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.Data;
-
+import lombok.Getter;
+import lombok.Setter;
 /**
  * 部门新增/编辑请求。
  *
  * @author wenbin
  * @since 2026-08-01
  */
-@Data
+@Getter
+@Setter
 public class DeptSaveReq {
 
     /** 父部门 ID，顶级为 0 */

@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.ai.service.impl;
 
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.admin.system.ai.entity.AiChatRole;
 import cn.ypbin.admin.system.ai.entity.AiChatRoleFavorite;
@@ -50,7 +51,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         List<AiChatRole> roles = TenantContext.executeIgnore(() ->
             roleMapper.selectList(
                 new LambdaQueryWrapper<AiChatRole>()
-                    .eq(AiChatRole::getStatus, 1)
+                    .eq(AiChatRole::getStatus, EntityStatus.ENABLED.getCode())
                     .and(w -> w.eq(AiChatRole::getTenantId, 0)
                         .or().eq(AiChatRole::getTenantId, tenantId))
                     .orderByAsc(AiChatRole::getSort)));
@@ -79,7 +80,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         BeanUtils.copyProperties(req, role);
         role.setIsBuiltin(0);
         role.setSort(100);
-        role.setStatus(1);
+        role.setStatus(EntityStatus.ENABLED.getCode());
         roleMapper.insert(role);
         return role.getId();
     }
