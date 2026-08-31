@@ -25,6 +25,17 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-cloud-nacos</artifactId>
         </dependency>
+        <!-- sa-token 核心（无状态 token 校验，网关用） -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-core</artifactId>
+            <version>1.46.0</version>
+        </dependency>
+        <!-- LoginUser/UserContext（身份头内容来源） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-security</artifactId>
+        </dependency>
         <!-- 限流熔断 -->
         <dependency>
             <groupId>cn.ypbin</groupId>
