@@ -40,6 +40,31 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-common-api</artifactId>
         </dependency>
+        <!-- 定时任务框架 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-job</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-tenant</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-web</artifactId>
+        </dependency>
         <!-- Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
