@@ -200,13 +200,11 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
         if (roleMenus.isEmpty()) {
             return;
         }
-        for (SysRoleMenu roleMenu : roleMenus) {
-            List<SysUserRole> userRoles = userRoleMapper.selectList(
-                new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getRoleId, roleMenu.getRoleId()));
-            for (SysUserRole userRole : userRoles) {
-                SysCache.evictUserAuth(userRole.getUserId());
-            }
-        }
+        // 批量 IN 查询（禁循环内查库）：菜单→角色→用户 两级各一次查询，distinct 去重防重复清理
+        List<Long> roleIds = roleMenus.stream().map(SysRoleMenu::getRoleId).distinct().toList();
+        List<SysUserRole> userRoles = userRoleMapper.selectList(
+            new LambdaQueryWrapper<SysUserRole>().in(SysUserRole::getRoleId, roleIds));
+        userRoles.stream().map(SysUserRole::getUserId).distinct().forEach(SysCache::evictUserAuth);
     }
 
     private void validateMenu(MenuSaveReq req, Long excludeId) {

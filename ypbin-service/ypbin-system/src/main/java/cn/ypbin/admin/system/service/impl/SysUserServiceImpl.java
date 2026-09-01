@@ -187,6 +187,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (req.getRoleIds() != null) {
             userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
             assignRolesInternal(id, req.getRoleIds());
+            // 角色变更：清该用户权限缓存（权限码/角色码可能已变）
+            SysCache.evictUserAuth(id);
         }
         if (req.getPostIds() != null) {
             userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
