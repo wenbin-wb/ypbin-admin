@@ -16,8 +16,10 @@ import cn.ypbin.admin.auth.dto.RouteResp;
 import cn.ypbin.admin.auth.dto.UserInfoResp;
 import cn.ypbin.admin.auth.entity.SysUser;
 import cn.ypbin.admin.auth.mapper.SysUserMapper;
+import cn.ypbin.admin.common.api.feign.SystemPermissionFeignClient;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
+import java.util.List;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
@@ -45,6 +47,7 @@ import org.springframework.util.StringUtils;
 public class AuthService {
 
     private final SysUserMapper userMapper;
+    private final SystemPermissionFeignClient permissionFeignClient;
 
     /**
      * 账号密码登录。
@@ -70,6 +73,15 @@ public class AuthService {
         loginUser.setNickname(user.getRealName());
         loginUser.setTenantId(user.getTenantId());
         loginUser.setDeptId(user.getDeptId());
+        // 角色码经 Feign 从 system-svc 获取（内部调用身份头自动透传）
+        try {
+            R<List<String>> roles = permissionFeignClient.listRoleCodes(user.getId());
+            if (roles != null && roles.getData() != null) {
+                loginUser.setRoles(new java.util.HashSet<>(roles.getData()));
+            }
+        } catch (Exception e) {
+            // system-svc 不可用时降级为空角色（登录不受阻，权限由网关身份头 X-Roles 决定）
+        }
         // 登录态写入 sa-token 会话（网关从会话读身份信息签发身份头）
         StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
         return new LoginResp(LoginHelper.getTokenValue());

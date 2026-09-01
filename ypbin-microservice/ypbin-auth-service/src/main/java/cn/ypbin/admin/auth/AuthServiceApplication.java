@@ -11,6 +11,7 @@ package cn.ypbin.admin.auth;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
  * Auth 服务启动器（微服务版）。
@@ -19,6 +20,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 2026-09-01
  */
 @SpringBootApplication
+@EnableFeignClients(basePackages = "cn.ypbin.admin.common.api.feign")
 public class AuthServiceApplication {
 
     public static void main(String[] args) {
