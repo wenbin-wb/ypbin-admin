@@ -20,6 +20,26 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-cloud-core</artifactId>
         </dependency>
+        <!-- 序列化注解（@RefText/@JsonSerialize 等） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-json</artifactId>
+        </dependency>
+        <!-- 敏感词注解（DTO 字段） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-sensitive-words</artifactId>
+        </dependency>
+        <!-- Excel 注解（VO 导入导出字段） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-excel</artifactId>
+        </dependency>
+        <!-- 分页基类（Query 继承 PageQuery） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-crud</artifactId>
+        </dependency>
         <!-- 实体基类/MyBatis 注解（共享实体依赖） -->
         <dependency>
             <groupId>cn.ypbin</groupId>

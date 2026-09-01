@@ -15,6 +15,23 @@
     <description>微服务版 ypbin-ai-api：Feign 接口与共享 DTO（对齐 blade-service-api）</description>
 
     <dependencies>
+        <!-- 数据/分页/序列化（实体与 DTO 依赖） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-tenant</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-crud</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-json</artifactId>
+        </dependency>
         <!-- Feign 接口定义 + 统一响应体 R（cloud-core 传递提供 openfeign 与 core） -->
         <dependency>
             <groupId>cn.ypbin</groupId>

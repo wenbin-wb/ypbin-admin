@@ -45,6 +45,11 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-system-api</artifactId>
         </dependency>
+        <!-- AI 域共享（entity/model） -->
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-ai-api</artifactId>
+        </dependency>
         <!-- AI 运行时 + 数据访问 + 安全/日志/工具 -->
         <dependency>
             <groupId>cn.ypbin</groupId>
