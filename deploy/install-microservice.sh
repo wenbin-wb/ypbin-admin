@@ -59,10 +59,12 @@ warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
 # ---------- 参数 ----------
-ROOT="${YPBIN_ROOT:-/opt/ypbin}"
+# 默认独立目录（与单体版 /opt/ypbin 分开，避免代码互相覆盖/分支冲突，两版本可共存）
+ROOT="${YPBIN_ROOT:-/opt/ypbin-ms}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 BRANCH="${BRANCH:-feature/microservice}"
 NO_DOCKER="${NO_DOCKER:-0}"
+ASSUME_YES="${ASSUME_YES:-0}"
 STARTER_VERSION="2.1.0"
 
 # 服务清单（目录名:jar名:端口）
@@ -72,7 +74,55 @@ ypbin-system:ypbin-system:18082
 ypbin-ai:ypbin-ai:18083
 ypbin-job:ypbin-job:18084"
 
+# 交互确认：Y/n；-y 或 ASSUME_YES=1 时直接 yes（对齐单体脚本）
+confirm() {
+  local answer
+  if [ "$ASSUME_YES" = "1" ]; then
+    return 0
+  fi
+  while true; do
+    read -rp "  ${1} [Y/n]: " answer
+    case "${answer:-Y}" in
+      Y|y|yes|YES) return 0 ;;
+      N|n|no|NO) return 1 ;;
+      *) warn "请输入 y 或 n" ;;
+    esac
+  done
+}
+
 info "部署参数：ROOT=$ROOT 分支=$BRANCH NO_DOCKER=$NO_DOCKER"
+
+# ---------- 操作模式选择（对齐单体脚本；-y 跳过）----------
+# full=全新部署/完整更新（拉代码+构建+启动） backend=只更新后端（构建+重启）
+# restart=只重启服务（不拉代码不构建）      exit=退出
+MODE="full"
+if [ "$ASSUME_YES" != "1" ]; then
+  echo ""
+  echo "  请选择操作模式:"
+  echo "    1) 全新部署/完整更新（拉代码 + 构建 starter/后端 + 启动）"
+  echo "    2) 只更新后端（拉代码 + 构建 + 重启服务）"
+  echo "    3) 只重启服务（不拉代码不构建）"
+  echo "    4) 退出"
+  while true; do
+    read -rp "  输入序号 [1]: " mode_choice
+    case "${mode_choice:-1}" in
+      1) MODE="full"; break ;;
+      2) MODE="backend"; break ;;
+      3) MODE="restart"; break ;;
+      4) echo "  已退出"; exit 0 ;;
+      *) warn "请输入 1-4" ;;
+    esac
+  done
+  echo "  → 模式: ${MODE}"
+fi
+
+# restart 模式：跳过拉代码/构建，直接启动
+if [ "$MODE" = "restart" ]; then
+  info "只重启服务模式，跳过拉取与构建"
+  SKIP_PULL=1 SKIP_BUILD=1
+else
+  SKIP_PULL=0 SKIP_BUILD=0
+fi
 
 # ---------- [1/7] 环境准备 ----------
 info "[1/7] 检查并安装依赖"
@@ -114,6 +164,9 @@ EOF
 fi
 
 # ---------- [2/7] 拉取代码 ----------
+if [ "${SKIP_PULL:-0}" = "1" ]; then
+  info "[2/7] 跳过拉取代码（restart 模式）"
+else
 info "[2/7] 拉取代码"
 mkdir -p "$ROOT"
 cd "$ROOT"
@@ -122,30 +175,74 @@ git config --global --add safe.directory "$ROOT/ypbin-starter" 2>/dev/null || tr
 git config --global --add safe.directory "$ROOT/ypbin-admin" 2>/dev/null || true
 [ -d ypbin-starter/.git ] || git clone -b master "$REPO_BASE/ypbin-starter.git"
 [ -d ypbin-admin/.git ]   || git clone -b "$BRANCH" "$REPO_BASE/ypbin-admin.git"
-# 拉取最新（失败必须报错，避免用旧代码构建出莫名编译错误）
-cd "$ROOT/ypbin-starter" && git checkout master 2>/dev/null && git pull --ff-only || die "ypbin-starter 拉取失败（检查网络或分支）"
-cd "$ROOT/ypbin-admin" && git checkout "$BRANCH" 2>/dev/null && git pull --ff-only || die "ypbin-admin 拉取失败（检查网络或分支）"
+# 拉取最新：分叉时强制对齐远程（部署目录无本地修改，直接 reset --hard 到远程）
+pull_repo() { # $1=仓库目录 $2=分支
+  local repo="$1" branch="$2"
+  cd "$repo"
+  git fetch origin "$branch" 2>/dev/null || die "$repo fetch 失败（检查网络）"
+  if git merge-base --is-ancestor "origin/$branch" HEAD 2>/dev/null; then
+    git checkout "$branch" 2>/dev/null && git merge --ff-only "origin/$branch" 2>/dev/null \
+      || git reset --hard "origin/$branch"
+  else
+    # 分叉（如历史改写）：直接强对齐远程
+    warn "$repo 与远程分叉，强制对齐 origin/$branch"
+    git checkout -f "$branch" 2>/dev/null || git checkout -b "$branch" "origin/$branch"
+    git reset --hard "origin/$branch"
+  fi
+}
+pull_repo "$ROOT/ypbin-starter" master
+pull_repo "$ROOT/ypbin-admin" "$BRANCH"
 ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD)，admin@$(git -C "$ROOT/ypbin-admin" rev-parse --short HEAD)）"
+fi
 
 # ---------- [3/7] 构建 starter ----------
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+  info "[3/7] 跳过构建（restart 模式）"
+else
 info "[3/7] 构建 starter $STARTER_VERSION（微服务依赖其新能力）"
-cd "$ROOT/ypbin-starter"
-# 完整输出错误（不吞日志）：失败时打印 maven 日志尾部
-if ! mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20; then
-  die "starter 构建失败（完整日志 /tmp/starter-build.log）"
+# 交互询问是否重构建 starter（对齐单体；-y 或已有构建产物时可选跳过）
+if [ "$ASSUME_YES" != "1" ]; then
+  if ! confirm "重新构建 starter（最新代码，约 3-6 分钟）？选 n 则用 .m2 已有包"; then
+    info "跳过 starter 构建（使用 .m2 已有包）"
+    SKIP_STARTER_BUILD=1
+  fi
 fi
-ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
+if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
+  cd "$ROOT/ypbin-starter"
+  # 完整输出错误（不吞日志）：失败时打印 maven 日志尾部
+  if ! mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20; then
+    die "starter 构建失败（完整日志 /tmp/starter-build.log）"
+  fi
+  ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
+else
+  # 确认本地仓库有 2.1.0（没有则强制构建）
+  if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.1.0" ]; then
+    warn "本地 Maven 仓库无 starter 2.1.0，强制构建"
+    cd "$ROOT/ypbin-starter"
+    mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20 \
+      || die "starter 构建失败（完整日志 /tmp/starter-build.log）"
+  fi
+fi
+fi
 
 # ---------- [4/7] 构建后端 5 服务 ----------
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+  info "[4/7] 跳过构建（restart 模式，复用已有 jar）"
+  JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
+else
 info "[4/7] 构建后端 5 个服务"
 cd "$ROOT/ypbin-admin"
-mvn -q -DskipTests clean package 2>&1 | tail -3 || die "admin 构建失败"
+# 完整输出错误（不吞日志）
+if ! mvn -DskipTests clean package 2>&1 | tee /tmp/admin-build.log | tail -20; then
+  die "admin 构建失败（完整日志 /tmp/admin-build.log）"
+fi
 JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
 mkdir -p "$JAR_DIR"
 while IFS=: read -r dir jar port; do
   find "ypbin-$dir" -name "*.jar" -path "*target*" ! -name "*sources*" ! -name "*javadoc*" ! -name "*.original" | head -1 | xargs -I{} cp "{}" "$JAR_DIR/$jar.jar"
   ok "打包 $jar.jar（端口 $port）"
 done <<< "$SERVICES"
+fi
 
 # ---------- [5/7] 生成配置 ----------
 info "[5/7] 生成 .env 配置"
@@ -188,10 +285,7 @@ if [ "$NO_DOCKER" = "1" ]; then
 else
   info "[6/7] Docker 模式：compose 启动（含 Nacos/Redis/MySQL 基础设施）"
   cd "$ROOT/ypbin-admin/deploy"
-  # 基础设施 compose（Nacos/Redis/MySQL/Sentinel）由 starter 提供
-  [ -f "$ROOT/ypbin-starter/deploy/docker-compose.yml" ] \
-    && docker compose -f "$ROOT/ypbin-starter/deploy/docker-compose.yml" --env-file "$ENV_FILE" up -d
-  # 微服务 5 件套
+  # 微服务 compose 已内嵌基础设施（nacos/redis/mysql），单文件拉起全链路
   docker compose -f docker-compose.microservice.yml --env-file "$ENV_FILE" up -d --build
 fi
 
