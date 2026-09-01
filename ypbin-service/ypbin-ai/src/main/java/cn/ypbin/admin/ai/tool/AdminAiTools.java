@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.ai.tool;
 
-import cn.ypbin.admin.system.api.feign.SystemPermissionFeignClient;
+import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.enums.JobStatusEnum;
@@ -42,7 +42,7 @@ import lombok.RequiredArgsConstructor;
 @ConditionalOnProperty(prefix = "ypbin.ai", name = "enabled", havingValue = "true")
 public class AdminAiTools {
 
-    private final SystemPermissionFeignClient systemFeignClient;
+    private final ISystemClient systemFeignClient;
 
     /**
      * 按用户名或真实姓名查找用户信息。

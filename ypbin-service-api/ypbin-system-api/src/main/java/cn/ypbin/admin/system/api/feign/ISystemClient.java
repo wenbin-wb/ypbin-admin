@@ -18,17 +18,18 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * 系统管理服务 Feign 客户端（供 auth/ai 等调用）。
+ * 系统管理服务 Feign 接口（供 auth/ai 等调用）。
  *
  * <p>内部调用由网关签发身份头，Feign 拦截器（starter-cloud-core）自动透传，
  * 服务端从 {@code X-User-Id} 等头识别调用者身份。查询结果建议经
- * {@code SysCache} 缓存，避免高频 RPC。</p>
+ * {@code SysCache} 缓存，避免高频 RPC。调用失败走 {@link ISystemClientFallback}
+ * 降级返回失败 {@code R}。</p>
  *
  * @author wenbin
  * @since 2026-09-01
  */
-@FeignClient(name = "ypbin-system", path = "/internal")
-public interface SystemPermissionFeignClient {
+@FeignClient(name = "ypbin-system", path = "/internal", fallback = ISystemClientFallback.class)
+public interface ISystemClient {
 
     /**
      * 查询用户权限码。
@@ -67,7 +68,7 @@ public interface SystemPermissionFeignClient {
     R<List<SysJob>> listJobs(@RequestParam(value = "name", required = false) String name);
 
     /**
-     * 用户计数与运行任务计数（AI 工具统计用）。
+     * 用户计数（AI 工具统计用）。
      */
     @GetMapping("/user-count")
     R<Long> countUsers();

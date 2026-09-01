@@ -11,6 +11,7 @@ package cn.ypbin.admin.ai;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
  * Ai 服务启动器（微服务版）。
@@ -18,7 +19,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @author wenbin
  * @since 2026-09-01
  */
-@SpringBootApplication
+@EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
+@SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.ai", "cn.ypbin.admin.system.api"})
 public class AiServiceApplication {
 
     public static void main(String[] args) {

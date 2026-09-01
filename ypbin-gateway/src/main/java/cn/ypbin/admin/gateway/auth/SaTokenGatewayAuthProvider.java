@@ -13,6 +13,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.starter.gateway.auth.GatewayAuthProvider;
 import cn.ypbin.starter.gateway.auth.GatewayAuthResult;
 import cn.ypbin.starter.security.core.LoginUser;
+import cn.ypbin.starter.security.identity.IdentityHeaders;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -84,22 +85,22 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
     }
 
     /**
-     * 构建下游可信身份头（CONTRACT.md §6）。
+     * 构建下游可信身份头（与 starter {@link IdentityHeaders} 常量对齐）。
      */
     private Map<String, String> buildTrustedHeaders(LoginUser loginUser) {
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("X-User-Id", String.valueOf(loginUser.getId()));
+        headers.put(IdentityHeaders.USER_ID, String.valueOf(loginUser.getId()));
         if (StringUtils.hasText(loginUser.getUsername())) {
-            headers.put("X-User-Name", loginUser.getUsername());
+            headers.put(IdentityHeaders.USER_NAME, loginUser.getUsername());
         }
         if (loginUser.getTenantId() != null) {
-            headers.put("X-Tenant-Id", String.valueOf(loginUser.getTenantId()));
+            headers.put(IdentityHeaders.TENANT_ID, String.valueOf(loginUser.getTenantId()));
         }
         if (loginUser.getDeptId() != null) {
-            headers.put("X-Dept-Id", String.valueOf(loginUser.getDeptId()));
+            headers.put(IdentityHeaders.DEPT_ID, String.valueOf(loginUser.getDeptId()));
         }
         if (loginUser.getRoles() != null && !loginUser.getRoles().isEmpty()) {
-            headers.put("X-Roles", String.join(",", loginUser.getRoles()));
+            headers.put(IdentityHeaders.ROLES, String.join(",", loginUser.getRoles()));
         }
         return headers;
     }

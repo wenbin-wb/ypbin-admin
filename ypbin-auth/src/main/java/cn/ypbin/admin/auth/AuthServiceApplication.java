@@ -19,7 +19,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  * @author wenbin
  * @since 2026-09-01
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.auth", "cn.ypbin.admin.system.api"})
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
 public class AuthServiceApplication {
 

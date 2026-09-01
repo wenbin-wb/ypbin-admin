@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.system.api.cache;
 
-import cn.ypbin.admin.system.api.feign.SystemPermissionFeignClient;
+import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.util.SpringUtils;
@@ -32,16 +32,16 @@ public final class SysCache {
     private static final String USERNAME_KEY = "sys:user:username:";
     private static final String USER_ID_KEY = "sys:user:id:";
 
-    private static volatile SystemPermissionFeignClient feignClient;
+    private static volatile ISystemClient feignClient;
 
     private SysCache() {
     }
 
-    private static SystemPermissionFeignClient feignClient() {
+    private static ISystemClient feignClient() {
         if (feignClient == null) {
             synchronized (SysCache.class) {
                 if (feignClient == null) {
-                    feignClient = SpringUtils.getBean(SystemPermissionFeignClient.class);
+                    feignClient = SpringUtils.getBean(ISystemClient.class);
                 }
             }
         }

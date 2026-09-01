@@ -16,7 +16,7 @@ import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.api.cache.SysCache;
-import cn.ypbin.admin.system.api.feign.SystemPermissionFeignClient;
+import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
@@ -44,7 +44,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final SystemPermissionFeignClient permissionFeignClient;
+    private final ISystemClient permissionFeignClient;
 
     /**
      * 账号密码登录。

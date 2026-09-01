@@ -12,24 +12,13 @@
 
     <artifactId>ypbin-common</artifactId>
     <name>${project.artifactId}</name>
-    <description>微服务版公共基础设施：身份头上下文/过滤器/跨域注解/常量</description>
+    <description>微服务版公共基础设施：安全上下文（LoginUser/IdentityContext）、跨域注解、常量</description>
 
     <dependencies>
-        <!-- LoginUser/UserContext（身份头构建） -->
+        <!-- 安全上下文：LoginUser/UserContext/IdentityContext（身份头模式） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-security</artifactId>
-        </dependency>
-        <!-- Spring Web（OncePerRequestFilter/FilterRegistrationBean） -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
-        </dependency>
-        <!-- Servlet（OncePerRequestFilter） -->
-        <dependency>
-            <groupId>jakarta.servlet</groupId>
-            <artifactId>jakarta.servlet-api</artifactId>
-            <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>
