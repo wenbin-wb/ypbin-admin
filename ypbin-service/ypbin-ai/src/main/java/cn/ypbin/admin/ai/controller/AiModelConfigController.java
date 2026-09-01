@@ -13,7 +13,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.ai.model.req.AiModelConfigSaveReq;
 import cn.ypbin.admin.ai.model.resp.AiModelConfigResp;
 import cn.ypbin.admin.ai.service.AiModelConfigService;
-import cn.ypbin.admin.common.PlatformAccess;
+import cn.ypbin.starter.security.platform.PlatformAccess;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;

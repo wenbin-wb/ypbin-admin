@@ -19,6 +19,7 @@ import cn.ypbin.admin.system.mapper.SysRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.system.service.SysPermissionService;
+import cn.ypbin.starter.security.platform.PlatformUserChecker;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
@@ -34,7 +35,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public class SysPermissionServiceImpl implements SysPermissionService {
+public class SysPermissionServiceImpl implements SysPermissionService, PlatformUserChecker {
 
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
