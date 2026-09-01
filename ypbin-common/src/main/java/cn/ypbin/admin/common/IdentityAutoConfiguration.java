@@ -25,7 +25,7 @@ import org.springframework.core.Ordered;
  * @since 2026-09-01
  */
 @AutoConfiguration
-public class MicroserviceIdentityAutoConfiguration {
+public class IdentityAutoConfiguration {
 
     @Bean
     public FilterRegistrationBean<IdentityHeaderFilter> identityHeaderFilterRegistration() {

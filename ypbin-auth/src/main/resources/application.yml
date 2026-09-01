@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: ypbin-auth-service
+    name: ypbin-auth
   cloud:
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}

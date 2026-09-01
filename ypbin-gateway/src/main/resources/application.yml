@@ -18,16 +18,16 @@ spring:
           enabled: true          # 按服务名自动路由：/ypbin-auth-service/** → auth 服务
           lower-case-service-id: true
       routes:
-        - id: auth-service
-          uri: lb://ypbin-auth-service
+        - id: auth
+          uri: lb://ypbin-auth
           predicates:
             - Path=/auth/**,/captcha/**,/user/**,/open-api/**
-        - id: system-service
-          uri: lb://ypbin-system-service
+        - id: system
+          uri: lb://ypbin-system
           predicates:
             - Path=/system/**
-        - id: ai-service
-          uri: lb://ypbin-ai-service
+        - id: ai
+          uri: lb://ypbin-ai
           predicates:
             - Path=/ai/**,/share/**,/widget/**
 

@@ -12,18 +12,18 @@
 
     <artifactId>ypbin-common</artifactId>
     <name>${project.artifactId}</name>
-    <description>微服务版跨服务 Feign 接口与共享 DTO（内部身份头由 starter-cloud-core 自动透传）</description>
+    <description>微服务版公共基础设施：身份头上下文/过滤器/跨域注解/常量</description>
 
     <dependencies>
-        <!-- Feign 接口定义依赖 starter-cloud-core（含 R 包装与身份头透传拦截器） -->
-        <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-cloud-core</artifactId>
-        </dependency>
         <!-- LoginUser/UserContext（身份头构建） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-security</artifactId>
+        </dependency>
+        <!-- Spring Web（OncePerRequestFilter/FilterRegistrationBean） -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
         </dependency>
         <!-- Servlet（OncePerRequestFilter） -->
         <dependency>

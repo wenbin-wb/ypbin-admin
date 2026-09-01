@@ -12,30 +12,23 @@
 
     <artifactId>ypbin-ai-api</artifactId>
     <name>${project.artifactId}</name>
-    <description>微服务版 ypbin-ai-api：Feign 接口与共享 DTO（对齐 blade-service-api）</description>
+    <description>微服务版 AI 域接口：实体/枚举/共享 DTO（对齐 blade-service-api）</description>
 
     <dependencies>
-        <!-- 数据/分页/序列化（实体与 DTO 依赖） -->
-        <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-data</artifactId>
-        </dependency>
+        <!-- 实体基类（继承 TenantBaseEntity） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-tenant</artifactId>
         </dependency>
-        <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-extension-crud</artifactId>
-        </dependency>
+        <!-- 实体/枚举序列化注解（@JsonSerialize 等） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-json</artifactId>
         </dependency>
-        <!-- Feign 接口定义 + 统一响应体 R（cloud-core 传递提供 openfeign 与 core） -->
+        <!-- DTO 参数校验注解（@NotBlank/@Size 等） -->
         <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-cloud-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
     </dependencies>
 </project>
