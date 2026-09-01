@@ -18,6 +18,5 @@
     <modules>
         <module>ypbin-system-api</module>
         <module>ypbin-ai-api</module>
-        <module>ypbin-auth-api</module>
     </modules>
 </project>

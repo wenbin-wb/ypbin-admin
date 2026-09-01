@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.system.annotation;
+package cn.ypbin.admin.common;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;

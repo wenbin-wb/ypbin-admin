@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.system.aspect;
 
-import cn.ypbin.admin.system.annotation.PlatformAccess;
+import cn.ypbin.admin.common.PlatformAccess;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;

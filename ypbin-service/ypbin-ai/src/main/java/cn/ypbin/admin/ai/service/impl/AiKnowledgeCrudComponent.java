@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
-import cn.ypbin.admin.system.enums.AiDocumentStatusEnum;
+import cn.ypbin.admin.ai.enums.AiDocumentStatusEnum;
 import cn.ypbin.admin.ai.entity.AiDocument;
 import cn.ypbin.admin.ai.entity.AiDocumentChunk;
 import cn.ypbin.admin.ai.entity.AiKnowledgeBase;

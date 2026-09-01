@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package cn.ypbin.admin.system.enums;
+package cn.ypbin.admin.ai.enums;
 
 /**
  * AI 知识库文档向量化处理状态。
@@ -22,7 +22,7 @@ package cn.ypbin.admin.system.enums;
  * 向量化生命周期。数据库与接口存/传 {@code code}，禁止散落裸数字映射。</p>
  *
  * <p>共享类：复制自单体版 ypbin-admin-system（与 system-svc 同源），
- * 后续抽公共库时统一收敛到 common-api，勿单侧修改。</p>
+ * 已归位至 api 模块，作为跨服务共享契约。</p>
  *
  * @author wenbin
  * @since 2026-08-31

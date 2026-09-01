@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.common.api.filter;
+package cn.ypbin.admin.common;
 
 import cn.ypbin.starter.security.core.LoginUser;
-import cn.ypbin.admin.common.api.context.IdentityContext;
+import cn.ypbin.admin.common.IdentityContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

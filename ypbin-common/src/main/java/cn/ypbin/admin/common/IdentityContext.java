@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.common.api.context;
+package cn.ypbin.admin.common;
 
 import cn.ypbin.starter.security.core.LoginUser;
 import java.util.Optional;

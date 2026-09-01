@@ -41,6 +41,7 @@
             <artifactId>ypbin-common</artifactId>
         </dependency>
         <!-- 系统域共享（实体/Feign） -->
+        <!-- 系统域共享实体/枚举（SysUser/SysJob 等） -->
         <dependency>
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-system-api</artifactId>

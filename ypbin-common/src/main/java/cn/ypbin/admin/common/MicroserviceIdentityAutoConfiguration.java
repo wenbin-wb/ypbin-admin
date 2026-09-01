@@ -7,9 +7,9 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.common.api.autoconfigure;
+package cn.ypbin.admin.common;
 
-import cn.ypbin.admin.common.api.filter.IdentityHeaderFilter;
+import cn.ypbin.admin.common.IdentityHeaderFilter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
