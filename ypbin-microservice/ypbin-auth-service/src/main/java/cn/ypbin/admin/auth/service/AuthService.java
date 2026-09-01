@@ -28,7 +28,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 /**
  * 认证服务（微服务版）。
@@ -58,7 +57,7 @@ public class AuthService {
         if (user == null || !PasswordEncoderUtil.matches(req.getPassword(), user.getPassword())) {
             throw new BusinessException("用户名或密码错误");
         }
-        if (user.getStatus() != null && user.getStatus() == 0) {
+        if (cn.ypbin.admin.auth.enums.UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
         return completeLogin(user);
@@ -133,7 +132,4 @@ public class AuthService {
         return R.ok();
     }
 
-    private static boolean hasText(String value) {
-        return StringUtils.hasText(value);
-    }
 }

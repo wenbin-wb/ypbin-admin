@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package cn.ypbin.admin.system.enums;
+package cn.ypbin.admin.auth.enums;
 
 /**
  * 用户账号状态。
  *
  * <p>数据库与接口存/传 {@code code}；业务判断用 {@code getCode()} 比较，展示文案统一取
  * {@link #descOf(Integer)}，禁止散落裸数字映射。</p>
- *
- * <p>共享类：复制自单体版 ypbin-admin-system（与 system-svc 同源），
- * 后续抽公共库时统一收敛到 common-api，勿单侧修改。</p>
  *
  * @author wenbin
  * @since 2026-08-31

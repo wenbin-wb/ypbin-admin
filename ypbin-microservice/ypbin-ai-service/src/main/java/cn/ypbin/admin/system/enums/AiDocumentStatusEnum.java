@@ -21,6 +21,9 @@ package cn.ypbin.admin.system.enums;
  * <p>注意区别于实体通用启用/禁用状态（{@code EntityStatus}）：本枚举描述文档的
  * 向量化生命周期。数据库与接口存/传 {@code code}，禁止散落裸数字映射。</p>
  *
+ * <p>共享类：复制自单体版 ypbin-admin-system（与 system-svc 同源），
+ * 后续抽公共库时统一收敛到 common-api，勿单侧修改。</p>
+ *
  * @author wenbin
  * @since 2026-08-31
  */

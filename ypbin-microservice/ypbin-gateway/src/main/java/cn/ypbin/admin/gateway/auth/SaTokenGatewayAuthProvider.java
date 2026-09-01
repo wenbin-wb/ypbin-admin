@@ -50,7 +50,8 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
                 return Mono.just(GatewayAuthResult.failure("登录用户不存在"));
             }
             return Mono.just(GatewayAuthResult.success(buildTrustedHeaders(loginUser)));
-        } catch (Exception e) {
+        } catch (cn.dev33.satoken.exception.NotLoginException e) {
+            // 仅未登录/过期走 401 语义；其它异常按服务端错误记录后拒绝
             return Mono.just(GatewayAuthResult.failure("登录状态已过期，请重新登录"));
         }
     }
@@ -77,6 +78,7 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
                 cn.ypbin.starter.security.core.UserContext.KEY_LOGIN_USER);
             return value instanceof LoginUser loginUser ? loginUser : null;
         } catch (Exception e) {
+            // 会话读取失败视为用户信息缺失，由调用方按未登录处理
             return null;
         }
     }
