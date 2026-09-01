@@ -16,7 +16,7 @@ import cn.ypbin.starter.core.util.SpringUtils;
 import java.time.Duration;
 
 /**
- * 系统域共享数据缓存（对齐 blade 的 SysCache 模式）。
+ * 系统域共享数据缓存。
  *
  * <p>auth/ai 等跨服务调用方经 Feign 查询系统数据时，先读缓存、未命中再走 Feign 并回填，
  * 避免每次登录/查询都触发 RPC。缓存键与 TTL 集中定义于此，单侧维护。</p>

@@ -13,7 +13,7 @@
     <artifactId>ypbin-service</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
-    <description>微服务版业务服务聚合（对齐 blade-service：每个业务域一个子模块）</description>
+    <description>微服务版业务服务聚合（每个业务域一个子模块）</description>
 
     <modules>
         <module>ypbin-system</module>

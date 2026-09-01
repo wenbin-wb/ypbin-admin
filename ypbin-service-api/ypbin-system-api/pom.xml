@@ -12,7 +12,7 @@
 
     <artifactId>ypbin-system-api</artifactId>
     <name>${project.artifactId}</name>
-    <description>微服务版 ypbin-system-api：Feign 接口与共享 DTO（对齐 blade-service-api）</description>
+    <description>微服务版 ypbin-system-api：Feign 接口与共享 DTO</description>
 
     <dependencies>
         <!-- 统一响应体 R / 错误码（Feign 返回结构） -->

@@ -1,6 +1,6 @@
 # ypbin-admin 微服务化改造方案（企业级）
 
-> 状态：**方案 v2.0**（单体代码已删除，微服务独立为根模块）（目录结构对齐 blade：service/api 分离 + common）（M4 Feign 跨服务已打通）（2026-09-01，M2 认证链路已落地）
+> 状态：**方案 v2.0**（单体代码已删除，微服务独立为根模块）（目录结构：service/api 分离 + common）（M4 Feign 跨服务已打通）（2026-09-01，M2 认证链路已落地）
 > 分支：`feature/microservice`（与 `main` 单体版并行维护）
 > 理念：**复用 ypbin-starter 的 cloud 系列底座，不另起炉灶；CONTRACT.md 对外契约不变，前端零改动切换**。
 

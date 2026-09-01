@@ -12,7 +12,7 @@
 
     <artifactId>ypbin-auth</artifactId>
     <name>${project.artifactId}</name>
-    <description>ypbin-admin 微服务版：认证服务（对齐 blade-auth）</description>
+    <description>ypbin-admin 微服务版：认证服务（登录/验证码/第三方登录）</description>
 
     <dependencies>
         <!-- 服务注册/配置中心 -->

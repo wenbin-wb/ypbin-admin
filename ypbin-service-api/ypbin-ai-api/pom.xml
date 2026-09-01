@@ -12,7 +12,7 @@
 
     <artifactId>ypbin-ai-api</artifactId>
     <name>${project.artifactId}</name>
-    <description>微服务版 AI 域接口：实体/枚举/共享 DTO（对齐 blade-service-api）</description>
+    <description>微服务版 AI 域接口：实体/枚举/共享 DTO</description>
 
     <dependencies>
         <!-- 实体基类（继承 TenantBaseEntity） -->
