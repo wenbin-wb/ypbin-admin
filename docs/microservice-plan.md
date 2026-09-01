@@ -1,6 +1,6 @@
 # ypbin-admin 微服务化改造方案（企业级）
 
-> 状态：**方案 v1.3**（2026-09-01，M2 认证链路已落地）
+> 状态：**方案 v1.4**（M4 Feign 跨服务已打通）（2026-09-01，M2 认证链路已落地）
 > 分支：`feature/microservice`（与 `main` 单体版并行维护）
 > 理念：**复用 ypbin-starter 的 cloud 系列底座，不另起炉灶；CONTRACT.md 对外契约不变，前端零改动切换**。
 
@@ -126,7 +126,7 @@ ypbin-admin/
 | **M1 骨架** | 建 `ypbin-microservice` 聚合 + 网关 + 四服务空壳 + Nacos/docker-compose | 网关转发到各服务，健康检查通过 |
 | **M2 认证链路** ✅ | 网关 `SaTokenGatewayAuthProvider`（sa-token 无状态校验 + 签发身份头）；common-api `IdentityHeaderFilter`/`IdentityContext`（下游信身份头，不绑 sa-token） | 编译通过；端到端联调待基础设施就绪 |
 | **M3 业务迁移** ✅ | system-svc（用户/角色/菜单等 153 文件）+ ai-svc（AI 域 79 文件）+ job-svc（调度框架）全部迁入，依赖收敛 | 编译通过；端到端联调待基础设施 |
-| **M4 加固上线** | Sentinel 规则、链路追踪、配置中心化、灰度发布、监控告警 | 压测 + 故障演练 + 灰度 |
+| **M4 加固上线** ✅(Feign) | Feign 跨服务（auth→system 权限/角色）+ 内部端点隔离；Sentinel 规则/配置中心化/监控告警待基础设施就绪后实施 | 编译通过；端到端联调待基础设施 |
 
 ## 6. 双版本并行维护策略
 
