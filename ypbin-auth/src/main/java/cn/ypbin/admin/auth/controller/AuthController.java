@@ -10,9 +10,9 @@
 package cn.ypbin.admin.auth.controller;
 
 import cn.ypbin.admin.auth.dto.LoginReq;
-import cn.ypbin.admin.auth.dto.LoginResp;
-import cn.ypbin.admin.auth.dto.RouteResp;
-import cn.ypbin.admin.auth.dto.UserInfoResp;
+import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.admin.system.model.resp.RouteResp;
+import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.auth.service.AuthService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.web.util.WebRequestUtils;

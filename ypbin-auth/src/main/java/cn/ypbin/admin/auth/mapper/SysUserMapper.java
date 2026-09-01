@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.auth.mapper;
 
-import cn.ypbin.admin.auth.entity.SysUser;
+import cn.ypbin.admin.system.entity.SysUser;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**

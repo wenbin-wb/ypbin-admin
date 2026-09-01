@@ -11,10 +11,10 @@ package cn.ypbin.admin.auth.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.auth.dto.LoginReq;
-import cn.ypbin.admin.auth.dto.LoginResp;
-import cn.ypbin.admin.auth.dto.RouteResp;
-import cn.ypbin.admin.auth.dto.UserInfoResp;
-import cn.ypbin.admin.auth.entity.SysUser;
+import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.admin.system.model.resp.RouteResp;
+import cn.ypbin.admin.system.model.resp.UserInfoResp;
+import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.auth.mapper.SysUserMapper;
 import cn.ypbin.admin.system.api.feign.SystemPermissionFeignClient;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -57,7 +57,7 @@ public class AuthService {
         if (user == null || !PasswordEncoderUtil.matches(req.getPassword(), user.getPassword())) {
             throw new BusinessException("用户名或密码错误");
         }
-        if (cn.ypbin.admin.auth.enums.UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
+        if (cn.ypbin.admin.system.enums.UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
         return completeLogin(user);
