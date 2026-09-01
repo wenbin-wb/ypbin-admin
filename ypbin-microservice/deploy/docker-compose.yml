@@ -21,11 +21,11 @@ services:
       - nacos
     restart: unless-stopped
 
-  ypbin-auth-service:
+  ypbin-auth:
     build:
-      context: ../ypbin-auth-service
-    image: ypbin/ypbin-auth-service:local
-    container_name: ypbin-auth-service
+      context: ../ypbin-auth
+    image: ypbin/ypbin-auth:local
+    container_name: ypbin-auth
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
@@ -40,11 +40,11 @@ services:
       - mysql
     restart: unless-stopped
 
-  ypbin-system-service:
+  ypbin-system-biz:
     build:
-      context: ../ypbin-system-service
-    image: ypbin/ypbin-system-service:local
-    container_name: ypbin-system-service
+      context: ../ypbin-service/ypbin-system-biz
+    image: ypbin/ypbin-system-biz:local
+    container_name: ypbin-system-biz
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
@@ -59,11 +59,11 @@ services:
       - mysql
     restart: unless-stopped
 
-  ypbin-ai-service:
+  ypbin-ai-biz:
     build:
-      context: ../ypbin-ai-service
-    image: ypbin/ypbin-ai-service:local
-    container_name: ypbin-ai-service
+      context: ../ypbin-service/ypbin-ai-biz
+    image: ypbin/ypbin-ai-biz:local
+    container_name: ypbin-ai-biz
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
@@ -78,11 +78,11 @@ services:
       - mysql
     restart: unless-stopped
 
-  ypbin-job-service:
+  ypbin-job-biz:
     build:
-      context: ../ypbin-job-service
-    image: ypbin/ypbin-job-service:local
-    container_name: ypbin-job-service
+      context: ../ypbin-service/ypbin-job-biz
+    image: ypbin/ypbin-job-biz:local
+    container_name: ypbin-job-biz
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858

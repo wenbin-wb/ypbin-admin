@@ -10,9 +10,9 @@
         <version>${revision}</version>
     </parent>
 
-    <artifactId>ypbin-auth-service</artifactId>
+    <artifactId>ypbin-auth</artifactId>
     <name>${project.artifactId}</name>
-    <description>ypbin-admin 微服务版：ypbin-auth-service</description>
+    <description>ypbin-admin 微服务版：认证服务（对齐 blade-auth）</description>
 
     <dependencies>
         <!-- 服务注册/配置中心 -->
