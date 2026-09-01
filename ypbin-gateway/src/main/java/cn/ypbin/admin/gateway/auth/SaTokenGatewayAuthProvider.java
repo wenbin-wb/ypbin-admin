@@ -13,6 +13,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.starter.gateway.auth.GatewayAuthProvider;
 import cn.ypbin.starter.gateway.auth.GatewayAuthResult;
 import cn.ypbin.starter.security.core.LoginUser;
+import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.identity.IdentityHeaders;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -76,7 +77,7 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
     private LoginUser readLoginUser(String loginId) {
         try {
             Object value = StpUtil.getSessionByLoginId(loginId).get(
-                cn.ypbin.starter.security.core.UserContext.KEY_LOGIN_USER);
+                UserContext.KEY_LOGIN_USER);
             return value instanceof LoginUser loginUser ? loginUser : null;
         } catch (Exception e) {
             // 会话读取失败视为用户信息缺失，由调用方按未登录处理

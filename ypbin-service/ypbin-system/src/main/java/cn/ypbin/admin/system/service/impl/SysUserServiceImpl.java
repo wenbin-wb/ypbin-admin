@@ -192,6 +192,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
             assignPosts(id, req.getPostIds());
         }
+        // 清缓存：新 username 由 @CacheEvict 注解清；旧 username/旧 phone 是方法内局部变量，手动清（防旧 key 残留）
+        SysCache.evictUser(null, existing.getUsername());
+        SysCache.evictUserByPhone(existing.getPhone());
         SysCache.evictUserByPhone(phone);
     }
 

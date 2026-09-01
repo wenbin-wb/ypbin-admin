@@ -11,10 +11,13 @@ package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysMenu;
 import cn.ypbin.admin.system.entity.SysRoleMenu;
+import cn.ypbin.admin.system.entity.SysUserRole;
 import cn.ypbin.admin.system.mapper.SysMenuMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMenuMapper;
+import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.model.req.MenuSaveReq;
 import cn.ypbin.admin.system.model.resp.MenuResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -57,6 +60,7 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
 
     private final SysPermissionService permissionService;
     private final SysRoleMenuMapper roleMenuMapper;
+    private final SysUserRoleMapper userRoleMapper;
     private final SysAuthTemplateService authTemplateService;
 
     @Override
@@ -167,6 +171,7 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
         if (!updated) {
             throw new BusinessException("修改菜单失败");
         }
+        evictMenuUsersCache(id);
     }
 
     @Override
@@ -183,6 +188,25 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
             throw new BusinessException("删除菜单失败");
         }
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getMenuId, id));
+        evictMenuUsersCache(id);
+    }
+
+    /**
+     * 菜单权限标识/结构变更后，清除拥有该菜单（经角色）的所有用户的权限缓存（权限码可能已变）。
+     */
+    private void evictMenuUsersCache(Long menuId) {
+        List<SysRoleMenu> roleMenus = roleMenuMapper.selectList(
+            new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getMenuId, menuId));
+        if (roleMenus.isEmpty()) {
+            return;
+        }
+        for (SysRoleMenu roleMenu : roleMenus) {
+            List<SysUserRole> userRoles = userRoleMapper.selectList(
+                new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getRoleId, roleMenu.getRoleId()));
+            for (SysUserRole userRole : userRoles) {
+                SysCache.evictUserAuth(userRole.getUserId());
+            }
+        }
     }
 
     private void validateMenu(MenuSaveReq req, Long excludeId) {

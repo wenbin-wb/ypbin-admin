@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -58,7 +59,7 @@ public class AuthService {
         if (!Boolean.TRUE.equals(matched)) {
             throw new BusinessException("用户名或密码错误");
         }
-        if (cn.ypbin.admin.system.enums.UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
         return loginSupport.completeLogin(user, "ACCOUNT");

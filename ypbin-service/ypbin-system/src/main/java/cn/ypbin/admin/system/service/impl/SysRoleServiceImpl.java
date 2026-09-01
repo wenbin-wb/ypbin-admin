@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysMenu;
 import cn.ypbin.admin.system.entity.SysRole;
@@ -158,6 +159,7 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, id));
         assignMenus(id, req.getPermissions());
         assignDepartments(id, req.getDeptIds());
+        evictRoleUsersCache(id);
     }
 
     @Override
@@ -175,6 +177,7 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         if (!updated) {
             throw new BusinessException("角色状态更新失败");
         }
+        evictRoleUsersCache(id);
     }
 
     @Override
@@ -189,6 +192,18 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getRoleId, id));
         roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, id));
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getRoleId, id));
+        evictRoleUsersCache(id);
+    }
+
+    /**
+     * 角色权限/状态变更后，清除拥有该角色的所有用户的权限缓存（权限码可能已变）。
+     */
+    private void evictRoleUsersCache(Long roleId) {
+        List<SysUserRole> relations = userRoleMapper.selectList(
+            new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getRoleId, roleId));
+        for (SysUserRole relation : relations) {
+            SysCache.evictUserAuth(relation.getUserId());
+        }
     }
 
     private void checkReservedCode(String code) {
