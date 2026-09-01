@@ -7,15 +7,10 @@ spring:
   cloud:
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}
-      discovery:
-        enabled: true
-    sentinel:
-      transport:
-        dashboard: ${SENTINEL_ADDR:localhost:8858}
     gateway:
       discovery:
         locator:
-          enabled: true          # 按服务名自动路由：/ypbin-auth-service/** → auth 服务
+          enabled: true          # 按服务名自动路由：/ypbin-auth/** → auth 服务
           lower-case-service-id: true
       routes:
         - id: auth
@@ -36,10 +31,14 @@ ypbin:
   gateway:
     auth:
       enabled: true
-      # 白名单路径（无需登录即可访问）
-      whitelist:
+      # 白名单路径（无需登录即可访问），键名对齐 starter GatewayProperties.Auth.excludePaths
+      exclude-paths:
         - /auth/login
-        - /auth/social/**
+        - /auth/sms/send
+        - /auth/sms/login
+        - /auth/social/authorize/**
+        - /auth/social/callback/**
+        - /auth/social/platforms
         - /captcha/**
         - /open-api/**
         - /open/license/**

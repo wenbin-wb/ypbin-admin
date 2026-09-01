@@ -18,8 +18,8 @@ import cn.ypbin.admin.ai.mapper.AiChatRoleMapper;
 import cn.ypbin.admin.ai.model.req.AiChatRoleSaveReq;
 import cn.ypbin.admin.ai.model.resp.AiChatRoleResp;
 import cn.ypbin.admin.ai.service.AiChatRoleService;
-import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
@@ -45,7 +45,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
 
     @Override
     public List<AiChatRoleResp> listRoles() {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         Long tenantId = currentTenantId();
         // 内置角色（tenant_id=0）与当前租户自定义角色，忽略租户拦截以读取内置角色
         List<AiChatRole> roles = TenantContext.executeIgnore(() ->
@@ -103,7 +103,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void toggleFavorite(Long roleId) {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         AiChatRoleFavorite existing = favoriteMapper.selectOne(
             new LambdaQueryWrapper<AiChatRoleFavorite>()
                 .eq(AiChatRoleFavorite::getUserId, userId)

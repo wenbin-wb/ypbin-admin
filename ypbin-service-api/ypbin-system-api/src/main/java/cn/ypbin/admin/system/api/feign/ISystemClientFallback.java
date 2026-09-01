@@ -11,6 +11,9 @@ package cn.ypbin.admin.system.api.feign;
 
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.ConfigValue;
+import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
@@ -53,6 +56,16 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
+    public R<SysUser> getUserByPhone(String phone) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Void> updateLastLoginTime(Long userId) {
+        return unavailable();
+    }
+
+    @Override
     public R<List<SysUser>> searchUsers(String keyword) {
         return unavailable();
     }
@@ -69,6 +82,52 @@ public class ISystemClientFallback implements ISystemClient {
 
     @Override
     public R<Long> countRunningJobs() {
+        return unavailable();
+    }
+
+    @Override
+    public R<ConfigValue> getConfigByKey(String configKey) {
+        return unavailable();
+    }
+
+    @Override
+    public R<SocialAuthConfig> getSocialAuthConfig(String source) {
+        return unavailable();
+    }
+
+    @Override
+    public R<List<SocialAuthConfig>> listSocialAuthConfigs() {
+        return unavailable();
+    }
+
+    @Override
+    public R<SysUserSocial> getSocialBinding(String platform, String openId) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Boolean> isSocialUserBound(Long userId, String platform) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Boolean> isSocialAccountBound(String platform, String openId) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Void> saveSocialBinding(Long userId, String platform, String openId,
+        String nickname, String avatar, String accessToken) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Void> unbindSocial(Long userId, String platform) {
+        return unavailable();
+    }
+
+    @Override
+    public R<List<SysUserSocial>> listSocialBindings(Long userId) {
         return unavailable();
     }
 }

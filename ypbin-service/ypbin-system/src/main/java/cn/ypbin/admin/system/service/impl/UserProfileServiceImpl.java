@@ -25,8 +25,8 @@ import cn.ypbin.admin.system.model.resp.ProfileResp;
 import cn.ypbin.admin.system.service.UserProfileService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
+import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +51,7 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     @Override
     public ProfileResp getProfile() {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
@@ -67,7 +67,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProfile(ProfileUpdateReq req) {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         String phone = accountSupport.normalizePhone(req.getPhone());
         accountSupport.checkPhoneUnique(phone, userId);
         SysUser user = new SysUser();
@@ -84,7 +84,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void changePassword(ChangePasswordReq req) {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");

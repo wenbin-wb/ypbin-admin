@@ -33,11 +33,11 @@ import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.datapermission.annotation.DataPermission;
 import cn.ypbin.starter.data.core.EntityStatus;
-import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUser;
 import cn.ypbin.starter.security.online.OnlineUserService;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
+import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -195,7 +195,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Transactional(rollbackFor = Exception.class)
     public void updateStatus(Long id, Integer status) {
         SysUser user = getManageableUser(id);
-        if (id.equals(LoginHelper.getUserId()) && UserStatusEnum.DISABLED.getCode().equals(status)) {
+        if (id.equals(IdentityContext.getUserId().orElse(null)) && UserStatusEnum.DISABLED.getCode().equals(status)) {
             throw new BusinessException("不允许禁用当前用户");
         }
         boolean updated = update(new LambdaUpdateWrapper<SysUser>()

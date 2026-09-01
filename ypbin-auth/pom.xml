@@ -45,15 +45,6 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-system-api</artifactId>
         </dependency>
-        <!-- 数据访问（共享库直查用户） -->
-        <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-data</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-extension-tenant</artifactId>
-        </dependency>
         <!-- 安全：sa-token 登录态/密码加密/LoginHelper -->
         <dependency>
             <groupId>cn.ypbin</groupId>
@@ -63,6 +54,30 @@
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-captcha</artifactId>
+        </dependency>
+        <!-- 操作日志 / 幂等防重 / 限流 / 密码锁定 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-log</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tools</artifactId>
+        </dependency>
+        <!-- 缓存（验证码 Redis 存储） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cache</artifactId>
+        </dependency>
+        <!-- 短信（SmsUtils 发验证码） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-messaging</artifactId>
+        </dependency>
+        <!-- 第三方登录（JustAuth 封装） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-social</artifactId>
         </dependency>
         <!-- Web 请求工具（WebRequestUtils.ip 等） -->
         <dependency>

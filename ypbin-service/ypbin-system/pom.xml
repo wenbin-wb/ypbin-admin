@@ -88,6 +88,35 @@
         </dependency>
         <dependency>
             <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-job</artifactId>
+        </dependency>
+        <!-- 授权签发（LicenseSigner/Sm2Utils/Sm4Utils） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-license</artifactId>
+        </dependency>
+        <!-- 公告投递通道（邮件/推送/短信） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-messaging</artifactId>
+        </dependency>
+        <!-- 短信聚合框架 sms4j（公告短信通道 / 短信配置动态注册） -->
+        <dependency>
+            <groupId>org.dromara.sms4j</groupId>
+            <artifactId>sms4j-spring-boot-starter</artifactId>
+        </dependency>
+        <!-- 接口签名（开放 API 示例 / 联机授权校验） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-sign</artifactId>
+        </dependency>
+        <!-- 第三方登录配置管理（平台授权请求注册表） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-social</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-sensitive-words</artifactId>
         </dependency>
         <dependency>

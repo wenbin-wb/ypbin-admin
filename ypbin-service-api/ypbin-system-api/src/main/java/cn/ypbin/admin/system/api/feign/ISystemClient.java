@@ -11,10 +11,14 @@ package cn.ypbin.admin.system.api.feign;
 
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.ConfigValue;
+import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
@@ -56,6 +60,18 @@ public interface ISystemClient {
     R<SysUser> getUserById(@RequestParam("userId") Long userId);
 
     /**
+     * 按手机号查询用户（手机验证码登录用）。
+     */
+    @GetMapping("/user-by-phone")
+    R<SysUser> getUserByPhone(@RequestParam("phone") String phone);
+
+    /**
+     * 记录最后登录时间（登录成功收尾用）。
+     */
+    @GetMapping("/update-last-login")
+    R<Void> updateLastLoginTime(@RequestParam("userId") Long userId);
+
+    /**
      * 按关键词搜索用户（AI 工具用，限制 10 条）。
      */
     @GetMapping("/search-users")
@@ -78,4 +94,66 @@ public interface ISystemClient {
      */
     @GetMapping("/running-job-count")
     R<Long> countRunningJobs();
+
+    /**
+     * 按参数键读取系统参数（auth 读取登录开关/短信配置用）。
+     */
+    @GetMapping("/config-by-key")
+    R<ConfigValue> getConfigByKey(@RequestParam("configKey") String configKey);
+
+    /**
+     * 第三方登录平台授权配置（auth 构建授权请求用，含密钥明文，仅限内部传递）。
+     */
+    @GetMapping("/social-auth-config")
+    R<SocialAuthConfig> getSocialAuthConfig(@RequestParam("source") String source);
+
+    /**
+     * 全部第三方登录平台授权配置（auth 拉取启用平台列表用）。
+     */
+    @GetMapping("/social-auth-configs")
+    R<List<SocialAuthConfig>> listSocialAuthConfigs();
+
+    /**
+     * 按平台与 openId 查绑定（第三方登录用）。
+     */
+    @GetMapping("/social-binding")
+    R<SysUserSocial> getSocialBinding(@RequestParam("platform") String platform,
+        @RequestParam("openId") String openId);
+
+    /**
+     * 用户是否已绑定指定平台。
+     */
+    @GetMapping("/social-user-bound")
+    R<Boolean> isSocialUserBound(@RequestParam("userId") Long userId,
+        @RequestParam("platform") String platform);
+
+    /**
+     * 按平台与 openId 是否已绑定其他用户。
+     */
+    @GetMapping("/social-account-bound")
+    R<Boolean> isSocialAccountBound(@RequestParam("platform") String platform,
+        @RequestParam("openId") String openId);
+
+    /**
+     * 新增第三方绑定。
+     */
+    @PostMapping("/social-bind-save")
+    R<Void> saveSocialBinding(@RequestParam("userId") Long userId,
+        @RequestParam("platform") String platform, @RequestParam("openId") String openId,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar,
+        @RequestParam(value = "accessToken", required = false) String accessToken);
+
+    /**
+     * 解绑（按用户+平台）。
+     */
+    @PostMapping("/social-unbind")
+    R<Void> unbindSocial(@RequestParam("userId") Long userId,
+        @RequestParam("platform") String platform);
+
+    /**
+     * 用户已绑定的平台列表。
+     */
+    @GetMapping("/social-bindings")
+    R<List<SysUserSocial>> listSocialBindings(@RequestParam("userId") Long userId);
 }

@@ -9,8 +9,10 @@
  */
 package cn.ypbin.admin.system;
 
+import cn.ypbin.admin.common.config.LicenseIssuerProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * System 服务启动器（微服务版）。
@@ -19,6 +21,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 2026-09-01
  */
 @SpringBootApplication
+@EnableConfigurationProperties(LicenseIssuerProperties.class)
 public class SystemServiceApplication {
 
     public static void main(String[] args) {

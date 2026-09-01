@@ -30,9 +30,9 @@ import org.springframework.stereotype.Service;
 /**
  * 认证服务（微服务版）。
  *
- * <p>登录校验通过后：{@link LoginHelper#login} 建立 sa-token 登录态，并把 {@link LoginUser}
- * 写入 sa-token 会话（键 {@code UserContext.KEY_LOGIN_USER}）——网关的
- * {@code SaTokenGatewayAuthProvider} 从会话读取该对象签发下游身份头。</p>
+ * <p>登录校验通过后由 {@link LoginSupport} 统一收尾：{@link LoginHelper#login} 建立 sa-token
+ * 登录态，并把 {@link LoginUser} 写入 sa-token 会话（键 {@code UserContext.KEY_LOGIN_USER}）——
+ * 网关的 {@code SaTokenGatewayAuthProvider} 从会话读取该对象签发下游身份头。</p>
  *
  * <p>权限/菜单/路由由 system-svc 提供（M3 以 Feign 打通），本服务暂返回空集合。</p>
  *
@@ -44,6 +44,7 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final ISystemClient permissionFeignClient;
+    private final LoginSupport loginSupport;
 
     /**
      * 账号密码登录。
@@ -56,30 +57,7 @@ public class AuthService {
         if (cn.ypbin.admin.system.enums.UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
-        return completeLogin(user);
-    }
-
-    /**
-     * 登录收尾：建立 sa-token 会话 + 写入 LoginUser 供网关读取。
-     */
-    private LoginResp completeLogin(SysUser user) {
-        LoginHelper.login(user.getId());
-        LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
-        loginUser.setNickname(user.getRealName());
-        loginUser.setTenantId(user.getTenantId());
-        loginUser.setDeptId(user.getDeptId());
-        // 角色码经 Feign 从 system-svc 获取（内部调用身份头自动透传）
-        try {
-            R<List<String>> roles = permissionFeignClient.listRoleCodes(user.getId());
-            if (roles != null && roles.getData() != null) {
-                loginUser.setRoles(new java.util.HashSet<>(roles.getData()));
-            }
-        } catch (Exception e) {
-            // system-svc 不可用时降级为空角色（登录不受阻，权限由网关身份头 X-Roles 决定）
-        }
-        // 登录态写入 sa-token 会话（网关从会话读身份信息签发身份头）
-        StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
-        return new LoginResp(LoginHelper.getTokenValue());
+        return loginSupport.completeLogin(user, "ACCOUNT");
     }
 
     /**

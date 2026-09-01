@@ -7,14 +7,33 @@ spring:
   cloud:
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}
-      discovery:
-        enabled: true
-    sentinel:
-      transport:
-        dashboard: ${SENTINEL_ADDR:localhost:8858}
+  config:
+    # 公共配置（Nacos 共享：限流/租户/数据权限），由部署手册说明在 Nacos 创建 ypbin-common.yaml
+    import: optional:nacos:ypbin-common.yaml
 
+# ---------- Sa-Token 认证配置（与网关校验保持一致） ----------
+sa-token:
+  token-name: Authorization     # Token 请求头名
+  token-prefix: Bearer          # Token 前缀
+  timeout: 2592000              # 固定有效期 30 天（秒）
+  active-timeout: 1800          # 活跃超时 30 分钟（秒）
+  auto-renew: true              # 活跃用户自动续期
+  is-read-cookie: false         # 不从 cookie 读 token（前后端分离）
+  is-print: false               # 关闭启动 banner 打印
+
+# ---------- ypbin-starter 配置 ----------
 ypbin:
-  tenant:
-    enabled: true
-  data-permission:
-    enabled: true
+  security:
+    # 登录/验证码/第三方登录公开端点免登录校验（与网关白名单一致）；绑定/解绑等需登录
+    excludes:
+      - /auth/login
+      - /auth/sms/send
+      - /auth/sms/login
+      - /auth/social/authorize/**
+      - /auth/social/callback/**
+      - /auth/social/platforms
+      - /captcha
+      - /captcha/verify
+      - /actuator/**
+  sse:
+    enabled: true               # SSE 长连接推送（站内信实时通知等）

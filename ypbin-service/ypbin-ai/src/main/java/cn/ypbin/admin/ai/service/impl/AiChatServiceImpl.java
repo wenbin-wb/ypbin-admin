@@ -24,8 +24,8 @@ import cn.ypbin.admin.ai.service.AiChatSessionService;
 import cn.ypbin.admin.ai.support.AiChatSseSupport;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import cn.ypbin.starter.tenant.core.TenantThreadLocalAccessor;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -96,7 +96,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
 
     @Override
     public List<AiChatSessionResp> listSessions() {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         List<AiChatSession> sessions = sessionMapper.selectList(
             new LambdaQueryWrapper<AiChatSession>()
                 .eq(AiChatSession::getUserId, userId)
@@ -120,7 +120,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSession(AiChatSessionCreateReq req) {
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         Long tenantId = UserContext.getTenantId().orElseThrow(
             () -> new BusinessException("无法获取当前租户上下文"));
         AiChatSession session = new AiChatSession();
@@ -180,7 +180,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         }
         final Long finalSessionId = sessionId;
         requireSession(finalSessionId);
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         Long tenantId = UserContext.getTenantId().orElseThrow(
             () -> new BusinessException("无法获取当前租户上下文"));
 
@@ -296,7 +296,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         }
         messageMapper.deleteById(lastAssistant.getId());
 
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         Long tenantId = UserContext.getTenantId().orElseThrow(
             () -> new BusinessException("无法获取当前租户上下文"));
         String convId = String.valueOf(sessionId);
@@ -344,7 +344,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         if (session == null) {
             throw new BusinessException("会话不存在");
         }
-        Long userId = LoginHelper.getUserId();
+        Long userId = IdentityContext.getUserId().orElse(null);
         if (!session.getUserId().equals(userId)) {
             throw new BusinessException("无权访问该会话");
         }
