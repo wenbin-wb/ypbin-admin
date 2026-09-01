@@ -8,14 +8,16 @@
     <artifactId>ypbin-admin</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
-    <name>${project.artifactId}</name>
-    <description>基于 ypbin-starter 的企业级后台管理系统</description>
 
     <modules>
-        <module>ypbin-admin-common</module>
-        <module>ypbin-admin-system</module>
-        <module>ypbin-admin-server</module>
+        <module>ypbin-common</module>
+        <module>ypbin-gateway</module>
+        <module>ypbin-auth</module>
+        <module>ypbin-service</module>
+        <module>ypbin-service-api</module>
     </modules>
+    <name>${project.artifactId}</name>
+    <description>基于 ypbin-starter 的企业级后台管理系统</description>
 
     <properties>
         <revision>1.0.0-SNAPSHOT</revision>
@@ -55,22 +57,22 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- 本项目模块 -->
-            <dependency>
-                <groupId>cn.ypbin.admin</groupId>
-                <artifactId>ypbin-admin-common</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>cn.ypbin.admin</groupId>
-                <artifactId>ypbin-admin-system</artifactId>
-                <version>${project.version}</version>
-            </dependency>
             <!-- sms4j 短信框架（不在 spring-boot-dependencies 中） -->
             <dependency>
                 <groupId>org.dromara.sms4j</groupId>
                 <artifactId>sms4j-spring-boot-starter</artifactId>
                 <version>${sms4j.version}</version>
+            </dependency>
+            <!-- 微服务内部模块 -->
+            <dependency>
+                <groupId>cn.ypbin.admin</groupId>
+                <artifactId>ypbin-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.ypbin.admin</groupId>
+                <artifactId>ypbin-system-api</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -134,14 +136,4 @@
         </plugins>
     </build>
 
-    <profiles>
-        <!-- 微服务版模块：仅 -Pmicroservice 激活，单体构建（默认）不受影响。
-             与 main 分支的单体版并行维护，见 docs/microservice-plan.md -->
-        <profile>
-            <id>microservice</id>
-            <modules>
-                <module>ypbin-microservice</module>
-            </modules>
-        </profile>
-    </profiles>
 </project>

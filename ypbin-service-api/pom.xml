@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.ypbin.admin</groupId>
+        <artifactId>ypbin-admin</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>ypbin-service-api</artifactId>
+    <packaging>pom</packaging>
+    <name>${project.artifactId}</name>
+    <description>微服务版服务接口聚合（对齐 blade-service-api：Feign 接口与共享 DTO 按域拆分）</description>
+
+    <modules>
+        <module>ypbin-system-api</module>
+        <module>ypbin-ai-api</module>
+        <module>ypbin-auth-api</module>
+    </modules>
+</project>

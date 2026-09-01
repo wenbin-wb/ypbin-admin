@@ -10,7 +10,7 @@ for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
 )
 
 cd /d "%~dp0"
-echo === Starting ypbin-admin on port 8080 (Java %JAVA_HOME%) ===
-call "%MVN%" -f ypbin-admin-server/pom.xml spring-boot:run
+echo === Starting ypbin-gateway on port 18080 (Java %JAVA_HOME%) ===
+call "%MVN%" -f ypbin-gateway/pom.xml spring-boot:run
 
 pause
