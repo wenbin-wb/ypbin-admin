@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.model.req.ConfigUpdateBatchReq;
 import cn.ypbin.admin.system.model.resp.ConfigResp;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.social.ConfigChangedEvent;
+import cn.ypbin.starter.cache.annotation.CacheEvict;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
@@ -108,6 +109,7 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:config:key:' + #req.configKey"})
     public void createConfig(ConfigSaveReq req) {
         rejectSocialConfig(req.getConfigGroup(), req.getConfigKey());
         checkKeyUnique(req.getConfigKey(), null);
@@ -118,11 +120,11 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("参数新增失败");
         }
         publishConfigChanged(req.getConfigGroup());
-        SysCache.evictConfig(req.getConfigKey());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:config:key:' + #req.configKey"})
     public void updateConfig(Long id, ConfigSaveReq req) {
         SysConfig existing = getById(id);
         if (existing == null) {
@@ -144,8 +146,6 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("参数更新失败");
         }
         publishConfigChanged(existing.getConfigGroup(), req.getConfigGroup());
-        SysCache.evictConfig(existing.getConfigKey());
-        SysCache.evictConfig(req.getConfigKey());
     }
 
     @Override

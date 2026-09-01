@@ -45,6 +45,11 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-system-api</artifactId>
         </dependency>
+        <!-- @CacheEvict 声明式缓存失效（system 侧写操作清跨服务缓存） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cache</artifactId>
+        </dependency>
 
         <!-- 数据访问 -->
         <dependency>

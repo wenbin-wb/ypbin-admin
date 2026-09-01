@@ -9,7 +9,6 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
-import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.model.req.SocialConfigUpdateReq;
 import cn.ypbin.admin.system.model.resp.SocialConfigResp;
@@ -17,6 +16,7 @@ import cn.ypbin.admin.system.service.SocialConfigService;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.social.SocialAuthRequestFactory;
 import cn.ypbin.admin.system.social.SocialConfigChangedEvent;
+import cn.ypbin.starter.cache.annotation.CacheEvict;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -75,6 +75,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:social:config:' + #source", "'sys:social:configs'"})
     public void updateConfig(String source, SocialConfigUpdateReq req) {
         String normalizedSource = normalizeSource(source);
         Map<String, SysConfig> configs = loadPlatformConfigs(normalizedSource);
@@ -103,7 +104,6 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         updates.forEach((key, configValue) -> updateRequired(configs.get(key), configValue));
         eventPublisher.publishEvent(new SocialConfigChangedEvent(
             normalizedSource, Boolean.TRUE.equals(req.getEnabled()), request));
-        SysCache.evictSocialConfig(normalizedSource);
     }
 
     private Map<String, SysConfig> loadSocialConfigs() {

@@ -29,6 +29,7 @@ import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
+import cn.ypbin.starter.cache.annotation.CacheEvict;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
@@ -127,6 +128,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:user:username:' + #req.username"})
     public void createUser(UserSaveReq req) {
         checkUsernameUnique(req.getUsername(), null);
         String phone = accountSupport.normalizePhone(req.getPhone());
@@ -149,13 +151,12 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
-        SysCache.evictUser(user.getId(), user.getUsername());
-        SysCache.evictUserAuth(user.getId());
     }
 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:user:id:' + #id", "'sys:user:username:' + #req.username"})
     public void updateUser(Long id, UserSaveReq req) {
         SysUser existing = getManageableUser(id);
         checkUsernameUnique(req.getUsername(), id);
@@ -191,14 +192,13 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
             assignPosts(id, req.getPostIds());
         }
-        SysCache.evictUser(id, existing.getUsername());
         SysCache.evictUserByPhone(phone);
-        SysCache.evictUserAuth(id);
     }
 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:user:id:' + #id"})
     public void updateStatus(Long id, Integer status) {
         SysUser user = getManageableUser(id);
         if (id.equals(IdentityContext.getUserId().orElse(null)) && UserStatusEnum.DISABLED.getCode().equals(status)) {
@@ -211,13 +211,12 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (!updated) {
             throw new BusinessException("用户状态更新失败");
         }
-        SysCache.evictUser(id, null);
-        SysCache.evictUserAuth(id);
     }
 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:user:id:' + #id"})
     public void deleteUser(Long id) {
         getManageableUser(id);
         boolean phoneCleared = update(new LambdaUpdateWrapper<SysUser>()
@@ -228,13 +227,12 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
-        SysCache.evictUser(id, null);
-        SysCache.evictUserAuth(id);
     }
 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:user:id:' + #id"})
     public void resetPassword(Long id, String password) {
         SysUser user = getManageableUser(id);
         if (!StringUtils.hasText(password)) {
@@ -249,18 +247,17 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         update.setPwdResetTime(LocalDateTime.now());
         updateById(update);
         accountSupport.recordPasswordHistory(id, encoded);
-        SysCache.evictUser(id, null);
     }
 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(keys = {"'sys:role:user:' + #id", "'sys:perm:user:' + #id"})
     public void assignRoles(Long id, List<Long> roleIds) {
         SysUser user = getManageableUser(id);
         validateAssignments(user, roleIds, null);
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         assignRolesInternal(id, roleIds);
-        SysCache.evictUserAuth(id);
     }
 
     private void checkUsernameUnique(String username, Long excludeId) {
