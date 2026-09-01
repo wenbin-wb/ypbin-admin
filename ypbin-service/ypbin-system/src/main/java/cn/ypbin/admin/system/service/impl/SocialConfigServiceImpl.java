@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.model.req.SocialConfigUpdateReq;
 import cn.ypbin.admin.system.model.resp.SocialConfigResp;
@@ -102,6 +103,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         updates.forEach((key, configValue) -> updateRequired(configs.get(key), configValue));
         eventPublisher.publishEvent(new SocialConfigChangedEvent(
             normalizedSource, Boolean.TRUE.equals(req.getEnabled()), request));
+        SysCache.evictSocialConfig(normalizedSource);
     }
 
     private Map<String, SysConfig> loadSocialConfigs() {

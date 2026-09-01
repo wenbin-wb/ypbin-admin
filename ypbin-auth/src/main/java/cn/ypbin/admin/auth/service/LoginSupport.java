@@ -12,9 +12,9 @@ package cn.ypbin.admin.auth.service;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.model.resp.LoginResp;
-import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
@@ -59,11 +59,11 @@ public class LoginSupport {
         loginUser.setClientId(AdminConstants.CLIENT_WEB_ADMIN);
         loginUser.setClientType("WEB");
         loginUser.setAuthType(authType);
-        // 角色码经 Feign 从 system-svc 获取（内部调用身份头自动透传）
+        // 角色码走 SysCache 缓存（system 侧角色变更时主动清缓存）
         try {
-            R<List<String>> roles = systemClient.listRoleCodes(user.getId());
-            if (roles != null && roles.getData() != null) {
-                loginUser.setRoles(new HashSet<>(roles.getData()));
+            List<String> roles = SysCache.getUserRoleCodes(user.getId());
+            if (!roles.isEmpty()) {
+                loginUser.setRoles(new HashSet<>(roles));
             }
         } catch (RuntimeException e) {
             // system-svc 不可用时降级为空角色（登录不受阻，权限由网关身份头 X-Roles 决定）

@@ -91,6 +91,11 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
+    public R<Boolean> verifyPassword(Long userId, String rawPassword) {
+        return unavailable();
+    }
+
+    @Override
     public R<SocialAuthConfig> getSocialAuthConfig(String source) {
         return unavailable();
     }

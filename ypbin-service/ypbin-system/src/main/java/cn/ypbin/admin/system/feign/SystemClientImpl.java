@@ -25,6 +25,7 @@ import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -141,6 +142,17 @@ public class SystemClientImpl implements ISystemClient {
             .eq(SysConfig::getConfigKey, configKey), false);
         value.setConfigValue(config == null ? "" : config.getConfigValue());
         return R.ok(value);
+    }
+
+    @Override
+    @PostMapping("/verify-password")
+    public R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
+        @RequestParam("rawPassword") String rawPassword) {
+        SysUser user = userMapper.selectById(userId);
+        if (user == null || user.getPassword() == null) {
+            return R.ok(false);
+        }
+        return R.ok(PasswordEncoderUtil.matches(rawPassword, user.getPassword()));
     }
 
     @Override

@@ -9,10 +9,10 @@
  */
 package cn.ypbin.admin.auth.support;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.core.model.R;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -43,11 +43,11 @@ public class AuthConfigReader {
      * @return 参数值
      */
     public String getString(String key, String defaultValue) {
-        R<ConfigValue> result = systemClient.getConfigByKey(key);
-        if (result == null || result.getData() == null || result.getData().getConfigValue() == null) {
+        ConfigValue value = SysCache.getConfigByKey(key);
+        if (value == null || value.getConfigValue() == null) {
             return defaultValue;
         }
-        return result.getData().getConfigValue();
+        return value.getConfigValue();
     }
 
     /**

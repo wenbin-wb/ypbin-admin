@@ -10,6 +10,7 @@
 package cn.ypbin.admin.auth.service;
 
 import cn.ypbin.admin.auth.support.AuthConfigReader;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.starter.cache.core.CacheService;
@@ -95,11 +96,7 @@ public class SmsCodeService {
      */
     public SysUser getUserByPhone(String phone) {
         String normalizedPhone = normalizePhone(phone);
-        R<SysUser> result = systemClient.getUserByPhone(normalizedPhone);
-        if (result == null || result.getData() == null) {
-            return null;
-        }
-        return result.getData();
+        return SysCache.getUserByPhone(normalizedPhone);
     }
 
     private String normalizePhone(String phone) {

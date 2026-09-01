@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.auth.service;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
@@ -49,7 +50,7 @@ public class SocialLoginService {
         String normalizedSource = normalizeSource(source);
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
 
-        SysUserSocial binding = systemClient.getSocialBinding(normalizedSource, authUser.getUuid()).getData();
+        SysUserSocial binding = SysCache.getSocialBinding(normalizedSource, authUser.getUuid());
         if (binding == null) {
             throw new BusinessException("第三方账号尚未绑定，请先登录已有账号完成绑定");
         }
@@ -65,18 +66,19 @@ public class SocialLoginService {
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
         Long userId = currentUserId();
 
-        Boolean userBound = systemClient.isSocialUserBound(userId, normalizedSource).getData();
-        if (Boolean.TRUE.equals(userBound)) {
+        boolean userBound = SysCache.isSocialUserBound(userId, normalizedSource);
+        if (userBound) {
             throw new BusinessException("该平台已绑定");
         }
-        Boolean accountBound = systemClient.isSocialAccountBound(normalizedSource, authUser.getUuid()).getData();
-        if (Boolean.TRUE.equals(accountBound)) {
+        boolean accountBound = SysCache.isSocialAccountBound(normalizedSource, authUser.getUuid());
+        if (accountBound) {
             throw new BusinessException("该第三方账号已绑定其他用户");
         }
 
         String accessToken = authUser.getToken() == null ? null : authUser.getToken().getAccessToken();
         systemClient.saveSocialBinding(userId, normalizedSource, authUser.getUuid(),
             authUser.getNickname(), authUser.getAvatar(), accessToken);
+        SysCache.evictSocialBinding(userId, normalizedSource, authUser.getUuid());
     }
 
     /**
@@ -84,7 +86,9 @@ public class SocialLoginService {
      */
     public void unbind(String source) {
         Long userId = currentUserId();
-        systemClient.unbindSocial(userId, normalizeSource(source));
+        String normalizedSource = normalizeSource(source);
+        systemClient.unbindSocial(userId, normalizedSource);
+        SysCache.evictSocialBinding(userId, normalizedSource, null);
     }
 
     /**
@@ -93,7 +97,7 @@ public class SocialLoginService {
      * @return 平台标识列表，无绑定返回空集合
      */
     public List<String> boundPlatforms() {
-        List<SysUserSocial> bindings = systemClient.listSocialBindings(currentUserId()).getData();
+        List<SysUserSocial> bindings = SysCache.listSocialBindings(currentUserId());
         if (bindings == null) {
             return List.of();
         }
@@ -101,11 +105,11 @@ public class SocialLoginService {
     }
 
     private SysUser fetchUser(Long userId) {
-        var result = systemClient.getUserById(userId);
-        if (result == null || result.getData() == null) {
+        SysUser user = SysCache.getUserById(userId);
+        if (user == null) {
             throw new BusinessException("第三方账号关联的用户不存在");
         }
-        return result.getData();
+        return user;
     }
 
     private Long currentUserId() {

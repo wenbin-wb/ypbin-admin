@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysPost;
 import cn.ypbin.admin.system.entity.SysRole;
 import cn.ypbin.admin.system.entity.SysUser;
@@ -148,6 +149,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
+        SysCache.evictUser(user.getId(), user.getUsername());
+        SysCache.evictUserAuth(user.getId());
     }
 
     @Override
@@ -188,6 +191,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
             assignPosts(id, req.getPostIds());
         }
+        SysCache.evictUser(id, existing.getUsername());
+        SysCache.evictUserByPhone(phone);
+        SysCache.evictUserAuth(id);
     }
 
     @Override
@@ -205,6 +211,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (!updated) {
             throw new BusinessException("用户状态更新失败");
         }
+        SysCache.evictUser(id, null);
+        SysCache.evictUserAuth(id);
     }
 
     @Override
@@ -220,6 +228,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
+        SysCache.evictUser(id, null);
+        SysCache.evictUserAuth(id);
     }
 
     @Override
@@ -239,6 +249,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         update.setPwdResetTime(LocalDateTime.now());
         updateById(update);
         accountSupport.recordPasswordHistory(id, encoded);
+        SysCache.evictUser(id, null);
     }
 
     @Override
@@ -249,6 +260,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         validateAssignments(user, roleIds, null);
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         assignRolesInternal(id, roleIds);
+        SysCache.evictUserAuth(id);
     }
 
     private void checkUsernameUnique(String username, Long excludeId) {

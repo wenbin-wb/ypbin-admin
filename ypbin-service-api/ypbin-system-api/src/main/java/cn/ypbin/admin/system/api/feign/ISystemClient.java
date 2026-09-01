@@ -102,6 +102,13 @@ public interface ISystemClient {
     R<ConfigValue> getConfigByKey(@RequestParam("configKey") String configKey);
 
     /**
+     * 密码校验（system 直查库比对；密码不落缓存，改密即时生效）。
+     */
+    @PostMapping("/verify-password")
+    R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
+        @RequestParam("rawPassword") String rawPassword);
+
+    /**
      * 第三方登录平台授权配置（auth 构建授权请求用，含密钥明文，仅限内部传递）。
      */
     @GetMapping("/social-auth-config")

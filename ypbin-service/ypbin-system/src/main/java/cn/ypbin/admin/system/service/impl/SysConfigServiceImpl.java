@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.query.ConfigQuery;
@@ -117,6 +118,7 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("参数新增失败");
         }
         publishConfigChanged(req.getConfigGroup());
+        SysCache.evictConfig(req.getConfigKey());
     }
 
     @Override
@@ -142,6 +144,8 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("参数更新失败");
         }
         publishConfigChanged(existing.getConfigGroup(), req.getConfigGroup());
+        SysCache.evictConfig(existing.getConfigKey());
+        SysCache.evictConfig(req.getConfigKey());
     }
 
     @Override
@@ -159,6 +163,7 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("参数删除失败");
         }
         publishConfigChanged(config.getConfigGroup());
+        SysCache.evictConfig(config.getConfigKey());
     }
 
     @Override

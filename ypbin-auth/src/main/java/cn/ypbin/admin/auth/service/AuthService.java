@@ -23,7 +23,6 @@ import java.util.List;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
-import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -51,7 +50,12 @@ public class AuthService {
      */
     public LoginResp login(LoginReq req, String ip) {
         SysUser user = SysCache.getUserByUsername(req.getUsername());
-        if (user == null || !PasswordEncoderUtil.matches(req.getPassword(), user.getPassword())) {
+        if (user == null) {
+            throw new BusinessException("用户名或密码错误");
+        }
+        // 密码不入缓存（安全），校验走 system 直查库比对
+        Boolean matched = permissionFeignClient.verifyPassword(user.getId(), req.getPassword()).getData();
+        if (!Boolean.TRUE.equals(matched)) {
             throw new BusinessException("用户名或密码错误");
         }
         if (cn.ypbin.admin.system.enums.UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
