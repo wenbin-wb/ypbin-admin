@@ -10,9 +10,9 @@
         <version>${revision}</version>
     </parent>
 
-    <artifactId>ypbin-ai-biz</artifactId>
+    <artifactId>ypbin-ai</artifactId>
     <name>${project.artifactId}</name>
-    <description>ypbin-admin 微服务版：ypbin-ai-service</description>
+    <description>ypbin-admin 微服务版：AI 服务（知识库/对话/模型/统计）</description>
 
     <dependencies>
         <!-- 服务注册/配置中心 -->
