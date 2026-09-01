@@ -17,12 +17,11 @@
     <description>ypbin-admin 微服务版聚合模块（与单体版 main 分支并行维护）</description>
 
     <modules>
-        <module>ypbin-common-api</module>
+        <module>ypbin-common</module>
         <module>ypbin-gateway</module>
-        <module>ypbin-auth-service</module>
-        <module>ypbin-system-service</module>
-        <module>ypbin-ai-service</module>
-        <module>ypbin-job-service</module>
+        <module>ypbin-auth</module>
+        <module>ypbin-service</module>
+        <module>ypbin-service-api</module>
     </modules>
 
     <properties>
@@ -34,7 +33,12 @@
         <dependencies>
             <dependency>
                 <groupId>cn.ypbin.admin</groupId>
-                <artifactId>ypbin-common-api</artifactId>
+                <artifactId>ypbin-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.ypbin.admin</groupId>
+                <artifactId>ypbin-system-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

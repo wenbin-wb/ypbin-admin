@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.ypbin.admin</groupId>
+        <artifactId>ypbin-microservice</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>ypbin-service</artifactId>
+    <packaging>pom</packaging>
+    <name>${project.artifactId}</name>
+    <description>微服务版业务服务聚合（对齐 blade-service：每个业务域一个 biz 子模块）</description>
+
+    <modules>
+        <module>ypbin-system-biz</module>
+        <module>ypbin-ai-biz</module>
+        <module>ypbin-job-biz</module>
+    </modules>
+</project>

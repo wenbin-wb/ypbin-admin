@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.ypbin.admin</groupId>
+        <artifactId>ypbin-service-api</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>ypbin-system-api</artifactId>
+    <name>${project.artifactId}</name>
+    <description>微服务版 ypbin-system-api：Feign 接口与共享 DTO（对齐 blade-service-api）</description>
+
+    <dependencies>
+        <!-- 统一响应体 R / 错误码（Feign 返回结构） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cloud-core</artifactId>
+        </dependency>
+        <!-- 实体基类/MyBatis 注解（共享实体依赖） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-tenant</artifactId>
+        </dependency>
+        <!-- Feign 接口定义 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+            <version>4.2.0</version>
+        </dependency>
+    </dependencies>
+</project>
