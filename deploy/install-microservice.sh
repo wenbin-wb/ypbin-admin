@@ -69,7 +69,29 @@ if ! command -v mvn >/dev/null 2>&1; then
 fi
 JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
 export JAVA_HOME
-ok "环境就绪：$(java -version 2>&1 | head -1)"
+ok "环境就绪：$(java -version 2>&1 | head -1)，Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
+
+# --- Maven 阿里云镜像（国内服务器访问 Central 常 403/超时，与单体脚本一致）---
+if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null; then
+  info "配置 Maven 阿里云镜像（国内加速）"
+  mkdir -p "$HOME/.m2"
+  cat > "$HOME/.m2/settings.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyun</id>
+      <mirrorOf>central</mirrorOf>
+      <name>Aliyun Maven Central Mirror</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+    </mirror>
+  </mirrors>
+</settings>
+EOF
+  ok "Maven 阿里云镜像已配置"
+fi
 
 # ---------- [2/7] 拉取代码 ----------
 info "[2/7] 拉取代码"
@@ -77,14 +99,18 @@ mkdir -p "$ROOT"
 cd "$ROOT"
 [ -d ypbin-starter/.git ] || git clone -b master "$REPO_BASE/ypbin-starter.git"
 [ -d ypbin-admin/.git ]   || git clone -b "$BRANCH" "$REPO_BASE/ypbin-admin.git"
-cd ypbin-starter && git pull --ff-only 2>/dev/null || true
-cd "$ROOT/ypbin-admin" && git pull --ff-only 2>/dev/null || true
-ok "代码就绪"
+# 拉取最新（失败必须报错，避免用旧代码构建出莫名编译错误）
+cd "$ROOT/ypbin-starter" && git checkout master 2>/dev/null && git pull --ff-only || die "ypbin-starter 拉取失败（检查网络或分支）"
+cd "$ROOT/ypbin-admin" && git checkout "$BRANCH" 2>/dev/null && git pull --ff-only || die "ypbin-admin 拉取失败（检查网络或分支）"
+ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD)，admin@$(git -C "$ROOT/ypbin-admin" rev-parse --short HEAD)）"
 
 # ---------- [3/7] 构建 starter ----------
 info "[3/7] 构建 starter $STARTER_VERSION（微服务依赖其新能力）"
 cd "$ROOT/ypbin-starter"
-mvn -q -DskipTests install 2>&1 | tail -3 || die "starter 构建失败"
+# 完整输出错误（不吞日志）：失败时打印 maven 日志尾部
+if ! mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20; then
+  die "starter 构建失败（完整日志 /tmp/starter-build.log）"
+fi
 ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
 
 # ---------- [4/7] 构建后端 5 服务 ----------
