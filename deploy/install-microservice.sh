@@ -32,6 +32,26 @@
 set -euo pipefail
 trap 'echo "!! 脚本执行失败于第 ${LINENO} 行"' ERR
 
+# ---------- 非 root 自提权（对齐单体脚本）----------
+# /opt/ypbin 由 root 创建（部署目录），非 root 用户构建会因写 target/ 权限失败；
+# 自动 sudo -E 以 root 重新执行本脚本。管道执行（bash <(curl ...)）时脚本无真实文件，
+# 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
+SCRIPT_VERSION="2026.09.01.1"
+SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/feature/microservice/deploy/install-microservice.sh}"
+if [ "$(id -u)" != "0" ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SELF="/tmp/ypbin-install-microservice.sh"
+    if [ ! -f "$SELF" ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" "$SELF" 2>/dev/null; then
+      echo "非 root 用户，下载脚本并用 sudo 提权执行..."
+      curl -fsSL -o "$SELF" "$SCRIPT_URL" || { echo "下载脚本失败（网络？）" >&2; exit 1; }
+      chmod +x "$SELF"
+    fi
+    exec sudo -E bash "$SELF" "$@"
+  fi
+  echo "请用 root 或 sudo 运行本脚本" >&2
+  exit 1
+fi
+
 # ---------- 工具函数 ----------
 info() { echo -e "\033[36m==> $*\033[0m"; }
 ok()   { echo -e "\033[32m✓  $*\033[0m"; }
@@ -97,6 +117,9 @@ fi
 info "[2/7] 拉取代码"
 mkdir -p "$ROOT"
 cd "$ROOT"
+# 仓库可能由不同用户/上次部署创建，root 操作需豁免 dubious ownership
+git config --global --add safe.directory "$ROOT/ypbin-starter" 2>/dev/null || true
+git config --global --add safe.directory "$ROOT/ypbin-admin" 2>/dev/null || true
 [ -d ypbin-starter/.git ] || git clone -b master "$REPO_BASE/ypbin-starter.git"
 [ -d ypbin-admin/.git ]   || git clone -b "$BRANCH" "$REPO_BASE/ypbin-admin.git"
 # 拉取最新（失败必须报错，避免用旧代码构建出莫名编译错误）
