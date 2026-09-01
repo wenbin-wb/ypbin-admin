@@ -9,19 +9,19 @@
  */
 package cn.ypbin.admin.ai.tool;
 
+import cn.ypbin.admin.system.api.feign.SystemPermissionFeignClient;
 import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.enums.JobStatusEnum;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
-import cn.ypbin.admin.ai.mapper.SysJobMapper;
-import cn.ypbin.admin.ai.mapper.SysUserMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.ypbin.starter.core.model.R;
 import java.util.List;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
+
 
 /**
  * 管理平台内置 AI 工具集。
@@ -42,8 +42,7 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "ypbin.ai", name = "enabled", havingValue = "true")
 public class AdminAiTools {
 
-    private final SysUserMapper userMapper;
-    private final SysJobMapper jobMapper;
+    private final SystemPermissionFeignClient systemFeignClient;
 
     /**
      * 按用户名或真实姓名查找用户信息。
@@ -54,12 +53,8 @@ public class AdminAiTools {
     @Tool(name = "searchUser",
         description = "按用户名或真实姓名搜索系统用户，返回用户基本信息，限制 10 条")
     public String searchUser(String keyword) {
-        List<SysUser> users = userMapper.selectList(
-            new LambdaQueryWrapper<SysUser>()
-                .like(SysUser::getUsername, keyword)
-                .or()
-                .like(SysUser::getRealName, keyword)
-                .last("LIMIT 10"));
+        var resp = systemFeignClient.searchUsers(keyword);
+        List<SysUser> users = resp == null ? List.of() : resp.getData() == null ? List.of() : resp.getData();
         if (users.isEmpty()) {
             return "未找到匹配用户：" + keyword;
         }
@@ -79,12 +74,8 @@ public class AdminAiTools {
     @Tool(name = "listJobs",
         description = "查询系统定时任务列表，可按名称筛选，返回任务名称/执行器/Cron/状态")
     public String listJobs(String nameKeyword) {
-        LambdaQueryWrapper<SysJob> wrapper = new LambdaQueryWrapper<>();
-        if (nameKeyword != null && !nameKeyword.isBlank()) {
-            wrapper.like(SysJob::getName, nameKeyword);
-        }
-        wrapper.last("LIMIT 20");
-        List<SysJob> jobs = jobMapper.selectList(wrapper);
+        var resp = systemFeignClient.listJobs(nameKeyword);
+        List<SysJob> jobs = resp == null ? List.of() : resp.getData() == null ? List.of() : resp.getData();
         if (jobs.isEmpty()) {
             return "没有找到匹配的定时任务";
         }
@@ -104,10 +95,12 @@ public class AdminAiTools {
     @Tool(name = "getSystemStats",
         description = "获取当前系统基础统计：注册用户总数、已启用任务数")
     public String getSystemStats() {
-        long userCount = userMapper.selectCount(
-            new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, UserStatusEnum.ENABLED.getCode()));
-        long runningJobs = jobMapper.selectCount(
-            new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, JobStatusEnum.ENABLED.getCode()));
+        long userCount = feignCount(systemFeignClient.countUsers());
+        long runningJobs = feignCount(systemFeignClient.countRunningJobs());
         return String.format("系统统计 - 正常用户数: %d，运行中定时任务: %d", userCount, runningJobs);
+    }
+
+    private static long feignCount(R<Long> resp) {
+        return resp == null || resp.getData() == null ? 0L : resp.getData();
     }
 }

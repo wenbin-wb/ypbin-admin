@@ -25,6 +25,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-json</artifactId>
         </dependency>
+        <!-- 缓存（SysCache 跨服务查询缓存） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-cache</artifactId>
+        </dependency>
         <!-- 敏感词注解（DTO 字段） -->
         <dependency>
             <groupId>cn.ypbin</groupId>

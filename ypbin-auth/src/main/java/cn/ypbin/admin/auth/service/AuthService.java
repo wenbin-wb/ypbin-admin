@@ -15,7 +15,7 @@ import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.auth.mapper.SysUserMapper;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.SystemPermissionFeignClient;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
@@ -24,7 +24,6 @@ import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,15 +44,13 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final SysUserMapper userMapper;
     private final SystemPermissionFeignClient permissionFeignClient;
 
     /**
      * 账号密码登录。
      */
     public LoginResp login(LoginReq req, String ip) {
-        SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getUsername, req.getUsername()), false);
+        SysUser user = SysCache.getUserByUsername(req.getUsername());
         if (user == null || !PasswordEncoderUtil.matches(req.getPassword(), user.getPassword())) {
             throw new BusinessException("用户名或密码错误");
         }
