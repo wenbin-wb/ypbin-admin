@@ -31,6 +31,9 @@ public class LoginReq {
     @NotBlank(message = "密码不能为空")
     private String password;
 
+    /** 租户 ID（可选；不传则按用户名全局定位，适用于平台超管/默认租户登录） */
+    private Long tenantId;
+
     /** 行为验证码 id（LOGIN_CAPTCHA_ENABLED 开启时必传） */
     private String captchaId;
 

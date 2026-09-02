@@ -21,6 +21,7 @@ import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
+import java.util.Objects;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
@@ -51,7 +52,7 @@ public class AuthService {
      */
     public LoginResp login(LoginReq req, String ip) {
         SysUser user = SysCache.getUserByUsername(req.getUsername());
-        if (user == null) {
+        if (user == null || !Objects.equals(req.getTenantId(), user.getTenantId())) {
             throw new BusinessException("用户名或密码错误");
         }
         // 密码不入缓存（安全），校验走 system 直查库比对

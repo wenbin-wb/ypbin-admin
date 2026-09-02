@@ -16,6 +16,7 @@ import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -68,7 +69,7 @@ public class PhoneLoginStrategy {
         }
 
         SysUser user = smsCodeService.getUserByPhone(phone);
-        if (user == null) {
+        if (user == null || !Objects.equals(req.getTenantId(), user.getTenantId())) {
             attemptLimiter.recordFailure(phone, clientIp);
             throw new BusinessException("手机号未注册");
         }

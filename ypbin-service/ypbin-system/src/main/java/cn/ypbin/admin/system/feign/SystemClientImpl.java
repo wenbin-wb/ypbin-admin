@@ -23,9 +23,11 @@ import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysPermissionService;
+import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,6 +53,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SystemClientImpl implements ISystemClient {
 
     private final SysPermissionService permissionService;
+    private final SysUserService userService;
     private final SysUserMapper userMapper;
     private final SysJobMapper jobMapper;
     private final SysConfigMapper configMapper;
@@ -73,9 +76,7 @@ public class SystemClientImpl implements ISystemClient {
     @Override
     @GetMapping("/user-by-username")
     public R<SysUser> getUserByUsername(@RequestParam("username") String username) {
-        SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getUsername, username), false);
-        return R.ok(user);
+        return R.ok(userService.getByUsername(username));
     }
 
     @Override
@@ -87,18 +88,13 @@ public class SystemClientImpl implements ISystemClient {
     @Override
     @GetMapping("/user-by-phone")
     public R<SysUser> getUserByPhone(@RequestParam("phone") String phone) {
-        SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getPhone, phone), false);
-        return R.ok(user);
+        return R.ok(userService.getByPhone(phone));
     }
 
     @Override
     @GetMapping("/update-last-login")
     public R<Void> updateLastLoginTime(@RequestParam("userId") Long userId) {
-        SysUser update = new SysUser();
-        update.setId(userId);
-        update.setLastLoginTime(LocalDateTime.now());
-        userMapper.updateById(update);
+        userService.updateLastLoginTime(userId);
         return R.ok();
     }
 
@@ -148,7 +144,7 @@ public class SystemClientImpl implements ISystemClient {
     @PostMapping("/verify-password")
     public R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
         @RequestParam("rawPassword") String rawPassword) {
-        SysUser user = userMapper.selectById(userId);
+        SysUser user = TenantContext.executeIgnore(() -> userMapper.selectById(userId));
         if (user == null || user.getPassword() == null) {
             return R.ok(false);
         }

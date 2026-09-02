@@ -30,4 +30,7 @@ public class PhoneLoginReq {
     /** 短信验证码 */
     @NotBlank(message = "验证码不能为空")
     private String code;
+
+    /** 租户 ID（可选；不传则按手机号全局定位） */
+    private Long tenantId;
 }

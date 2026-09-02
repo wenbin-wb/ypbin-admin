@@ -98,7 +98,11 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         SysUser update = new SysUser();
         update.setId(userId);
         update.setLastLoginTime(LocalDateTime.now());
-        updateById(update);
+        // 登录成功回写时通常尚无租户上下文（auth 经 Feign 调用），须忽略租户行级过滤
+        TenantContext.executeIgnore(() -> {
+            updateById(update);
+            return null;
+        });
     }
 
     @Override
