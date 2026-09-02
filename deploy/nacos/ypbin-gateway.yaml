@@ -9,23 +9,25 @@ spring:
     compatibility-verifier:
       enabled: false
     gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      routes:
-        - id: auth
-          uri: lb://ypbin-auth
-          predicates:
-            - Path=/auth/**,/captcha/**,/user/**,/open-api/**
-        - id: system
-          uri: lb://ypbin-system
-          predicates:
-            - Path=/system/**
-        - id: ai
-          uri: lb://ypbin-ai
-          predicates:
-            - Path=/ai/**,/share/**,/widget/**
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          routes:
+            - id: auth
+              uri: lb://ypbin-auth
+              predicates:
+                - Path=/auth/**,/captcha/**,/user/**,/open-api/**
+            - id: system
+              uri: lb://ypbin-system
+              predicates:
+                - Path=/system/**
+            - id: ai
+              uri: lb://ypbin-ai
+              predicates:
+                - Path=/ai/**,/share/**,/widget/**
 
 # 统一鉴权：校验 token 后清洗外部头、签发内部身份头
 ypbin:

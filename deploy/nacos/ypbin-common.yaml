@@ -9,21 +9,21 @@
 # ============================================================
 
 # ---------- 数据库连接（所有连库服务共享）----------
-ypbin:
+spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://mysql:3306/ypbin_admin?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: YpbinRoot2026!
+    password: YpbinRoot1788324161
 
 # ---------- Redis（验证码/会话/缓存）----------
-  redis:
-    host: redis
-    port: 6379
-    database: 0
+  data:
+    redis:
+      host: redis
+      port: 6379
+      database: 0
 
 # ---------- Sentinel 限流控制台 ----------
-spring:
   cloud:
     sentinel:
       transport:

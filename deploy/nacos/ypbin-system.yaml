@@ -31,6 +31,9 @@ ypbin:
       - sys_license
   data-permission:
     enabled: true
+  # 本应用是授权签发端，不启用 starter License 自保护
+  license:
+    enabled: false
 
 # ---------- 安全（开放接口与内部 Feign 端点免登录拦截）----------
   security:

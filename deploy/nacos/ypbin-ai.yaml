@@ -8,3 +8,6 @@ ypbin:
     enabled: true
   data-permission:
     enabled: true
+  ai:
+    model-config:
+      secret-key: ${AI_MODEL_SECRET_KEY:}
