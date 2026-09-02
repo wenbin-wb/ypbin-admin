@@ -83,8 +83,6 @@ services:
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
     ports:
       - "18081:18081"
     depends_on:
@@ -100,12 +98,6 @@ services:
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: ypbin_admin
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
     ports:
       - "18082:18082"
     depends_on:
@@ -121,12 +113,6 @@ services:
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: ypbin_admin
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
     ports:
       - "18083:18083"
     depends_on:
@@ -142,12 +128,6 @@ services:
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_NAME: ypbin_admin
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
     ports:
       - "18084:18084"
     depends_on:

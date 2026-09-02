@@ -2,30 +2,29 @@
 # ypbin-admin 微服务共享配置（Nacos 配置中心）
 # Data ID: ypbin-common.yaml | Group: DEFAULT_GROUP | 格式: YAML
 #
-# 部署/本地启动前必须在 Nacos 创建本配置（一键脚本自动导入，或手动复制内容创建）。
-# 各服务通过 spring.config.import: optional:nacos:ypbin-common.yaml 引入。
-#
-# 占位符说明：${DB_HOST:mysql} 等由各服务进程的环境解析（docker compose 注入 env），
-# 本地直连可配 DB_HOST=localhost。
+# 所有连接参数直接在此配置（不再依赖环境变量/本地 yml）。
+# 数据库/Redis 与各服务同属 docker compose 网络，主机名用容器名：
+#   mysql / redis / nacos
+# 若服务以宿主机方式运行（java -jar），把主机名改为 localhost。
 # ============================================================
 
 # ---------- 数据库连接（所有连库服务共享）----------
 ypbin:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:}
+    url: jdbc:mysql://mysql:3306/ypbin_admin?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: YpbinRoot2026!
 
 # ---------- Redis（验证码/会话/缓存）----------
   redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    database: ${REDIS_DB:0}
+    host: redis
+    port: 6379
+    database: 0
 
 # ---------- Sentinel 限流控制台 ----------
 spring:
   cloud:
     sentinel:
       transport:
-        dashboard: ${SENTINEL_ADDR:localhost:8858}
+        dashboard: sentinel-dashboard:8858
