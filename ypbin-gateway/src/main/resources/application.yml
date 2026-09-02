@@ -5,6 +5,9 @@ spring:
   application:
     name: ypbin-gateway
   cloud:
+    # Spring Cloud 2025.1.2 官方支持 Boot 4.1.x，兼容性检查器元数据滞后误报，显式禁用
+    compatibility-verifier:
+      enabled: false
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}
     gateway:
