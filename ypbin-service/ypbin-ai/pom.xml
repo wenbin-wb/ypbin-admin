@@ -116,6 +116,11 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Reactor 跨线程租户传播（tenant 的 ThreadLocalAccessor，optional 不传递需显式引入） -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>context-propagation</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
