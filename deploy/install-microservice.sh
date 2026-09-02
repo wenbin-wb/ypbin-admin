@@ -239,7 +239,7 @@ fi
 JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
 mkdir -p "$JAR_DIR"
 while IFS=: read -r dir jar port; do
-  find "ypbin-$dir" -name "*.jar" -path "*target*" ! -name "*sources*" ! -name "*javadoc*" ! -name "*.original" | head -1 | xargs -I{} cp "{}" "$JAR_DIR/$jar.jar"
+  find "$dir" -name "*.jar" -path "*target*" ! -name "*sources*" ! -name "*javadoc*" ! -name "*.original" | head -1 | xargs -I{} cp "{}" "$JAR_DIR/$jar.jar"
   ok "打包 $jar.jar（端口 $port）"
 done <<< "$SERVICES"
 fi
