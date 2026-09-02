@@ -20,5 +20,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-security</artifactId>
         </dependency>
+        <!-- 租户扩展接口（TenantProvider）；optional：仅 system/ai 等已引入租户模块的服务生效 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-extension-tenant</artifactId>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 </project>
