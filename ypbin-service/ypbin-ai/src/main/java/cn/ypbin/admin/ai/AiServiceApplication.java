@@ -10,6 +10,7 @@
 package cn.ypbin.admin.ai;
 
 import org.springframework.boot.SpringApplication;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
@@ -20,6 +21,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  * @since 2026-09-01
  */
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
+@MapperScan("cn.ypbin.admin.ai.mapper")
 @SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.ai", "cn.ypbin.admin.system.api"})
 public class AiServiceApplication {
 
