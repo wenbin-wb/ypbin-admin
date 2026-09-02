@@ -70,9 +70,9 @@ STARTER_VERSION="2.1.0"
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
 ypbin-auth:ypbin-auth:18081
-ypbin-system:ypbin-system:18082
-ypbin-ai:ypbin-ai:18083
-ypbin-job:ypbin-job:18084"
+ypbin-service/ypbin-system:ypbin-system:18082
+ypbin-service/ypbin-ai:ypbin-ai:18083
+ypbin-service/ypbin-job:ypbin-job:18084"
 
 # 交互确认：Y/n；-y 或 ASSUME_YES=1 时直接 yes（对齐单体脚本）
 confirm() {
