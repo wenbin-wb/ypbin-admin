@@ -1,124 +1,81 @@
 #!/usr/bin/env bash
 # ============================================================
-# ypbin-admin 一键部署脚本（零配置，全自动）
+# ypbin-admin 微服务版一键部署脚本（零配置，全自动）
 #
-# 用法（新服务器一键安装）：
-#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+# 用法（新服务器一键安装，Docker 模式）：
+#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/feature/microservice/deploy/install.sh)
+#
+# 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
+#   NO_DOCKER=1 bash deploy/install.sh
+#   注意：无 Docker 模式要求外部已有 Nacos/Redis/MySQL，用环境变量指定地址
 #
 # 阶段总览：
-#   [1/7] 环境准备   —— 一次性检查并安装全部依赖（系统/Docker/JDK21/Maven/Node/pnpm/镜像/网络）
-#   [2/7] 磁盘检测   —— 构建空间是否充足
-#   [3/7] 拉取代码   —— starter / admin / admin-ui 三仓
-#   [4/7] 构建后端   —— Maven 打包 admin.jar
-#   [5/7] 构建前端   —— pnpm 构建 admin-ui dist（或复用已上传产物）
-#   [6/7] 启动服务   —— 生成 .env 凭据 + docker compose up
-#   [7/7] 健康检查   —— 验证 admin / admin-ui 可访问，输出凭据
+#   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven）
+#   [2/7] 拉取代码   —— starter（构建到本地 Maven 仓库）+ admin（feature/microservice 分支）
+#   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.1.0 及新能力）
+#   [4/7] 构建后端   —— Maven 打包 5 个服务可执行 jar
+#   [5/7] 生成配置   —— .env 凭据 + Nacos 共享配置提示
+#   [6/7] 启动服务   —— Docker: compose up（含基础设施）；NO_DOCKER: java -jar 逐个启动
+#   [7/7] 健康检查   —— 验证网关/各服务注册，输出访问地址
 #
-# 自定义参数（可选，通过环境变量覆盖）：
+# 自定义参数（环境变量覆盖）：
 #   YPBIN_ROOT=/opt/ypbin          部署根目录（默认 /opt/ypbin）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
-#   ADMIN_PORT=8080                admin 后端端口
-#   ADMIN_UI_PORT=18080            admin-ui 前端端口
-#   MYSQL_PORT=3307                MySQL 映射端口（默认 3307，避开本机 3306）
-#   REDIS_PORT=6380                Redis 映射端口（默认 6380，避开常见 6379）
-#   SKIP_FRONTEND=1                跳过前端构建（使用已上传的 admin-ui-dist）
-#   ADMIN_BOOTSTRAP_USERNAME=admin 初始管理员账号
+#   BRANCH=feature/microservice    admin 分支（默认 feature/microservice）
+#   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
+#   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
+#   REDIS_HOST=localhost REDIS_PORT=6379
+#   MYSQL_ROOT_PASSWORD=           Docker 模式内建 MySQL 密码（必填）
+#   NO_DOCKER=1                    无 Docker 模式：java -jar 直接启动
 # ============================================================
 
 set -euo pipefail
+trap 'echo "!! 脚本执行失败于第 ${LINENO} 行"' ERR
 
-# ============================================================
-# 脚本版本与自更新检测
-# raw.githubusercontent.com 走 Fastly CDN（max-age=300，5 分钟缓存），
-# push 后立即执行可能拉到旧版。这里每次运行优先用 GitHub API
-# （contents 端点不经 Fastly 缓存）比对远程最新版本号，更新则自动重拉执行。
-# 用法不变：bash <(curl -fsSL ...)
-# ============================================================
-SCRIPT_VERSION="2026.08.29.5"
-SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
-SCRIPT_API_URL="${YPBIN_SCRIPT_API_URL:-https://api.github.com/repos/wenbin-wb/ypbin-admin/contents/deploy/install.sh}"
-
-if [ "${YPBIN_SKIP_SELF_UPDATE:-0}" != "1" ]; then
-  # 仅当脚本来自管道/进程替换（无真实文件）或文件版本与当前不符时才检查更新
-  if [ ! -f /tmp/ypbin-install.sh ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" /tmp/ypbin-install.sh 2>/dev/null; then
-    # 优先用 GitHub API 拉取远程最新版本（不经 CDN 缓存）
-    REMOTE_VER=""
-    REMOTE_VER=$(curl -fsSL --max-time 20 -H "Accept: application/vnd.github+json" "${SCRIPT_API_URL}" 2>/dev/null \
-      | grep -oE '"content": "[A-Za-z0-9+/=]+"' | head -1 | sed 's/"content": "//;s/"//' \
-      | base64 -d 2>/dev/null | grep -m1 'SCRIPT_VERSION=' | sed 's/SCRIPT_VERSION="\([^"]*\)"/\1/' || true)
-    if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$SCRIPT_VERSION" ]; then
-      echo ""
-      echo "  检测到脚本新版本 ($REMOTE_VER > $SCRIPT_VERSION)，自动更新..."
-      # 用 GitHub API 重新下载最新版并执行
-      curl -fsSL --max-time 30 -H "Accept: application/vnd.github+json" "${SCRIPT_API_URL}" \
-        | grep -oE '"content": "[A-Za-z0-9+/=]+"' | head -1 | sed 's/"content": "//;s/"//' \
-        | base64 -d > /tmp/ypbin-install.sh
-      chmod +x /tmp/ypbin-install.sh
-      exec bash /tmp/ypbin-install.sh "$@"
+# ---------- 非 root 自提权（对齐单体脚本）----------
+# /opt/ypbin 由 root 创建（部署目录），非 root 用户构建会因写 target/ 权限失败；
+# 自动 sudo -E 以 root 重新执行本脚本。管道执行（bash <(curl ...)）时脚本无真实文件，
+# 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
+SCRIPT_VERSION="2026.09.01.1"
+SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/feature/microservice/deploy/install.sh}"
+if [ "$(id -u)" != "0" ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SELF="/tmp/ypbin-install.sh"
+    if [ ! -f "$SELF" ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" "$SELF" 2>/dev/null; then
+      echo "非 root 用户，下载脚本并用 sudo 提权执行..."
+      curl -fsSL -o "$SELF" "$SCRIPT_URL" || { echo "下载脚本失败（网络？）" >&2; exit 1; }
+      chmod +x "$SELF"
     fi
-    # 缓存当前版到 /tmp，后续同名文件直接复用（避免重复检查）
-    if [ ! -f /tmp/ypbin-install.sh ]; then
-      curl -fsSL --max-time 30 -H "Accept: application/vnd.github+json" "${SCRIPT_API_URL}" \
-        | grep -oE '"content": "[A-Za-z0-9+/=]+"' | head -1 | sed 's/"content": "//;s/"//' \
-        | base64 -d > /tmp/ypbin-install.sh
-      chmod +x /tmp/ypbin-install.sh
-    fi
+    exec sudo -E bash "$SELF" "$@"
   fi
+  echo "请用 root 或 sudo 运行本脚本" >&2
+  exit 1
 fi
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
-ok()   { echo -e "  ${GREEN}✓${NC}  $*"; }
-info() { echo -e "  ${BLUE}·${NC}  $*"; }
-warn() { echo -e "  ${YELLOW}!${NC}  $*"; }
-die()  { echo -e "\n  ${RED}✗  错误：$*${NC}\n"; exit 1; }
-step() { echo -e "\n${BOLD}── $* ──${NC}"; }
+# ---------- 工具函数 ----------
+info() { echo -e "\033[36m==> $*\033[0m"; }
+ok()   { echo -e "\033[32m✓  $*\033[0m"; }
+warn() { echo -e "\033[33m!  $*\033[0m"; }
+die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
 # ---------- 参数 ----------
-ROOT="${YPBIN_ROOT:-/opt/ypbin}"
+# 默认独立目录（与单体版 /opt/ypbin 分开，避免代码互相覆盖/分支冲突，两版本可共存）
+ROOT="${YPBIN_ROOT:-/opt/ypbin-ms}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
-ADMIN_PORT="${ADMIN_PORT:-8080}"
-ADMIN_UI_PORT="${ADMIN_UI_PORT:-18080}"
-MYSQL_PORT="${MYSQL_PORT:-3307}"
-REDIS_PORT="${REDIS_PORT:-6380}"
-SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
-BOOTSTRAP_USER="${ADMIN_BOOTSTRAP_USERNAME:-admin}"
-DIST_DIR="$ROOT/admin-ui-dist"
-DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
-
-# ---------- 交互模式 ----------
-# 默认交互（人工确认关键步骤）；-y/--yes 全自动跳过所有确认（CI/无头环境）
+BRANCH="${BRANCH:-feature/microservice}"
+NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -y|--yes) ASSUME_YES=1; shift ;;
-    *) shift ;;
-  esac
-done
+STARTER_VERSION="2.1.0"
 
-# 交互询问：读入值；非交互或 ASSUME_YES 时直接返回默认值
-ask() {
-  # $1=提示  $2=默认值  $3=校验正则(可选)
-  local prompt="$1" default="$2" pattern="${3:-}"
-  local answer
-  if [ "$ASSUME_YES" = "1" ]; then
-    echo "$default"
-    return 0
-  fi
-  while true; do
-    read -rp "  ${prompt} [${default}]: " answer
-    answer="${answer:-$default}"
-    if [ -z "$pattern" ] || echo "$answer" | grep -qE "$pattern"; then
-      echo "$answer"
-      return 0
-    fi
-    warn "输入无效（需匹配: $pattern），请重试"
-  done
-}
+# 服务清单（目录名:jar名:端口）
+SERVICES="ypbin-gateway:ypbin-gateway:18080
+ypbin-auth:ypbin-auth:18081
+ypbin-service/ypbin-system:ypbin-system:18082
+ypbin-service/ypbin-ai:ypbin-ai:18083
+ypbin-service/ypbin-job:ypbin-job:18084"
 
-# 交互确认：Y/n；非交互或 ASSUME_YES 时直接 yes
+# 交互确认：Y/n；-y 或 ASSUME_YES=1 时直接 yes（对齐单体脚本）
 confirm() {
-  # $1=提示
   local answer
   if [ "$ASSUME_YES" = "1" ]; then
     return 0
@@ -133,103 +90,62 @@ confirm() {
   done
 }
 
-# 模式选择：菜单询问（全新部署 / 只后端 / 只前端 / 手动上传前端 / 退出）
-MODE="full"   # full | backend | frontend | upload-frontend
+info "部署参数：ROOT=$ROOT 分支=$BRANCH NO_DOCKER=$NO_DOCKER"
+
+# ---------- 操作模式选择（对齐单体脚本；-y 跳过）----------
+# full=全新部署/完整更新（拉代码+构建+启动） backend=只更新后端（构建+重启）
+# restart=只重启服务（不拉代码不构建）      exit=退出
+MODE="full"
 if [ "$ASSUME_YES" != "1" ]; then
   echo ""
   echo "  请选择操作模式:"
-  echo "    1) 全新部署/完整更新（环境 + 后端 + 前端）"
-  echo "    2) 只更新后端（构建 jar + 重启 admin）"
-  echo "    3) 只更新前端（构建 dist + 重启 admin-ui）"
-  echo "    4) 手动上传前端包（跳过构建，等 dist 就绪后继续）"
-  echo "    5) 退出"
+  echo "    1) 全新部署/完整更新（拉代码 + 构建 starter/后端 + 启动）"
+  echo "    2) 只更新后端（拉代码 + 构建 + 重启服务）"
+  echo "    3) 只重启服务（不拉代码不构建）"
+  echo "    4) 退出"
   while true; do
     read -rp "  输入序号 [1]: " mode_choice
     case "${mode_choice:-1}" in
       1) MODE="full"; break ;;
       2) MODE="backend"; break ;;
-      3) MODE="frontend"; break ;;
-      4) MODE="upload-frontend"; break ;;
-      5) echo "  已退出"; exit 0 ;;
-      *) warn "请输入 1-5" ;;
+      3) MODE="restart"; break ;;
+      4) echo "  已退出"; exit 0 ;;
+      *) warn "请输入 1-4" ;;
     esac
   done
-  case "$MODE" in
-    backend) echo "  → 模式: 只更新后端" ;;
-    frontend) echo "  → 模式: 只更新前端" ;;
-    upload-frontend) echo "  → 模式: 手动上传前端包" ;;
-    *) echo "  → 模式: 完整部署" ;;
-  esac
+  echo "  → 模式: ${MODE}"
 fi
 
-echo "====================================================="
-echo "  ypbin-admin 一键部署 @ $(date '+%F %T')"
-if [ "$ASSUME_YES" = "1" ]; then
-  echo "  模式: 全自动（-y，跳过人工确认）"
+# restart 模式：跳过拉代码/构建，直接启动
+if [ "$MODE" = "restart" ]; then
+  info "只重启服务模式，跳过拉取与构建"
+  SKIP_PULL=1 SKIP_BUILD=1
 else
-  echo "  模式: 交互（关键步骤会询问，回车用默认值）"
+  SKIP_PULL=0 SKIP_BUILD=0
 fi
-echo "====================================================="
 
-# ============================================================
-# [1/7] 环境准备：系统 / Docker / JDK / Maven / Node / 镜像 / 网络
-# ============================================================
-step "[1/7] 环境准备"
-
-# --- 系统 ---
-[ "$(uname -s)" = "Linux" ] || die "本脚本仅支持 Linux"
-if [ "$(id -u)" != "0" ]; then
-  if command -v sudo >/dev/null 2>&1; then
-    SELF="/tmp/ypbin-install.sh"
-    if [ ! -f "$SELF" ] || ! grep -q "ypbin-admin 一键部署" "$SELF" 2>/dev/null; then
-      info "非 root 用户，自动下载脚本并用 sudo 提权执行..."
-      curl -fsSL -o "$SELF" "$SCRIPT_URL" || die "下载脚本失败（网络？）"
-    fi
-    exec sudo -E bash "$SELF" "$@"
-  fi
-  die "请用 root 或 sudo 运行本脚本"
+# ---------- [1/7] 环境准备 ----------
+info "[1/7] 检查并安装依赖"
+command -v git >/dev/null 2>&1 || { apt-get update -y && apt-get install -y git; }
+if [ "$NO_DOCKER" = "0" ]; then
+  command -v docker >/dev/null 2>&1 || die "Docker 未安装（NO_DOCKER=1 可跳过 Docker 用 java -jar 启动）"
+  docker compose version >/dev/null 2>&1 || die "Docker Compose 插件未安装"
 fi
-ok "系统: $(uname -s) / root 权限"
-
-command -v curl >/dev/null 2>&1 || { info "安装 curl"; apt-get update -y && apt-get install -y curl; }
-command -v git >/dev/null 2>&1 || { info "安装 git"; apt-get install -y git; }
-command -v tar >/dev/null 2>&1 || { info "安装 tar"; apt-get install -y tar; }
-
-# --- Docker ---
-if ! command -v docker >/dev/null 2>&1; then
-  info "安装 Docker（官方脚本）"
-  curl -fsSL https://get.docker.com | sh
-  systemctl enable --now docker
+if ! command -v java >/dev/null 2>&1; then
+  apt-get install -y openjdk-21-jdk-headless 2>/dev/null || die "JDK 21 安装失败"
 fi
-docker compose version >/dev/null 2>&1 || { info "安装 docker compose 插件"; apt-get install -y docker-compose-plugin; }
-ok "Docker $(docker --version | awk '{print $3}' | tr -d ',') + Compose"
-
-# --- JDK 21 ---
-NEED_JDK=0
-if ! command -v java >/dev/null 2>&1; then NEED_JDK=1; else
-  JAVA_VER=$(java -version 2>&1 | head -1 | grep -oE '"[0-9]+' | tr -d '"')
-  [ "$JAVA_VER" = "21" ] || NEED_JDK=1
-fi
-if [ "$NEED_JDK" = "1" ]; then
-  info "安装 JDK 21（openjdk-21-jdk-headless）"
-  apt-get install -y openjdk-21-jdk-headless 2>/dev/null || die "JDK 21 安装失败，请手动安装 openjdk-21-jdk-headless"
-fi
-JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
-export JAVA_HOME PATH="$JAVA_HOME/bin:$PATH"
-ok "JDK 21 @ $JAVA_HOME"
-
-# --- Maven ---
 if ! command -v mvn >/dev/null 2>&1; then
-  info "安装 Maven"
-  apt-get install -y maven
+  apt-get install -y maven 2>/dev/null || die "Maven 安装失败"
 fi
-ok "Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
+JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
+export JAVA_HOME
+ok "环境就绪：$(java -version 2>&1 | head -1)，Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
 
-# --- Maven 阿里云镜像（国内服务器访问 Central 常 403/超时）---
-if [ ! -f /root/.m2/settings.xml ] || ! grep -q "maven.aliyun.com" /root/.m2/settings.xml 2>/dev/null; then
+# --- Maven 阿里云镜像（国内服务器访问 Central 常 403/超时，与单体脚本一致）---
+if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null; then
   info "配置 Maven 阿里云镜像（国内加速）"
-  mkdir -p /root/.m2
-  cat > /root/.m2/settings.xml <<'EOF'
+  mkdir -p "$HOME/.m2"
+  cat > "$HOME/.m2/settings.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -238,341 +154,189 @@ if [ ! -f /root/.m2/settings.xml ] || ! grep -q "maven.aliyun.com" /root/.m2/set
     <mirror>
       <id>aliyun</id>
       <mirrorOf>central</mirrorOf>
-      <name>Aliyun Maven Mirror</name>
+      <name>Aliyun Maven Central Mirror</name>
       <url>https://maven.aliyun.com/repository/public</url>
     </mirror>
   </mirrors>
 </settings>
 EOF
   ok "Maven 阿里云镜像已配置"
-else
-  ok "Maven 阿里云镜像已存在"
 fi
 
-# --- Node 22.18+ / pnpm（vben 5.7 要求 node ^22.18.0 || ^24.12.0）---
-# 仅在需要服务器构建前端时安装（full/frontend 模式）；backend 模式不装
-NEED_NODE=0
-if { [ "$MODE" = "full" ] || [ "$MODE" = "frontend" ]; } && [ "$SKIP_FRONTEND" != "1" ] && [ ! -f "$DIST_DIR/index.html" ]; then
-  if ! command -v node >/dev/null 2>&1; then
-    NEED_NODE=1
+# ---------- [2/7] 拉取代码 ----------
+if [ "${SKIP_PULL:-0}" = "1" ]; then
+  info "[2/7] 跳过拉取代码（restart 模式）"
+else
+info "[2/7] 拉取代码"
+mkdir -p "$ROOT"
+cd "$ROOT"
+# 仓库可能由不同用户/上次部署创建，root 操作需豁免 dubious ownership
+git config --global --add safe.directory "$ROOT/ypbin-starter" 2>/dev/null || true
+git config --global --add safe.directory "$ROOT/ypbin-admin" 2>/dev/null || true
+[ -d ypbin-starter/.git ] || git clone -b master "$REPO_BASE/ypbin-starter.git"
+[ -d ypbin-admin/.git ]   || git clone -b "$BRANCH" "$REPO_BASE/ypbin-admin.git"
+# 拉取最新：分叉时强制对齐远程（部署目录无本地修改，直接 reset --hard 到远程）
+pull_repo() { # $1=仓库目录 $2=分支
+  local repo="$1" branch="$2"
+  cd "$repo"
+  git fetch origin "$branch" 2>/dev/null || die "$repo fetch 失败（检查网络）"
+  if git merge-base --is-ancestor "origin/$branch" HEAD 2>/dev/null; then
+    git checkout "$branch" 2>/dev/null && git merge --ff-only "origin/$branch" 2>/dev/null \
+      || git reset --hard "origin/$branch"
   else
-    NODE_MAJOR=$(node -v 2>/dev/null | sed 's/v\([0-9]*\).*/\1/')
-    NODE_MINOR=$(node -v 2>/dev/null | sed 's/v[0-9]*\.\([0-9]*\).*/\1/')
-    if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" = "22" ] && [ "$NODE_MINOR" -lt 18 ]; } || { [ "$NODE_MAJOR" = "23" ]; } || { [ "$NODE_MAJOR" = "24" ] && [ "$NODE_MINOR" -lt 12 ]; }; then
-      NEED_NODE=1
+    # 分叉（如历史改写）：直接强对齐远程
+    warn "$repo 与远程分叉，强制对齐 origin/$branch"
+    git checkout -f "$branch" 2>/dev/null || git checkout -b "$branch" "origin/$branch"
+    git reset --hard "origin/$branch"
+  fi
+}
+pull_repo "$ROOT/ypbin-starter" master
+pull_repo "$ROOT/ypbin-admin" "$BRANCH"
+ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD)，admin@$(git -C "$ROOT/ypbin-admin" rev-parse --short HEAD)）"
+fi
+
+# ---------- [3/7] 构建 starter ----------
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+  info "[3/7] 跳过构建（restart 模式）"
+else
+info "[3/7] 构建 starter $STARTER_VERSION（微服务依赖其新能力）"
+# 交互询问是否重构建 starter（对齐单体；-y 或已有构建产物时可选跳过）
+if [ "$ASSUME_YES" != "1" ]; then
+  if ! confirm "重新构建 starter（最新代码，约 3-6 分钟）？选 n 则用 .m2 已有包"; then
+    info "跳过 starter 构建（使用 .m2 已有包）"
+    SKIP_STARTER_BUILD=1
+  fi
+fi
+if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
+  cd "$ROOT/ypbin-starter"
+  # 完整输出错误（不吞日志）：失败时打印 maven 日志尾部
+  if ! mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20; then
+    die "starter 构建失败（完整日志 /tmp/starter-build.log）"
+  fi
+  ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
+else
+  # 确认本地仓库有 2.1.0（没有则强制构建）
+  if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.1.0" ]; then
+    warn "本地 Maven 仓库无 starter 2.1.0，强制构建"
+    cd "$ROOT/ypbin-starter"
+    mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20 \
+      || die "starter 构建失败（完整日志 /tmp/starter-build.log）"
+  fi
+fi
+fi
+
+# ---------- [4/7] 构建后端 5 服务 ----------
+if [ "${SKIP_BUILD:-0}" = "1" ]; then
+  info "[4/7] 跳过构建（restart 模式，复用已有 jar）"
+  JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
+else
+info "[4/7] 构建后端 5 个服务"
+cd "$ROOT/ypbin-admin"
+# 完整输出错误（不吞日志）
+if ! mvn -DskipTests clean package 2>&1 | tee /tmp/admin-build.log | tail -20; then
+  die "admin 构建失败（完整日志 /tmp/admin-build.log）"
+fi
+JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
+mkdir -p "$JAR_DIR"
+while IFS=: read -r dir jar port; do
+  find "$dir" -name "*.jar" -path "*target*" ! -name "*sources*" ! -name "*javadoc*" ! -name "*.original" | head -1 | xargs -I{} cp "{}" "$JAR_DIR/$jar.jar"
+  ok "打包 $jar.jar（端口 $port）"
+done <<< "$SERVICES"
+fi
+
+# ---------- [5/7] 生成配置 ----------
+info "[5/7] 生成 .env 配置"
+ENV_FILE="$ROOT/ypbin-admin/deploy/.env"
+if [ ! -f "$ENV_FILE" ]; then
+  MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
+  cat > "$ENV_FILE" <<EOF
+# 由 install.sh 生成
+MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
+SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
+EOF
+  chmod 600 "$ENV_FILE"
+  ok "已生成 .env（MySQL 密码：$MYSQL_ROOT_PASSWORD，可改 $ENV_FILE）"
+else
+  warn "复用已有 .env"
+fi
+
+# ---------- [5.5/7] 导入 Nacos 配置（本地 yml 仅端口，DB/Redis/路由等全在此）----------
+if [ "$NO_DOCKER" = "1" ] || docker ps >/dev/null 2>&1; then
+  info "[5.5/7] 导入 Nacos 配置中心（ypbin-common + 5 服务）"
+  NACOS_URL="http://${NACOS_ADDR:-nacos:8848}"
+  # 等待 Nacos 就绪
+  for i in $(seq 1 30); do
+    if curl -fsS "$NACOS_URL/nacos/v1/console/health/readiness" >/dev/null 2>&1; then
+      break
     fi
-  fi
+    [ "$i" = "30" ] && warn "Nacos 未就绪，跳过配置导入（服务可能因缺配置启动失败）"
+    sleep 2
+  done
+  # 发布 6 个配置（幂等：已存在则覆盖）
+  NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
+  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-job; do
+    if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
+      curl -fsS -X POST "$NACOS_URL/nacos/v1/cs/configs" \
+        --data-urlencode "dataId=$cfg.yaml" \
+        --data-urlencode "group=DEFAULT_GROUP" \
+        --data-urlencode "type=yaml" \
+        --data-urlencode "content@$NACOS_DIR/$cfg.yaml" \
+        >/dev/null 2>&1 && ok "已导入 $cfg.yaml" || warn "$cfg.yaml 导入失败"
+    fi
+  done
 fi
-if [ "$NEED_NODE" = "1" ]; then
-  NODE_VER="v22.18.0"
-  info "安装 Node ${NODE_VER}（vben 要求 ^22.18.0 || ^24.12.0）..."
-  ARCH=$(uname -m)
-  case "$ARCH" in
-    x86_64) NODE_ARCH="x64" ;;
-    aarch64|arm64) NODE_ARCH="arm64" ;;
-    *) warn "不支持的架构 $ARCH"; die "前端需本地构建上传（可用 SKIP_FRONTEND=1）" ;;
-  esac
-  curl -fsSL --max-time 120 -o /tmp/node.tar.xz \
-    "https://npmmirror.com/mirrors/node/${NODE_VER}/node-${NODE_VER}-linux-${NODE_ARCH}.tar.xz" \
-    || { warn "node 下载失败（网络？）"; die "可改用 SKIP_FRONTEND=1 + 本地构建上传"; }
-  mkdir -p /usr/local/lib/nodejs
-  tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs --strip-components=1
-  rm -f /tmp/node.tar.xz
-  export PATH="/usr/local/lib/nodejs/bin:$PATH"
-  echo 'export PATH="/usr/local/lib/nodejs/bin:$PATH"' > /etc/profile.d/nodejs.sh
-  npm install -g pnpm@latest --registry=https://registry.npmmirror.com >/dev/null 2>&1 \
-    || npm install -g pnpm@latest >/dev/null 2>&1
-  hash -r
-  ok "Node $(node -v) + pnpm $(pnpm -v)"
-elif command -v node >/dev/null 2>&1; then
-  ok "Node $(node -v) + pnpm $(pnpm -v 2>/dev/null || echo '无')"
+
+# ---------- [6/7] 启动服务 ----------
+if [ "$NO_DOCKER" = "1" ]; then
+  info "[6/7] 无 Docker 模式：java -jar 启动 5 服务（需外部 Nacos/Redis/MySQL）"
+  [ -n "${NACOS_ADDR:-}" ] || die "NO_DOCKER 模式需设置 NACOS_ADDR"
+  mkdir -p "$ROOT/logs"
+  while IFS=: read -r dir jar port; do
+    if [ "$dir" = "ypbin-gateway" ]; then
+      EXTRA="--spring.cloud.nacos.server-addr=$NACOS_ADDR"
+    else
+      EXTRA="--spring.cloud.nacos.server-addr=$NACOS_ADDR
+             --spring.datasource.url=jdbc:mysql://${DB_HOST:-localhost}:${DB_PORT:-3306}/${DB_NAME:-ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+             --spring.datasource.username=${DB_USER:-root}
+             --spring.datasource.password=${DB_PASSWORD:-}
+             --spring.data.redis.host=${REDIS_HOST:-localhost}
+             --spring.data.redis.port=${REDIS_PORT:-6379}"
+    fi
+    # shellcheck disable=SC2086
+    nohup java -Xms256m -Xmx512m -jar "$JAR_DIR/$jar.jar" $EXTRA \
+      > "$ROOT/logs/$jar.log" 2>&1 &
+    ok "已启动 $jar（端口 $port，日志 $ROOT/logs/$jar.log）"
+  done <<< "$SERVICES"
 else
-  ok "跳过 Node 安装（backend 模式或无需服务器构建前端）"
+  info "[6/7] Docker 模式：compose 启动（含 Nacos/Redis/MySQL 基础设施）"
+  cd "$ROOT/ypbin-admin/deploy"
+  # 微服务 compose 已内嵌基础设施（nacos/redis/mysql），单文件拉起全链路
+  docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d --build
 fi
 
-# --- 网络预检查 ---
-info "网络预检查（Maven Central / 阿里云镜像）..."
-CENTRAL_OK=0; MIRROR_OK=0
-curl -s -o /dev/null --max-time 10 \
-  "https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-dependencies/4.1.0/spring-boot-dependencies-4.1.0.pom" \
-  && CENTRAL_OK=1 || CENTRAL_OK=0
-curl -s -o /dev/null --max-time 10 \
-  "https://maven.aliyun.com/repository/public/org/springframework/boot/spring-boot-dependencies/4.1.0/spring-boot-dependencies-4.1.0.pom" \
-  && MIRROR_OK=1 || MIRROR_OK=0
-[ "$CENTRAL_OK" = "1" ] && ok "Maven Central 可达" || warn "Maven Central 不可达（403/超时）——已配阿里云镜像兜底"
-[ "$MIRROR_OK" = "1" ] && ok "阿里云镜像可达" || warn "阿里云镜像不可达——请检查网络/DNS/防火墙"
-if [ "$CENTRAL_OK" != "1" ] && [ "$MIRROR_OK" != "1" ]; then
-  die "Maven 仓库全部不可达。排查：curl -v https://repo.maven.apache.org/ 看报错；检查 DNS/防火墙/代理"
-fi
-
-# ============================================================
-# [2/7] 磁盘检测
-# ============================================================
-step "[2/7] 磁盘检测"
-AVAIL=$(df -m / | awk 'NR==2 {print $4}')
-echo "  可用磁盘: ${AVAIL}MB"
-[ "$AVAIL" -lt 3000 ] && warn "磁盘不足 3GB，构建可能失败（建议 ≥5GB）"
-
-# ============================================================
-# [3/7] 拉取代码（按模式拉取所需仓库）
-# ============================================================
-step "[3/7] 拉取代码"
-mkdir -p "$ROOT" && cd "$ROOT"
-# 模式 → 需要拉取的仓库
-REPOS_TO_PULL="ypbin-admin"
-case "$MODE" in
-  full) REPOS_TO_PULL="ypbin-starter ypbin-admin ypbin-admin-ui" ;;
-  backend) REPOS_TO_PULL="ypbin-starter ypbin-admin" ;;
-  frontend|upload-frontend) REPOS_TO_PULL="ypbin-admin ypbin-admin-ui" ;;
-esac
-for repo in $REPOS_TO_PULL; do
-  if [ ! -d "$repo/.git" ]; then
-    info "clone $repo"
-    git clone --quiet "$REPO_BASE/$repo.git"
-  else
-    info "更新 $repo"
-    (cd "$repo" && git stash --quiet 2>/dev/null || true; git pull --ff-only --quiet || warn "$repo 更新失败（本地有改动？）")
+# ---------- [7/7] 健康检查 ----------
+info "[7/7] 健康检查（等待服务就绪，最多 120 秒）"
+GATEWAY_PORT=18080
+for i in $(seq 1 24); do
+  if curl -fsS "http://localhost:$GATEWAY_PORT/actuator/health" >/dev/null 2>&1; then
+    ok "网关健康检查通过"
+    break
   fi
-  ok "$repo @ $(cd "$repo" && git log --oneline -1)"
+  [ "$i" = "24" ] && warn "网关健康检查超时（服务可能仍在启动，查看 $ROOT/logs/ 或 docker compose logs）"
+  sleep 5
 done
 
-# ============================================================
-# [4/7] 构建后端（full / backend 模式）
-# ============================================================
-if [ "$MODE" = "full" ] || [ "$MODE" = "backend" ]; then
-  step "[4/7] 构建 admin 后端 jar（首次约 3-6 分钟）"
-  # starter 构建策略：询问是否重新构建（仅交互模式）；-y 或已有 .m2 包时可选跳过
-  BUILD_STARTER="yes"
-  if [ "$ASSUME_YES" != "1" ]; then
-    if confirm "重新构建 starter（最新代码，约 3-6 分钟）？选 n 则用 .m2/Central 已有包"; then
-      BUILD_STARTER="yes"
-    else
-      BUILD_STARTER="no"
-    fi
-  fi
-  if [ "$BUILD_STARTER" = "yes" ]; then
-    mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests install -q || die "starter 构建失败（网络/依赖问题？）"
-  else
-    info "跳过 starter 构建（使用 .m2/Central 已有版本）"
-  fi
-  mvn -f "$ROOT/ypbin-admin/pom.xml" -DskipTests install -q || die "admin 构建失败"
-  JAR="$ROOT/ypbin-admin/ypbin-admin-server/target/ypbin-admin.jar"
-  [ -f "$JAR" ] || die "未找到构建产物 $JAR"
-  ok "jar 构建完成: $(du -h "$JAR" | cut -f1)"
-fi
-
-# ============================================================
-# [5/7] 构建前端（full / frontend / upload-frontend 模式）
-# ============================================================
-if [ "$MODE" = "full" ] || [ "$MODE" = "frontend" ] || [ "$MODE" = "upload-frontend" ]; then
-  step "[5/7] 前端处理"
-  if [ "$MODE" = "upload-frontend" ]; then
-    # 手动上传模式：等待用户上传 dist 到 $DIST_DIR
-    mkdir -p "$DIST_DIR"
-    if [ ! -f "$DIST_DIR/index.html" ]; then
-      info "请在另一个终端把前端构建产物上传到 $DIST_DIR/:"
-      info "  本机: cd ypbin-admin-ui && pnpm -F @vben/web-antd build"
-      info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
-      while true; do
-        if [ -f "$DIST_DIR/index.html" ]; then
-          ok "检测到前端产物已上传"
-          break
-        fi
-        echo "  等待 index.html 出现...（10 秒后重查，Ctrl+C 取消）"
-        sleep 10
-      done
-    else
-      ok "已有前端产物 $DIST_DIR"
-    fi
-  elif [ "$SKIP_FRONTEND" = "1" ] || [ -f "$DIST_DIR/index.html" ]; then
-    if [ -f "$DIST_DIR/index.html" ]; then
-      ok "使用已有前端产物 $DIST_DIR"
-    else
-      warn "SKIP_FRONTEND=1 但 $DIST_DIR 无 index.html"
-      info "请本地构建后上传：cd ypbin-admin-ui && pnpm -F @vben/web-antd build && scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
-      die "缺少前端产物"
-    fi
-  else
-    # 前端构建方式选择（仅交互模式、full 且需构建时）
-    FRONTEND_BUILD="server"
-    if [ "$ASSUME_YES" != "1" ]; then
-      echo "  前端构建方式:"
-      echo "    1) 服务器自动构建（需 node/pnpm，约 2-10 分钟）"
-      echo "    2) 手动上传（本机构建后 scp 到 $DIST_DIR/）"
-      while true; do
-        read -rp "  输入序号 [1]: " fe_choice
-        case "${fe_choice:-1}" in
-          1) FRONTEND_BUILD="server"; break ;;
-          2) FRONTEND_BUILD="manual"; break ;;
-          *) warn "请输入 1 或 2" ;;
-        esac
-      done
-    fi
-    if [ "$FRONTEND_BUILD" = "manual" ]; then
-      info "请手动上传前端产物到 $DIST_DIR/:"
-      info "  本机: cd ypbin-admin-ui && pnpm -F @vben/web-antd build"
-      info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
-      while true; do
-        if [ -f "$DIST_DIR/index.html" ]; then
-          ok "检测到前端产物已上传"
-          break
-        fi
-        echo "  等待 index.html 出现...（10 秒后重查，Ctrl+C 取消）"
-        sleep 10
-      done
-    elif command -v pnpm >/dev/null 2>&1; then
-      info "构建 admin-ui（pnpm，约 2-10 分钟，依赖多时更久）..."
-      export PATH="/usr/local/lib/nodejs/bin:$PATH"
-      pnpm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
-      (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1) \
-        || { warn "pnpm install 失败，请看上方输出"; die "依赖安装失败（网络/源问题？）"; }
-      (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build 2>&1) \
-        && mkdir -p "$DIST_DIR" \
-        && cp -r "$ROOT/ypbin-admin-ui/apps/web-antd/dist/"* "$DIST_DIR/" \
-        || { warn "前端构建失败，请看上方输出"; die "可改用手动上传方式"; }
-      ok "前端构建完成"
-    else
-      warn "node/pnpm 不可用，前端需手动上传"
-      info "  本机: cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
-      info "  上传: scp -r apps/web-antd/dist/* root@<IP>:$DIST_DIR/"
-      die "缺少前端产物（可选模式 4 手动上传后重跑）"
-    fi
-  fi
-
-  # ⚠️ 权限修复（scp 上传会保留 700 目录权限，nginx worker 读不了 → js 返回 text/html）
-  find "$DIST_DIR" -type d -exec chmod 755 {} \;
-  find "$DIST_DIR" -type f -exec chmod 644 {} \;
-  ok "前端目录权限已修复（755/644）"
-fi
-
-# ============================================================
-# [6/7] 生成凭据 + 启动服务（按模式重启对应容器）
-# ============================================================
-step "[6/7] 凭据与启动"
-
-# --- 端口交互（仅 full 模式询问；backend/frontend 沿用已有 .env）---
-if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
-  info "端口配置（回车用默认值）:"
-  MYSQL_PORT=$(ask "MySQL 映射端口" "$MYSQL_PORT" '^[0-9]+$')
-  REDIS_PORT=$(ask "Redis 映射端口" "$REDIS_PORT" '^[0-9]+$')
-  ADMIN_PORT=$(ask "admin 后端端口" "$ADMIN_PORT" '^[0-9]+$')
-  ADMIN_UI_PORT=$(ask "admin-ui 前端端口" "$ADMIN_UI_PORT" '^[0-9]+$')
-fi
-
-# --- 部署目录确认（仅 full 模式询问）---
-if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
-  ROOT=$(ask "部署根目录" "$ROOT" '^/')
-  DIST_DIR="$ROOT/admin-ui-dist"
-  DEPLOY_DIR="$ROOT/ypbin-admin/deploy"
-fi
-
-mkdir -p "$DEPLOY_DIR"
-
-# --- .env 生成 / 复用 ---
-if [ ! -f "$DEPLOY_DIR/.env" ]; then
-  # .env.example 已填好可用默认值，直接复制即启动；敏感三项再随机化增强安全
-  cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
-  MYSQL_PASS="$(openssl rand -hex 16)"
-  ADMIN_PASS="$(openssl rand -base64 12 | tr '+/' 'Aa')"
-  AI_KEY="$(openssl rand -base64 24 | tr '+/' 'Aa' | cut -c1-32)"
-  sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$MYSQL_PASS/" "$DEPLOY_DIR/.env"
-  sed -i "s/^ADMIN_BOOTSTRAP_USERNAME=.*/ADMIN_BOOTSTRAP_USERNAME=$BOOTSTRAP_USER/" "$DEPLOY_DIR/.env"
-  sed -i "s/^ADMIN_BOOTSTRAP_PASSWORD=.*/ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS/" "$DEPLOY_DIR/.env"
-  sed -i "s/^AI_MODEL_SECRET_KEY=.*/AI_MODEL_SECRET_KEY=$AI_KEY/" "$DEPLOY_DIR/.env"
-  ok "凭据已生成（复制 .env.example + 随机化密码/密钥）"
-  info "License 签发密钥（LICENSE_ISSUER_*）留空可正常启动，签发前在系统内生成后填入"
+echo ""
+echo "================================================"
+echo "  ypbin-admin 微服务版部署完成"
+echo "  网关入口:   http://localhost:$GATEWAY_PORT"
+echo "  Nacos 控制台: http://${NACOS_ADDR:-localhost:8848}/nacos （默认 nacos/nacos）"
+echo "  登录接口:   POST http://localhost:$GATEWAY_PORT/auth/login"
+echo "  部署目录:   $ROOT"
+if [ "$NO_DOCKER" = "1" ]; then
+  echo "  服务日志:   $ROOT/logs/*.log"
 else
-  ok "使用已有 .env（保留原凭据）"
-  # 交互模式询问是否重新生成凭据
-  if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
-    if confirm "重新生成 .env 凭据（会丢失原密码）？选 n 保留现有凭据"; then
-      info "重新生成 .env..."
-      MYSQL_PASS="$(openssl rand -hex 16)"
-      ADMIN_PASS="$(openssl rand -base64 12 | tr '+/' 'Aa')"
-      AI_KEY="$(openssl rand -base64 24 | tr '+/' 'Aa' | cut -c1-32)"
-      sed -i "s/^MYSQL_ROOT_PASSWORD=.*/MYSQL_ROOT_PASSWORD=$MYSQL_PASS/" "$DEPLOY_DIR/.env"
-      sed -i "s/^ADMIN_BOOTSTRAP_PASSWORD=.*/ADMIN_BOOTSTRAP_PASSWORD=$ADMIN_PASS/" "$DEPLOY_DIR/.env"
-      sed -i "s/^AI_MODEL_SECRET_KEY=.*/AI_MODEL_SECRET_KEY=$AI_KEY/" "$DEPLOY_DIR/.env"
-      ok "凭据已重新生成"
-    fi
-  fi
+  echo "  管理:       cd $ROOT/ypbin-admin/deploy && docker compose -f docker-compose.yml logs -f"
 fi
-
-# 端口参数无条件应用（新老 .env 都对齐当前值，避免残留旧端口导致冲突）
-sed -i "s/^MYSQL_PORT=.*/MYSQL_PORT=$MYSQL_PORT/" "$DEPLOY_DIR/.env"
-sed -i "s/^REDIS_PORT=.*/REDIS_PORT=$REDIS_PORT/" "$DEPLOY_DIR/.env"
-sed -i "s/^ADMIN_PORT=.*/ADMIN_PORT=$ADMIN_PORT/" "$DEPLOY_DIR/.env"
-sed -i "s/^ADMIN_UI_PORT=.*/ADMIN_UI_PORT=$ADMIN_UI_PORT/" "$DEPLOY_DIR/.env"
-
-# --- 启动前最终确认（full 模式）---
-if [ "$ASSUME_YES" != "1" ] && [ "$MODE" = "full" ]; then
-  echo ""
-  echo "  ┌────── 部署配置摘要 ──────┐"
-  echo "  │ 模式:      完整部署"
-  echo "  │ 根目录:    $ROOT"
-  echo "  │ MySQL:     端口 $MYSQL_PORT"
-  echo "  │ Redis:     端口 $REDIS_PORT"
-  echo "  │ 后端:      端口 $ADMIN_PORT"
-  echo "  │ 前端:      端口 $ADMIN_UI_PORT"
-  echo "  │ 管理员:    $BOOTSTRAP_USER"
-  echo "  └──────────────────────────┘"
-  confirm "确认以上配置并启动？" || { echo "  已取消"; exit 1; }
-fi
-
-# --- 启动（按模式）---
-cd "$DEPLOY_DIR"
-case "$MODE" in
-  full)
-    docker compose up -d --build 2>&1 | tail -5 || die "容器启动失败"
-    ;;
-  backend)
-    # 只重建 admin 容器（后端 jar 已更新）
-    docker compose up -d --build admin 2>&1 | tail -5 || die "admin 容器启动失败"
-    ;;
-  frontend|upload-frontend)
-    # 前端是 bind 挂载静态文件，nginx 直接读新文件；仅需重启 admin-ui 确保配置生效
-    docker compose up -d admin-ui 2>&1 | tail -5 || die "admin-ui 容器启动失败"
-    ;;
-esac
-ok "容器已启动"
-
-# ============================================================
-# [7/7] 健康检查 + 输出凭据（按模式检查对应服务）
-# ============================================================
-step "[7/7] 健康检查"
-
-# 后端健康（full / backend 模式）
-if [ "$MODE" = "full" ] || [ "$MODE" = "backend" ]; then
-  echo "  等待 admin 启动（最多 90s）..."
-  ADMIN_OK=0
-  for i in $(seq 1 18); do
-    sleep 5
-    CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$ADMIN_PORT/actuator/health" 2>/dev/null || echo "000")
-    if [ "$CODE" = "200" ]; then ADMIN_OK=1; break; fi
-    echo "  等待 admin 启动... ($i/18, HTTP $CODE)"
-  done
-  [ "$ADMIN_OK" = "1" ] || { warn "admin 未在预期时间内健康，查看日志:"; docker logs "$(docker ps --filter name=deploy-admin --format '{{.Names}}' | head -1)" --tail 30 2>&1 | tail -30; die "admin 启动失败"; }
-  ok "admin 后端健康（HTTP 200）"
-fi
-
-# 前端健康（full / frontend / upload-frontend 模式）
-if [ "$MODE" = "full" ] || [ "$MODE" = "frontend" ] || [ "$MODE" = "upload-frontend" ]; then
-  UI_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$ADMIN_UI_PORT/" 2>/dev/null || echo "000")
-  [ "$UI_CODE" = "200" ] && ok "admin-ui 前端可访问（HTTP 200）" || warn "前端未就绪（HTTP $UI_CODE）"
-fi
-
-# --- 输出凭据 ---
-IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-echo ""
-echo "  ┌──────────────────────────────────────────────┐"
-echo "  │  ypbin-admin 部署完成                         │"
-echo "  │  前端: http://${IP:-<服务器IP>}:$ADMIN_UI_PORT        │"
-echo "  │  后端: http://${IP:-<服务器IP>}:$ADMIN_PORT          │"
-echo "  │  账号: $BOOTSTRAP_USER                                 │"
-echo "  │  密码: $(grep '^ADMIN_BOOTSTRAP_PASSWORD=' "$DEPLOY_DIR/.env" | cut -d= -f2) │"
-echo "  └──────────────────────────────────────────────┘"
-echo ""
-echo "  凭据已存: $DEPLOY_DIR/.env（勿提交版本管理）"
-echo "  之后更新: bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)"
-echo "  或手动:   cd $DEPLOY_DIR && docker compose up -d --build"
-echo "  清理空间: bash $ROOT/cleanup.sh --snap"
+echo "================================================"

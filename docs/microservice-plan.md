@@ -82,7 +82,7 @@ ypbin-admin/
 │   ├── ypbin-ai-service/            # AI 服务
 │   ├── ypbin-job-service/           # 任务服务
 │   ├── ypbin-common-api/            # 跨服务 Feign 接口 + 共享 DTO
-└── deploy/                      # 部署（含 docker-compose.microservice.yml）
+└── deploy/                      # 部署（含 docker-compose.yml）
 └── docs/microservice-plan.md        # 本方案
 ```
 

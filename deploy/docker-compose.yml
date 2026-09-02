@@ -1,77 +1,149 @@
+# ypbin-admin 微服务版本地部署环境
+#
+# 用法：
+#   docker compose -f docker-compose.yml up -d
+#
+# 说明：本文件编排基础设施（Nacos/Redis/MySQL/Sentinel）+ 微服务四件套 + 网关，
+# 单文件即可拉起全链路。账号密码一律从 .env 注入。
+
 services:
+  # ---------- 基础设施 ----------
+  nacos:
+    image: nacos/nacos-server:v3.2.4
+    container_name: ypbin-nacos
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_TOKEN: V6km96ahL8f9qnJAsjXdwKcFedfH85D+U4LzKmzz9z8kn5yb4sp7HMmt0a91rTKW
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: security
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "8080:8080"
+    volumes:
+      - ypbin-nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v3/console/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ypbin-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - ypbin-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   mysql:
     image: mysql:8.4
-    restart: unless-stopped
+    container_name: ypbin-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 设置 MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ypbin_admin
-    volumes:
-      - mysql-data:/var/lib/mysql
+      TZ: Asia/Shanghai
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "3306:3306"
+    volumes:
+      - ypbin-mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
-      retries: 12
-
-  redis:
-    image: redis:7-alpine
+      retries: 10
     restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6380}:6379"
 
-  admin:
+  # 说明：Sentinel Dashboard 由 starter 的 deploy 提供（从官方 jar 自构建，
+  # 镜像 ypbin/sentinel-dashboard:1.8.8），本文件不重复编排；如需限流控制台，
+  # 先执行 starter 的 docker-compose.yml 或单独构建 sentinel-dashboard。
+
+  # ---------- 微服务 ----------
+  ypbin-gateway:
     build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    restart: unless-stopped
+      context: ../ypbin-gateway
+    image: ypbin/ypbin-gateway:local
+    container_name: ypbin-gateway
     environment:
-      # 默认走 Docker 内嵌 DNS 用容器名互连；若内嵌 DNS 异常可覆写为容器 IP（.env 配 DB_HOST/REDIS_HOST）
-      DB_HOST: ${DB_HOST:-mysql}
-      DB_PORT: 3306
-      DB_NAME: ypbin_admin
-      DB_USER: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      ADMIN_BOOTSTRAP_ENABLED: "true"
-      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
-      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?请在 .env 设置初始管理员密码}
-      ADMIN_BOOTSTRAP_REAL_NAME: 平台管理员
-      ADMIN_BOOTSTRAP_TENANT_ID: 1
-      ADMIN_JOB_RECONCILE_DELAY: ${ADMIN_JOB_RECONCILE_DELAY:-30000}
-      API_CRYPTO_KEY: ${API_CRYPTO_KEY:-}
-      AI_MODEL_SECRET_KEY: ${AI_MODEL_SECRET_KEY:?请在 .env 设置 AI_MODEL_SECRET_KEY（16/24/32 字节）}
-      AI_SIMPLE_STORE_PATH: ${AI_SIMPLE_STORE_PATH:-data/ai/simple-vector-store.json}
-      LICENSE_ISSUER_PUBLIC_KEY: ${LICENSE_ISSUER_PUBLIC_KEY:-}
-      LICENSE_ISSUER_PRIVATE_KEY: ${LICENSE_ISSUER_PRIVATE_KEY:-}
-      LICENSE_ISSUER_SM4_KEY: ${LICENSE_ISSUER_SM4_KEY:-}
-      YPBIN_WEB_CORS_ENABLED: "${YPBIN_CORS_ENABLED:-false}"
-      YPBIN_WEB_CORS_ALLOWED_ORIGIN_PATTERNS: "${YPBIN_CORS_ORIGINS:-http://localhost:*}"
-      TZ: Asia/Shanghai
-    volumes:
-      - admin-data:/opt/ypbin/ypbin-admin/data
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
     ports:
-      - "${ADMIN_PORT:-8080}:8080"
+      - "18080:18080"
     depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
-  admin-ui:
-    image: nginx:alpine
+      - nacos
     restart: unless-stopped
-    volumes:
-      - ../../admin-ui-dist:/usr/share/nginx/html:ro
-      - ../../ypbin-admin-ui/deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  ypbin-auth:
+    build:
+      context: ../ypbin-auth
+    image: ypbin/ypbin-auth:local
+    container_name: ypbin-auth
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
     ports:
-      - "${ADMIN_UI_PORT:-18080}:80"
+      - "18081:18081"
     depends_on:
-      - admin
+      - nacos
+      - redis
+    restart: unless-stopped
+
+  ypbin-system:
+    build:
+      context: ../ypbin-service/ypbin-system
+    image: ypbin/ypbin-system:local
+    container_name: ypbin-system
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+    ports:
+      - "18082:18082"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
+
+  ypbin-ai:
+    build:
+      context: ../ypbin-service/ypbin-ai
+    image: ypbin/ypbin-ai:local
+    container_name: ypbin-ai
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+      AI_MODEL_SECRET_KEY: ${AI_MODEL_SECRET_KEY:?请在 deploy/.env 设置 AI_MODEL_SECRET_KEY（16/24/32 字节）}
+    ports:
+      - "18083:18083"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
+
+  ypbin-job:
+    build:
+      context: ../ypbin-service/ypbin-job
+    image: ypbin/ypbin-job:local
+    container_name: ypbin-job
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+    ports:
+      - "18084:18084"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
 
 volumes:
-  mysql-data:
-  admin-data:
+  ypbin-redis-data:
+  ypbin-mysql-data:
+  ypbin-nacos-data:
