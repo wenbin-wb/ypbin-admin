@@ -31,15 +31,27 @@
             <artifactId>sa-token-core</artifactId>
             <version>1.46.0</version>
         </dependency>
-        <!-- LoginUser/UserContext（身份头内容来源） -->
+        <!-- LoginUser/UserContext（身份头内容来源）；排除 sa-token webmvc 适配（网关是 WebFlux） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-security</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>cn.dev33</groupId>
+                    <artifactId>sa-token-spring-boot4-starter</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
-        <!-- 限流熔断 -->
+        <!-- 限流熔断；排除 Servlet MVC 适配（网关用 WebFlux 适配，不需要 webmvc） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-cloud-sentinel</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.alibaba.csp</groupId>
+                    <artifactId>sentinel-spring-webmvc-v6x-adapter</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- 链路可观测 -->
         <dependency>
