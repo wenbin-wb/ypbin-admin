@@ -5,45 +5,9 @@ spring:
   application:
     name: ypbin-gateway
   cloud:
-    # Spring Cloud 2025.1.2 官方支持 Boot 4.1.x，兼容性检查器元数据滞后误报，显式禁用
-    compatibility-verifier:
-      enabled: false
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}
-    gateway:
-      discovery:
-        locator:
-          enabled: true          # 按服务名自动路由：/ypbin-auth/** → auth 服务
-          lower-case-service-id: true
-      routes:
-        - id: auth
-          uri: lb://ypbin-auth
-          predicates:
-            - Path=/auth/**,/captcha/**,/user/**,/open-api/**
-        - id: system
-          uri: lb://ypbin-system
-          predicates:
-            - Path=/system/**
-        - id: ai
-          uri: lb://ypbin-ai
-          predicates:
-            - Path=/ai/**,/share/**,/widget/**
-
-# 统一鉴权：校验 token 后清洗外部头、签发内部身份头（CONTRACT.md §6）
-ypbin:
-  gateway:
-    auth:
-      enabled: true
-      # 白名单路径（无需登录即可访问），键名对齐 starter GatewayProperties.Auth.excludePaths
-      exclude-paths:
-        - /auth/login
-        - /auth/sms/send
-        - /auth/sms/login
-        - /auth/social/authorize/**
-        - /auth/social/callback/**
-        - /auth/social/platforms
-        - /captcha/**
-        - /open-api/**
-        - /open/license/**
-        - /share/**
-        - /widget/**
+  config:
+    import:
+      - optional:nacos:ypbin-common.yaml
+      - optional:nacos:ypbin-gateway.yaml

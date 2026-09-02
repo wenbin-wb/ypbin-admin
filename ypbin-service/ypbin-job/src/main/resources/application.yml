@@ -4,25 +4,10 @@ server:
 spring:
   application:
     name: ypbin-job
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:}
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      database: ${REDIS_DB:0}
   cloud:
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}
   config:
-    # 公共配置（Nacos 共享：限流等），本地无 Nacos 配置中心时回退默认
-    import: optional:nacos:ypbin-common.yaml
-
-ypbin:
-  tenant:
-    enabled: true
-  data-permission:
-    enabled: true
+    import:
+      - optional:nacos:ypbin-common.yaml
+      - optional:nacos:ypbin-job.yaml

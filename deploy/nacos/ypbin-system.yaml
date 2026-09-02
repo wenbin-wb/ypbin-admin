@@ -1,0 +1,50 @@
+# ============================================================
+# ypbin-system 服务配置（Nacos 配置中心）
+# Data ID: ypbin-system.yaml | Group: DEFAULT_GROUP | 格式: YAML
+# ============================================================
+
+# ---------- 租户/数据权限 ----------
+ypbin:
+  tenant:
+    enabled: true
+    # 不做租户隔离的全局表（与单体版对齐）
+    ignore-tables:
+      - sys_menu
+      - sys_tenant
+      - sys_user_role
+      - sys_role_menu
+      - sys_dict
+      - sys_dict_item
+      - sys_config
+      - sys_user_password_history
+      - sys_log
+      - sys_client
+      - sys_user_post
+      - sys_role_dept
+      - sys_file
+      - sys_job
+      - sys_job_log
+      - sys_app
+      - sys_user_social
+      - sys_auth_template
+      - sys_template_menu
+      - sys_license
+  data-permission:
+    enabled: true
+
+# ---------- 安全（开放接口与内部 Feign 端点免登录拦截）----------
+  security:
+    excludes:
+      - /open/license/**
+      - /open-api/**
+      - /internal/**
+      - /actuator/**
+
+# ---------- 接口签名（开放 API 示例）----------
+  sign:
+    enabled: true
+    mode: ANNOTATION
+
+# ---------- SSE 推送 ----------
+  sse:
+    enabled: true

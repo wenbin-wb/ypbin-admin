@@ -4,60 +4,10 @@ server:
 spring:
   application:
     name: ypbin-system
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ypbin_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:}
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      database: ${REDIS_DB:0}
   cloud:
     nacos:
       server-addr: ${NACOS_ADDR:localhost:8848}
   config:
-    # 公共配置（Nacos 共享：限流等），本地无 Nacos 配置中心时回退默认
-    import: optional:nacos:ypbin-common.yaml
-
-ypbin:
-  tenant:
-    enabled: true
-    # 不做租户隔离的全局表（与单体版对齐）
-    ignore-tables:
-      - sys_menu
-      - sys_tenant
-      - sys_user_role
-      - sys_role_menu
-      - sys_dict
-      - sys_dict_item
-      - sys_config
-      - sys_user_password_history
-      - sys_log
-      - sys_client
-      - sys_user_post
-      - sys_role_dept
-      - sys_file
-      - sys_job
-      - sys_job_log
-      - sys_app
-      - sys_user_social
-      - sys_auth_template
-      - sys_template_menu
-      - sys_license
-  data-permission:
-    enabled: true
-  security:
-    # 开放接口（联机授权校验 / 开放 API 签名示例）与内部 Feign 端点免登录拦截：
-    # 联机校验走 AK/SK 接口签名自证，内部端点仅服务间调用（网关内网）
-    excludes:
-      - /open/license/**
-      - /open-api/**
-      - /internal/**
-      - /actuator/**
-  sign:
-    enabled: true               # 开启接口签名
-    mode: ANNOTATION            # 仅 @ApiSign 标注的接口校验签名（开放 API 示例）
-  sse:
-    enabled: true               # SSE 长连接推送（站内信实时通知 / 推送测试端点）
+    import:
+      - optional:nacos:ypbin-common.yaml
+      - optional:nacos:ypbin-system.yaml

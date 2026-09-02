@@ -1,0 +1,47 @@
+# ============================================================
+# ypbin-gateway 服务配置（Nacos 配置中心）
+# Data ID: ypbin-gateway.yaml | Group: DEFAULT_GROUP | 格式: YAML
+# ============================================================
+
+# Spring Cloud 2025.1.2 官方支持 Boot 4.1.x，兼容性检查器元数据滞后误报，显式禁用
+spring:
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: auth
+          uri: lb://ypbin-auth
+          predicates:
+            - Path=/auth/**,/captcha/**,/user/**,/open-api/**
+        - id: system
+          uri: lb://ypbin-system
+          predicates:
+            - Path=/system/**
+        - id: ai
+          uri: lb://ypbin-ai
+          predicates:
+            - Path=/ai/**,/share/**,/widget/**
+
+# 统一鉴权：校验 token 后清洗外部头、签发内部身份头
+ypbin:
+  gateway:
+    auth:
+      enabled: true
+      # 白名单路径（无需登录即可访问）
+      exclude-paths:
+        - /auth/login
+        - /auth/sms/send
+        - /auth/sms/login
+        - /auth/social/authorize/**
+        - /auth/social/callback/**
+        - /auth/social/platforms
+        - /captcha/**
+        - /open-api/**
+        - /open/license/**
+        - /share/**
+        - /widget/**

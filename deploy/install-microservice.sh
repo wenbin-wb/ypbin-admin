@@ -261,6 +261,32 @@ else
   warn "复用已有 .env"
 fi
 
+# ---------- [5.5/7] 导入 Nacos 配置（本地 yml 仅端口，DB/Redis/路由等全在此）----------
+if [ "$NO_DOCKER" = "1" ] || docker ps >/dev/null 2>&1; then
+  info "[5.5/7] 导入 Nacos 配置中心（ypbin-common + 5 服务）"
+  NACOS_URL="http://${NACOS_ADDR:-nacos:8848}"
+  # 等待 Nacos 就绪
+  for i in $(seq 1 30); do
+    if curl -fsS "$NACOS_URL/nacos/v1/console/health/readiness" >/dev/null 2>&1; then
+      break
+    fi
+    [ "$i" = "30" ] && warn "Nacos 未就绪，跳过配置导入（服务可能因缺配置启动失败）"
+    sleep 2
+  done
+  # 发布 6 个配置（幂等：已存在则覆盖）
+  NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
+  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-job; do
+    if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
+      curl -fsS -X POST "$NACOS_URL/nacos/v1/cs/configs" \
+        --data-urlencode "dataId=$cfg.yaml" \
+        --data-urlencode "group=DEFAULT_GROUP" \
+        --data-urlencode "type=yaml" \
+        --data-urlencode "content@$NACOS_DIR/$cfg.yaml" \
+        >/dev/null 2>&1 && ok "已导入 $cfg.yaml" || warn "$cfg.yaml 导入失败"
+    fi
+  done
+fi
+
 # ---------- [6/7] 启动服务 ----------
 if [ "$NO_DOCKER" = "1" ]; then
   info "[6/7] 无 Docker 模式：java -jar 启动 5 服务（需外部 Nacos/Redis/MySQL）"
