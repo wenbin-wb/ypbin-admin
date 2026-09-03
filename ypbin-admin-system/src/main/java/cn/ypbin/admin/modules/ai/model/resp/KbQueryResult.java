@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.model.resp;
+package cn.ypbin.admin.modules.ai.model.resp;
 
 import java.util.List;
 import java.util.Map;

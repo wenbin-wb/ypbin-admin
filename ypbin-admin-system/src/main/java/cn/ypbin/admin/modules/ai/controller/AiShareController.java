@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.controller;
+package cn.ypbin.admin.modules.ai.controller;
 
-import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
-import cn.ypbin.admin.ai.service.AiShareService;
+import cn.ypbin.admin.modules.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.modules.ai.service.AiShareService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.model.PageQuery;

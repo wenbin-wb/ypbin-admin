@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.tool;
+package cn.ypbin.admin.modules.ai.tool;
 
 import cn.ypbin.admin.modules.system.entity.SysJob;
 import cn.ypbin.admin.modules.system.entity.SysUser;

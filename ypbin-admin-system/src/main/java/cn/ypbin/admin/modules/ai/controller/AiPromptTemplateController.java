@@ -7,12 +7,12 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.controller;
+package cn.ypbin.admin.modules.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.ai.entity.AiPromptTemplate;
-import cn.ypbin.admin.ai.model.req.AiPromptTemplateSaveReq;
-import cn.ypbin.admin.ai.service.AiPromptTemplateService;
+import cn.ypbin.admin.modules.ai.entity.AiPromptTemplate;
+import cn.ypbin.admin.modules.ai.model.req.AiPromptTemplateSaveReq;
+import cn.ypbin.admin.modules.ai.service.AiPromptTemplateService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;

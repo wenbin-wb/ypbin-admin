@@ -7,9 +7,9 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.mapper;
+package cn.ypbin.admin.modules.ai.mapper;
 
-import cn.ypbin.admin.ai.entity.AiUsageLog;
+import cn.ypbin.admin.modules.ai.entity.AiUsageLog;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;

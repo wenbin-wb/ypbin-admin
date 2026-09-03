@@ -7,22 +7,22 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.controller;
+package cn.ypbin.admin.modules.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
-import cn.ypbin.admin.ai.model.req.AiDocumentImportReq;
-import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseSaveReq;
-import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseUpdateReq;
-import cn.ypbin.admin.ai.model.req.AiShareSettingReq;
-import cn.ypbin.admin.ai.model.req.KbMultiSearchTestReq;
-import cn.ypbin.admin.ai.model.req.KbQueryReq;
-import cn.ypbin.admin.ai.model.req.KbSearchTestReq;
-import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
-import cn.ypbin.admin.ai.model.resp.KbQueryResult;
-import cn.ypbin.admin.ai.service.AiKnowledgeBizService;
-import cn.ypbin.admin.ai.service.AiShareService;
-import cn.ypbin.admin.ai.service.AiWidgetService;
+import cn.ypbin.admin.modules.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.modules.ai.model.req.AiDocumentImportReq;
+import cn.ypbin.admin.modules.ai.model.req.AiKnowledgeBaseSaveReq;
+import cn.ypbin.admin.modules.ai.model.req.AiKnowledgeBaseUpdateReq;
+import cn.ypbin.admin.modules.ai.model.req.AiShareSettingReq;
+import cn.ypbin.admin.modules.ai.model.req.KbMultiSearchTestReq;
+import cn.ypbin.admin.modules.ai.model.req.KbQueryReq;
+import cn.ypbin.admin.modules.ai.model.req.KbSearchTestReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.modules.ai.model.resp.KbQueryResult;
+import cn.ypbin.admin.modules.ai.service.AiKnowledgeBizService;
+import cn.ypbin.admin.modules.ai.service.AiShareService;
+import cn.ypbin.admin.modules.ai.service.AiWidgetService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;

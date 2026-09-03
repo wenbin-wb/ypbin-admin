@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
-import cn.ypbin.admin.ai.model.req.AiChatRoleSaveReq;
-import cn.ypbin.admin.ai.model.resp.AiChatRoleResp;
+import cn.ypbin.admin.modules.ai.model.req.AiChatRoleSaveReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatRoleResp;
 import java.util.List;
 
 /**

@@ -7,14 +7,14 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.controller;
+package cn.ypbin.admin.modules.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.ai.model.req.AiChatSendReq;
-import cn.ypbin.admin.ai.model.req.AiChatSessionCreateReq;
-import cn.ypbin.admin.ai.model.resp.AiChatMessageResp;
-import cn.ypbin.admin.ai.model.resp.AiChatSessionResp;
-import cn.ypbin.admin.ai.service.AiChatSessionService;
+import cn.ypbin.admin.modules.ai.model.req.AiChatSendReq;
+import cn.ypbin.admin.modules.ai.model.req.AiChatSessionCreateReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatMessageResp;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatSessionResp;
+import cn.ypbin.admin.modules.ai.service.AiChatSessionService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;

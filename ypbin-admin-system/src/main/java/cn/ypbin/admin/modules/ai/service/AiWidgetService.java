@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
 import java.util.Map;
 

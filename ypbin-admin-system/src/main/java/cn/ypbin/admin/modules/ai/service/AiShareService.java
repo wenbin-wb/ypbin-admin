@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
-import cn.ypbin.admin.ai.model.req.AiShareSettingReq;
-import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.modules.ai.model.req.AiShareSettingReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiDocumentVO;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
 import java.util.Map;

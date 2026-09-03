@@ -7,17 +7,17 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
-import cn.ypbin.admin.ai.entity.AiDocument;
-import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
-import cn.ypbin.admin.ai.entity.AiQueryLog;
-import cn.ypbin.admin.ai.entity.AiUsageLog;
-import cn.ypbin.admin.ai.mapper.AiDocumentMapper;
-import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
-import cn.ypbin.admin.ai.mapper.AiQueryLogMapper;
-import cn.ypbin.admin.ai.mapper.AiUsageLogMapper;
-import cn.ypbin.admin.ai.service.AiStatsService;
+import cn.ypbin.admin.modules.ai.entity.AiDocument;
+import cn.ypbin.admin.modules.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.modules.ai.entity.AiQueryLog;
+import cn.ypbin.admin.modules.ai.entity.AiUsageLog;
+import cn.ypbin.admin.modules.ai.mapper.AiDocumentMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiKnowledgeBaseMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiQueryLogMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiUsageLogMapper;
+import cn.ypbin.admin.modules.ai.service.AiStatsService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;

@@ -7,11 +7,11 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
-import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
-import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
-import cn.ypbin.admin.ai.service.AiWidgetService;
+import cn.ypbin.admin.modules.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.modules.ai.mapper.AiKnowledgeBaseMapper;
+import cn.ypbin.admin.modules.ai.service.AiWidgetService;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.tenant.core.TenantContext;

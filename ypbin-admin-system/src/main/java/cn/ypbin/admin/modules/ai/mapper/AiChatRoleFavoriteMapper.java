@@ -7,9 +7,9 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.mapper;
+package cn.ypbin.admin.modules.ai.mapper;
 
-import cn.ypbin.admin.ai.entity.AiChatRoleFavorite;
+import cn.ypbin.admin.modules.ai.entity.AiChatRoleFavorite;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 

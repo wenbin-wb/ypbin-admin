@@ -7,9 +7,9 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.mapper;
+package cn.ypbin.admin.modules.ai.mapper;
 
-import cn.ypbin.admin.ai.entity.AiModelConfig;
+import cn.ypbin.admin.modules.ai.entity.AiModelConfig;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**

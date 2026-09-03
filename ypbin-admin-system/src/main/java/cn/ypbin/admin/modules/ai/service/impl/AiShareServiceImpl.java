@@ -7,16 +7,16 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.admin.modules.system.enums.AiDocumentStatusEnum;
-import cn.ypbin.admin.ai.entity.AiDocument;
-import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
-import cn.ypbin.admin.ai.mapper.AiDocumentMapper;
-import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
-import cn.ypbin.admin.ai.model.req.AiShareSettingReq;
-import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
-import cn.ypbin.admin.ai.service.AiShareService;
+import cn.ypbin.admin.modules.ai.entity.AiDocument;
+import cn.ypbin.admin.modules.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.modules.ai.mapper.AiDocumentMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiKnowledgeBaseMapper;
+import cn.ypbin.admin.modules.ai.model.req.AiShareSettingReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.modules.ai.service.AiShareService;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageQuery;

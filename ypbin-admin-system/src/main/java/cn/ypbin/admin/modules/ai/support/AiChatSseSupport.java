@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.support;
+package cn.ypbin.admin.modules.ai.support;
 
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;

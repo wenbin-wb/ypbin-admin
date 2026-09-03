@@ -7,11 +7,11 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.core;
+package cn.ypbin.admin.modules.ai.core;
 
 import cn.ypbin.starter.data.core.EntityStatus;
-import cn.ypbin.admin.ai.entity.AiModelConfig;
-import cn.ypbin.admin.ai.mapper.AiModelConfigMapper;
+import cn.ypbin.admin.modules.ai.entity.AiModelConfig;
+import cn.ypbin.admin.modules.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.starter.ai.chat.AiModelConfigResolver;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;

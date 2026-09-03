@@ -7,12 +7,12 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
-import cn.ypbin.admin.ai.model.req.AiChatSendReq;
-import cn.ypbin.admin.ai.model.req.AiChatSessionCreateReq;
-import cn.ypbin.admin.ai.model.resp.AiChatMessageResp;
-import cn.ypbin.admin.ai.model.resp.AiChatSessionResp;
+import cn.ypbin.admin.modules.ai.model.req.AiChatSendReq;
+import cn.ypbin.admin.modules.ai.model.req.AiChatSessionCreateReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatMessageResp;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatSessionResp;
 import java.util.List;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 

@@ -7,15 +7,15 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
 import cn.ypbin.admin.modules.system.enums.AiDocumentStatusEnum;
-import cn.ypbin.admin.ai.entity.AiDocument;
-import cn.ypbin.admin.ai.entity.AiDocumentChunk;
-import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
-import cn.ypbin.admin.ai.mapper.AiDocumentChunkMapper;
-import cn.ypbin.admin.ai.mapper.AiDocumentMapper;
-import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
+import cn.ypbin.admin.modules.ai.entity.AiDocument;
+import cn.ypbin.admin.modules.ai.entity.AiDocumentChunk;
+import cn.ypbin.admin.modules.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.modules.ai.mapper.AiDocumentChunkMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiDocumentMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.ai.rag.DocumentLoader;
 import cn.ypbin.starter.tenant.core.TenantContext;

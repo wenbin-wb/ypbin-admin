@@ -7,13 +7,13 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
-import cn.ypbin.admin.ai.entity.AiPromptTemplate;
-import cn.ypbin.admin.ai.mapper.AiPromptTemplateMapper;
-import cn.ypbin.admin.ai.model.req.AiPromptTemplateSaveReq;
-import cn.ypbin.admin.ai.service.AiPromptTemplateService;
+import cn.ypbin.admin.modules.ai.entity.AiPromptTemplate;
+import cn.ypbin.admin.modules.ai.mapper.AiPromptTemplateMapper;
+import cn.ypbin.admin.modules.ai.model.req.AiPromptTemplateSaveReq;
+import cn.ypbin.admin.modules.ai.service.AiPromptTemplateService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;

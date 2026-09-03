@@ -7,11 +7,11 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
-import cn.ypbin.admin.ai.entity.AiModelConfig;
-import cn.ypbin.admin.ai.model.req.AiModelConfigSaveReq;
-import cn.ypbin.admin.ai.model.resp.AiModelConfigResp;
+import cn.ypbin.admin.modules.ai.entity.AiModelConfig;
+import cn.ypbin.admin.modules.ai.model.req.AiModelConfigSaveReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiModelConfigResp;
 import java.util.List;
 
 /**

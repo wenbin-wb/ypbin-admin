@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
-import cn.ypbin.admin.ai.model.req.AiDocumentImportReq;
-import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.modules.ai.model.req.AiDocumentImportReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiDocumentVO;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;

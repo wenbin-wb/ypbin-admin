@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service;
+package cn.ypbin.admin.modules.ai.service;
 
-import cn.ypbin.admin.ai.entity.AiPromptTemplate;
-import cn.ypbin.admin.ai.model.req.AiPromptTemplateSaveReq;
+import cn.ypbin.admin.modules.ai.entity.AiPromptTemplate;
+import cn.ypbin.admin.modules.ai.model.req.AiPromptTemplateSaveReq;
 import java.util.List;
 
 /**

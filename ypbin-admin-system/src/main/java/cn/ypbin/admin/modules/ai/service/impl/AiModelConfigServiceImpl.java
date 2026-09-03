@@ -7,15 +7,15 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
-import cn.ypbin.admin.ai.core.AiKeyCipher;
-import cn.ypbin.admin.ai.entity.AiModelConfig;
-import cn.ypbin.admin.ai.mapper.AiModelConfigMapper;
-import cn.ypbin.admin.ai.model.req.AiModelConfigSaveReq;
-import cn.ypbin.admin.ai.model.resp.AiModelConfigResp;
-import cn.ypbin.admin.ai.service.AiModelConfigService;
+import cn.ypbin.admin.modules.ai.core.AiKeyCipher;
+import cn.ypbin.admin.modules.ai.entity.AiModelConfig;
+import cn.ypbin.admin.modules.ai.mapper.AiModelConfigMapper;
+import cn.ypbin.admin.modules.ai.model.req.AiModelConfigSaveReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiModelConfigResp;
+import cn.ypbin.admin.modules.ai.service.AiModelConfigService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;

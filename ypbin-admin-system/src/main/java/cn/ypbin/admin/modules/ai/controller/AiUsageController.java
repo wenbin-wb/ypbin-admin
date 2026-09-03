@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.controller;
+package cn.ypbin.admin.modules.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.ai.service.AiUsageService;
+import cn.ypbin.admin.modules.ai.service.AiUsageService;
 import cn.ypbin.starter.core.model.R;
 import java.time.LocalDate;
 import java.util.List;

@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.core;
+package cn.ypbin.admin.modules.ai.core;
 
 import cn.ypbin.starter.tools.crypto.AesUtils;
 import java.nio.charset.StandardCharsets;

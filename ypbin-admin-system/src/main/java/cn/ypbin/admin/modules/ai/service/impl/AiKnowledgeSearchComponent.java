@@ -7,11 +7,11 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
-import cn.ypbin.admin.ai.entity.AiQueryLog;
-import cn.ypbin.admin.ai.mapper.AiQueryLogMapper;
-import cn.ypbin.admin.ai.model.resp.KbQueryResult;
+import cn.ypbin.admin.modules.ai.entity.AiQueryLog;
+import cn.ypbin.admin.modules.ai.mapper.AiQueryLogMapper;
+import cn.ypbin.admin.modules.ai.model.resp.KbQueryResult;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.core.exception.BusinessException;

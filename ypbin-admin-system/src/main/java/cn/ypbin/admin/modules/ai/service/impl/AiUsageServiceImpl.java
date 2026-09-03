@@ -7,11 +7,11 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
-import cn.ypbin.admin.ai.entity.AiUsageLog;
-import cn.ypbin.admin.ai.mapper.AiUsageLogMapper;
-import cn.ypbin.admin.ai.service.AiUsageService;
+import cn.ypbin.admin.modules.ai.entity.AiUsageLog;
+import cn.ypbin.admin.modules.ai.mapper.AiUsageLogMapper;
+import cn.ypbin.admin.modules.ai.service.AiUsageService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;

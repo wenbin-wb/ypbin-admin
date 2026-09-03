@@ -7,17 +7,17 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.admin.ai.entity.AiChatRole;
-import cn.ypbin.admin.ai.entity.AiChatRoleFavorite;
-import cn.ypbin.admin.ai.mapper.AiChatRoleFavoriteMapper;
-import cn.ypbin.admin.ai.mapper.AiChatRoleMapper;
-import cn.ypbin.admin.ai.model.req.AiChatRoleSaveReq;
-import cn.ypbin.admin.ai.model.resp.AiChatRoleResp;
-import cn.ypbin.admin.ai.service.AiChatRoleService;
+import cn.ypbin.admin.modules.ai.entity.AiChatRole;
+import cn.ypbin.admin.modules.ai.entity.AiChatRoleFavorite;
+import cn.ypbin.admin.modules.ai.mapper.AiChatRoleFavoriteMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiChatRoleMapper;
+import cn.ypbin.admin.modules.ai.model.req.AiChatRoleSaveReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatRoleResp;
+import cn.ypbin.admin.modules.ai.service.AiChatRoleService;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.tenant.core.TenantContext;

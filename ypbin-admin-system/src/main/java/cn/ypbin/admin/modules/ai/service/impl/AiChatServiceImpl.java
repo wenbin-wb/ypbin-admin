@@ -7,21 +7,21 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.service.impl;
+package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
-import cn.ypbin.admin.ai.entity.AiChatMessage;
-import cn.ypbin.admin.ai.entity.AiChatRole;
-import cn.ypbin.admin.ai.entity.AiChatSession;
-import cn.ypbin.admin.ai.mapper.AiChatMessageMapper;
-import cn.ypbin.admin.ai.mapper.AiChatRoleMapper;
-import cn.ypbin.admin.ai.mapper.AiChatSessionMapper;
-import cn.ypbin.admin.ai.model.req.AiChatSendReq;
-import cn.ypbin.admin.ai.model.req.AiChatSessionCreateReq;
-import cn.ypbin.admin.ai.model.resp.AiChatMessageResp;
-import cn.ypbin.admin.ai.model.resp.AiChatSessionResp;
-import cn.ypbin.admin.ai.service.AiChatSessionService;
-import cn.ypbin.admin.ai.support.AiChatSseSupport;
+import cn.ypbin.admin.modules.ai.entity.AiChatMessage;
+import cn.ypbin.admin.modules.ai.entity.AiChatRole;
+import cn.ypbin.admin.modules.ai.entity.AiChatSession;
+import cn.ypbin.admin.modules.ai.mapper.AiChatMessageMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiChatRoleMapper;
+import cn.ypbin.admin.modules.ai.mapper.AiChatSessionMapper;
+import cn.ypbin.admin.modules.ai.model.req.AiChatSendReq;
+import cn.ypbin.admin.modules.ai.model.req.AiChatSessionCreateReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatMessageResp;
+import cn.ypbin.admin.modules.ai.model.resp.AiChatSessionResp;
+import cn.ypbin.admin.modules.ai.service.AiChatSessionService;
+import cn.ypbin.admin.modules.ai.support.AiChatSseSupport;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
