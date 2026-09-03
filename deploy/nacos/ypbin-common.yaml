@@ -23,6 +23,16 @@ spring:
       port: 6379
       database: 0
 
+# ---------- Sa-Token（auth/gateway 共享会话）----------
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 2592000              # 固定有效期 30 天（秒）
+  active-timeout: 1800          # 活跃超时 30 分钟（秒）
+  auto-renew: true
+  is-read-cookie: false
+  is-print: false
+
 # ---------- Sentinel 限流控制台 ----------
   cloud:
     sentinel:

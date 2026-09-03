@@ -3,16 +3,6 @@
 # Data ID: ypbin-auth.yaml | Group: DEFAULT_GROUP | 格式: YAML
 # ============================================================
 
-# ---------- Sa-Token 认证（与网关校验保持一致）----------
-sa-token:
-  token-name: Authorization
-  token-prefix: Bearer
-  timeout: 2592000              # 固定有效期 30 天（秒）
-  active-timeout: 1800          # 活跃超时 30 分钟（秒）
-  auto-renew: true
-  is-read-cookie: false
-  is-print: false
-
 # ---------- 安全（公开端点免登录校验，与网关白名单一致）----------
 ypbin:
   security:
