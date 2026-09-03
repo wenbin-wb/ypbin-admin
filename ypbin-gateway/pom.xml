@@ -37,6 +37,12 @@
             <artifactId>sa-token-redis-jackson</artifactId>
             <version>1.46.0</version>
         </dependency>
+        <!-- WebFlux 环境 Sa-Token 自动装配 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-reactor-spring-boot4-starter</artifactId>
+            <version>1.46.0</version>
+        </dependency>
         <!-- Redis 连接工厂：sa-token Redis 会话存储依赖 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
