@@ -323,6 +323,13 @@ fi
 # 初始化 MySQL 库表（仅在数据库不存在表时执行；使用 deploy/sql 下的 V1-V4 等价脚本）
 if [ "$NO_DOCKER" != "1" ]; then
   info "初始化 MySQL 库表（如已初始化会自动跳过）"
+  # 等待 MySQL 健康
+  for i in $(seq 1 30); do
+    if [ "$(docker inspect -f '{{.State.Health.Status}}' ypbin-mysql 2>/dev/null)" = "healthy" ]; then
+      break
+    fi
+    sleep 2
+  done
   DB_HOST=localhost
   DB_PORT=3306
   TABLE_COUNT=$(docker exec ypbin-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='ypbin_admin';" 2>/dev/null || echo 0)
