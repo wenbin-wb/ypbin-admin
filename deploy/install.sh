@@ -249,9 +249,11 @@ info "[5/7] 生成 .env 配置"
 ENV_FILE="$ROOT/ypbin-admin/deploy/.env"
 if [ ! -f "$ENV_FILE" ]; then
   MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
+  AI_MODEL_SECRET_KEY="${AI_MODEL_SECRET_KEY:-YpbinAiKey2026_32bytes!!}"
   cat > "$ENV_FILE" <<EOF
 # 由 install.sh 生成
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
 EOF
@@ -261,30 +263,80 @@ else
   warn "复用已有 .env"
 fi
 
-# ---------- [5.5/7] 导入 Nacos 配置（本地 yml 仅端口，DB/Redis/路由等全在此）----------
-if [ "$NO_DOCKER" = "1" ] || docker ps >/dev/null 2>&1; then
-  info "[5.5/7] 导入 Nacos 配置中心（ypbin-common + 5 服务）"
-  NACOS_URL="http://${NACOS_ADDR:-nacos:8848}"
-  # 等待 Nacos 就绪
-  for i in $(seq 1 30); do
-    if curl -fsS "$NACOS_URL/nacos/v1/console/health/readiness" >/dev/null 2>&1; then
-      break
-    fi
-    [ "$i" = "30" ] && warn "Nacos 未就绪，跳过配置导入（服务可能因缺配置启动失败）"
-    sleep 2
-  done
-  # 发布 6 个配置（幂等：已存在则覆盖）
+# ---------- [5.5/7] 启动基础设施并初始化（Nacos 配置 + MySQL 库表）----------
+# Docker 模式：先只启动基础设施（nacos/redis/mysql），配置导入和建库完成后再启动业务服务
+if [ "$NO_DOCKER" = "1" ]; then
+  info "[5.5/7] NO_DOCKER 模式：假定外部 Nacos/Redis/MySQL 已就绪，直接导入 Nacos 配置"
+else
+  info "[5.5/7] 启动基础设施（Nacos/Redis/MySQL）"
+  cd "$ROOT/ypbin-admin/deploy"
+  docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql 2>&1 | tail -20
+fi
+
+NACOS_CONSOLE_URL="${NACOS_CONSOLE_URL:-http://localhost:8080}"
+NACOS_USERNAME="${NACOS_USERNAME:-nacos}"
+NACOS_PASSWORD="${NACOS_PASSWORD:-nacos}"
+
+# 等待 Nacos Console 就绪（v3 独立 Console 端口）
+for i in $(seq 1 60); do
+  if curl -fsS "$NACOS_CONSOLE_URL/v3/console/health/readiness" >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" = "60" ]; then
+    warn "Nacos Console 未就绪，跳过配置导入"
+  fi
+  sleep 2
+done
+
+# 初始化 Nacos 管理员（幂等；已有管理员时忽略失败）
+curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/auth/user/admin" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=$NACOS_USERNAME" \
+  --data-urlencode "password=$NACOS_PASSWORD" >/dev/null 2>&1 || true
+
+# 登录获取 accessToken
+NACOS_TOKEN=$(curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/auth/user/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "username=$NACOS_USERNAME" \
+  --data-urlencode "password=$NACOS_PASSWORD" 2>/dev/null | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' || true)
+
+# 发布 6 个 Nacos 配置（幂等：已存在则覆盖；使用 Nacos 3 Console 新 API）
+if [ -n "$NACOS_TOKEN" ]; then
+  info "导入 Nacos 配置中心（ypbin-common + 5 服务）"
   NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
   for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-job; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
-      curl -fsS -X POST "$NACOS_URL/nacos/v1/cs/configs" \
+      curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
+        -H "accessToken: $NACOS_TOKEN" \
         --data-urlencode "dataId=$cfg.yaml" \
-        --data-urlencode "group=DEFAULT_GROUP" \
+        --data-urlencode "groupName=DEFAULT_GROUP" \
         --data-urlencode "type=yaml" \
+        --data-urlencode "namespaceId=" \
         --data-urlencode "content@$NACOS_DIR/$cfg.yaml" \
         >/dev/null 2>&1 && ok "已导入 $cfg.yaml" || warn "$cfg.yaml 导入失败"
     fi
   done
+else
+  warn "Nacos 登录失败，跳过配置导入"
+fi
+
+# 初始化 MySQL 库表（仅在数据库不存在表时执行；使用 deploy/sql 下的 V1-V4 等价脚本）
+if [ "$NO_DOCKER" != "1" ]; then
+  info "初始化 MySQL 库表（如已初始化会自动跳过）"
+  DB_HOST=localhost
+  DB_PORT=3306
+  TABLE_COUNT=$(docker exec ypbin-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='ypbin_admin';" 2>/dev/null || echo 0)
+  if [ "${TABLE_COUNT:-0}" = "0" ]; then
+    docker exec ypbin-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e \
+      "CREATE DATABASE IF NOT EXISTS ypbin_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    for sql in "$ROOT/ypbin-admin/deploy/sql/"*.sql; do
+      docker cp "$sql" ypbin-mysql:/tmp/init.sql
+      docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" ypbin_admin < /tmp/init.sql"
+      ok "已执行 $(basename "$sql")"
+    done
+  else
+    ok "MySQL 已初始化，跳过建库脚本"
+  fi
 fi
 
 # ---------- [6/7] 启动服务 ----------
