@@ -52,7 +52,8 @@ public class AuthService {
      */
     public LoginResp login(LoginReq req, String ip) {
         SysUser user = SysCache.getUserByUsername(req.getUsername());
-        if (user == null || !Objects.equals(req.getTenantId(), user.getTenantId())) {
+        if (user == null || (req.getTenantId() != null
+            && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
             throw new BusinessException("用户名或密码错误");
         }
         // 密码不入缓存（安全），校验走 system 直查库比对

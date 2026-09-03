@@ -69,7 +69,8 @@ public class PhoneLoginStrategy {
         }
 
         SysUser user = smsCodeService.getUserByPhone(phone);
-        if (user == null || !Objects.equals(req.getTenantId(), user.getTenantId())) {
+        if (user == null || (req.getTenantId() != null
+            && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
             attemptLimiter.recordFailure(phone, clientIp);
             throw new BusinessException("手机号未注册");
         }
