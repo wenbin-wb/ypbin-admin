@@ -15,6 +15,11 @@
     <description>ypbin-admin 微服务版 API 网关：统一鉴权 + 路由 + 限流熔断 + Swagger 聚合</description>
 
     <dependencies>
+        <!-- 统一 Jackson/日期格式（网关错误处理也需与业务服务一致 yyyy-MM-dd HH:mm:ss） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-json</artifactId>
+        </dependency>
         <!-- 网关（WebFlux 响应式，不引入 spring-boot-starter-web） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
@@ -48,12 +53,7 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
-        <!-- sa-token-jackson 使用旧 Jackson2 JSR310 序列化 -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.datatype</groupId>
-            <artifactId>jackson-datatype-jsr310</artifactId>
-            <version>2.21.4</version>
-        </dependency>
+
         <!-- LoginUser/UserContext（身份头内容来源）；排除 sa-token webmvc 适配（网关是 WebFlux） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
