@@ -29,7 +29,7 @@ spring:
             - id: auth
               uri: lb://ypbin-auth
               predicates:
-                - Path=/auth/**,/captcha/**,/user/**,/open-api/**
+                - Path=/auth/**,/captcha/**,/user/**,/menu/**,/open-api/**
             - id: system
               uri: lb://ypbin-system
               predicates:
