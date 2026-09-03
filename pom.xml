@@ -12,7 +12,6 @@
     <description>基于 ypbin-starter 的企业级后台管理系统</description>
 
     <modules>
-        <module>ypbin-admin-common</module>
         <module>ypbin-admin-system</module>
         <module>ypbin-admin-server</module>
     </modules>
@@ -56,11 +55,6 @@
                 <scope>import</scope>
             </dependency>
             <!-- 本项目模块 -->
-            <dependency>
-                <groupId>cn.ypbin.admin</groupId>
-                <artifactId>ypbin-admin-common</artifactId>
-                <version>${project.version}</version>
-            </dependency>
             <dependency>
                 <groupId>cn.ypbin.admin</groupId>
                 <artifactId>ypbin-admin-system</artifactId>
