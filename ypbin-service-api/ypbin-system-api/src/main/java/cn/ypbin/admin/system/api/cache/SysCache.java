@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.starter.cache.util.CacheUtils;
+import cn.ypbin.starter.cloud.feign.support.FeignResponses;
 import cn.ypbin.starter.core.util.SpringUtils;
 import java.util.List;
 
@@ -70,10 +71,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             USERNAME_KEY + username,
             SysUser.class,
-            () -> {
-                var result = feignClient().getUserByUsername(username);
-                return sanitize(result == null ? null : result.getData());
-            },
+            () -> sanitize(FeignResponses.dataOrThrow(feignClient().getUserByUsername(username),
+                "系统服务暂不可用，请稍后重试")),
             null);
     }
 
@@ -84,10 +83,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             USER_ID_KEY + userId,
             SysUser.class,
-            () -> {
-                var result = feignClient().getUserById(userId);
-                return sanitize(result == null ? null : result.getData());
-            },
+            () -> sanitize(FeignResponses.dataOrThrow(feignClient().getUserById(userId),
+                "系统服务暂不可用，请稍后重试")),
             null);
     }
 
@@ -98,10 +95,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             ROLE_USER_KEY + userId,
             (Class<List<String>>) (Class<?>) List.class,
-            () -> {
-                var result = feignClient().listRoleCodes(userId);
-                return result == null || result.getData() == null ? List.of() : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().listRoleCodes(userId),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -112,10 +107,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             PERM_USER_KEY + userId,
             (Class<List<String>>) (Class<?>) List.class,
-            () -> {
-                var result = feignClient().listPermissions(userId);
-                return result == null || result.getData() == null ? List.of() : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().listPermissions(userId),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -153,10 +146,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             PHONE_KEY + phone,
             SysUser.class,
-            () -> {
-                var result = feignClient().getUserByPhone(phone);
-                return sanitize(result == null ? null : result.getData());
-            },
+            () -> sanitize(FeignResponses.dataOrThrow(feignClient().getUserByPhone(phone),
+                "系统服务暂不可用，请稍后重试")),
             null);
     }
 
@@ -178,10 +169,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             CONFIG_KEY + configKey,
             ConfigValue.class,
-            () -> {
-                var result = feignClient().getConfigByKey(configKey);
-                return result == null ? null : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().getConfigByKey(configKey),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -201,10 +190,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             SOCIAL_CONFIG_KEY + source,
             SocialAuthConfig.class,
-            () -> {
-                var result = feignClient().getSocialAuthConfig(source);
-                return result == null ? null : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().getSocialAuthConfig(source),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -215,10 +202,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             SOCIAL_CONFIGS_KEY,
             (Class<List<SocialAuthConfig>>) (Class<?>) List.class,
-            () -> {
-                var result = feignClient().listSocialAuthConfigs();
-                return result == null || result.getData() == null ? List.of() : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().listSocialAuthConfigs(),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -239,10 +224,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             SOCIAL_BINDING_KEY + platform + ":" + openId,
             SysUserSocial.class,
-            () -> {
-                var result = feignClient().getSocialBinding(platform, openId);
-                return result == null ? null : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().getSocialBinding(platform, openId),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -253,10 +236,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             SOCIAL_BOUND_KEY + userId + ":" + platform,
             Boolean.class,
-            () -> {
-                var result = feignClient().isSocialUserBound(userId, platform);
-                return result == null || result.getData() == null ? false : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().isSocialUserBound(userId, platform),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -267,10 +248,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             SOCIAL_ACCOUNT_BOUND_KEY + platform + ":" + openId,
             Boolean.class,
-            () -> {
-                var result = feignClient().isSocialAccountBound(platform, openId);
-                return result == null || result.getData() == null ? false : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().isSocialAccountBound(platform, openId),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -281,10 +260,8 @@ public final class SysCache {
         return CacheUtils.getOrLoad(
             SOCIAL_BINDINGS_USER_KEY + userId,
             (Class<List<SysUserSocial>>) (Class<?>) List.class,
-            () -> {
-                var result = feignClient().listSocialBindings(userId);
-                return result == null || result.getData() == null ? List.of() : result.getData();
-            },
+            () -> FeignResponses.dataOrThrow(feignClient().listSocialBindings(userId),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 

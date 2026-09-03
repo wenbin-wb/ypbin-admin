@@ -17,19 +17,14 @@ import cn.ypbin.admin.system.enums.JobStatusEnum;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.mapper.SysJobMapper;
-import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.service.SocialBindService;
-import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.security.password.PasswordEncoderUtil;
-import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,10 +49,8 @@ public class SystemClientImpl implements ISystemClient {
 
     private final SysPermissionService permissionService;
     private final SysUserService userService;
-    private final SysUserMapper userMapper;
     private final SysJobMapper jobMapper;
     private final SysConfigMapper configMapper;
-    private final SysConfigService configService;
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
 
@@ -82,7 +75,7 @@ public class SystemClientImpl implements ISystemClient {
     @Override
     @GetMapping("/user-by-id")
     public R<SysUser> getUserById(@RequestParam("userId") Long userId) {
-        return R.ok(userMapper.selectById(userId));
+        return R.ok(userService.getById(userId));
     }
 
     @Override
@@ -101,11 +94,7 @@ public class SystemClientImpl implements ISystemClient {
     @Override
     @GetMapping("/search-users")
     public R<List<SysUser>> searchUsers(@RequestParam("keyword") String keyword) {
-        return R.ok(userMapper.selectList(new LambdaQueryWrapper<SysUser>()
-            .like(SysUser::getUsername, keyword)
-            .or()
-            .like(SysUser::getRealName, keyword)
-            .last("LIMIT 10")));
+        return R.ok(userService.searchUsers(keyword));
     }
 
     @Override
@@ -119,7 +108,7 @@ public class SystemClientImpl implements ISystemClient {
     @Override
     @GetMapping("/user-count")
     public R<Long> countUsers() {
-        return R.ok(userMapper.selectCount(null));
+        return R.ok(userService.countUsers());
     }
 
     @Override
@@ -144,11 +133,7 @@ public class SystemClientImpl implements ISystemClient {
     @PostMapping("/verify-password")
     public R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
         @RequestParam("rawPassword") String rawPassword) {
-        SysUser user = TenantContext.executeIgnore(() -> userMapper.selectById(userId));
-        if (user == null || user.getPassword() == null) {
-            return R.ok(false);
-        }
-        return R.ok(PasswordEncoderUtil.matches(rawPassword, user.getPassword()));
+        return R.ok(userService.verifyPassword(userId, rawPassword));
     }
 
     @Override
