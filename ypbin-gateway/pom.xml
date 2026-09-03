@@ -35,6 +35,7 @@
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-redis-jackson</artifactId>
+            <version>1.46.0</version>
         </dependency>
         <!-- Redis 连接工厂：sa-token Redis 会话存储依赖 -->
         <dependency>

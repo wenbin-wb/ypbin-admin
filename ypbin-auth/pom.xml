@@ -54,6 +54,7 @@
         <dependency>
             <groupId>cn.dev33</groupId>
             <artifactId>sa-token-redis-jackson</artifactId>
+            <version>1.46.0</version>
         </dependency>
         <!-- 验证码 -->
         <dependency>
