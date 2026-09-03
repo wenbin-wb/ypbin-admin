@@ -7,12 +7,12 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.auth;
+package cn.ypbin.admin.modules.auth.core;
 
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
-import cn.ypbin.admin.modules.system.service.SmsCodeService;
+import cn.ypbin.admin.modules.auth.service.SmsCodeService;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.core.exception.BusinessException;

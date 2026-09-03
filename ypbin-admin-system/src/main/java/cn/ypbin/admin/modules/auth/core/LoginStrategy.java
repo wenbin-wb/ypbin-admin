@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.auth;
+package cn.ypbin.admin.modules.auth.core;
 
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 

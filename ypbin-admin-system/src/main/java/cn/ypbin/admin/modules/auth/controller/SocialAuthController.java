@@ -7,11 +7,11 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.controller;
+package cn.ypbin.admin.modules.auth.controller;
 
 import cn.ypbin.admin.modules.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
-import cn.ypbin.admin.modules.system.service.SocialLoginService;
+import cn.ypbin.admin.modules.auth.service.SocialLoginService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.social.core.SocialService;

@@ -7,13 +7,13 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.controller;
+package cn.ypbin.admin.modules.auth.controller;
 
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
-import cn.ypbin.admin.modules.system.service.AuthService;
+import cn.ypbin.admin.modules.auth.service.AuthService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.limiter.RateLimit;

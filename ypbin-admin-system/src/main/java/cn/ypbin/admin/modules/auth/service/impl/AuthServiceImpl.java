@@ -7,17 +7,17 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.service.impl;
+package cn.ypbin.admin.modules.auth.service.impl;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
-import cn.ypbin.admin.modules.system.auth.LoginSupport;
+import cn.ypbin.admin.modules.auth.core.LoginSupport;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
-import cn.ypbin.admin.modules.system.service.AuthService;
+import cn.ypbin.admin.modules.auth.service.AuthService;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.admin.modules.system.service.SysMenuService;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;

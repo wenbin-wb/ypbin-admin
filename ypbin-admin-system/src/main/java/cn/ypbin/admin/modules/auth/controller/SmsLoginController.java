@@ -7,12 +7,12 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.controller;
+package cn.ypbin.admin.modules.auth.controller;
 
-import cn.ypbin.admin.modules.system.auth.LoginStrategyFactory;
-import cn.ypbin.admin.modules.system.auth.PhoneLoginReq;
+import cn.ypbin.admin.modules.auth.core.LoginStrategyFactory;
+import cn.ypbin.admin.modules.auth.core.PhoneLoginReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
-import cn.ypbin.admin.modules.system.service.SmsCodeService;
+import cn.ypbin.admin.modules.auth.service.SmsCodeService;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;

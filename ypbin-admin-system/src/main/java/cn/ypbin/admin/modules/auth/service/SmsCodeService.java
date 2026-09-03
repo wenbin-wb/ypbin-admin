@@ -7,8 +7,9 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.service;
+package cn.ypbin.admin.modules.auth.service;
 
+import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.messaging.util.SmsUtils;
