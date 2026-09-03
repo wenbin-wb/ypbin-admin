@@ -3,6 +3,16 @@
 # Data ID: ypbin-gateway.yaml | Group: DEFAULT_GROUP | 格式: YAML
 # ============================================================
 
+# Sa-Token 与 auth 保持一致，确保网关能读取 Redis 中的登录会话
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 2592000
+  active-timeout: 1800
+  auto-renew: true
+  is-read-cookie: false
+  is-print: false
+
 # Spring Cloud 2025.1.2 官方支持 Boot 4.1.x，兼容性检查器元数据滞后误报，显式禁用
 spring:
   cloud:
