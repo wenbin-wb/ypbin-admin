@@ -65,6 +65,9 @@ REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 BRANCH="${BRANCH:-feature/microservice}"
 NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
+SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
+ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
+ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
 STARTER_VERSION="2.1.0"
 
 # 服务清单（目录名:jar名:端口）
@@ -175,6 +178,9 @@ git config --global --add safe.directory "$ROOT/ypbin-starter" 2>/dev/null || tr
 git config --global --add safe.directory "$ROOT/ypbin-admin" 2>/dev/null || true
 [ -d ypbin-starter/.git ] || git clone -b master "$REPO_BASE/ypbin-starter.git"
 [ -d ypbin-admin/.git ]   || git clone -b "$BRANCH" "$REPO_BASE/ypbin-admin.git"
+if [ "$SKIP_FRONTEND" = "0" ]; then
+  [ -d ypbin-admin-ui/.git ] || git clone -b main "$REPO_BASE/ypbin-admin-ui.git"
+fi
 # 拉取最新：分叉时强制对齐远程（部署目录无本地修改，直接 reset --hard 到远程）
 pull_repo() { # $1=仓库目录 $2=分支
   local repo="$1" branch="$2"
@@ -192,6 +198,9 @@ pull_repo() { # $1=仓库目录 $2=分支
 }
 pull_repo "$ROOT/ypbin-starter" master
 pull_repo "$ROOT/ypbin-admin" "$BRANCH"
+if [ "$SKIP_FRONTEND" = "0" ]; then
+  pull_repo "$ROOT/ypbin-admin-ui" master
+fi
 ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD)，admin@$(git -C "$ROOT/ypbin-admin" rev-parse --short HEAD)）"
 fi
 
@@ -256,6 +265,8 @@ MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
+ADMIN_UI_PORT=$ADMIN_UI_PORT
+ADMIN_UI_DIST_DIR=$ADMIN_UI_DIST_DIR
 EOF
   chmod 600 "$ENV_FILE"
   ok "已生成 .env（MySQL 密码：$MYSQL_ROOT_PASSWORD，可改 $ENV_FILE）"
@@ -344,6 +355,50 @@ if [ "$NO_DOCKER" != "1" ]; then
   else
     ok "MySQL 已初始化，跳过建库脚本"
   fi
+fi
+
+# ---------- [5.6/7] 构建前端（可 SKIP_FRONTEND=1 跳过） ----------
+if [ "$NO_DOCKER" = "1" ]; then
+  # NO_DOCKER 模式目前只部署后端，前端需另行部署；跳过构建避免误导
+  info "[5.6/7] NO_DOCKER 模式跳过前端构建"
+elif [ "$SKIP_FRONTEND" = "1" ] || [ -f "$ADMIN_UI_DIST_DIR/index.html" ]; then
+  if [ -f "$ADMIN_UI_DIST_DIR/index.html" ]; then
+    ok "使用已有前端产物 $ADMIN_UI_DIST_DIR"
+  else
+    warn "SKIP_FRONTEND=1 但 $ADMIN_UI_DIST_DIR 无 index.html"
+    info "请本地构建后上传：cd ypbin-admin-ui && pnpm install && pnpm -F @vben/web-antd build"
+    info "上传：scp -r apps/web-antd/dist/* root@<IP>:$ADMIN_UI_DIST_DIR/"
+    die "缺少前端产物"
+  fi
+else
+  info "[5.6/7] 构建前端 admin-ui（约 2-10 分钟）"
+  export PATH="/usr/local/lib/nodejs/bin:$PATH"
+  if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
+    info "未检测到 node/pnpm，尝试自动安装 Node 22"
+    ARCH=$(uname -m)
+    case "$ARCH" in
+      x86_64) NODE_ARCH="x64" ;;
+      aarch64|arm64) NODE_ARCH="arm64" ;;
+      *) die "不支持的架构 $ARCH，请本地构建后上传" ;;
+    esac
+    curl -fsSL --max-time 120 -o /tmp/node.tar.xz \
+      "https://npmmirror.com/mirrors/node/v22.18.0/node-v22.18.0-linux-${NODE_ARCH}.tar.xz" \
+      || die "Node 下载失败"
+    mkdir -p /usr/local/lib/nodejs
+    tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs --strip-components=1
+    export PATH="/usr/local/lib/nodejs/bin:$PATH"
+    npm install -g pnpm@latest --registry=https://registry.npmmirror.com >/dev/null 2>&1 || true
+  fi
+  pnpm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
+  (cd "$ROOT/ypbin-admin-ui" && pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1) \
+    || die "前端依赖安装失败"
+  (cd "$ROOT/ypbin-admin-ui" && pnpm -F @vben/web-antd build 2>&1) \
+    || die "前端构建失败"
+  mkdir -p "$ADMIN_UI_DIST_DIR"
+  cp -r "$ROOT/ypbin-admin-ui/apps/web-antd/dist/"* "$ADMIN_UI_DIST_DIR/"
+  find "$ADMIN_UI_DIST_DIR" -type d -exec chmod 755 {} \;
+  find "$ADMIN_UI_DIST_DIR" -type f -exec chmod 644 {} \;
+  ok "前端构建完成：$ADMIN_UI_DIST_DIR"
 fi
 
 # ---------- [6/7] 启动服务 ----------
