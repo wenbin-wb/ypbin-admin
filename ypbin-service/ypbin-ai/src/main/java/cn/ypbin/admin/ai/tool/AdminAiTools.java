@@ -54,7 +54,10 @@ public class AdminAiTools {
         description = "按用户名或真实姓名搜索系统用户，返回用户基本信息，限制 10 条")
     public String searchUser(String keyword) {
         var resp = systemFeignClient.searchUsers(keyword);
-        List<SysUser> users = resp == null ? List.of() : resp.getData() == null ? List.of() : resp.getData();
+        if (resp == null || !resp.isSuccess() || resp.getData() == null) {
+            return "系统服务暂不可用，请稍后重试";
+        }
+        List<SysUser> users = resp.getData();
         if (users.isEmpty()) {
             return "未找到匹配用户：" + keyword;
         }
@@ -75,7 +78,10 @@ public class AdminAiTools {
         description = "查询系统定时任务列表，可按名称筛选，返回任务名称/执行器/Cron/状态")
     public String listJobs(String nameKeyword) {
         var resp = systemFeignClient.listJobs(nameKeyword);
-        List<SysJob> jobs = resp == null ? List.of() : resp.getData() == null ? List.of() : resp.getData();
+        if (resp == null || !resp.isSuccess() || resp.getData() == null) {
+            return "系统服务暂不可用，请稍后重试";
+        }
+        List<SysJob> jobs = resp.getData();
         if (jobs.isEmpty()) {
             return "没有找到匹配的定时任务";
         }
@@ -95,12 +101,21 @@ public class AdminAiTools {
     @Tool(name = "getSystemStats",
         description = "获取当前系统基础统计：注册用户总数、已启用任务数")
     public String getSystemStats() {
-        long userCount = feignCount(systemFeignClient.countUsers());
-        long runningJobs = feignCount(systemFeignClient.countRunningJobs());
-        return String.format("系统统计 - 正常用户数: %d，运行中定时任务: %d", userCount, runningJobs);
+        String userCount = feignCount(systemFeignClient.countUsers(), "用户数");
+        if (userCount.startsWith("ERROR:")) {
+            return userCount;
+        }
+        String runningJobs = feignCount(systemFeignClient.countRunningJobs(), "运行任务数");
+        if (runningJobs.startsWith("ERROR:")) {
+            return runningJobs;
+        }
+        return String.format("系统统计 - 正常用户数: %s，运行中定时任务: %s", userCount, runningJobs);
     }
 
-    private static long feignCount(R<Long> resp) {
-        return resp == null || resp.getData() == null ? 0L : resp.getData();
+    private static String feignCount(R<Long> resp, String label) {
+        if (resp == null || !resp.isSuccess() || resp.getData() == null) {
+            return "ERROR:系统服务暂不可用，无法获取" + label;
+        }
+        return String.valueOf(resp.getData());
     }
 }

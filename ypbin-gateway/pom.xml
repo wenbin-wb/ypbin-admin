@@ -31,6 +31,16 @@
             <artifactId>sa-token-core</artifactId>
             <version>1.46.0</version>
         </dependency>
+        <!-- sa-token Redis 会话存储：与 auth 共享登录态 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-jackson</artifactId>
+        </dependency>
+        <!-- Redis 连接工厂：sa-token Redis 会话存储依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!-- LoginUser/UserContext（身份头内容来源）；排除 sa-token webmvc 适配（网关是 WebFlux） -->
         <dependency>
             <groupId>cn.ypbin</groupId>

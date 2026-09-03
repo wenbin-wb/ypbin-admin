@@ -57,8 +57,8 @@ public class AuthService {
             throw new BusinessException("用户名或密码错误");
         }
         // 密码不入缓存（安全），校验走 system 直查库比对
-        Boolean matched = permissionFeignClient.verifyPassword(user.getId(), req.getPassword()).getData();
-        if (!Boolean.TRUE.equals(matched)) {
+        R<Boolean> verifyResp = permissionFeignClient.verifyPassword(user.getId(), req.getPassword());
+        if (verifyResp == null || !verifyResp.isSuccess() || !Boolean.TRUE.equals(verifyResp.getData())) {
             throw new BusinessException("用户名或密码错误");
         }
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {

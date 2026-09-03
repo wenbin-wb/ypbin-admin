@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.entity;
 
 import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serial;
 import java.time.LocalDateTime;
 import lombok.Getter;
@@ -39,7 +40,8 @@ public class SysUser extends TenantBaseEntity {
     /** 用户类型：PLATFORM 平台用户、TENANT 租户用户 */
     private String userType;
 
-    /** 登录密码（BCrypt 密文，响应不输出） */
+    /** 登录密码（BCrypt 密文，禁止 JSON 序列化输出） */
+    @JsonIgnore
     private String password;
 
     /** 真实姓名/显示名 */

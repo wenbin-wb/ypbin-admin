@@ -33,6 +33,12 @@ public interface SysUserService extends BaseService<SysUser> {
 
     SysUser getByPhone(String phone);
 
+    boolean verifyPassword(Long userId, String rawPassword);
+
+    long countUsers();
+
+    List<SysUser> searchUsers(String keyword);
+
     void updateLastLoginTime(Long userId);
 
     PageResult<UserResp> pageUsers(UserQuery query);

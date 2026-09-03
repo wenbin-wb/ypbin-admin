@@ -50,6 +50,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-security</artifactId>
         </dependency>
+        <!-- sa-token Redis 会话存储：与网关共享登录态 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-jackson</artifactId>
+        </dependency>
         <!-- 验证码 -->
         <dependency>
             <groupId>cn.ypbin</groupId>

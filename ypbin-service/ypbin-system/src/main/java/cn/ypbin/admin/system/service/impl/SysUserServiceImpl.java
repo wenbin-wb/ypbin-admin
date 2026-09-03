@@ -94,6 +94,27 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     }
 
     @Override
+    public boolean verifyPassword(Long userId, String rawPassword) {
+        SysUser user = TenantContext.executeIgnore(() -> getById(userId));
+        return user != null && user.getPassword() != null
+            && PasswordEncoderUtil.matches(rawPassword, user.getPassword());
+    }
+
+    @Override
+    public long countUsers() {
+        return TenantContext.executeIgnore(this::count);
+    }
+
+    @Override
+    public List<SysUser> searchUsers(String keyword) {
+        return TenantContext.executeIgnore(() -> list(new LambdaQueryWrapper<SysUser>()
+            .like(SysUser::getUsername, keyword)
+            .or()
+            .like(SysUser::getRealName, keyword)
+            .last("LIMIT 10")));
+    }
+
+    @Override
     public void updateLastLoginTime(Long userId) {
         SysUser update = new SysUser();
         update.setId(userId);
