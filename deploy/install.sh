@@ -19,7 +19,7 @@
 #   [7/7] 健康检查   —— 验证网关/各服务注册，输出访问地址
 #
 # 自定义参数（环境变量覆盖）：
-#   YPBIN_ROOT=/opt/ypbin-ms      部署根目录（默认 /opt/ypbin-ms）
+#   YPBIN_ROOT=/opt/ypbin/main      部署根目录（默认 /opt/ypbin/main）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
 #   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
@@ -59,8 +59,8 @@ warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
 # ---------- 参数 ----------
-# 默认独立目录（与单体版 /opt/ypbin 分开，避免代码互相覆盖/分支冲突，两版本可共存）
-ROOT="${YPBIN_ROOT:-/opt/ypbin-ms}"
+# 默认独立目录（与单体版 /opt/ypbin/boot 分开，避免代码互相覆盖/分支冲突，两版本可共存）
+ROOT="${YPBIN_ROOT:-/opt/ypbin/main}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 BRANCH="${BRANCH:-main}"
 NO_DOCKER="${NO_DOCKER:-0}"
