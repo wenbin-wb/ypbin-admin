@@ -33,7 +33,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/d
 
 1. **操作模式**：①完整部署 ②只更新后端 ③只更新前端 ④手动上传前端包 ⑤退出
 2. **端口配置**：MySQL/Redis/后端/前端端口（默认 3307/6380/8080/18080）
-3. **部署根目录**（默认 `/opt/ypbin`）
+3. **部署根目录**（默认 `/opt/ypbin/boot`）
 4. **前端构建方式**：服务器构建 / 手动上传（自动检测）
 5. **starter 构建策略**：重新构建 / 用 .m2 已有包
 6. **.env 复用**：保留原凭据 / 重新生成
@@ -53,7 +53,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/d
 SKIP_FRONTEND=1 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
 
 # 自定义端口 / 部署目录
-ADMIN_PORT=8080 ADMIN_UI_PORT=18080 YPBIN_ROOT=/opt/ypbin bash <(curl -fsSL ...)
+ADMIN_PORT=8080 ADMIN_UI_PORT=18080 YPBIN_ROOT=/opt/ypbin/boot bash <(curl -fsSL ...)
 ```
 
 之后更新也执行同一条命令（保留已有 `.env` 凭据，自动重新构建启动）。
@@ -70,7 +70,7 @@ cd ypbin-admin-ui
 git pull --ff-only
 pnpm install
 pnpm -F @vben/web-antd build      # 产物在 apps/web-antd/dist
-scp -r apps/web-antd/dist/* root@<服务器IP>:/opt/ypbin/admin-ui-dist/
+scp -r apps/web-antd/dist/* root@<服务器IP>:/opt/ypbin/boot/admin-ui-dist/
 ```
 
 前端 API 地址在 `.env.production` 的 `VITE_GLOB_API_URL`(默认 `/api`,走 nginx 同源代理)。改完前端上传后,nginx 直接读新文件,无需重启。
@@ -80,10 +80,10 @@ scp -r apps/web-antd/dist/* root@<服务器IP>:/opt/ypbin/admin-ui-dist/
 `.env.example` 已填好全部可用默认值，手动部署直接复制即可：
 
 ```bash
-cp /opt/ypbin/ypbin-admin/deploy/.env.example /opt/ypbin/ypbin-admin/deploy/.env
+cp /opt/ypbin/boot/ypbin-admin/deploy/.env.example /opt/ypbin/boot/ypbin-admin/deploy/.env
 ```
 
-生产环境建议修改敏感项（密码/密钥），然后编辑 `/opt/ypbin/ypbin-admin/deploy/.env`:
+生产环境建议修改敏感项（密码/密钥），然后编辑 `/opt/ypbin/boot/ypbin-admin/deploy/.env`:
 
 | 变量 | 说明 |
 |---|---|

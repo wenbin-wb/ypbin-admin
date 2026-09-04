@@ -2,7 +2,7 @@
 # ============================================================
 # ypbin 服务器磁盘清理脚本
 # 安全清理：未使用 docker 镜像/构建缓存/悬空卷、journal 日志、apt 缓存、旧 snap
-# 用法：bash /opt/ypbin/cleanup.sh [--dry-run] [--journal-days N] [--snap]
+# 用法：bash /opt/ypbin/boot/cleanup.sh [--dry-run] [--journal-days N] [--snap]
 #   --dry-run        只统计不清理
 #   --journal-days N  journal 日志保留天数（默认 3）
 #   --snap           额外清理未使用 snap（lxd 等，需确认未使用）
@@ -129,4 +129,4 @@ echo "=============================================="
 echo "清理后根分区: $(before)"
 echo "=============================================="
 echo "提示: 定期执行可加 cron，如每周日 03:00:"
-echo "  0 3 * * 0 bash /opt/ypbin/cleanup.sh --snap >> /var/log/ypbin-cleanup.log 2>&1"
+echo "  0 3 * * 0 bash /opt/ypbin/boot/cleanup.sh --snap >> /var/log/ypbin-cleanup.log 2>&1"

@@ -15,7 +15,7 @@
 #   [7/7] 健康检查   —— 验证 admin / admin-ui 可访问，输出凭据
 #
 # 自定义参数（可选，通过环境变量覆盖）：
-#   YPBIN_ROOT=/opt/ypbin          部署根目录（默认 /opt/ypbin）
+#   YPBIN_ROOT=/opt/ypbin/boot      部署根目录（默认 /opt/ypbin/boot）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
 #   ADMIN_PORT=8080                admin 后端端口
 #   ADMIN_UI_PORT=18080            admin-ui 前端端口
@@ -75,7 +75,7 @@ die()  { echo -e "\n  ${RED}✗  错误：$*${NC}\n"; exit 1; }
 step() { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 # ---------- 参数 ----------
-ROOT="${YPBIN_ROOT:-/opt/ypbin}"
+ROOT="${YPBIN_ROOT:-/opt/ypbin/boot}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 ADMIN_PORT="${ADMIN_PORT:-8080}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-18080}"
