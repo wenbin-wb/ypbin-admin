@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ boot ]
   pull_request:
-    branches: [ main ]
+    branches: [ boot ]
 
 jobs:
   build:
@@ -36,7 +36,7 @@ jobs:
           path: ypbin-starter
 
       - name: 本地安装 ypbin-starter
-        run: mvn -B clean install -DskipTests
+        run: mvn -B clean install -DskipTests -Djacoco.skip=true
         working-directory: ypbin-starter
 
       - name: 编译、代码风格校验与测试
