@@ -3,7 +3,7 @@
 # ypbin-admin 一键部署脚本（零配置，全自动）
 #
 # 用法（新服务器一键安装）：
-#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
 #
 # 阶段总览：
 #   [1/7] 环境准备   —— 一次性检查并安装全部依赖（系统/Docker/JDK21/Maven/Node/pnpm/镜像/网络）
@@ -35,8 +35,8 @@ set -euo pipefail
 # 用法不变：bash <(curl -fsSL ...)
 # ============================================================
 SCRIPT_VERSION="2026.08.29.5"
-SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
-SCRIPT_API_URL="${YPBIN_SCRIPT_API_URL:-https://api.github.com/repos/wenbin-wb/ypbin-admin/contents/deploy/install.sh}"
+SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh}"
+SCRIPT_API_URL="${YPBIN_SCRIPT_API_URL:-https://api.github.com/repos/wenbin-wb/ypbin-admin/contents/deploy/install.sh?ref=boot}"
 
 if [ "${YPBIN_SKIP_SELF_UPDATE:-0}" != "1" ]; then
   # 仅当脚本来自管道/进程替换（无真实文件）或文件版本与当前不符时才检查更新
@@ -325,8 +325,6 @@ case "$MODE" in
   backend) REPOS_TO_PULL="ypbin-starter ypbin-admin" ;;
   frontend|upload-frontend) REPOS_TO_PULL="ypbin-admin ypbin-admin-ui" ;;
 esac
-# 单体版 main 固定使用 ypbin-starter v2.0.0，避免误装 master(2.1.0)
-STARTER_TAG="${STARTER_TAG:-v2.0.0}"
 for repo in $REPOS_TO_PULL; do
   if [ ! -d "$repo/.git" ]; then
     info "clone $repo"
@@ -334,9 +332,6 @@ for repo in $REPOS_TO_PULL; do
   else
     info "更新 $repo"
     (cd "$repo" && git stash --quiet 2>/dev/null || true; git pull --ff-only --quiet || warn "$repo 更新失败（本地有改动？）")
-  fi
-  if [ "$repo" = "ypbin-starter" ]; then
-    (cd "$repo" && git checkout --quiet "$STARTER_TAG" 2>/dev/null || warn "starter 切换到 $STARTER_TAG 失败")
   fi
   ok "$repo @ $(cd "$repo" && git log --oneline -1)"
 done
@@ -578,6 +573,6 @@ echo "  │  密码: $(grep '^ADMIN_BOOTSTRAP_PASSWORD=' "$DEPLOY_DIR/.env" | cu
 echo "  └──────────────────────────────────────────────┘"
 echo ""
 echo "  凭据已存: $DEPLOY_DIR/.env（勿提交版本管理）"
-echo "  之后更新: bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)"
+echo "  之后更新: bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)"
 echo "  或手动:   cd $DEPLOY_DIR && docker compose up -d --build"
 echo "  清理空间: bash $ROOT/cleanup.sh --snap"

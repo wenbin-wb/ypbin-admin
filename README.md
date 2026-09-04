@@ -118,7 +118,7 @@
 新服务器零配置一键安装（自动装依赖、构建、启动全部容器）：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
 ```
 
 交互模式会询问：操作模式（完整部署 / 只更新后端 / 只更新前端 / 手动上传前端包）、端口（默认 MySQL 3307 / Redis 6380 / 后端 8080 / 前端 18080）、部署目录等；加 `-y` 全自动跳过所有询问（CI / 无头环境）。详细见 [部署文档](https://ypbin.cn/guide/admin/deployment)。

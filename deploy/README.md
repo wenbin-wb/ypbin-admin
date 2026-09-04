@@ -22,7 +22,7 @@
 新服务器零配置一键安装：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
 ```
 
 脚本自动完成：环境检测（Linux/Docker/JDK21/Maven/Node）→ 拉取代码 → 构建 admin 后端 jar → 构建 admin-ui 前端 → 生成凭据 `.env` → docker compose 启动 → 健康检查 + 凭据输出。
@@ -43,14 +43,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/d
 
 ```bash
 # -y 跳过所有询问
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -y
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh) -y
 ```
 
 自定义参数（环境变量覆盖）：
 
 ```bash
 # 前端已本地构建上传时跳过服务器构建（国内 npm 常见）
-SKIP_FRONTEND=1 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+SKIP_FRONTEND=1 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
 
 # 自定义端口 / 部署目录
 ADMIN_PORT=8080 ADMIN_UI_PORT=18080 YPBIN_ROOT=/opt/ypbin bash <(curl -fsSL ...)
