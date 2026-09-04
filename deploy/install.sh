@@ -70,6 +70,15 @@ ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
 ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
 STARTER_VERSION="2.1.1"
 
+# ---------- 交互模式 ----------
+# 默认交互（人工确认关键步骤）；-y/--yes 全自动跳过所有确认（CI/无头环境，对齐单体脚本）
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -y|--yes) ASSUME_YES=1; shift ;;
+    *) shift ;;
+  esac
+done
+
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
 ypbin-auth:ypbin-auth:18081
