@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.api.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.when;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.starter.cache.util.CacheUtils;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.core.util.SpringUtils;
 import java.time.Duration;
@@ -93,7 +95,7 @@ class SysCacheTest {
     }
 
     @Test
-    void getUserRoleCodesShouldReturnEmptyListWhenFeignFails() {
+    void getUserRoleCodesShouldThrowWhenFeignFails() {
         ISystemClient client = org.mockito.Mockito.mock(ISystemClient.class);
         when(client.listRoleCodes(42L)).thenReturn(R.fail(500, "不可用"));
 
@@ -103,9 +105,10 @@ class SysCacheTest {
             cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:role:user:42"), any(), any(), org.mockito.ArgumentMatchers.isNull()))
                 .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
 
-            List<String> roles = SysCache.getUserRoleCodes(42L);
-
-            assertThat(roles).isEmpty();
+            // 铁律3 禁止静默降级：Feign 失败必须抛异常暴露错误，而非返回空列表假装正常
+            assertThatThrownBy(() -> SysCache.getUserRoleCodes(42L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("系统服务暂不可用");
         }
     }
 

@@ -12,7 +12,7 @@
 # 阶段总览：
 #   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven）
 #   [2/7] 拉取代码   —— starter（构建到本地 Maven 仓库）+ admin（main 分支）
-#   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.1.0 及新能力）
+#   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.1.1 及新能力）
 #   [4/7] 构建后端   —— Maven 打包 5 个服务可执行 jar
 #   [5/7] 生成配置   —— .env 凭据 + Nacos 共享配置提示
 #   [6/7] 启动服务   —— Docker: compose up（含基础设施）；NO_DOCKER: java -jar 逐个启动
@@ -68,7 +68,7 @@ ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
 ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
-STARTER_VERSION="2.1.0"
+STARTER_VERSION="2.1.1"
 
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
@@ -224,9 +224,9 @@ if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
   fi
   ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
 else
-  # 确认本地仓库有 2.1.0（没有则强制构建）
-  if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.1.0" ]; then
-    warn "本地 Maven 仓库无 starter 2.1.0，强制构建"
+  # 确认本地仓库有 2.1.1（没有则强制构建）
+  if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.1.1" ]; then
+    warn "本地 Maven 仓库无 starter 2.1.1，强制构建"
     cd "$ROOT/ypbin-starter"
     mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20 \
       || die "starter 构建失败（完整日志 /tmp/starter-build.log）"
