@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.service;
 
 import cn.ypbin.admin.modules.system.entity.SysNotice;
 import cn.ypbin.admin.modules.system.model.req.NoticeSaveReq;
+import cn.ypbin.admin.modules.system.model.resp.NoticeResp;
 import cn.ypbin.starter.crud.service.BaseService;
 import java.util.List;
 
@@ -22,7 +23,7 @@ import java.util.List;
  */
 public interface SysNoticeService extends BaseService<SysNotice> {
 
-    List<SysNotice> listNotices();
+    List<NoticeResp> listNotices();
 
     void createNotice(NoticeSaveReq req);
 
