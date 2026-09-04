@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
+import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.service.NoticePublishService;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -47,8 +48,8 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     private final NoticePublishService noticePublishService;
 
     @Override
-    public List<SysNotice> listNotices() {
-        return list();
+    public List<NoticeResp> listNotices() {
+        return list().stream().map(this::toResp).toList();
     }
 
     @Override
@@ -203,6 +204,12 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         if (notice.getPublishType() != IMMEDIATE && notice.getPublishType() != SCHEDULED) {
             throw new BusinessException("发布方式不合法");
         }
+    }
+
+    private NoticeResp toResp(SysNotice notice) {
+        NoticeResp resp = new NoticeResp();
+        BeanUtils.copyProperties(notice, resp);
+        return resp;
     }
 
     private SysNotice requireNotice(Long id) {

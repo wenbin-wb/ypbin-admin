@@ -10,7 +10,7 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.system.entity.SysNotice;
+import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.model.R;
@@ -43,7 +43,7 @@ public class SysNoticeController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:notice:list")
-    public R<List<SysNotice>> list() {
+    public R<List<NoticeResp>> list() {
         return R.ok(noticeService.listNotices());
     }
 

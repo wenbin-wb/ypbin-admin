@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysFile;
 import cn.ypbin.admin.system.model.query.FileQuery;
+import cn.ypbin.admin.system.model.resp.FileResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
 import cn.ypbin.starter.storage.model.FileInfo;
@@ -30,7 +31,7 @@ public interface SysFileService extends BaseService<SysFile> {
      * @param query 查询条件
      * @return 分页结果
      */
-    PageResult<SysFile> pageFiles(FileQuery query);
+    PageResult<FileResp> pageFiles(FileQuery query);
 
     /**
      * 上传并记录文件元数据。

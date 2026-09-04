@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.mapper.SysMessageMapper;
 import cn.ypbin.admin.system.model.query.MessageQuery;
+import cn.ypbin.admin.system.model.resp.MessageResp;
 import cn.ypbin.admin.system.service.SysMessageService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -19,6 +20,7 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.util.List;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,12 +35,14 @@ public class SysMessageServiceImpl extends BaseServiceImpl<SysMessageMapper, Sys
     implements SysMessageService {
 
     @Override
-    public PageResult<SysMessage> pageMessages(Long userId, MessageQuery query) {
-        return page(query, new LambdaQueryWrapper<SysMessage>()
+    public PageResult<MessageResp> pageMessages(Long userId, MessageQuery query) {
+        PageResult<SysMessage> source = page(query, new LambdaQueryWrapper<SysMessage>()
             .eq(SysMessage::getReceiverUserId, userId)
             .eq(query.getReadStatus() != null, SysMessage::getReadStatus, query.getReadStatus())
             .eq(query.getMessageType() != null, SysMessage::getMessageType, query.getMessageType())
             .orderByDesc(SysMessage::getCreateTime));
+        List<MessageResp> items = source.getItems().stream().map(this::toResp).toList();
+        return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
     }
 
     @Override
@@ -49,14 +53,20 @@ public class SysMessageServiceImpl extends BaseServiceImpl<SysMessageMapper, Sys
     }
 
     @Override
-    public List<SysMessage> recent(Long userId, long limit) {
+    public List<MessageResp> recent(Long userId, long limit) {
         if (limit < 1 || limit > 100) {
             throw new BusinessException("最近消息数量必须在 1 到 100 之间");
         }
         return list(new LambdaQueryWrapper<SysMessage>()
             .eq(SysMessage::getReceiverUserId, userId)
             .orderByDesc(SysMessage::getCreateTime)
-            .last("limit " + limit));
+            .last("limit " + limit)).stream().map(this::toResp).toList();
+    }
+
+    private MessageResp toResp(SysMessage message) {
+        MessageResp resp = new MessageResp();
+        BeanUtils.copyProperties(message, resp);
+        return resp;
     }
 
     @Override
