@@ -3,7 +3,7 @@
 # ypbin-admin 微服务版一键部署脚本（零配置，全自动）
 #
 # 用法（新服务器一键安装，Docker 模式）：
-#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/feature/microservice/deploy/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 #
 # 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
 #   NO_DOCKER=1 bash deploy/install.sh
@@ -11,7 +11,7 @@
 #
 # 阶段总览：
 #   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven）
-#   [2/7] 拉取代码   —— starter（构建到本地 Maven 仓库）+ admin（feature/microservice 分支）
+#   [2/7] 拉取代码   —— starter（构建到本地 Maven 仓库）+ admin（main 分支）
 #   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.1.0 及新能力）
 #   [4/7] 构建后端   —— Maven 打包 5 个服务可执行 jar
 #   [5/7] 生成配置   —— .env 凭据 + Nacos 共享配置提示
@@ -21,7 +21,7 @@
 # 自定义参数（环境变量覆盖）：
 #   YPBIN_ROOT=/opt/ypbin          部署根目录（默认 /opt/ypbin）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
-#   BRANCH=feature/microservice    admin 分支（默认 feature/microservice）
+#   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
 #   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
 #   REDIS_HOST=localhost REDIS_PORT=6379
@@ -37,7 +37,7 @@ trap 'echo "!! 脚本执行失败于第 ${LINENO} 行"' ERR
 # 自动 sudo -E 以 root 重新执行本脚本。管道执行（bash <(curl ...)）时脚本无真实文件，
 # 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
 SCRIPT_VERSION="2026.09.01.1"
-SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/feature/microservice/deploy/install.sh}"
+SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
 if [ "$(id -u)" != "0" ]; then
   if command -v sudo >/dev/null 2>&1; then
     SELF="/tmp/ypbin-install.sh"
@@ -62,7 +62,7 @@ die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 # 默认独立目录（与单体版 /opt/ypbin 分开，避免代码互相覆盖/分支冲突，两版本可共存）
 ROOT="${YPBIN_ROOT:-/opt/ypbin-ms}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
-BRANCH="${BRANCH:-feature/microservice}"
+BRANCH="${BRANCH:-main}"
 NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
