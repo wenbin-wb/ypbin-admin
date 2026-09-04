@@ -39,5 +39,6 @@ data/
 .DS_Store
 Thumbs.db
 
-# 规范/内部配置（本地，不公开）
-.claude/
+# Claude 技能（.claude/skills 随仓库发布，供各会话/协作者统一使用）
+.claude/*
+!.claude/skills/
