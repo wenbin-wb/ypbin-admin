@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.service.impl;
+package cn.ypbin.admin.modules.job.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,10 +18,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import cn.ypbin.admin.modules.system.entity.SysJob;
-import cn.ypbin.admin.modules.system.mapper.SysJobLogMapper;
-import cn.ypbin.admin.modules.system.mapper.SysJobMapper;
-import cn.ypbin.admin.modules.system.model.req.JobSaveReq;
+import cn.ypbin.admin.modules.job.entity.SysJob;
+import cn.ypbin.admin.modules.job.mapper.SysJobLogMapper;
+import cn.ypbin.admin.modules.job.mapper.SysJobMapper;
+import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.job.core.CronService;
 import cn.ypbin.starter.job.core.JobDefinition;

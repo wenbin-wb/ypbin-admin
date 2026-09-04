@@ -7,50 +7,46 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.entity;
+package cn.ypbin.admin.modules.job.entity;
 
 import cn.ypbin.starter.data.core.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
-import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 定时任务执行日志。全局表，不隔离租户。
+ * 定时任务。全局表，不隔离租户。
  *
  * @author wenbin
  * @since 2026-08-02
  */
 @Getter
 @Setter
-@TableName("sys_job_log")
-public class SysJobLog extends BaseEntity {
+@TableName("sys_job")
+public class SysJob extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** 任务 ID */
-    private Long jobId;
-
     /** 任务名称 */
-    private String jobName;
+    private String name;
 
-    /** 执行器名称 */
+    /** 执行器名称（对应 @YpbinJob 声明的名称） */
     private String executor;
 
-    /** 触发时间 */
-    private LocalDateTime triggerTime;
+    /** cron 表达式（与 fixedRateSeconds 二选一） */
+    private String cron;
 
-    /** 是否手动触发 */
-    private Integer manual;
+    /** 固定频率秒数（与 cron 二选一） */
+    private Long fixedRateSeconds;
 
-    /** 执行结果：0 跳过、1 成功、2 失败 */
-    private Integer outcome;
+    /** 执行参数 */
+    private String args;
 
-    /** 执行耗时（毫秒） */
-    private Long durationMs;
+    /** 执行超时秒数 */
+    private Long timeoutSeconds;
 
-    /** 错误信息 */
-    private String errorMsg;
+    /** 是否启用集群防重 */
+    private Integer concurrentGuard;
 }

@@ -7,9 +7,9 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.job;
+package cn.ypbin.admin.modules.job;
 
-import cn.ypbin.admin.modules.system.service.SysJobService;
+import cn.ypbin.admin.modules.job.service.SysJobService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;

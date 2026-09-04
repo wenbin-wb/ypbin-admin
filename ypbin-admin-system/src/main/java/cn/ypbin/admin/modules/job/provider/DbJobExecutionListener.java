@@ -7,10 +7,10 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.provider;
+package cn.ypbin.admin.modules.job.provider;
 
-import cn.ypbin.admin.modules.system.entity.SysJobLog;
-import cn.ypbin.admin.modules.system.mapper.SysJobLogMapper;
+import cn.ypbin.admin.modules.job.entity.SysJobLog;
+import cn.ypbin.admin.modules.job.mapper.SysJobLogMapper;
 import cn.ypbin.starter.job.core.JobContext;
 import cn.ypbin.starter.job.core.JobExecutionListener;
 import java.time.LocalDateTime;

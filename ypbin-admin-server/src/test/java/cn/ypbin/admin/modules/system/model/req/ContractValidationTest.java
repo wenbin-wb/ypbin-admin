@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.modules.system.model.req;
 
+import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
 import cn.ypbin.starter.data.core.EntityStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 

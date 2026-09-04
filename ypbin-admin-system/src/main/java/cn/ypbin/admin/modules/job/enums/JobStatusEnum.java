@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package cn.ypbin.admin.modules.system.enums;
+package cn.ypbin.admin.modules.job.enums;
 
 /**
  * 定时任务调度状态。

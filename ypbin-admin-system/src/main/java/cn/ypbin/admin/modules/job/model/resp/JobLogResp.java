@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.model.resp;
+package cn.ypbin.admin.modules.job.model.resp;
 
 import java.time.LocalDateTime;
 import lombok.Getter;

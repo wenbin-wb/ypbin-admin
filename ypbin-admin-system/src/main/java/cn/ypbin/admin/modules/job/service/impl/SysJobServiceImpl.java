@@ -7,17 +7,17 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.service.impl;
+package cn.ypbin.admin.modules.job.service.impl;
 
-import cn.ypbin.admin.modules.system.entity.SysJob;
-import cn.ypbin.admin.modules.system.entity.SysJobLog;
-import cn.ypbin.admin.modules.system.enums.JobStatusEnum;
-import cn.ypbin.admin.modules.system.mapper.SysJobLogMapper;
-import cn.ypbin.admin.modules.system.mapper.SysJobMapper;
-import cn.ypbin.admin.modules.system.model.req.JobSaveReq;
-import cn.ypbin.admin.modules.system.model.resp.CronPreviewResp;
-import cn.ypbin.admin.modules.system.model.resp.JobLogResp;
-import cn.ypbin.admin.modules.system.service.SysJobService;
+import cn.ypbin.admin.modules.job.entity.SysJob;
+import cn.ypbin.admin.modules.job.entity.SysJobLog;
+import cn.ypbin.admin.modules.job.enums.JobStatusEnum;
+import cn.ypbin.admin.modules.job.mapper.SysJobLogMapper;
+import cn.ypbin.admin.modules.job.mapper.SysJobMapper;
+import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
+import cn.ypbin.admin.modules.job.model.resp.CronPreviewResp;
+import cn.ypbin.admin.modules.job.model.resp.JobLogResp;
+import cn.ypbin.admin.modules.job.service.SysJobService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;

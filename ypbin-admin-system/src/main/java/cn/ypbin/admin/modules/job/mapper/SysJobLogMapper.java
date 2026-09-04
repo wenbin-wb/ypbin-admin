@@ -7,16 +7,16 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.mapper;
+package cn.ypbin.admin.modules.job.mapper;
 
-import cn.ypbin.admin.modules.system.entity.SysJob;
+import cn.ypbin.admin.modules.job.entity.SysJobLog;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
- * 定时任务 Mapper。
+ * 定时任务日志 Mapper。
  *
  * @author wenbin
  * @since 2026-08-02
  */
-public interface SysJobMapper extends BaseMapper<SysJob> {
+public interface SysJobLogMapper extends BaseMapper<SysJobLog> {
 }

@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.job;
+package cn.ypbin.admin.modules.job;
 
 import cn.ypbin.admin.modules.system.entity.SysNotice;
 import cn.ypbin.admin.modules.system.mapper.SysNoticeMapper;

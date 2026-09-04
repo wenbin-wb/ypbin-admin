@@ -9,11 +9,11 @@
  */
 package cn.ypbin.admin.modules.ai.tool;
 
-import cn.ypbin.admin.modules.system.entity.SysJob;
+import cn.ypbin.admin.modules.job.entity.SysJob;
 import cn.ypbin.admin.modules.system.entity.SysUser;
-import cn.ypbin.admin.modules.system.enums.JobStatusEnum;
+import cn.ypbin.admin.modules.job.enums.JobStatusEnum;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
-import cn.ypbin.admin.modules.system.mapper.SysJobMapper;
+import cn.ypbin.admin.modules.job.mapper.SysJobMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;

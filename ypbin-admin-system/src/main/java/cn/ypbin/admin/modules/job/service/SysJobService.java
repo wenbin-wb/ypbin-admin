@@ -7,12 +7,12 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.modules.system.service;
+package cn.ypbin.admin.modules.job.service;
 
-import cn.ypbin.admin.modules.system.entity.SysJob;
-import cn.ypbin.admin.modules.system.model.req.JobSaveReq;
-import cn.ypbin.admin.modules.system.model.resp.CronPreviewResp;
-import cn.ypbin.admin.modules.system.model.resp.JobLogResp;
+import cn.ypbin.admin.modules.job.entity.SysJob;
+import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
+import cn.ypbin.admin.modules.job.model.resp.CronPreviewResp;
+import cn.ypbin.admin.modules.job.model.resp.JobLogResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.service.BaseService;
