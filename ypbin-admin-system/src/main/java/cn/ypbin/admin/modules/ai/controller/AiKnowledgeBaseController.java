@@ -10,7 +10,7 @@
 package cn.ypbin.admin.modules.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.modules.ai.entity.AiKnowledgeBase;
+import cn.ypbin.admin.modules.ai.model.resp.AiKnowledgeBaseResp;
 import cn.ypbin.admin.modules.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.modules.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.modules.ai.model.req.AiKnowledgeBaseUpdateReq;
@@ -62,7 +62,7 @@ public class AiKnowledgeBaseController {
     @Idempotent
     @PostMapping
     @SaCheckPermission("ai:knowledge:create")
-    public R<AiKnowledgeBase> createKnowledgeBase(
+    public R<AiKnowledgeBaseResp> createKnowledgeBase(
             @Valid @RequestBody AiKnowledgeBaseSaveReq req) {
         return R.ok(knowledgeBizService.createKnowledgeBase(req));
     }
@@ -80,7 +80,7 @@ public class AiKnowledgeBaseController {
 
     @GetMapping
     @SaCheckPermission("ai:knowledge:list")
-    public R<List<AiKnowledgeBase>> listKnowledgeBases() {
+    public R<List<AiKnowledgeBaseResp>> listKnowledgeBases() {
         return R.ok(knowledgeBizService.listKnowledgeBases());
     }
 

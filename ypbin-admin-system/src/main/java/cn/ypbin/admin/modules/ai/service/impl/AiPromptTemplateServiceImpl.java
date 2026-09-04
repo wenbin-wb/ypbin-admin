@@ -13,6 +13,7 @@ import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.modules.ai.entity.AiPromptTemplate;
 import cn.ypbin.admin.modules.ai.mapper.AiPromptTemplateMapper;
 import cn.ypbin.admin.modules.ai.model.req.AiPromptTemplateSaveReq;
+import cn.ypbin.admin.modules.ai.model.resp.AiPromptTemplateResp;
 import cn.ypbin.admin.modules.ai.service.AiPromptTemplateService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
@@ -36,13 +37,14 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     private final AiPromptTemplateMapper templateMapper;
 
     @Override
-    public List<AiPromptTemplate> listTemplates() {
+    public List<AiPromptTemplateResp> listTemplates() {
         Long tenantId = currentTenantId();
         return templateMapper.selectList(
             new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(AiPromptTemplate::getTenantId, tenantId)
                 .eq(AiPromptTemplate::getStatus, EntityStatus.ENABLED.getCode())
-                .orderByDesc(AiPromptTemplate::getCreateTime));
+                .orderByDesc(AiPromptTemplate::getCreateTime))
+            .stream().map(this::toResp).toList();
     }
 
     @Override
@@ -86,6 +88,12 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
      * @param id 模板 ID
      * @return 模板实体
      */
+    private AiPromptTemplateResp toResp(AiPromptTemplate tpl) {
+        AiPromptTemplateResp resp = new AiPromptTemplateResp();
+        BeanUtils.copyProperties(tpl, resp);
+        return resp;
+    }
+
     private AiPromptTemplate requireTemplate(Long id) {
         AiPromptTemplate existing = templateMapper.selectById(id);
         if (existing == null) {
