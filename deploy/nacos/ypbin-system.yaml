@@ -37,6 +37,9 @@ ypbin:
 
 # ---------- 安全（开放接口与内部 Feign 端点免登录拦截）----------
   security:
+    # system 为下游业务服务，登录态由网关校验并注入身份头；
+    # 关闭本地 Sa-Token 全局拦截，避免 system 直读 Redis 会话导致 token 无效。
+    interceptor: false
     excludes:
       - /open/license/**
       - /open-api/**
