@@ -14,8 +14,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 租户响应。
@@ -27,14 +25,12 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class TenantResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String name;
 
     private String code;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     @RefText("template")
     private Long templateId;
 

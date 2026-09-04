@@ -13,8 +13,6 @@ import cn.ypbin.admin.modules.ai.entity.AiDocument;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 知识库文档视图对象（对外响应，不暴露本地存储路径等敏感字段）。
@@ -26,12 +24,9 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class AiDocumentVO {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeBaseId;
     private String filename;
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long fileSize;
     private Integer chunkCount;
     /**

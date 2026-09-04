@@ -13,8 +13,6 @@ import cn.ypbin.starter.tenant.core.TenantBaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * AI 知识库文档。
@@ -31,7 +29,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 public class AiDocument extends TenantBaseEntity {
 
     /** 所属知识库 */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeBaseId;
 
     /** 文件名 */

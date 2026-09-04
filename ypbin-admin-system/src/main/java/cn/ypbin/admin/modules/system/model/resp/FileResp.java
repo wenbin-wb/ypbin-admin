@@ -12,8 +12,6 @@ package cn.ypbin.admin.modules.system.model.resp;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 文件管理响应。
@@ -25,7 +23,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class FileResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 存储平台（local/aliyun 等） */
@@ -59,7 +56,6 @@ public class FileResp {
     private String hash;
 
     /** 上传人 */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long uploadUserId;
 
     /** 所属业务模块（如 avatar/notice/document） */

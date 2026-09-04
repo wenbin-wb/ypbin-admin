@@ -13,8 +13,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 对话消息响应。
@@ -26,7 +24,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class AiChatMessageResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 角色（user/assistant/system/tool） */

@@ -13,8 +13,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 菜单管理响应。
@@ -27,10 +25,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class MenuResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long pid;
 
     private List<MenuResp> children;

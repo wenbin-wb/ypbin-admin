@@ -13,8 +13,6 @@ import cn.ypbin.starter.json.ref.RefText;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 公告响应。
@@ -26,7 +24,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class NoticeResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 标题 */
@@ -60,7 +57,6 @@ public class NoticeResp {
     private Integer publishStatus;
 
     /** 发布版本 */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long publishVersion;
 
     /** 定时发布时间（发布方式为定时时生效） */
@@ -77,7 +73,6 @@ public class NoticeResp {
 
     /** 创建人，额外输出 createUserName */
     @RefText("user")
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long createUser;
 
     private LocalDateTime createTime;

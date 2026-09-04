@@ -12,8 +12,6 @@ package cn.ypbin.admin.modules.system.model.resp;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 当前登录用户信息。
@@ -26,7 +24,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 public class UserInfoResp {
 
     /** 用户 ID */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     /** 登录账号 */

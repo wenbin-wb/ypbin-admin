@@ -12,8 +12,6 @@ package cn.ypbin.admin.modules.ai.model.resp;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * AI 消息响应 DTO。
@@ -25,10 +23,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class AiMessageResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
 
     private String role;
