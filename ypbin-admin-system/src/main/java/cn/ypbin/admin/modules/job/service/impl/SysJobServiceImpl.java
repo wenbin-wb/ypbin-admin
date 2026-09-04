@@ -16,6 +16,7 @@ import cn.ypbin.admin.modules.job.mapper.SysJobLogMapper;
 import cn.ypbin.admin.modules.job.mapper.SysJobMapper;
 import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
 import cn.ypbin.admin.modules.job.model.resp.CronPreviewResp;
+import cn.ypbin.admin.modules.job.model.resp.JobResp;
 import cn.ypbin.admin.modules.job.model.resp.JobLogResp;
 import cn.ypbin.admin.modules.job.service.SysJobService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -48,6 +49,11 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
     private final SysJobLogMapper jobLogMapper;
     private final JobManager jobManager;
     private final CronService cronService;
+
+    @Override
+    public List<JobResp> listJobs() {
+        return list().stream().map(this::toResp).toList();
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -237,6 +243,12 @@ public class SysJobServiceImpl extends BaseServiceImpl<SysJobMapper, SysJob> imp
         } catch (RuntimeException compensationFailure) {
             failure.addSuppressed(compensationFailure);
         }
+    }
+
+    private JobResp toResp(SysJob job) {
+        JobResp resp = new JobResp();
+        BeanUtils.copyProperties(job, resp);
+        return resp;
     }
 
     private JobDefinition toDefinition(SysJob job) {

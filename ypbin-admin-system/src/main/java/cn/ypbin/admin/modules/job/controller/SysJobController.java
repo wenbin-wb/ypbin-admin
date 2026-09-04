@@ -11,7 +11,7 @@ package cn.ypbin.admin.modules.job.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.modules.system.annotation.PlatformAccess;
-import cn.ypbin.admin.modules.job.entity.SysJob;
+import cn.ypbin.admin.modules.job.model.resp.JobResp;
 import cn.ypbin.admin.modules.job.model.req.CronPreviewReq;
 import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
 import cn.ypbin.admin.modules.job.model.resp.CronPreviewResp;
@@ -50,8 +50,8 @@ public class SysJobController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:job:list")
-    public R<List<SysJob>> list() {
-        return R.ok(jobService.list());
+    public R<List<JobResp>> list() {
+        return R.ok(jobService.listJobs());
     }
 
     @GetMapping("/log")

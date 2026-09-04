@@ -12,10 +12,12 @@ package cn.ypbin.admin.modules.job.service;
 import cn.ypbin.admin.modules.job.entity.SysJob;
 import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
 import cn.ypbin.admin.modules.job.model.resp.CronPreviewResp;
+import cn.ypbin.admin.modules.job.model.resp.JobResp;
 import cn.ypbin.admin.modules.job.model.resp.JobLogResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 
 /**
  * 定时任务服务。
@@ -24,6 +26,13 @@ import cn.ypbin.starter.crud.service.BaseService;
  * @since 2026-08-02
  */
 public interface SysJobService extends BaseService<SysJob> {
+
+    /**
+     * 查询任务列表（供管理端展示，不暴露实体）。
+     *
+     * @return 任务响应列表
+     */
+    List<JobResp> listJobs();
 
     /**
      * 新增任务。
