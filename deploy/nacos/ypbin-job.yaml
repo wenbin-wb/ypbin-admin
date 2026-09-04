@@ -8,3 +8,9 @@ ypbin:
     enabled: true
   data-permission:
     enabled: true
+  # job 为下游业务服务，登录态由网关校验并注入身份头；
+  # 关闭本地 Sa-Token 全局拦截，避免 job 直读 Redis 会话导致 token 无效。
+  security:
+    interceptor: false
+    excludes:
+      - /actuator/**
