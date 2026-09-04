@@ -325,6 +325,8 @@ case "$MODE" in
   backend) REPOS_TO_PULL="ypbin-starter ypbin-admin" ;;
   frontend|upload-frontend) REPOS_TO_PULL="ypbin-admin ypbin-admin-ui" ;;
 esac
+# 单体版 main 固定使用 ypbin-starter v2.0.0，避免误装 master(2.1.0)
+STARTER_TAG="${STARTER_TAG:-v2.0.0}"
 for repo in $REPOS_TO_PULL; do
   if [ ! -d "$repo/.git" ]; then
     info "clone $repo"
@@ -332,6 +334,9 @@ for repo in $REPOS_TO_PULL; do
   else
     info "更新 $repo"
     (cd "$repo" && git stash --quiet 2>/dev/null || true; git pull --ff-only --quiet || warn "$repo 更新失败（本地有改动？）")
+  fi
+  if [ "$repo" = "ypbin-starter" ]; then
+    (cd "$repo" && git checkout --quiet "$STARTER_TAG" 2>/dev/null || warn "starter 切换到 $STARTER_TAG 失败")
   fi
   ok "$repo @ $(cd "$repo" && git log --oneline -1)"
 done
