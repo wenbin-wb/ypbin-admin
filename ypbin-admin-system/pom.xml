@@ -12,7 +12,7 @@
 
     <artifactId>ypbin-admin-system</artifactId>
     <name>${project.artifactId}</name>
-    <description>系统管理业务域：RBAC、菜单、部门、租户</description>
+    <description>单体业务域：公共能力 + modules/{ai,auth,job,system}</description>
 
     <dependencies>
         <!-- 单体 Web 一站式基础能力（web/json/data/cache/security/api-doc/log/tools/async） -->
