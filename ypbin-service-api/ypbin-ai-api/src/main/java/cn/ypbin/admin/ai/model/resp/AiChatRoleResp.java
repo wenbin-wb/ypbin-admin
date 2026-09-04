@@ -12,8 +12,6 @@ package cn.ypbin.admin.ai.model.resp;
 import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 对话角色响应。
@@ -25,7 +23,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class AiChatRoleResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 角色名称 */

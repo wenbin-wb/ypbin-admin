@@ -14,8 +14,6 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * AI 文档分块（向量化切片落库，供分块可视化与检索诊断）。
@@ -32,11 +30,9 @@ public class AiDocumentChunk extends TenantBaseEntity {
     private static final long serialVersionUID = 1L;
 
     /** 所属知识库 */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long knowledgeBaseId;
 
     /** 所属文档 */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long documentId;
 
     /** 分块序号（0 起） */

@@ -11,8 +11,6 @@ package cn.ypbin.admin.system.model.resp;
 
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 授权签发结果。
@@ -26,7 +24,6 @@ public class LicenseIssueResp {
 
     private String authCode;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long appId;
 
     private String appName;

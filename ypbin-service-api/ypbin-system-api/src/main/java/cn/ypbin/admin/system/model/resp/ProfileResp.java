@@ -14,8 +14,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 个人中心响应。本人查看本人信息，手机/邮箱不脱敏（供编辑表单原样回填），密码不输出。
@@ -27,7 +25,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class ProfileResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String username;
@@ -36,7 +33,6 @@ public class ProfileResp {
 
     private String nickname;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long deptId;
 
     private String avatar;

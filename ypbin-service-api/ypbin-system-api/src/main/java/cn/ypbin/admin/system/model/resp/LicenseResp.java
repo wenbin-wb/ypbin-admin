@@ -15,8 +15,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 商业授权列表/详情响应。
@@ -28,7 +26,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class LicenseResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 授权编号 */
@@ -74,7 +71,6 @@ public class LicenseResp {
     private String approveStatus;
 
     /** 审批人 */
-    @JsonSerialize(using = ToStringSerializer.class)
     @RefText("user")
     private Long approveUser;
 
@@ -91,7 +87,6 @@ public class LicenseResp {
      */
     private String currentStatus;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     @RefText("user")
     private Long createUser;
 

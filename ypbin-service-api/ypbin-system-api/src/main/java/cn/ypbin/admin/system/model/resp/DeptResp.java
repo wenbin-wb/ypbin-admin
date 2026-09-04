@@ -15,8 +15,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 部门树节点。用于 {@code /system/dept/list}。
@@ -29,10 +27,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DeptResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long pid;
 
     private String name;

@@ -17,8 +17,6 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 系统日志。承载操作日志与登录日志（按 module 区分），字段与 starter LogRecord 对齐。
@@ -40,7 +38,6 @@ public class SysLog implements Serializable {
 
     /** 主键，雪花算法生成 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 日志描述 */

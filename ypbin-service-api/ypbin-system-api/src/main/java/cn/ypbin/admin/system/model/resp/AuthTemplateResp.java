@@ -14,8 +14,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 权限模板响应。
@@ -27,7 +25,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class AuthTemplateResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String name;

@@ -12,8 +12,6 @@ package cn.ypbin.admin.system.model.resp;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 定时任务执行日志响应。
@@ -25,10 +23,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class JobLogResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long jobId;
 
     private String jobName;

@@ -12,8 +12,6 @@ package cn.ypbin.admin.system.model.resp;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 在线用户响应。在 starter {@code OnlineUser} 基础上补充用户真实姓名（按 userId 关联 sys_user）。
@@ -26,7 +24,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 public class OnlineUserResp {
 
     /** 用户 ID */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     /** 登录账号 */
@@ -39,7 +36,6 @@ public class OnlineUserResp {
     private String realName;
 
     /** 租户 ID */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long tenantId;
 
     /** 会话 token */

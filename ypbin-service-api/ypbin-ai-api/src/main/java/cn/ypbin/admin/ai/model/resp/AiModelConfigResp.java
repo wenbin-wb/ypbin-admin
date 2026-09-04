@@ -12,8 +12,6 @@ package cn.ypbin.admin.ai.model.resp;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 模型配置响应 DTO（API Key 脱敏）。
@@ -25,7 +23,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class AiModelConfigResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String name;

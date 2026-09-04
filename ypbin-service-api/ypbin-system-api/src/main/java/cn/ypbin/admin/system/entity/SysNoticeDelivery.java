@@ -17,8 +17,6 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 公告投递记录。
@@ -36,7 +34,6 @@ public class SysNoticeDelivery implements Serializable {
 
     /** 主键 */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     /** 租户 ID */

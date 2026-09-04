@@ -11,8 +11,6 @@ package cn.ypbin.admin.system.model.resp;
 
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 授权交付信息。
@@ -30,7 +28,6 @@ public class LicenseDeliveryResp {
     private String authCode;
 
     /** 联机开放应用 ID（可为空表示未建联机应用） */
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long appId;
 
     /** 联机应用名称（= 被授权方） */

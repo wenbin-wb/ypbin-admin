@@ -14,8 +14,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 角色列表/详情响应。
@@ -27,7 +25,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class RoleResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String name;

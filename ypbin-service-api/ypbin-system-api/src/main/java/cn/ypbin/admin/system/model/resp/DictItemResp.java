@@ -13,8 +13,6 @@ import cn.ypbin.starter.json.ref.RefText;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 字典项响应。
@@ -26,10 +24,8 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class DictItemResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long dictId;
 
     private String label;

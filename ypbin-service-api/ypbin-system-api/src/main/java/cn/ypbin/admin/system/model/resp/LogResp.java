@@ -13,8 +13,6 @@ import cn.ypbin.starter.json.ref.RefText;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import tools.jackson.databind.annotation.JsonSerialize;
-import tools.jackson.databind.ser.std.ToStringSerializer;
 
 /**
  * 系统日志响应。
@@ -26,7 +24,6 @@ import tools.jackson.databind.ser.std.ToStringSerializer;
 @Setter
 public class LogResp {
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private String description;
@@ -49,13 +46,11 @@ public class LogResp {
 
     private String clientType;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     @RefText("user")
     private Long operateUserId;
 
     private LocalDateTime operateTime;
 
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long timeTaken;
 
     private Integer success;
