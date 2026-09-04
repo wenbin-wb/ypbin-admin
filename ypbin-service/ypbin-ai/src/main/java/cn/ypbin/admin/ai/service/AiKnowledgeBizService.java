@@ -14,6 +14,7 @@ import cn.ypbin.admin.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.ai.model.resp.AiKnowledgeBaseResp;
 import cn.ypbin.admin.ai.model.resp.KbQueryResult;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -30,13 +31,13 @@ import org.springframework.web.multipart.MultipartFile;
 public interface AiKnowledgeBizService {
 
     /** 新建知识库 */
-    AiKnowledgeBase createKnowledgeBase(AiKnowledgeBaseSaveReq req);
+    AiKnowledgeBaseResp createKnowledgeBase(AiKnowledgeBaseSaveReq req);
 
     /** 编辑知识库（名称、描述、图标、备注） */
     void updateKnowledgeBase(Long id, AiKnowledgeBaseUpdateReq req);
 
     /** 知识库列表（按创建时间倒序） */
-    List<AiKnowledgeBase> listKnowledgeBases();
+    List<AiKnowledgeBaseResp> listKnowledgeBases();
 
     /** 删除知识库（同时清理向量数据与文档记录） */
     void deleteKnowledgeBase(Long id);

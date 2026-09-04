@@ -11,6 +11,7 @@ package cn.ypbin.admin.ai.service;
 
 import cn.ypbin.admin.ai.entity.AiPromptTemplate;
 import cn.ypbin.admin.ai.model.req.AiPromptTemplateSaveReq;
+import cn.ypbin.admin.ai.model.resp.AiPromptTemplateResp;
 import java.util.List;
 
 /**
@@ -26,7 +27,7 @@ public interface AiPromptTemplateService {
      *
      * @return 按创建时间倒序的模板列表
      */
-    List<AiPromptTemplate> listTemplates();
+    List<AiPromptTemplateResp> listTemplates();
 
     /**
      * 新增模板（归属当前租户）。

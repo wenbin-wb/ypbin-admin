@@ -10,7 +10,7 @@
 package cn.ypbin.admin.ai.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.ai.entity.AiPromptTemplate;
+import cn.ypbin.admin.ai.model.resp.AiPromptTemplateResp;
 import cn.ypbin.admin.ai.model.req.AiPromptTemplateSaveReq;
 import cn.ypbin.admin.ai.service.AiPromptTemplateService;
 import cn.ypbin.starter.core.model.R;
@@ -43,7 +43,7 @@ public class AiPromptTemplateController {
 
     @GetMapping
     @SaCheckPermission("ai:prompt:list")
-    public R<List<AiPromptTemplate>> list() {
+    public R<List<AiPromptTemplateResp>> list() {
         return R.ok(promptTemplateService.listTemplates());
     }
 

@@ -19,6 +19,7 @@ import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.ai.model.resp.AiKnowledgeBaseResp;
 import cn.ypbin.admin.ai.service.AiDocumentVectorizer;
 import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -41,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,7 +69,7 @@ public class AiKnowledgeCrudComponent {
     private final ObjectProvider<AiRagService> ragServiceProvider;
 
     @Transactional(rollbackFor = Exception.class)
-    public AiKnowledgeBase createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
+    public AiKnowledgeBaseResp createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
         AiKnowledgeBase kb = new AiKnowledgeBase();
         kb.setTenantId(currentTenantId());
         kb.setName(req.getName());
@@ -76,7 +78,7 @@ public class AiKnowledgeCrudComponent {
         kb.setRemark(req.getRemark());
         kb.setDocCount(0);
         kbMapper.insert(kb);
-        return kb;
+        return toResp(kb);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -90,11 +92,12 @@ public class AiKnowledgeCrudComponent {
         kbMapper.updateById(kb);
     }
 
-    public List<AiKnowledgeBase> listKnowledgeBases() {
+    public List<AiKnowledgeBaseResp> listKnowledgeBases() {
         return kbMapper.selectList(
             new LambdaQueryWrapper<AiKnowledgeBase>()
                 .eq(AiKnowledgeBase::getTenantId, currentTenantId())
-                .orderByDesc(AiKnowledgeBase::getCreateTime));
+                .orderByDesc(AiKnowledgeBase::getCreateTime))
+            .stream().map(this::toResp).toList();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -284,6 +287,12 @@ public class AiKnowledgeCrudComponent {
         documentVectorizer.vectorizeAsync(
             doc.getId(), knowledgeBaseId, doc.getTenantId(), filename, bytes);
         return AiDocumentVO.from(doc);
+    }
+
+    public AiKnowledgeBaseResp toResp(AiKnowledgeBase kb) {
+        AiKnowledgeBaseResp resp = new AiKnowledgeBaseResp();
+        BeanUtils.copyProperties(kb, resp);
+        return resp;
     }
 
     public AiKnowledgeBase requireKb(Long id) {

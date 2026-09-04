@@ -14,6 +14,7 @@ import cn.ypbin.admin.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseSaveReq;
 import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.ai.model.resp.AiKnowledgeBaseResp;
 import cn.ypbin.admin.ai.model.resp.KbQueryResult;
 import cn.ypbin.admin.ai.service.AiKnowledgeBizService;
 import cn.ypbin.starter.crud.model.PageQuery;
@@ -46,7 +47,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public AiKnowledgeBase createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
+    public AiKnowledgeBaseResp createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
         return crudComponent.createKnowledgeBase(req);
     }
 
@@ -57,7 +58,7 @@ public class AiKnowledgeBizServiceImpl implements AiKnowledgeBizService {
     }
 
     @Override
-    public List<AiKnowledgeBase> listKnowledgeBases() {
+    public List<AiKnowledgeBaseResp> listKnowledgeBases() {
         return crudComponent.listKnowledgeBases();
     }
 
