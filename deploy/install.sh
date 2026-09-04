@@ -19,7 +19,7 @@
 #   [7/7] 健康检查   —— 验证网关/各服务注册，输出访问地址
 #
 # 自定义参数（环境变量覆盖）：
-#   YPBIN_ROOT=/opt/ypbin          部署根目录（默认 /opt/ypbin）
+#   YPBIN_ROOT=/opt/ypbin-ms      部署根目录（默认 /opt/ypbin-ms）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
 #   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
