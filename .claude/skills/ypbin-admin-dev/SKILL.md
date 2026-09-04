@@ -252,6 +252,13 @@ rg -n "vben|RouteRecordRaw|前端契约" --glob '*.java'
    - **版本同步**：`ypbin-starter` 的 BOM 版本、`ypbin-admin` pom 的 `ypbin-starter.version`、`ypbin-site` 文档（`compatibility.md` 稳定版号 + `products/starter.md` Java 基线 + `guide/starter/modules/index.md` BOM 号）三处必须一致；发版后同步更新 site 的 releases/CHANGELOG。
    - **菜单/权限三向核对**：新增/修改一个菜单功能时，DB 菜单表（sys_menu 的 permission 列）、后端 `@SaCheckPermission("system:xxx:action")`、前端 `v-access:code` / `VbenTableAction` 的 `auth` 字符串三处权限码必须完全一致，缺一处该功能对相应角色不可见或越权。权限码格式 `system:模块:动作`（list/add/edit/delete/export 等）。
 
+5b. **starter 依赖版本必须 = GitHub 最新 Release（CI 硬性校验）**（2026-09 实战：v2.1.0 Release 缺失曾致 main CI 全红）。
+   - admin 的 CI 有一道「校验 starter 依赖版本为最新 Release」：`pom.xml` 的 `ypbin-starter.version` 必须等于 `https://api.github.com/repos/wenbin-wb/ypbin-starter/releases/latest` 的 tag（去 v 前缀），否则 **CI 直接失败**。升 starter 依赖前先查 latest release；starter 发版后（GitHub Release 建成）admin 需同步升依赖。
+   - **`deploy/install.sh` 的 `STARTER_VERSION` 与 pom 的 `ypbin-starter.version` 必须一致**（两处漏改会导致部署脚本 .m2 检查与实际版本错位）。
+   - **boot（单体）分支同样受版本校验约束**：boot pom 也必须跟随 latest release，不能长期停在旧版（曾因 v2.1.0 未正式发布而临时固定 2.0.0，发布后必须升回 2.1.x）。
+   - **starter 发版必须是 GitHub Release 而非仅 git tag**：仅打 tag 不建 Release，`/releases/latest` 不会指向它（v2.1.0 因此缺失，CI 校验误判失败）。starter 的 release.yml 流水线会自动建 Release，若失败需人工补建。
+   - **Nacos 共享配置（`deploy/nacos/*.yaml`）禁止硬编码数据库/密钥密码**：仓库内写 `${MYSQL_ROOT_PASSWORD}` 占位符，install.sh 导入 Nacos 前用 sed 替换为 `.env` 实际值。硬编码旧密码会导致新部署（.env 随机新密码）下服务连 MySQL `Access denied`、登录 500/409。
+
 6. **实体继承体系：租户业务实体一律 `extends TenantBaseEntity`（Long tenantId），关系表用 `@Getter @Setter` 禁 `@Data`**（2026-08 全量审核定稿）。AI 模块曾用 `Integer tenantId` + 手写字段导致与 `sys_*` 的 `Long` 分叉、反复 Integer/Long 转换（已统一：7 实体 + 5 处 `currentTenantId()` + V7 迁移 `ALTER TABLE ... MODIFY tenant_id BIGINT`）。新实体：业务表继承 `TenantBaseEntity`（自动带审计/逻辑删除/租户列）；纯关联表（如 `SysRoleMenu`）`implements Serializable` + `@Getter @Setter`，**不用 `@Data`**（避免多余 equals/hashCode/toString）。
    - **建表必须补满 `BaseEntity` 全套公共列再继承**（2026-08 AI 实体规范化定稿）。`BaseEntity` 定义 `id + create_user/create_time/update_user/update_time/status/is_deleted`，`TenantBaseEntity` 再加 `tenant_id`。新建业务表 SQL 必须含这些列，实体才能继承基类；否则 MyBatis 生成 SQL 引用不存在列直接报错（如 `ai_chat_message` 缺 create_user）。**禁止为图轻量省略公共列**。确属纯追加大流量日志时才作受控例外：`implements Serializable` 自含字段 + 类级 Javadoc 明确批注原因，建表不含冗余审计列。
 
