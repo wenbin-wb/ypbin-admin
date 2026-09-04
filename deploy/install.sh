@@ -326,13 +326,17 @@ if [ -n "$NACOS_TOKEN" ]; then
   NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
   for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-job; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
+      # 占位符替换：仓库 nacos yaml 不提交真实密码，导入前用 .env 实际值填充
+      # （目前仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}）
+      TMP_CFG="/tmp/nacos-${cfg}.yaml"
+      sed "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
         -H "accessToken: $NACOS_TOKEN" \
         --data-urlencode "dataId=$cfg.yaml" \
         --data-urlencode "groupName=DEFAULT_GROUP" \
         --data-urlencode "type=yaml" \
         --data-urlencode "namespaceId=" \
-        --data-urlencode "content@$NACOS_DIR/$cfg.yaml" \
+        --data-urlencode "content@$TMP_CFG" \
         >/dev/null 2>&1 && ok "已导入 $cfg.yaml" || warn "$cfg.yaml 导入失败"
     fi
   done

@@ -14,7 +14,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://mysql:3306/ypbin_admin?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: YpbinRoot1788324161
+    # install.sh 导入 Nacos 时替换为 deploy/.env 的 MYSQL_ROOT_PASSWORD（仓库不提交真实密码）
+    password: ${MYSQL_ROOT_PASSWORD}
 
 # ---------- Redis（验证码/会话/缓存）----------
   data:
