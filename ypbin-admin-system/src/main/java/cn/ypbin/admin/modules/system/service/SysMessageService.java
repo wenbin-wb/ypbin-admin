@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.service;
 
 import cn.ypbin.admin.modules.system.entity.SysMessage;
 import cn.ypbin.admin.modules.system.model.query.MessageQuery;
+import cn.ypbin.admin.modules.system.model.resp.MessageResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
 import java.util.List;
@@ -23,11 +24,11 @@ import java.util.List;
  */
 public interface SysMessageService extends BaseService<SysMessage> {
 
-    PageResult<SysMessage> pageMessages(Long userId, MessageQuery query);
+    PageResult<MessageResp> pageMessages(Long userId, MessageQuery query);
 
     long unreadCount(Long userId);
 
-    List<SysMessage> recent(Long userId, long limit);
+    List<MessageResp> recent(Long userId, long limit);
 
     void markRead(Long userId, Long id);
 

@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.modules.system.controller;
 
-import cn.ypbin.admin.modules.system.entity.SysMessage;
+import cn.ypbin.admin.modules.system.model.resp.MessageResp;
 import cn.ypbin.admin.modules.system.model.query.MessageQuery;
 import cn.ypbin.admin.modules.system.service.SysMessageService;
 import cn.ypbin.starter.core.model.R;
@@ -47,7 +47,7 @@ public class SysMessageController {
      * 分页查询当前用户站内信，可按已读状态过滤。
      */
     @GetMapping
-    public R<PageResult<SysMessage>> list(@Valid MessageQuery query) {
+    public R<PageResult<MessageResp>> list(@Valid MessageQuery query) {
         return R.ok(messageService.pageMessages(UserContext.getUserId(), query));
     }
 
@@ -63,7 +63,7 @@ public class SysMessageController {
      * 最近消息，包含已读和未读消息。
      */
     @GetMapping("/recent")
-    public R<List<SysMessage>> recent(
+    public R<List<MessageResp>> recent(
         @RequestParam(defaultValue = "10") @Min(1) @Max(100) long limit) {
         return R.ok(messageService.recent(UserContext.getUserId(), limit));
     }
