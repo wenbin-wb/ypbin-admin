@@ -208,7 +208,7 @@ pull_repo() { # $1=仓库目录 $2=分支
 pull_repo "$ROOT/ypbin-starter" master
 pull_repo "$ROOT/ypbin-admin" "$BRANCH"
 if [ "$SKIP_FRONTEND" = "0" ]; then
-  pull_repo "$ROOT/ypbin-admin-ui" master
+  pull_repo "$ROOT/ypbin-admin-ui" main
 fi
 ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD)，admin@$(git -C "$ROOT/ypbin-admin" rev-parse --short HEAD)）"
 fi
