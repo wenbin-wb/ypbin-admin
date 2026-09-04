@@ -219,7 +219,7 @@ fi
 if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
   cd "$ROOT/ypbin-starter"
   # 完整输出错误（不吞日志）：失败时打印 maven 日志尾部
-  if ! mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20; then
+  if ! mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20; then
     die "starter 构建失败（完整日志 /tmp/starter-build.log）"
   fi
   ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
@@ -228,7 +228,7 @@ else
   if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.1.0" ]; then
     warn "本地 Maven 仓库无 starter 2.1.0，强制构建"
     cd "$ROOT/ypbin-starter"
-    mvn -DskipTests install 2>&1 | tee /tmp/starter-build.log | tail -20 \
+    mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20 \
       || die "starter 构建失败（完整日志 /tmp/starter-build.log）"
   fi
 fi
