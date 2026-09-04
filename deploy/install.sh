@@ -351,7 +351,7 @@ if [ "$MODE" = "full" ] || [ "$MODE" = "backend" ]; then
     fi
   fi
   if [ "$BUILD_STARTER" = "yes" ]; then
-    mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests install -q || die "starter 构建失败（网络/依赖问题？）"
+    mvn -f "$ROOT/ypbin-starter/pom.xml" -DskipTests -Djacoco.skip=true install -q || die "starter 构建失败（网络/依赖问题？）"
   else
     info "跳过 starter 构建（使用 .m2/Central 已有版本）"
   fi
