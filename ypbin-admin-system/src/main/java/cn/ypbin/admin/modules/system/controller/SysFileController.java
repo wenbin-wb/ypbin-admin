@@ -11,7 +11,7 @@ package cn.ypbin.admin.modules.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.modules.system.annotation.PlatformAccess;
-import cn.ypbin.admin.modules.system.entity.SysFile;
+import cn.ypbin.admin.modules.system.model.resp.FileResp;
 import cn.ypbin.admin.modules.system.model.query.FileQuery;
 import cn.ypbin.admin.modules.system.service.SysFileService;
 import cn.ypbin.starter.core.model.R;
@@ -56,7 +56,7 @@ public class SysFileController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:file:list")
-    public R<PageResult<SysFile>> list(@Valid FileQuery query) {
+    public R<PageResult<FileResp>> list(@Valid FileQuery query) {
         return R.ok(fileService.pageFiles(query));
     }
 

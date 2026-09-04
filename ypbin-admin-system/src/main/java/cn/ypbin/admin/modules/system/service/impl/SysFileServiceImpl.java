@@ -12,6 +12,7 @@ package cn.ypbin.admin.modules.system.service.impl;
 import cn.ypbin.admin.modules.system.entity.SysFile;
 import cn.ypbin.admin.modules.system.mapper.SysFileMapper;
 import cn.ypbin.admin.modules.system.model.query.FileQuery;
+import cn.ypbin.admin.modules.system.model.resp.FileResp;
 import cn.ypbin.admin.modules.system.service.SysFileService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -23,10 +24,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,10 +55,12 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
     private final FileStorageService fileStorageService;
 
     @Override
-    public PageResult<SysFile> pageFiles(FileQuery query) {
-        return page(query, new LambdaQueryWrapper<SysFile>()
+    public PageResult<FileResp> pageFiles(FileQuery query) {
+        PageResult<SysFile> source = page(query, new LambdaQueryWrapper<SysFile>()
             .like(StringUtils.hasText(query.getOriginalName()), SysFile::getOriginalName, query.getOriginalName())
             .orderByDesc(SysFile::getCreateTime));
+        List<FileResp> items = source.getItems().stream().map(this::toResp).toList();
+        return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
     }
 
     @Override
@@ -121,6 +126,12 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
             throw new BusinessException("文件业务模块仅允许字母、数字、下划线和中划线，长度 1-32");
         }
         return module.trim();
+    }
+
+    private FileResp toResp(SysFile file) {
+        FileResp resp = new FileResp();
+        BeanUtils.copyProperties(file, resp);
+        return resp;
     }
 
     private SysFile toEntity(FileInfo info, String module) {
