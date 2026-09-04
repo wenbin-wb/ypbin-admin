@@ -137,9 +137,18 @@ mvn -f ypbin-admin-server/pom.xml spring-boot:run
 ## 📁 项目结构
 
 ```
-ypbin-admin-common    公共层：常量、starter 扩展点实现、基础配置
-ypbin-admin-system    业务层：实体 / mapper / service / controller
+ypbin-admin-system    业务模块：common（公共）+ modules/{ai,auth,job,system}
 ypbin-admin-server    启动层：主类、配置、数据库迁移（Flyway）
+```
+
+单体业务代码统一收口在 `cn.ypbin.admin.modules` 下按业务域分层：
+
+```
+modules/
+├── ai/          AI 对话、知识库、模型配置
+├── auth/        登录、验证码、短信/第三方登录
+├── job/         定时任务管理、执行器、任务日志
+└── system/      RBAC、菜单、部门、租户、系统参数、消息公告等系统底座
 ```
 
 ## 📚 文档
