@@ -361,12 +361,25 @@ if [ "$NO_DOCKER" != "1" ]; then
     docker exec ypbin-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e \
       "CREATE DATABASE IF NOT EXISTS ypbin_admin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
     for sql in "$ROOT/ypbin-admin/deploy/sql/"*.sql; do
-      docker cp "$sql" ypbin-mysql:/tmp/init.sql
-      docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" ypbin_admin < /tmp/init.sql"
+      # xxl-job 初始化脚本自带 CREATE DATABASE xxl_job + use，不指定库执行
+      if [ "$(basename "$sql")" = "005-xxl-job.sql" ]; then
+        docker cp "$sql" ypbin-mysql:/tmp/init-xxl.sql
+        docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" < /tmp/init-xxl.sql"
+      else
+        docker cp "$sql" ypbin-mysql:/tmp/init.sql
+        docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" ypbin_admin < /tmp/init.sql"
+      fi
       ok "已执行 $(basename "$sql")"
     done
   else
     ok "MySQL 已初始化，跳过建库脚本"
+    # ypbin_admin 已存在时仍确保 xxl_job 库（xxl-job-admin 独立库）就绪
+    XXL_TABLE_COUNT=$(docker exec ypbin-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='xxl_job';" 2>/dev/null || echo 0)
+    if [ "${XXL_TABLE_COUNT:-0}" = "0" ] && [ -f "$ROOT/ypbin-admin/deploy/sql/005-xxl-job.sql" ]; then
+      docker cp "$ROOT/ypbin-admin/deploy/sql/005-xxl-job.sql" ypbin-mysql:/tmp/init-xxl.sql
+      docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" < /tmp/init-xxl.sql"
+      ok "已执行 005-xxl-job.sql（xxl_job 库初始化）"
+    fi
   fi
 fi
 
