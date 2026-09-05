@@ -65,11 +65,6 @@ VALUES (11, 1, '正常', '1', 'success', 1, 1, NOW(), 1, 0),
        (22, 2, '男', '1', 'processing', 2, 1, NOW(), 1, 0),
        (23, 2, '女', '2', 'warning', 3, 1, NOW(), 1, 0);
 
--- 示例任务
-INSERT INTO sys_job (id, name, executor, cron, create_user, create_time, status, is_deleted)
-VALUES (1, '清理临时文件', 'cleanTempFile', '0 0 3 * * ?', 1, NOW(), 0, 0),
-       (2, '公告定时发布扫描', 'noticePublishScan', '0 * * * * ?', 1, NOW(), 1, 0);
-
 -- 默认 Web 管理后台客户端
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
 VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL', 86400, 1800, 1, 1, NOW(), 1, 0);
@@ -169,7 +164,6 @@ INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title
 VALUES (3001, 0, 'OrgManage', 'catalog', 0, '/system/org', 'BasicLayout', 'system.org.title', 'carbon:tree-view-alt', 1, NOW(), 1, 0),
        (3002, 0, 'AuthManage', 'catalog', 0, '/system/auth', 'BasicLayout', 'system.auth.title', 'carbon:security', 2, NOW(), 1, 0),
        (3005, 0, 'TenantManage', 'catalog', 1, '/system/tenant', 'BasicLayout', 'system.tenant.title', 'carbon:building', 3, NOW(), 1, 0),
-       (3006, 0, 'JobManage', 'catalog', 1, '/system/jobm', 'BasicLayout', 'system.schedule.title', 'carbon:timer', 4, NOW(), 1, 0),
        (3007, 0, 'MessageManage', 'catalog', 0, '/message-center', 'BasicLayout', 'system.messageCenter.title', 'carbon:notification', 6, NOW(), 1, 0),
        (3004, 0, 'MonitorManage', 'catalog', 1, '/system/monitor', 'BasicLayout', 'system.monitor.title', 'carbon:activity', 7, NOW(), 1, 0),
        (3003, 0, 'SysManage', 'catalog', 1, '/system/sys', 'BasicLayout', 'system.sys.title', 'carbon:settings-adjust', 8, NOW(), 1, 0),
@@ -282,17 +276,6 @@ INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort
 VALUES (295201, 2952, 'SystemAuthTemplateAdd', 'button', 1, 'system:auth-template:add', 'common.create', 1, NOW(), 1, 0),
        (295202, 2952, 'SystemAuthTemplateEdit', 'button', 1, 'system:auth-template:edit', 'common.edit', 2, NOW(), 1, 0),
        (295203, 2952, 'SystemAuthTemplateDelete', 'button', 1, 'system:auth-template:delete', 'common.delete', 3, NOW(), 1, 0);
-
--- 任务管理（3006，平台）：定时任务 / 执行日志
-INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2800, 3006, 'SystemJob', 'menu', 1, '/system/job', '/system/job/list', 'system:job:list', 'system.job.title', 'carbon:timer', 13, NOW(), 1, 0);
-INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
-VALUES (280001, 2800, 'SystemJobAdd', 'button', 1, 'system:job:add', 'common.create', 1, NOW(), 1, 0),
-       (280002, 2800, 'SystemJobEdit', 'button', 1, 'system:job:edit', 'common.edit', 2, NOW(), 1, 0),
-       (280003, 2800, 'SystemJobDelete', 'button', 1, 'system:job:delete', 'common.delete', 3, NOW(), 1, 0);
-
-INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
-VALUES (2951, 3006, 'SystemJobLog', 'menu', 1, '/system/job/log', '/system/job/log/list', 'system:job:list', 'system.jobLog.title', 'carbon:document', 2, NOW(), 1, 0);
 
 -- 授权管理（3008，平台）：授权列表 + 开放应用
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
