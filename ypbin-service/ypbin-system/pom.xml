@@ -95,6 +95,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-job</artifactId>
         </dependency>
+        <!-- XXL-JOB 执行器（分布式任务调度，替代自研 job 调度） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-xxljob</artifactId>
+        </dependency>
         <!-- 授权签发（LicenseSigner/Sm2Utils/Sm4Utils） -->
         <dependency>
             <groupId>cn.ypbin</groupId>

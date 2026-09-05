@@ -54,3 +54,12 @@ ypbin:
 # ---------- SSE 推送 ----------
   sse:
     enabled: true
+
+# ---------- XXL-JOB 执行器（分布式任务调度）----------
+# xxl-job: 启用前需先部署 xxl-job-admin 调度中心；执行器端口需在容器/网络可达
+#   xxl-job:
+#     enabled: true
+#     admin-addresses: http://xxl-job-admin:8080/xxl-job-admin
+#     access-token: ""
+#     appname: ypbin-system
+#     port: 9999
