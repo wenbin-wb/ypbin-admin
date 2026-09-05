@@ -9,7 +9,6 @@
  */
 package cn.ypbin.admin.modules.system.model.req;
 
-import cn.ypbin.admin.modules.job.model.req.JobSaveReq;
 import cn.ypbin.starter.data.core.EntityStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,30 +35,5 @@ class ContractValidationTest {
 
         assertThat(validator.validate(valid)).isEmpty();
         assertThat(validator.validate(invalid)).isNotEmpty();
-    }
-
-    @Test
-    void jobRequiresExactlyOneTrigger() {
-        JobSaveReq missing = request();
-        JobSaveReq cron = request();
-        cron.setCron("0 * * * * *");
-        JobSaveReq fixedRate = request();
-        fixedRate.setFixedRateSeconds(30L);
-        JobSaveReq multiple = request();
-        multiple.setCron("0 * * * * *");
-        multiple.setFixedRateSeconds(30L);
-
-        assertThat(validator.validate(missing)).isNotEmpty();
-        assertThat(validator.validate(cron)).isEmpty();
-        assertThat(validator.validate(fixedRate)).isEmpty();
-        assertThat(validator.validate(multiple)).isNotEmpty();
-    }
-
-    private JobSaveReq request() {
-        JobSaveReq req = new JobSaveReq();
-        req.setName("job");
-        req.setExecutor("demo");
-        req.setConcurrentGuard(1);
-        return req;
     }
 }

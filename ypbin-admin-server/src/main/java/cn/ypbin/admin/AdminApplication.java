@@ -15,7 +15,6 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * ypbin-admin 启动类。
@@ -24,7 +23,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @since 2026-08-01
  */
 @SpringBootApplication
-@EnableScheduling
 @EnableConfigurationProperties({SecurityBootstrapProperties.class, LicenseIssuerProperties.class})
 @MapperScan("cn.ypbin.admin.**.mapper")
 public class AdminApplication {

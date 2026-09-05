@@ -9,9 +9,7 @@
  */
 package cn.ypbin.admin.modules.job;
 
-import cn.ypbin.starter.job.core.JobContext;
-import cn.ypbin.starter.job.core.JobHandler;
-import cn.ypbin.starter.job.core.YpbinJob;
+import com.xxl.job.core.handler.annotation.XxlJob;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -21,19 +19,20 @@ import java.time.Duration;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 /**
- * 定时任务：清理系统临时目录中过期的 ypbin 临时文件。
+ * 定时任务：清理系统临时目录中过期的 ypbin 临时文件（XXL-JOB 执行器）。
  *
  * <p>仅删除 {@code java.io.tmpdir} 下文件名以 {@code ypbin-} 开头且最后修改时间
  * 超过 {@link #MAX_AGE} 的普通文件，不递归删除目录、不触碰非 ypbin 前缀文件，
- * 避免误删其它进程的临时数据。</p>
+ * 避免误删其它进程的临时数据。注册执行器名 {@code cleanTempFile}。</p>
  *
  * @author wenbin
  * @since 2026-08-02
  */
-@YpbinJob("cleanTempFile")
-public class CleanTempFileJob implements JobHandler {
+@Component
+public class CleanTempFileJob {
 
     private static final Logger log = LoggerFactory.getLogger(CleanTempFileJob.class);
 
@@ -43,8 +42,8 @@ public class CleanTempFileJob implements JobHandler {
     /** 仅清理本系统创建的临时文件前缀 */
     private static final String PREFIX = "ypbin-";
 
-    @Override
-    public void execute(JobContext context) {
+    @XxlJob("cleanTempFile")
+    public void execute() {
         String tmpDir = System.getProperty("java.io.tmpdir");
         Path dir = Path.of(tmpDir);
         int deleted = 0;
@@ -70,6 +69,6 @@ public class CleanTempFileJob implements JobHandler {
             log.error("[ypbin-admin] 扫描临时目录失败: {} err={}", dir, e.getMessage());
             return;
         }
-        log.info("[ypbin-admin] 临时文件清理完成: 作业={}, 参数={}, 删除={} 个", context.getJobName(), context.getArgs(), deleted);
+        log.info("[ypbin-admin] 临时文件清理完成，删除 {} 个", deleted);
     }
 }

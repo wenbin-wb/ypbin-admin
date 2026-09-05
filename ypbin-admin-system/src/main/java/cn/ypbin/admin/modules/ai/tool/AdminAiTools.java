@@ -9,11 +9,8 @@
  */
 package cn.ypbin.admin.modules.ai.tool;
 
-import cn.ypbin.admin.modules.job.entity.SysJob;
 import cn.ypbin.admin.modules.system.entity.SysUser;
-import cn.ypbin.admin.modules.job.enums.JobStatusEnum;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
-import cn.ypbin.admin.modules.job.mapper.SysJobMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
@@ -43,7 +40,6 @@ import org.springframework.stereotype.Component;
 public class AdminAiTools {
 
     private final SysUserMapper userMapper;
-    private final SysJobMapper jobMapper;
 
     /**
      * 按用户名或真实姓名查找用户信息。
@@ -71,43 +67,15 @@ public class AdminAiTools {
     }
 
     /**
-     * 查询定时任务列表及运行状态。
-     *
-     * @param nameKeyword 任务名称关键词（空字符串或 null 时返回全部，最多 20 条）
-     * @return 任务列表：名称、执行器、Cron、状态
-     */
-    @Tool(name = "listJobs",
-        description = "查询系统定时任务列表，可按名称筛选，返回任务名称/执行器/Cron/状态")
-    public String listJobs(String nameKeyword) {
-        LambdaQueryWrapper<SysJob> wrapper = new LambdaQueryWrapper<>();
-        if (nameKeyword != null && !nameKeyword.isBlank()) {
-            wrapper.like(SysJob::getName, nameKeyword);
-        }
-        wrapper.last("LIMIT 20");
-        List<SysJob> jobs = jobMapper.selectList(wrapper);
-        if (jobs.isEmpty()) {
-            return "没有找到匹配的定时任务";
-        }
-        return jobs.stream()
-            .map(j -> String.format("名称=%s 执行器=%s Cron=%s 状态=%s",
-                j.getName(), j.getExecutor(),
-                j.getCron() != null ? j.getCron() : ("每" + j.getFixedRateSeconds() + "秒"),
-                JobStatusEnum.descOf(j.getStatus())))
-            .collect(Collectors.joining("\n"));
-    }
-
-    /**
      * 获取系统基础统计数据。
      *
-     * @return 正常用户数和运行中定时任务数
+     * @return 注册用户总数
      */
     @Tool(name = "getSystemStats",
-        description = "获取当前系统基础统计：注册用户总数、已启用任务数")
+        description = "获取当前系统基础统计：注册用户总数")
     public String getSystemStats() {
         long userCount = userMapper.selectCount(
             new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, UserStatusEnum.ENABLED.getCode()));
-        long runningJobs = jobMapper.selectCount(
-            new LambdaQueryWrapper<SysJob>().eq(SysJob::getStatus, JobStatusEnum.ENABLED.getCode()));
-        return String.format("系统统计 - 正常用户数: %d，运行中定时任务: %d", userCount, runningJobs);
+        return String.format("系统统计 - 正常用户数: %d", userCount);
     }
 }

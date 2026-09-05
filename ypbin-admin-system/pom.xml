@@ -70,10 +70,15 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-api-crypto</artifactId>
         </dependency>
-        <!-- 定时任务 -->
+        <!-- 定时任务（自研，license 传递需要；业务调度已迁 XXL-JOB） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-job</artifactId>
+        </dependency>
+        <!-- XXL-JOB 执行器（分布式任务调度，替代自研 job 调度） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-xxljob</artifactId>
         </dependency>
         <!-- 接口签名 -->
         <dependency>

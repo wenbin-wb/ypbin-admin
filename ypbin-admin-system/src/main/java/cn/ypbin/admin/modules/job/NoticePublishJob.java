@@ -13,26 +13,28 @@ import cn.ypbin.admin.modules.system.entity.SysNotice;
 import cn.ypbin.admin.modules.system.mapper.SysNoticeMapper;
 import cn.ypbin.admin.modules.system.service.NoticePublishService;
 import cn.ypbin.admin.modules.system.service.SysNoticeService;
-import cn.ypbin.starter.job.core.JobContext;
-import cn.ypbin.starter.job.core.JobHandler;
-import cn.ypbin.starter.job.core.YpbinJob;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.xxl.job.core.handler.annotation.XxlJob;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 /**
- * 公告定时发布与可靠投递扫描任务。
+ * 公告定时发布与可靠投递扫描任务（XXL-JOB 执行器）。
+ *
+ * <p>由 xxl-job-admin 按 cron 周期触发，扫描到期待发布公告执行发布，并驱动可靠投递
+ * （恢复滞留投递 + 派发到期待投递）。注册执行器名 {@code noticePublishScan}。</p>
  *
  * @author wenbin
  * @since 2026-08-09
  */
-@YpbinJob("noticePublishScan")
+@Component
 @RequiredArgsConstructor
-public class NoticePublishJob implements JobHandler {
+public class NoticePublishJob {
 
     private static final Logger log = LoggerFactory.getLogger(NoticePublishJob.class);
     private static final int PENDING = 1;
@@ -42,8 +44,8 @@ public class NoticePublishJob implements JobHandler {
     private final SysNoticeService noticeService;
     private final NoticePublishService noticePublishService;
 
-    @Override
-    public void execute(JobContext context) {
+    @XxlJob("noticePublishScan")
+    public void execute() {
         List<SysNotice> due = TenantContext.executeIgnore(() -> noticeMapper.selectList(
             new LambdaQueryWrapper<SysNotice>()
                 .eq(SysNotice::getPublishStatus, PENDING)
