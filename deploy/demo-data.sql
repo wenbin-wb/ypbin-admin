@@ -29,8 +29,6 @@ DELETE FROM sys_role_menu       WHERE role_id >= 100;
 DELETE FROM sys_message         WHERE id >= 1000;
 DELETE FROM sys_notice_delivery WHERE id >= 1000;
 DELETE FROM sys_notice          WHERE id >= 1000;
-DELETE FROM sys_job_log         WHERE id >= 1000;
-DELETE FROM sys_job             WHERE id >= 1000;
 DELETE FROM sys_log             WHERE id >= 1000;
 DELETE FROM sys_file            WHERE id >= 1000;
 DELETE FROM sys_config          WHERE id >= 1000;
@@ -187,30 +185,6 @@ INSERT INTO sys_app (id, access_key, secret_key, app_name, expire_time, enabled,
 (1000, 'demo-access-key-001', 'demo-secret-key-00000000000000000000000001', 'CRM 数据同步', DATE_ADD(NOW(), INTERVAL 365 DAY), 1, 1, NOW(), 1, 0),
 (1001, 'demo-access-key-002', 'demo-secret-key-00000000000000000000000002', '移动端 App', DATE_ADD(NOW(), INTERVAL 180 DAY), 1, 1, NOW(), 1, 0),
 (1002, 'demo-access-key-003', 'demo-secret-key-00000000000000000000000003', '数据分析平台', DATE_ADD(NOW(), INTERVAL 90 DAY), 1, 1, NOW(), 1, 0);
-
--- ============ 8. 定时任务 ============
-INSERT INTO sys_job (id, name, executor, cron, fixed_rate_seconds, args, timeout_seconds, concurrent_guard, create_user, create_time, status, is_deleted) VALUES
-(1000, '通知投递对账', 'noticeDeliveryReconcile', '0 0/5 * * * *', NULL, NULL, 60, 1, 1, NOW(), 1, 0),
-(1001, '会话心跳清理', 'sessionHeartbeatClean', NULL, 300, NULL, 30, 1, 1, NOW(), 1, 0),
-(1002, '数据备份提醒', 'dataBackupRemind', '0 0 2 * * ?', NULL, NULL, 30, 1, 1, NOW(), 1, 0),
-(1003, '演示数据巡检', 'demoDataCheck', '0 0 1 * * ?', NULL, NULL, 30, 1, 1, NOW(), 0, 0);
-
--- 任务执行日志（造近 30 天历史）
-INSERT INTO sys_job_log (id, job_id, job_name, executor, trigger_time, manual, outcome, duration_ms, error_msg, create_user, create_time, status, is_deleted) VALUES
-(1000, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 1 HOUR), 0, 1, 512, NULL, 1, NOW(), 1, 0),
-(1001, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 2 HOUR), 0, 2, 0, 'SMTP 连接超时', 1, NOW(), 1, 0),
-(1002, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 3 HOUR), 0, 1, 634, NULL, 1, NOW(), 1, 0),
-(1003, 1001, '会话心跳清理', 'sessionHeartbeatClean', DATE_SUB(NOW(), INTERVAL 30 MINUTE), 0, 1, 45, NULL, 1, NOW(), 1, 0),
-(1004, 1002, '数据备份提醒', 'dataBackupRemind', DATE_SUB(NOW(), INTERVAL 1 DAY), 0, 1, 210, NULL, 1, NOW(), 1, 0),
-(1005, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 1 DAY), 0, 1, 489, NULL, 1, NOW(), 1, 0),
-(1006, 1001, '会话心跳清理', 'sessionHeartbeatClean', DATE_SUB(NOW(), INTERVAL 1 DAY), 0, 1, 52, NULL, 1, NOW(), 1, 0),
-(1007, 1002, '数据备份提醒', 'dataBackupRemind', DATE_SUB(NOW(), INTERVAL 2 DAY), 0, 1, 198, NULL, 1, NOW(), 1, 0),
-(1008, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 2 DAY), 0, 1, 456, NULL, 1, NOW(), 1, 0),
-(1009, 1001, '会话心跳清理', 'sessionHeartbeatClean', DATE_SUB(NOW(), INTERVAL 2 DAY), 0, 1, 61, NULL, 1, NOW(), 1, 0),
-(1010, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 3 DAY), 0, 1, 523, NULL, 1, NOW(), 1, 0),
-(1011, 1002, '数据备份提醒', 'dataBackupRemind', DATE_SUB(NOW(), INTERVAL 3 DAY), 0, 1, 187, NULL, 1, NOW(), 1, 0),
-(1012, 1000, '通知投递对账', 'noticeDeliveryReconcile', DATE_SUB(NOW(), INTERVAL 4 DAY), 0, 1, 498, NULL, 1, NOW(), 1, 0),
-(1013, 1001, '会话心跳清理', 'sessionHeartbeatClean', DATE_SUB(NOW(), INTERVAL 4 DAY), 0, 1, 58, NULL, 1, NOW(), 1, 0);
 
 -- ============ 9. 公告 ============
 INSERT INTO sys_notice (id, tenant_id, title, content, cover, notice_type, notice_scope, scope_target_ids, notify_methods, is_top, publish_type, publish_status, publish_version, scheduled_time, publish_time, effective_time, expire_time, create_user, create_time, status, is_deleted) VALUES

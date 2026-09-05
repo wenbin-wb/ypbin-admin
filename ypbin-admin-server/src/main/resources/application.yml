@@ -106,8 +106,6 @@ ypbin:
       - sys_user_post
       - sys_role_dept
       - sys_file
-      - sys_job
-      - sys_job_log
       - sys_app
       - sys_user_social
       - sys_auth_template
@@ -126,6 +124,15 @@ ypbin:
       public-key: ${LICENSE_ISSUER_PUBLIC_KEY:}
       private-key: ${LICENSE_ISSUER_PRIVATE_KEY:}
       sm4-key: ${LICENSE_ISSUER_SM4_KEY:}
+
+  # ---------- XXL-JOB 执行器（分布式任务调度）----------
+  # 调度中心 xxl-job-admin 3.4.2 context path 为根路径；执行器端口需与 admin 网络可达
+  xxl-job:
+    enabled: ${YPBIN_XXL_JOB_ENABLED:false}          # 部署时置 true 启用执行器注册
+    admin-addresses: ${YPBIN_XXL_JOB_ADMIN:http://127.0.0.1:18085}
+    access-token: ""
+    appname: ypbin-boot
+    port: 9999
 
   # ---------- 操作日志 / 访问日志 ----------
   log:
