@@ -280,6 +280,11 @@ EOF
   ok "已生成 .env（MySQL 密码：$MYSQL_ROOT_PASSWORD，可改 $ENV_FILE）"
 else
   warn "复用已有 .env"
+  # 复用场景需把 .env 变量载入环境，供后续 Nacos 占位符替换 / compose 使用
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
 fi
 
 # ---------- [5.5/7] 启动基础设施并初始化（Nacos 配置 + MySQL 库表）----------
