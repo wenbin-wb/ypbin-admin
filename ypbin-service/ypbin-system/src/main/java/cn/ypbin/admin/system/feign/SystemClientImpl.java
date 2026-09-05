@@ -11,12 +11,9 @@ package cn.ypbin.admin.system.feign;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
-import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.enums.JobStatusEnum;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
-import cn.ypbin.admin.system.mapper.SysJobMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.service.SocialBindService;
@@ -49,7 +46,6 @@ public class SystemClientImpl implements ISystemClient {
 
     private final SysPermissionService permissionService;
     private final SysUserService userService;
-    private final SysJobMapper jobMapper;
     private final SysConfigMapper configMapper;
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
@@ -98,24 +94,9 @@ public class SystemClientImpl implements ISystemClient {
     }
 
     @Override
-    @GetMapping("/list-jobs")
-    public R<List<SysJob>> listJobs(@RequestParam(value = "name", required = false) String name) {
-        return R.ok(jobMapper.selectList(new LambdaQueryWrapper<SysJob>()
-            .like(name != null && !name.isBlank(), SysJob::getName, name)
-            .last("LIMIT 20")));
-    }
-
-    @Override
     @GetMapping("/user-count")
     public R<Long> countUsers() {
         return R.ok(userService.countUsers());
-    }
-
-    @Override
-    @GetMapping("/running-job-count")
-    public R<Long> countRunningJobs() {
-        return R.ok(jobMapper.selectCount(new LambdaQueryWrapper<SysJob>()
-            .eq(SysJob::getStatus, JobStatusEnum.ENABLED.getCode())));
     }
 
     @Override

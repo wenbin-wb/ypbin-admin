@@ -9,7 +9,6 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
-import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
@@ -71,17 +70,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<SysJob>> listJobs(String name) {
-        return unavailable();
-    }
-
-    @Override
     public R<Long> countUsers() {
-        return unavailable();
-    }
-
-    @Override
-    public R<Long> countRunningJobs() {
         return unavailable();
     }
 

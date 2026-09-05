@@ -10,9 +10,7 @@
 package cn.ypbin.admin.ai.tool;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.enums.JobStatusEnum;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
@@ -69,47 +67,18 @@ public class AdminAiTools {
     }
 
     /**
-     * 查询定时任务列表及运行状态。
-     *
-     * @param nameKeyword 任务名称关键词（空字符串或 null 时返回全部，最多 20 条）
-     * @return 任务列表：名称、执行器、Cron、状态
-     */
-    @Tool(name = "listJobs",
-        description = "查询系统定时任务列表，可按名称筛选，返回任务名称/执行器/Cron/状态")
-    public String listJobs(String nameKeyword) {
-        var resp = systemFeignClient.listJobs(nameKeyword);
-        if (resp == null || !resp.isSuccess() || resp.getData() == null) {
-            return "系统服务暂不可用，请稍后重试";
-        }
-        List<SysJob> jobs = resp.getData();
-        if (jobs.isEmpty()) {
-            return "没有找到匹配的定时任务";
-        }
-        return jobs.stream()
-            .map(j -> String.format("名称=%s 执行器=%s Cron=%s 状态=%s",
-                j.getName(), j.getExecutor(),
-                j.getCron() != null ? j.getCron() : ("每" + j.getFixedRateSeconds() + "秒"),
-                JobStatusEnum.descOf(j.getStatus())))
-            .collect(Collectors.joining("\n"));
-    }
-
-    /**
      * 获取系统基础统计数据。
      *
-     * @return 正常用户数和运行中定时任务数
+     * @return 注册用户总数
      */
     @Tool(name = "getSystemStats",
-        description = "获取当前系统基础统计：注册用户总数、已启用任务数")
+        description = "获取当前系统基础统计：注册用户总数")
     public String getSystemStats() {
         String userCount = feignCount(systemFeignClient.countUsers(), "用户数");
         if (userCount.startsWith("ERROR:")) {
             return userCount;
         }
-        String runningJobs = feignCount(systemFeignClient.countRunningJobs(), "运行任务数");
-        if (runningJobs.startsWith("ERROR:")) {
-            return runningJobs;
-        }
-        return String.format("系统统计 - 正常用户数: %s，运行中定时任务: %s", userCount, runningJobs);
+        return String.format("系统统计 - 正常用户数: %s", userCount);
     }
 
     private static String feignCount(R<Long> resp, String label) {

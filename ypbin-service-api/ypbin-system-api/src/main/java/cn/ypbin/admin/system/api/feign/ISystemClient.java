@@ -9,7 +9,6 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
-import cn.ypbin.admin.system.entity.SysJob;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
@@ -78,22 +77,10 @@ public interface ISystemClient {
     R<List<SysUser>> searchUsers(@RequestParam("keyword") String keyword);
 
     /**
-     * 按名称查询任务列表（AI 工具用，限制 20 条）。
-     */
-    @GetMapping("/list-jobs")
-    R<List<SysJob>> listJobs(@RequestParam(value = "name", required = false) String name);
-
-    /**
      * 用户计数（AI 工具统计用）。
      */
     @GetMapping("/user-count")
     R<Long> countUsers();
-
-    /**
-     * 运行任务计数。
-     */
-    @GetMapping("/running-job-count")
-    R<Long> countRunningJobs();
 
     /**
      * 按参数键读取系统参数（auth 读取登录开关/短信配置用）。
