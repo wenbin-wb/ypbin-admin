@@ -22,8 +22,6 @@ ypbin:
       - sys_user_post
       - sys_role_dept
       - sys_file
-      - sys_job
-      - sys_job_log
       - sys_app
       - sys_user_social
       - sys_auth_template

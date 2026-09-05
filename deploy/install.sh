@@ -83,8 +83,7 @@ done
 SERVICES="ypbin-gateway:ypbin-gateway:18080
 ypbin-auth:ypbin-auth:18081
 ypbin-service/ypbin-system:ypbin-system:18082
-ypbin-service/ypbin-ai:ypbin-ai:18083
-ypbin-service/ypbin-job:ypbin-job:18084"
+ypbin-service/ypbin-ai:ypbin-ai:18083"
 
 # 交互确认：Y/n；-y 或 ASSUME_YES=1 时直接 yes（对齐单体脚本）
 confirm() {
@@ -322,9 +321,9 @@ NACOS_TOKEN=$(curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/auth/user/login" \
 
 # 发布 6 个 Nacos 配置（幂等：已存在则覆盖；使用 Nacos 3 Console 新 API）
 if [ -n "$NACOS_TOKEN" ]; then
-  info "导入 Nacos 配置中心（ypbin-common + 5 服务）"
+  info "导入 Nacos 配置中心（ypbin-common + 4 服务）"
   NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
-  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-job; do
+  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
       # 占位符替换：仓库 nacos yaml 不提交真实密码，导入前用 .env 实际值填充
       # （目前仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}）

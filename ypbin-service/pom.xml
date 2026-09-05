@@ -18,6 +18,5 @@
     <modules>
         <module>ypbin-system</module>
         <module>ypbin-ai</module>
-        <module>ypbin-job</module>
     </modules>
 </project>

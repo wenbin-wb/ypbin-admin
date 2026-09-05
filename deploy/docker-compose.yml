@@ -128,21 +128,6 @@ services:
       - mysql
     restart: unless-stopped
 
-  ypbin-job:
-    build:
-      context: ../ypbin-service/ypbin-job
-    image: ypbin/ypbin-job:local
-    container_name: ypbin-job
-    environment:
-      NACOS_ADDR: nacos:8848
-      SENTINEL_ADDR: sentinel-dashboard:8858
-    ports:
-      - "18084:18084"
-    depends_on:
-      - nacos
-      - mysql
-    restart: unless-stopped
-
   # ---------- XXL-JOB 调度中心（独立中间件，任务调度/日志 UI）----------
   xxl-job-admin:
     image: xuxueli/xxl-job-admin:3.4.2
