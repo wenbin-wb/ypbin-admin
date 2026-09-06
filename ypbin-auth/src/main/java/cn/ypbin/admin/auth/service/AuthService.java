@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
+import cn.ypbin.starter.cloud.feign.support.FeignResponses;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
@@ -75,32 +76,41 @@ public class AuthService {
     }
 
     /**
-     * 当前用户信息（从登录态读取，权限列表由 system-svc 提供，暂空）。
+     * 当前用户信息（从登录态读取，权限/路由由 system 服务经 Feign 提供）。
      */
     public UserInfoResp currentUserInfo() {
         LoginUser loginUser = UserContext.getLoginUser()
             .orElseThrow(() -> new BusinessException("当前用户未登录"));
+        Long userId = loginUser.getId();
         UserInfoResp resp = new UserInfoResp();
-        resp.setUserId(loginUser.getId());
+        resp.setUserId(userId);
         resp.setUsername(loginUser.getUsername());
         resp.setRealName(loginUser.getNickname());
-        resp.setRoles(List.of());
-        resp.setPermissions(List.of());
+        resp.setRoles(FeignResponses.dataOrThrow(permissionFeignClient.listRoleCodes(userId),
+            "获取用户角色失败"));
+        resp.setPermissions(FeignResponses.dataOrThrow(permissionFeignClient.listPermissions(userId),
+            "获取用户权限失败"));
         return resp;
     }
 
     /**
-     * 当前用户权限码（M3 由 system-svc 提供，暂空）。
+     * 当前用户权限码（system 服务经 Feign 提供）。
      */
     public List<String> currentPermissions() {
-        return List.of();
+        Long userId = UserContext.getLoginUser()
+            .orElseThrow(() -> new BusinessException("当前用户未登录")).getId();
+        return FeignResponses.dataOrThrow(permissionFeignClient.listPermissions(userId),
+            "获取用户权限失败");
     }
 
     /**
-     * 当前用户菜单路由（M3 由 system-svc 提供，暂空）。
+     * 当前用户菜单路由（system 服务经 Feign 提供，前端动态菜单依赖）。
      */
     public List<RouteResp> currentRoutes() {
-        return List.of();
+        Long userId = UserContext.getLoginUser()
+            .orElseThrow(() -> new BusinessException("当前用户未登录")).getId();
+        return FeignResponses.dataOrThrow(permissionFeignClient.listRoutes(userId),
+            "获取用户菜单失败");
     }
 
     /**

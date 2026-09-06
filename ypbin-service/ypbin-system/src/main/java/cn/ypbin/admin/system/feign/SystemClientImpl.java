@@ -16,7 +16,9 @@ import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.service.SocialBindService;
+import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
@@ -49,6 +51,7 @@ public class SystemClientImpl implements ISystemClient {
     private final SysConfigMapper configMapper;
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
+    private final SysMenuService menuService;
 
     @Override
     @GetMapping("/permissions")
@@ -60,6 +63,12 @@ public class SystemClientImpl implements ISystemClient {
     @GetMapping("/role-codes")
     public R<List<String>> listRoleCodes(@RequestParam("userId") Long userId) {
         return R.ok(permissionService.listRoleCodes(userId));
+    }
+
+    @Override
+    @GetMapping("/routes")
+    public R<List<RouteResp>> listRoutes(@RequestParam("userId") Long userId) {
+        return R.ok(menuService.buildRoutes(userId));
     }
 
     @Override

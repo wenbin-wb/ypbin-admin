@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -45,6 +46,12 @@ public interface ISystemClient {
      */
     @GetMapping("/role-codes")
     R<List<String>> listRoleCodes(@RequestParam("userId") Long userId);
+
+    /**
+     * 查询用户可访问的路由树（登录后动态菜单）。
+     */
+    @GetMapping("/routes")
+    R<List<RouteResp>> listRoutes(@RequestParam("userId") Long userId);
 
     /**
      * 按用户名查询用户（登录用）。

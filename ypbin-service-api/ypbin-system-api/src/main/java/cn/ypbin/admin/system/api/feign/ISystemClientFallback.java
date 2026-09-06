@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
@@ -41,6 +42,11 @@ public class ISystemClientFallback implements ISystemClient {
 
     @Override
     public R<List<String>> listRoleCodes(Long userId) {
+        return unavailable();
+    }
+
+    @Override
+    public R<List<RouteResp>> listRoutes(Long userId) {
         return unavailable();
     }
 
