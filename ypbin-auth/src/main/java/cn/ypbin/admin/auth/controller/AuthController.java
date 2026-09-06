@@ -56,7 +56,7 @@ public class AuthController {
     /**
      * 当前用户信息。
      */
-    @GetMapping("/user/info")
+    @GetMapping("/auth/user/info")
     public R<UserInfoResp> userInfo() {
         return R.ok(authService.currentUserInfo());
     }
@@ -72,7 +72,7 @@ public class AuthController {
     /**
      * 当前用户菜单路由。
      */
-    @GetMapping("/menu/all")
+    @GetMapping("/auth/menu/all")
     public R<List<RouteResp>> menuAll() {
         return R.ok(authService.currentRoutes());
     }

@@ -37,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-03
  */
 @RestController
-@RequestMapping("/user/messages")
+@RequestMapping("/system/messages")
 @RequiredArgsConstructor
 public class SysMessageController {
 

@@ -26,17 +26,21 @@ spring:
               enabled: true
               lower-case-service-id: true
           routes:
+            # 约定：每个服务对外唯一主段 = 服务业务域；新增 controller 一律挂主段下，无需改本表
             - id: auth
               uri: lb://ypbin-auth
               predicates:
-                - Path=/auth/**,/captcha/**,/user/**,/menu/**,/open-api/**
+                # 认证域：登录/登出/验证码/当前用户/我的菜单/权限码
+                - Path=/auth/**,/captcha/**
             - id: system
               uri: lb://ypbin-system
               predicates:
-                - Path=/system/**,/ypbin/**
+                # 系统域：RBAC/文件/公告/仪表盘/站内信/个人中心 + 开放/许可/Sse 匿名段
+                - Path=/system/**,/open-api/**,/open/license/**,/ypbin/**
             - id: ai
               uri: lb://ypbin-ai
               predicates:
+                # AI 域：对话/知识库/模型 + 公网分享/挂件匿名段
                 - Path=/ai/**,/share/**,/widget/**
 
 # 统一鉴权：校验 token 后清洗外部头、签发内部身份头
