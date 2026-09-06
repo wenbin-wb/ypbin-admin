@@ -4,15 +4,16 @@
 # ============================================================
 
 # ---------- 安全（公开端点免登录校验，与网关白名单一致）----------
+# 注意：网关 StripPrefix 已剥掉短名段，此处为服务实际收到的路径（纯资源路径）
 ypbin:
   security:
     excludes:
-      - /auth/login
-      - /auth/sms/send
-      - /auth/sms/login
-      - /auth/social/authorize/**
-      - /auth/social/callback/**
-      - /auth/social/platforms
+      - /login
+      - /sms/send
+      - /sms/login
+      - /social/authorize/**
+      - /social/callback/**
+      - /social/platforms
       - /captcha
       - /captcha/verify
       - /actuator/**
