@@ -33,7 +33,7 @@ spring:
             - id: system
               uri: lb://ypbin-system
               predicates:
-                - Path=/system/**
+                - Path=/system/**,/ypbin/**
             - id: ai
               uri: lb://ypbin-ai
               predicates:
@@ -57,3 +57,5 @@ ypbin:
         - /open/license/**
         - /share/**
         - /widget/**
+        # SSE 订阅：EventSource 无法携带 Authorization，靠一次性 ticket 换身份（ticket 由登录态签发）
+        - /ypbin/sse/subscribe
