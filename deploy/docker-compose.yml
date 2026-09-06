@@ -3,8 +3,12 @@
 # 用法：
 #   docker compose -f docker-compose.yml up -d
 #
-# 说明：本文件编排基础设施（Nacos/Redis/MySQL/Sentinel）+ 微服务四件套 + 网关，
+# 说明：本文件编排基础设施（Nacos/Redis/MySQL/Sentinel）+ 微服务四件套 + 网关 + XXL-JOB 调度中心，
 # 单文件即可拉起全链路。账号密码一律从 .env 注入。
+#
+# 网络：所有服务接入自定义网络 ypbin-net（固定 subnet + 固定 IP），
+# 容器重建不漂移 IP —— 避免 nginx 等"启动时解析一次"的代理因上游 IP 变化 502。
+# 服务间仍优先用服务名（Docker DNS）通信；固定 IP 作为 DNS 解析的稳定兜底。
 
 services:
   # ---------- 基础设施 ----------
@@ -29,6 +33,9 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.10
 
   redis:
     image: redis:7-alpine
@@ -44,6 +51,9 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.11
 
   mysql:
     image: mysql:8.4
@@ -62,6 +72,9 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.12
 
   # 说明：Sentinel Dashboard 由 starter 的 deploy 提供（从官方 jar 自构建，
   # 镜像 ypbin/sentinel-dashboard:1.8.8），本文件不重复编排；如需限流控制台，
@@ -81,6 +94,9 @@ services:
     depends_on:
       - nacos
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.20
 
   ypbin-auth:
     build:
@@ -96,6 +112,9 @@ services:
       - nacos
       - redis
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.21
 
   ypbin-system:
     build:
@@ -111,6 +130,9 @@ services:
       - nacos
       - mysql
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.22
 
   ypbin-ai:
     build:
@@ -127,6 +149,9 @@ services:
       - nacos
       - mysql
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.23
 
   # ---------- XXL-JOB 调度中心（独立中间件，任务调度/日志 UI）----------
   xxl-job-admin:
@@ -139,6 +164,9 @@ services:
     depends_on:
       - mysql
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.30
 
   # ---------- 前端 ----------
   ypbin-admin-ui:
@@ -152,6 +180,16 @@ services:
     depends_on:
       - ypbin-gateway
     restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.40
+
+networks:
+  ypbin-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
 
 volumes:
   ypbin-redis-data:
