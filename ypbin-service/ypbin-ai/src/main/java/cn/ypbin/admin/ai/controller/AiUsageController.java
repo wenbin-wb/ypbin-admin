@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-15
  */
 @RestController
-@RequestMapping("/ai/usage")
+@RequestMapping("/usage")
 @RequiredArgsConstructor
 public class AiUsageController {
 

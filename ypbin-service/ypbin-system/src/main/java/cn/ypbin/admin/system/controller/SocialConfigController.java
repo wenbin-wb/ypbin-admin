@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-08
  */
 @RestController
-@RequestMapping("/system/config/social")
+@RequestMapping("/config/social")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SocialConfigController {

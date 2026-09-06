@@ -46,7 +46,7 @@ public class SmsLoginController {
     /**
      * 发送验证码。每 IP 60 秒最多 5 次。
      */
-    @PostMapping("/auth/sms/send")
+    @PostMapping("/sms/send")
     @RateLimit(count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
     public R<Void> sendCode(@RequestParam String phone) {
         if (!configReader.getBoolean(KEY_LOGIN_SMS_ENABLED, false)) {
@@ -60,7 +60,7 @@ public class SmsLoginController {
      * 手机验证码登录。
      */
     @Log(value = "手机验证码登录", module = "认证")
-    @PostMapping("/auth/sms/login")
+    @PostMapping("/sms/login")
     public R<LoginResp> smsLogin(@Valid @RequestBody PhoneLoginReq req) {
         return R.ok(phoneLoginStrategy.login(req, WebRequestUtils.ip()));
     }

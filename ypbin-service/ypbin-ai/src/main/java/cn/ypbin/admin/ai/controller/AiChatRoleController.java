@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-16
  */
 @RestController
-@RequestMapping("/ai/roles")
+@RequestMapping("/roles")
 @RequiredArgsConstructor
 public class AiChatRoleController {
 

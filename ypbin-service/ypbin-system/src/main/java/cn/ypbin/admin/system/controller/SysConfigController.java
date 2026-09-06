@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-01
  */
 @RestController
-@RequestMapping("/system/config")
+@RequestMapping("/config")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SysConfigController {

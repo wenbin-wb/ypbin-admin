@@ -36,7 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @since 2026-08-01
  */
 @RestController
-@RequestMapping("/system/user/profile")
+@RequestMapping("/user/profile")
 @RequiredArgsConstructor
 public class UserProfileController {
 

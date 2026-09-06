@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-02
  */
 @RestController
-@RequestMapping("/system/post")
+@RequestMapping("/post")
 @RequiredArgsConstructor
 public class SysPostController {
 

@@ -39,7 +39,7 @@ public class AuthController {
     /**
      * 账号密码登录。
      */
-    @PostMapping("/auth/login")
+    @PostMapping("/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
         return R.ok(authService.login(req, WebRequestUtils.ip()));
     }
@@ -47,7 +47,7 @@ public class AuthController {
     /**
      * 退出登录。
      */
-    @PostMapping("/auth/logout")
+    @PostMapping("/logout")
     public R<Void> logout() {
         authService.logout();
         return R.ok();
@@ -56,7 +56,7 @@ public class AuthController {
     /**
      * 当前用户信息。
      */
-    @GetMapping("/auth/user/info")
+    @GetMapping("/user/info")
     public R<UserInfoResp> userInfo() {
         return R.ok(authService.currentUserInfo());
     }
@@ -64,7 +64,7 @@ public class AuthController {
     /**
      * 当前用户权限码。
      */
-    @GetMapping("/auth/codes")
+    @GetMapping("/codes")
     public R<List<String>> codes() {
         return R.ok(authService.currentPermissions());
     }
@@ -72,7 +72,7 @@ public class AuthController {
     /**
      * 当前用户菜单路由。
      */
-    @GetMapping("/auth/menu/all")
+    @GetMapping("/menu/all")
     public R<List<RouteResp>> menuAll() {
         return R.ok(authService.currentRoutes());
     }
@@ -80,7 +80,7 @@ public class AuthController {
     /**
      * 登录态检查。
      */
-    @GetMapping("/auth/check")
+    @GetMapping("/check")
     public R<Void> check() {
         return authService.checkLogin();
     }

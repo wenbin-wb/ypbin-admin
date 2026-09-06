@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-01
  */
 @RestController
-@RequestMapping("/system/log")
+@RequestMapping("/log")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SysLogController {

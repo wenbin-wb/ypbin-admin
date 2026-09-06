@@ -43,7 +43,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @since 2026-08-01
  */
 @RestController
-@RequestMapping("/system/user")
+@RequestMapping("/user")
 @RequiredArgsConstructor
 public class SysUserController {
 

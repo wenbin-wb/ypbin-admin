@@ -37,7 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @since 2026-08-02
  */
 @RestController
-@RequestMapping("/system/file")
+@RequestMapping("/file")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SysFileController {

@@ -41,7 +41,7 @@ public class PushController {
      */
     @Idempotent
     @Log(value = "推送测试", module = "消息推送")
-    @PostMapping("/system/push/test")
+    @PostMapping("/push/test")
     @SaCheckPermission("system:push:test")
     public R<Void> pushTest(@Valid @RequestBody PushTestReq req) {
         pushService.sendToUser(req.getUserId().toString(), "test-message", Map.of("message", req.getMessage()));

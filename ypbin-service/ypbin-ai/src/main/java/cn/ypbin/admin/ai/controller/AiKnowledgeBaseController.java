@@ -50,7 +50,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @since 2026-08-15
  */
 @RestController
-@RequestMapping("/ai/knowledge-bases")
+@RequestMapping("/knowledge-bases")
 @RequiredArgsConstructor
 public class AiKnowledgeBaseController {
 

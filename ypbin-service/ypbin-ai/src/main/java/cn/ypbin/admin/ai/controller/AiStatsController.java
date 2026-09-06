@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-18
  */
 @RestController
-@RequestMapping("/ai/stats")
+@RequestMapping("/stats")
 @RequiredArgsConstructor
 public class AiStatsController {
 

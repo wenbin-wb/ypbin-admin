@@ -37,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-01
  */
 @RestController
-@RequestMapping("/system/dict")
+@RequestMapping("/dict")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SysDictController {

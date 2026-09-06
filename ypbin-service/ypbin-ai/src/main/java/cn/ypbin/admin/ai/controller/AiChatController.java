@@ -39,7 +39,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * @since 2026-08-15
  */
 @RestController
-@RequestMapping("/ai/chat")
+@RequestMapping("/chat")
 @RequiredArgsConstructor
 public class AiChatController {
 

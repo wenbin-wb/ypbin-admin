@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-02
  */
 @RestController
-@RequestMapping("/system/auth-template")
+@RequestMapping("/auth-template")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SysAuthTemplateController {

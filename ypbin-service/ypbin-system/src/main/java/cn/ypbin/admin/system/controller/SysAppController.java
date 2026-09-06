@@ -37,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-02
  */
 @RestController
-@RequestMapping("/system/app")
+@RequestMapping("/app")
 @RequiredArgsConstructor
 @PlatformAccess
 public class SysAppController {

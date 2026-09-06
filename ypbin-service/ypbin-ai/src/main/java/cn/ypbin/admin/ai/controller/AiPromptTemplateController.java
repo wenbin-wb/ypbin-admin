@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @since 2026-08-15
  */
 @RestController
-@RequestMapping("/ai/prompt-templates")
+@RequestMapping("/prompt-templates")
 @RequiredArgsConstructor
 public class AiPromptTemplateController {
 
