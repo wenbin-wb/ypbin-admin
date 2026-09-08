@@ -35,11 +35,14 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -355,12 +358,21 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
     }
 
     private String generateUniqueRoomCode() {
+        // 一次性生成 10 个候选随机码，单次 IN 查询批量排除正在使用中的口令，杜绝循环内查 DB
+        List<String> candidates = new ArrayList<>(10);
         for (int i = 0; i < 10; i++) {
-            String code = String.valueOf(1000 + RANDOM.nextInt(9000));
-            boolean exists = exists(new LambdaQueryWrapper<CardtabRoom>()
-                .eq(CardtabRoom::getRoomCode, code)
-                .eq(CardtabRoom::getRoomStatus, "ONGOING"));
-            if (!exists) {
+            candidates.add(String.valueOf(1000 + RANDOM.nextInt(9000)));
+        }
+        Set<String> usedCodes = list(new LambdaQueryWrapper<CardtabRoom>()
+            .select(CardtabRoom::getRoomCode)
+            .in(CardtabRoom::getRoomCode, candidates)
+            .eq(CardtabRoom::getRoomStatus, "ONGOING"))
+            .stream()
+            .map(CardtabRoom::getRoomCode)
+            .collect(Collectors.toSet());
+
+        for (String code : candidates) {
+            if (!usedCodes.contains(code)) {
                 return code;
             }
         }
