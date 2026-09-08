@@ -18,10 +18,11 @@
 #   [6/7] 启动服务   —— Docker: compose up（含基础设施）；NO_DOCKER: java -jar 逐个启动
 #   [7/7] 健康检查   —— 验证网关/各服务注册，输出访问地址
 #
-# 自定义参数（环境变量覆盖）：
-#   YPBIN_ROOT=/opt/ypbin/main      部署根目录（默认 /opt/ypbin/main）
+# 自定义参数（支持命令行参数与环境变量覆盖）：
+#   -b, --branch <name>            admin 分支（默认 main；也可环境变量 BRANCH=...）
+#   --root <dir>                   部署根目录（默认 /opt/ypbin/<branch>；也可环境变量 YPBIN_ROOT=...）
+#   -y, --yes                      跳过所有交互确认（自动模式）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
-#   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
 #   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
 #   REDIS_HOST=localhost REDIS_PORT=6379
@@ -32,11 +33,21 @@
 set -euo pipefail
 trap 'echo "!! 脚本执行失败于第 ${LINENO} 行"' ERR
 
+# 先处理 -h/--help 帮助参数（无需 root 权限）
+for arg in "$@"; do
+  if [ "$arg" = "-h" ] || [ "$arg" = "--help" ]; then
+    echo "ypbin-admin 微服务版一键部署脚本"
+    echo "用法: $0 [-b|--branch <分支名>] [--root <部署目录>] [-y|--yes]"
+    echo "示例: $0 -b feature/miniapp-backend"
+    exit 0
+  fi
+done
+
 # ---------- 非 root 自提权（对齐单体脚本）----------
 # /opt/ypbin 由 root 创建（部署目录），非 root 用户构建会因写 target/ 权限失败；
 # 自动 sudo -E 以 root 重新执行本脚本。管道执行（bash <(curl ...)）时脚本无真实文件，
 # 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
-SCRIPT_VERSION="2026.09.01.1"
+SCRIPT_VERSION="2026.09.08.1"
 SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
 if [ "$(id -u)" != "0" ]; then
   if command -v sudo >/dev/null 2>&1; then
@@ -58,32 +69,55 @@ ok()   { echo -e "\033[32m✓  $*\033[0m"; }
 warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
-# ---------- 参数 ----------
-# 默认独立目录（与单体版 /opt/ypbin/boot 分开，避免代码互相覆盖/分支冲突，两版本可共存）
-ROOT="${YPBIN_ROOT:-/opt/ypbin/main}"
-REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
+# ---------- 参数解析（支持命令行参数与环境变量） ----------
 BRANCH="${BRANCH:-main}"
+CUSTOM_ROOT="${YPBIN_ROOT:-}"
+REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
-ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
 STARTER_VERSION="2.2.1"
 
-# ---------- 交互模式 ----------
-# 默认交互（人工确认关键步骤）；-y/--yes 全自动跳过所有确认（CI/无头环境，对齐单体脚本）
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -y|--yes) ASSUME_YES=1; shift ;;
-    *) shift ;;
+    -b|--branch)
+      [[ -n "${2:-}" ]] || die "--branch 参数缺少分支名称"
+      BRANCH="$2"
+      shift 2
+      ;;
+    --root)
+      [[ -n "${2:-}" ]] || die "--root 参数缺少路径"
+      CUSTOM_ROOT="$2"
+      shift 2
+      ;;
+    -y|--yes)
+      ASSUME_YES=1
+      shift
+      ;;
+    -h|--help)
+      echo "用法: $0 [-b|--branch <分支名>] [--root <部署目录>] [-y|--yes]"
+      echo "示例: $0 -b feature/miniapp-backend"
+      exit 0
+      ;;
+    *)
+      shift
+      ;;
   esac
 done
+
+# 如果未指定 ROOT，按分支名自动推导隔离目录（去除特殊符号，如 feature/xxx -> feature-xxx）
+# 避免不同分支部署在同一目录导致代码/配置互相污染
+SAFE_BRANCH_TAG=$(echo "$BRANCH" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
+ROOT="${CUSTOM_ROOT:-/opt/ypbin/${SAFE_BRANCH_TAG}}"
+ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
 
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
 ypbin-auth:ypbin-auth:18081
 ypbin-service/ypbin-system:ypbin-system:18082
-ypbin-service/ypbin-ai:ypbin-ai:18083"
+ypbin-service/ypbin-ai:ypbin-ai:18083
+ypbin-service/ypbin-miniapp:ypbin-miniapp:18084"
 
 # 交互确认：Y/n；-y 或 ASSUME_YES=1 时直接 yes（对齐单体脚本）
 confirm() {
@@ -100,6 +134,19 @@ confirm() {
     esac
   done
 }
+
+# 交互式分支确认（非 -y 模式下允许用户修改分支）
+if [ "$ASSUME_YES" != "1" ]; then
+  read -rp "  请输入要部署的 admin 分支 [当前: ${BRANCH}]: " input_branch
+  if [ -n "$input_branch" ]; then
+    BRANCH="$input_branch"
+    SAFE_BRANCH_TAG=$(echo "$BRANCH" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
+    if [ -z "$CUSTOM_ROOT" ]; then
+      ROOT="/opt/ypbin/${SAFE_BRANCH_TAG}"
+      ADMIN_UI_DIST_DIR="$ROOT/ypbin-admin/admin-ui-dist"
+    fi
+  fi
+fi
 
 info "部署参数：ROOT=$ROOT 分支=$BRANCH NO_DOCKER=$NO_DOCKER"
 
@@ -326,9 +373,9 @@ NACOS_TOKEN=$(curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/auth/user/login" \
 
 # 发布 6 个 Nacos 配置（幂等：已存在则覆盖；使用 Nacos 3 Console 新 API）
 if [ -n "$NACOS_TOKEN" ]; then
-  info "导入 Nacos 配置中心（ypbin-common + 4 服务）"
+  info "导入 Nacos 配置中心（ypbin-common + 微服务配置）"
   NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
-  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai; do
+  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-miniapp; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
       # 占位符替换：仓库 nacos yaml 不提交真实密码，导入前用 .env 实际值填充
       # （目前仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}）

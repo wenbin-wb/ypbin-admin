@@ -37,15 +37,21 @@
 **方式一：一键脚本**（自动完成环境检查→拉取 starter/admin→构建 starter→打包 5 服务→启动→健康检查）：
 
 ```bash
-# Docker 模式（生产服务器，含 Nacos/Redis/MySQL 基础设施）
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+# Docker 模式（部署指定分支，例如 feature/miniapp-backend）
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -b feature/miniapp-backend
+
+# 默认部署 main 分支（静默免确认）
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -y
 
 # 无 Docker 模式（本机/轻量服务器，java -jar 直接启动；需外部 Nacos/Redis/MySQL）
 NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD=xxx \
-  bash deploy/install.sh
+  bash deploy/install.sh -b feature/miniapp-backend
 ```
 
-自定义参数（环境变量）：`YPBIN_ROOT`（部署根目录，默认 /opt/ypbin/main）、`BRANCH`（默认 main）、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
+自定义参数：
+- 命令行参数：`-b, --branch <分支名>`（指定代码分支）、`--root <目录>`（指定部署目录）、`-y, --yes`（免确认自动运行）；
+- 目录自动隔离：当未指定 `--root` 时，脚本将自动按分支名隔离目录（例如 `feature/miniapp-backend` 自动部署在 `/opt/ypbin/feature-miniapp-backend`，主分支在 `/opt/ypbin/main`），彻底杜绝多分支部署相互污染；
+- 环境变量覆盖：`BRANCH`、`YPBIN_ROOT`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`。
 
 **方式二：手动**：
 
