@@ -29,6 +29,7 @@
         <sms4j.version>3.3.5</sms4j.version>
         <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
         <lombok.version>1.18.46</lombok.version>
+        <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -137,6 +138,13 @@
                     <!-- 保留方法参数名：Spring MVC @PathVariable/@RequestParam 依赖参数名解析 -->
                     <parameters>true</parameters>
                 </configuration>
+            </plugin>
+            <!-- 测试执行器：显式锁定现代版本（JUnit 5 支持），
+                 避免依赖 Maven 隐式默认（旧 Maven 回退 2.12.4 不识别 JUnit 5 导致测试静默不执行） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
             </plugin>
         </plugins>
     </build>
