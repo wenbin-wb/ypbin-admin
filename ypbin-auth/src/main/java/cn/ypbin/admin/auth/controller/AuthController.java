@@ -10,10 +10,12 @@
 package cn.ypbin.admin.auth.controller;
 
 import cn.ypbin.admin.auth.dto.LoginReq;
+import cn.ypbin.admin.auth.dto.MiniappLoginReq;
+import cn.ypbin.admin.auth.service.AuthService;
+import cn.ypbin.admin.auth.service.MiniappLoginService;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
-import cn.ypbin.admin.auth.service.AuthService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.web.util.WebRequestUtils;
 import jakarta.validation.Valid;
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final MiniappLoginService miniappLoginService;
 
     /**
      * 账号密码登录。
@@ -42,6 +45,14 @@ public class AuthController {
     @PostMapping("/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
         return R.ok(authService.login(req, WebRequestUtils.ip()));
+    }
+
+    /**
+     * 微信小程序登录。
+     */
+    @PostMapping("/miniapp/login")
+    public R<LoginResp> miniappLogin(@RequestBody MiniappLoginReq req) {
+        return R.ok(miniappLoginService.login(req));
     }
 
     /**

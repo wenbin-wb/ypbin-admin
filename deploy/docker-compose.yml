@@ -153,6 +153,24 @@ services:
       ypbin-net:
         ipv4_address: 172.20.0.23
 
+  ypbin-miniapp:
+    build:
+      context: ../ypbin-service/ypbin-miniapp
+    image: ypbin/ypbin-miniapp:local
+    container_name: ypbin-miniapp
+    environment:
+      NACOS_ADDR: nacos:8848
+      SENTINEL_ADDR: sentinel-dashboard:8858
+    ports:
+      - "18084:18084"
+    depends_on:
+      - nacos
+      - mysql
+    restart: unless-stopped
+    networks:
+      ypbin-net:
+        ipv4_address: 172.20.0.24
+
   # ---------- XXL-JOB 调度中心（独立中间件，任务调度/日志 UI）----------
   xxl-job-admin:
     image: xuxueli/xxl-job-admin:3.4.2

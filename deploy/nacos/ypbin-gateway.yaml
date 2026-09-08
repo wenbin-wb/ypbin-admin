@@ -46,6 +46,12 @@ spring:
                 - Path=/ai/**
               filters:
                 - StripPrefix=1
+            - id: miniapp
+              uri: lb://ypbin-miniapp
+              predicates:
+                - Path=/miniapp/**
+              filters:
+                - StripPrefix=1
 
 # 统一鉴权：校验 token 后清洗外部头、签发内部身份头
 ypbin:
@@ -57,6 +63,9 @@ ypbin:
         - /auth/login
         - /auth/sms/send
         - /auth/sms/login
+        - /auth/miniapp/login
+        - /miniapp/cardtab/rooms/code/**
+        - /miniapp/familymenu/preset-dish/list
         - /auth/social/authorize/**
         - /auth/social/callback/**
         - /auth/social/platforms

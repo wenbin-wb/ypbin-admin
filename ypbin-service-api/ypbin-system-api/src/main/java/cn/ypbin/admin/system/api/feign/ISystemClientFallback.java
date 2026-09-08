@@ -130,4 +130,14 @@ public class ISystemClientFallback implements ISystemClient {
     public R<List<SysUserSocial>> listSocialBindings(Long userId) {
         return unavailable();
     }
+
+    @Override
+    public R<SysUser> getOrCreateMiniappUser(String username, String nickname, String avatar) {
+        return unavailable();
+    }
+
+    @Override
+    public R<SysUser> updateMiniappUser(Long userId, String nickname, String avatar, String phone) {
+        return unavailable();
+    }
 }

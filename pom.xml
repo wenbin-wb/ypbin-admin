@@ -80,6 +80,11 @@
                 <artifactId>ypbin-ai-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>cn.ypbin.admin</groupId>
+                <artifactId>ypbin-miniapp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

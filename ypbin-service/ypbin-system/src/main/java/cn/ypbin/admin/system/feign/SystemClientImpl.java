@@ -23,9 +23,12 @@ import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -189,5 +192,70 @@ public class SystemClientImpl implements ISystemClient {
     @GetMapping("/social-bindings")
     public R<List<SysUserSocial>> listSocialBindings(@RequestParam("userId") Long userId) {
         return R.ok(socialBindService.listByUserId(userId));
+    }
+
+    @Override
+    @PostMapping("/user-get-or-create-miniapp")
+    public R<SysUser> getOrCreateMiniappUser(@RequestParam("username") String username,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar) {
+        SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
+            .eq(SysUser::getUsername, username));
+        if (user == null) {
+            user = new SysUser();
+            user.setUsername(username);
+            user.setRealName(StringUtils.hasText(nickname) ? nickname : "微信用户");
+            user.setNickname(nickname);
+            user.setAvatar(avatar);
+            user.setUserType("MINIAPP");
+            user.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
+            user.setStatus(1);
+            userService.save(user);
+        } else {
+            boolean updated = false;
+            if (StringUtils.hasText(nickname) && !nickname.equals(user.getNickname())) {
+                user.setNickname(nickname);
+                user.setRealName(nickname);
+                updated = true;
+            }
+            if (StringUtils.hasText(avatar) && !avatar.equals(user.getAvatar())) {
+                user.setAvatar(avatar);
+                updated = true;
+            }
+            if (updated) {
+                userService.updateById(user);
+            }
+        }
+        return R.ok(user);
+    }
+
+    @Override
+    @PostMapping("/user-update-miniapp")
+    public R<SysUser> updateMiniappUser(@RequestParam("userId") Long userId,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar,
+        @RequestParam(value = "phone", required = false) String phone) {
+        SysUser user = userService.getById(userId);
+        if (user == null) {
+            return R.fail("用户不存在");
+        }
+        boolean updated = false;
+        if (StringUtils.hasText(nickname)) {
+            user.setNickname(nickname.trim());
+            user.setRealName(nickname.trim());
+            updated = true;
+        }
+        if (StringUtils.hasText(avatar)) {
+            user.setAvatar(avatar.trim());
+            updated = true;
+        }
+        if (StringUtils.hasText(phone)) {
+            user.setPhone(phone.trim());
+            updated = true;
+        }
+        if (updated) {
+            userService.updateById(user);
+        }
+        return R.ok(user);
     }
 }

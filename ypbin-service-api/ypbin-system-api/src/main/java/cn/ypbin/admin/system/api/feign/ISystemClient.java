@@ -157,4 +157,21 @@ public interface ISystemClient {
      */
     @GetMapping("/social-bindings")
     R<List<SysUserSocial>> listSocialBindings(@RequestParam("userId") Long userId);
+
+    /**
+     * 按用户名查询或创建小程序用户（微信小程序登录用）。
+     */
+    @PostMapping("/user-get-or-create-miniapp")
+    R<SysUser> getOrCreateMiniappUser(@RequestParam("username") String username,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar);
+
+    /**
+     * 更新小程序用户信息（昵称、头像、手机号）。
+     */
+    @PostMapping("/user-update-miniapp")
+    R<SysUser> updateMiniappUser(@RequestParam("userId") Long userId,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar,
+        @RequestParam(value = "phone", required = false) String phone);
 }

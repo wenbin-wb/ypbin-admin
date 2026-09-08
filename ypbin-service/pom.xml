@@ -18,5 +18,6 @@
     <modules>
         <module>ypbin-system</module>
         <module>ypbin-ai</module>
+        <module>ypbin-miniapp</module>
     </modules>
 </project>
