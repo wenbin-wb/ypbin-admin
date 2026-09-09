@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.enums.GenderEnum;
@@ -191,6 +192,9 @@ public class UserExcelComponent {
             if (phone != null) {
                 importedPhones.add(phone);
             }
+            // 导入直插绕过 createUser，需同步清 username/phone 永久缓存键防旧快照残留
+            SysCache.evictUser(null, username);
+            SysCache.evictUserByPhone(phone);
             result.setSuccessCount(result.getSuccessCount() + 1);
         }
         return result;

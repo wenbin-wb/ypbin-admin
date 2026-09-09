@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysAuthTemplate;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysPost;
@@ -26,8 +27,10 @@ import cn.ypbin.admin.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.system.service.SysTenantService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -71,7 +74,8 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateTenant(Long id, TenantSaveReq req) {
-        if (getById(id) == null) {
+        SysTenant existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("租户不存在");
         }
         checkNameUnique(req.getName(), id);
@@ -82,6 +86,10 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
         tenant.setId(id);
         if (!updateById(tenant)) {
             throw new BusinessException("租户更新失败");
+        }
+        if (!Objects.equals(existing.getTemplateId(), req.getTemplateId())) {
+            // 重绑权限模板后，租户下用户角色/权限缓存（永久键）随模板变化，须批量失效
+            evictTenantUsers(id);
         }
     }
 
@@ -131,6 +139,25 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
         if (template == null || !Integer.valueOf(1).equals(template.getStatus())) {
             throw new BusinessException("权限模板不存在或已禁用");
         }
+    }
+
+    /**
+     * 租户重绑权限模板后，清理该租户下全部用户的角色/权限缓存。
+     *
+     * <p>与权限模板变更清缓存同款：角色/权限缓存为永久键，重绑后解析结果随新模板变化；
+     * 按租户批量查用户 ID（两步查询，禁循环内查库），一次性批量失效。</p>
+     *
+     * @param tenantId 租户 ID
+     */
+    private void evictTenantUsers(Long tenantId) {
+        List<SysUser> users = TenantContext.executeIgnore(() -> userMapper.selectList(
+            new LambdaQueryWrapper<SysUser>()
+                .eq(SysUser::getTenantId, tenantId)
+                .select(SysUser::getId)));
+        if (users.isEmpty()) {
+            return;
+        }
+        users.stream().map(SysUser::getId).distinct().forEach(SysCache::evictUserAuth);
     }
 
     private TenantResp toResp(SysTenant tenant) {

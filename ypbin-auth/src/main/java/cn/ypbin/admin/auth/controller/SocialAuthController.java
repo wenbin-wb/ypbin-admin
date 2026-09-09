@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.auth.controller;
 
+import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.auth.service.SocialLoginService;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
@@ -38,6 +39,7 @@ public class SocialAuthController {
 
     private final SocialService socialService;
     private final SocialLoginService socialLoginService;
+    private final SocialAuthRegistryInitializer registryInitializer;
 
     /**
      * 已注册的第三方平台列表。未配置任何平台时返回空集合。
@@ -48,10 +50,11 @@ public class SocialAuthController {
     }
 
     /**
-     * 生成授权跳转地址。
+     * 生成授权跳转地址（跳转前即时校验平台启用状态并同步最新配置）。
      */
     @GetMapping("/authorize/{source}")
     public R<String> authorize(@PathVariable String source) {
+        registryInitializer.ensurePlatformRegistered(source);
         return R.ok(socialService.authorizeUrl(source));
     }
 

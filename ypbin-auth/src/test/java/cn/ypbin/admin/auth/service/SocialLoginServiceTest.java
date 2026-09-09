@@ -16,6 +16,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysUser;
@@ -45,14 +46,16 @@ class SocialLoginServiceTest {
 
     private SocialService socialService;
     private ISystemClient systemClient;
+    private SocialAuthRegistryInitializer registryInitializer;
     private SocialLoginService service;
 
     @BeforeEach
     void setUp() {
         socialService = org.mockito.Mockito.mock(SocialService.class);
         systemClient = org.mockito.Mockito.mock(ISystemClient.class);
+        registryInitializer = org.mockito.Mockito.mock(SocialAuthRegistryInitializer.class);
         service = new SocialLoginService(socialService, systemClient,
-            org.mockito.Mockito.mock(LoginSupport.class));
+            org.mockito.Mockito.mock(LoginSupport.class), registryInitializer);
     }
 
     @AfterEach

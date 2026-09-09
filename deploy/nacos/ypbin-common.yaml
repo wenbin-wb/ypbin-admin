@@ -23,6 +23,9 @@ spring:
       host: redis
       port: 6379
       database: 0
+      # install.sh 导入 Nacos 时替换为 deploy/.env 的 REDIS_PASSWORD（仓库不提交真实密码，
+      # 与 compose 内建 Redis 的 requirepass 一致；NO_DOCKER 外部 Redis 且未设密码时该行被删除=不认证）
+      password: ${REDIS_PASSWORD}
 
 # ---------- Sa-Token（auth/gateway 共享会话）----------
 sa-token:
@@ -35,7 +38,26 @@ sa-token:
   is-print: false
 
 # ---------- Sentinel 限流控制台 ----------
-  cloud:
-    sentinel:
-      transport:
-        dashboard: sentinel-dashboard:8858
+# 说明：此处原有一段 cloud.sentinel.transport.dashboard 配置，因错误缩进嵌套在 sa-token: 节下，
+# 实际被解析为 sa-token.cloud.sentinel.* 而从未生效（死键，审计发现）。本部署栈
+# （deploy/docker-compose.yml）不编排 sentinel-dashboard（控制台由 ypbin-starter 的 compose
+# 单独提供，网络不同，sentinel-dashboard:8858 在本栈内不可解析），且 Sentinel 限流由 starter
+# ypbin.cloud.sentinel.enabled（默认开）按本地规则工作、不依赖控制台，故删除该死键块。
+# 日后如需接入控制台：将 spring.cloud.sentinel.transport.dashboard 配置到顶层 spring: 节下，
+# 并确保控制台与本栈处于同一 docker 网络。
+
+# ---------- 微服务身份头（网关签发，下游服务解析）----------
+# starter 的 ypbin.security.identity（IdentityHeaderFilter，解析网关签发的身份头写入
+# IdentityContext）随后续 starter 版本将改为默认关闭（matchIfMissing=false），此处显式开启，
+# 保持 auth/system/ai 各 Servlet 服务既有行为不变；网关为 WebFlux，不装配该过滤器，本键对其无效。
+ypbin:
+  security:
+    identity:
+      enabled: true
+  # ---------- 内部 Feign 调用凭证（/internal/** 服务间调用守卫）----------
+  # 网关鉴权不覆盖 Feign 直连的 /internal/** 端点：system 服务守卫校验 X-Internal-Token 与
+  # 本凭证一致，未配置（缺失/为空）即 fail-closed 拒绝。auth/system/ai 三服务同处本共享配置
+  # （值一致），Feign 侧从同一键读取并写入凭证头；install.sh 导入 Nacos 时替换为
+  # deploy/.env 的 INTERNAL_TOKEN（仓库不提交真实值）。
+  internal:
+    token: ${INTERNAL_TOKEN}

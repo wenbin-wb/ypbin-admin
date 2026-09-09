@@ -2,17 +2,23 @@
 # ============================================================
 # ypbin-admin 微服务版一键部署脚本（零配置，全自动）
 #
-# 用法（新服务器一键安装，Docker 模式）：
+# 用法（GitHub 可直连时）：
 #   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+#
+# 国内服务器（GitHub 不可达，推荐走 Gitee 镜像源一键）：
+#   bash <(curl -fsSL https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh)
+#   仓库源自动探测：默认直连 GitHub（3s 快超时）；不可达自动降级为 Gitee 同名镜像
+#   （gitee.com/wenbin-wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
+#   两者都不可达时按下方 YPBIN_REPO 手工指定镜像/代理前缀后重跑。
 #
 # 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
 #   NO_DOCKER=1 bash deploy/install.sh
 #   注意：无 Docker 模式要求外部已有 Nacos/Redis/MySQL，用环境变量指定地址
 #
 # 阶段总览：
-#   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven）
-#   [2/7] 拉取代码   —— starter（构建到本地 Maven 仓库）+ admin（main 分支）
-#   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.2.1 及新能力）
+#   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven，Maven 走阿里云镜像）
+#   [2/7] 拉取代码   —— starter + admin（main 分支）+ admin-ui（main），源自动探测/降级
+#   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.2.3 及新能力）
 #   [4/7] 构建后端   —— Maven 打包 5 个服务可执行 jar
 #   [5/7] 生成配置   —— .env 凭据 + Nacos 共享配置提示
 #   [6/7] 启动服务   —— Docker: compose up（含基础设施）；NO_DOCKER: java -jar 逐个启动
@@ -22,11 +28,23 @@
 #   -b, --branch <name>            admin 分支（默认 main；也可环境变量 BRANCH=...）
 #   --root <dir>                   部署根目录（默认 /opt/ypbin/<branch>；也可环境变量 YPBIN_ROOT=...）
 #   -y, --yes                      跳过所有交互确认（自动模式）
-#   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
+#   YPBIN_ROOT=/opt/ypbin/main      部署根目录（默认 /opt/ypbin/main，未指定时按分支自动推导隔离目录）
+#   YPBIN_REPO=https://github.com/wenbin-wb   显式仓库前缀（跳过自动探测；可指向 Gitee
+#                                   镜像 gitee.com/wenbin-wb 或 ghproxy 等代理前缀）
+#   GITEE_REPO=https://gitee.com/wenbin-wb    自动降级目标（默认 Gitee 同名镜像）
+#   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
 #   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
 #   REDIS_HOST=localhost REDIS_PORT=6379
+#   REDIS_PASSWORD=                Redis 密码（Docker 模式自动随机生成；NO_DOCKER 用外部 Redis
+#                                  有密码时须传入（导入 Nacos 共享配置用），无认证可留空）
 #   MYSQL_ROOT_PASSWORD=           Docker 模式内建 MySQL 密码（必填）
+#   NACOS_AUTH_TOKEN= NACOS_AUTH_IDENTITY_KEY= NACOS_AUTH_IDENTITY_VALUE=
+#                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
+#                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
+#   INTERNAL_TOKEN=                /internal/** 服务间 Feign 调用凭证（守卫校验，自动随机生成，
+#                                  auth/system/ai 共享一致值，一般无需手传）
+#   REGISTRY_PREFIX=               Docker 镜像加速前缀（如 docker.m.daocloud.io/；留空=官方源）
 #   NO_DOCKER=1                    无 Docker 模式：java -jar 直接启动
 # ============================================================
 
@@ -49,12 +67,23 @@ done
 # 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
 SCRIPT_VERSION="2026.09.08.1"
 SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
+GITEE_SCRIPT_URL="https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh"
+# 脚本源连通探测（3s 快超时）：GitHub raw 不可达时降级 Gitee raw（内容同源）
+resolve_script_url() {
+  if [ -n "${YPBIN_SCRIPT_URL:-}" ]; then printf '%s' "$SCRIPT_URL"; return; fi
+  if curl -fsSI -m 3 -o /dev/null "$SCRIPT_URL" 2>/dev/null; then
+    printf '%s' "$SCRIPT_URL"
+  else
+    warn "GitHub raw 不可达，脚本源降级为 Gitee：${GITEE_SCRIPT_URL}"
+    printf '%s' "$GITEE_SCRIPT_URL"
+  fi
+}
 if [ "$(id -u)" != "0" ]; then
   if command -v sudo >/dev/null 2>&1; then
     SELF="/tmp/ypbin-install.sh"
     if [ ! -f "$SELF" ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" "$SELF" 2>/dev/null; then
       echo "非 root 用户，下载脚本并用 sudo 提权执行..."
-      curl -fsSL -o "$SELF" "$SCRIPT_URL" || { echo "下载脚本失败（网络？）" >&2; exit 1; }
+      curl -fsSL -o "$SELF" "$(resolve_script_url)" || { echo "下载脚本失败（GitHub/Gitee 均不可达，请检查网络或代理）" >&2; exit 1; }
       chmod +x "$SELF"
     fi
     exec sudo -E bash "$SELF" "$@"
@@ -72,12 +101,29 @@ die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 # ---------- 参数解析（支持命令行参数与环境变量） ----------
 BRANCH="${BRANCH:-main}"
 CUSTOM_ROOT="${YPBIN_ROOT:-}"
-REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
 NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
-STARTER_VERSION="2.2.1"
+STARTER_VERSION="2.2.3"
+# 仓库源（GitHub / Gitee 镜像自动探测；显式 YPBIN_REPO 优先）
+REPO_BASE=""
+GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin-wb}"
+GITHUB_REPO="https://github.com/wenbin-wb"
+# 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE，[2/7] 前调用一次
+resolve_repo_base() {
+  [ -n "$REPO_BASE" ] && { echo "$REPO_BASE"; return; }
+  if [ -n "${YPBIN_REPO:-}" ]; then REPO_BASE="$YPBIN_REPO"; echo "$REPO_BASE"; return; fi
+  if curl -fsSI -m 3 -o /dev/null "https://github.com" 2>/dev/null; then
+    REPO_BASE="$GITHUB_REPO"
+  elif curl -fsSI -m 3 -o /dev/null "https://gitee.com" 2>/dev/null; then
+    warn "GitHub 不可达，仓库源自动降级为 Gitee 镜像：${GITEE_REPO}（请在 Gitee 建同名镜像并开启自动同步）"
+    REPO_BASE="$GITEE_REPO"
+  else
+    die "GitHub 与 Gitee 均不可达：请配置代理或显式指定 YPBIN_REPO（如 https://ghproxy.com/https://github.com/wenbin-wb）后重跑"
+  fi
+  echo "$REPO_BASE"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -226,6 +272,8 @@ if [ "${SKIP_PULL:-0}" = "1" ]; then
   info "[2/7] 跳过拉取代码（restart 模式）"
 else
 info "[2/7] 拉取代码"
+REPO_BASE="$(resolve_repo_base)"
+ok "仓库源：$REPO_BASE"
 mkdir -p "$ROOT"
 cd "$ROOT"
 # 仓库可能由不同用户/上次部署创建，root 操作需豁免 dubious ownership
@@ -240,7 +288,26 @@ fi
 pull_repo() { # $1=仓库目录 $2=分支
   local repo="$1" branch="$2"
   cd "$repo"
-  git fetch origin "$branch" 2>/dev/null || die "$repo fetch 失败（检查网络）"
+  if ! git fetch origin "$branch" 2>/dev/null; then
+    # 单源失败自动切换镜像域名后重试（GitHub<->Gitee 同名镜像互换；显式 YPBIN_REPO 时不改 origin）
+    local url repo_name
+    url="$(git remote get-url origin 2>/dev/null || true)"
+    if [ -z "${YPBIN_REPO:-}" ] && [ -n "$url" ]; then
+      # 镜像与官方仓库同名（gitee.com/wenbin-wb/ypbin-*），按 URL 域名判定后拼同名镜像 URL
+      repo_name="$(basename "$repo")"
+      case "$url" in
+        *github.com*)
+          git remote set-url origin "$GITEE_REPO/$repo_name"
+          warn "origin 切换 Gitee 镜像($GITEE_REPO/$repo_name)重试" ;;
+        *gitee.com*)
+          git remote set-url origin "$GITHUB_REPO/$repo_name"
+          warn "origin 切换 GitHub($GITHUB_REPO/$repo_name)重试" ;;
+        *) : ;;
+      esac
+      if git fetch origin "$branch" 2>/dev/null; then return 0; fi
+    fi
+    die "$repo fetch 失败（GitHub/Gitee 均不可达，请检查网络或指定 YPBIN_REPO 代理）"
+  fi
   if git merge-base --is-ancestor "origin/$branch" HEAD 2>/dev/null; then
     git checkout "$branch" 2>/dev/null && git merge --ff-only "origin/$branch" 2>/dev/null \
       || git reset --hard "origin/$branch"
@@ -311,13 +378,48 @@ fi
 # ---------- [5/7] 生成配置 ----------
 info "[5/7] 生成 .env 配置"
 ENV_FILE="$ROOT/ypbin-admin/deploy/.env"
+
+# 安全随机凭据生成（Nacos JWT 密钥要求 Base64 解码 ≥32 字节；hex 与 base64 字符集对 sed/compose 均安全）
+rand_b64_48() { # Base64（解码 48 字节）
+  local v
+  v="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
+  [ -n "$v" ] || v="$(head -c 48 /dev/urandom | base64 2>/dev/null | tr -d '\n')"
+  [ -n "$v" ] || die "无法生成随机凭据（缺 openssl/base64），请手工 export NACOS_AUTH_TOKEN 后重跑"
+  printf '%s' "$v"
+}
+rand_hex() { # $1=字节数，输出 2 倍长度小写十六进制
+  local v
+  v="$(openssl rand -hex "$1" 2>/dev/null)"
+  [ -n "$v" ] || v="$(head -c "$1" /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  [ -n "$v" ] || die "无法生成随机凭据（缺 openssl/od），请手工 export 对应变量后重跑"
+  printf '%s' "$v"
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
   AI_MODEL_SECRET_KEY="${AI_MODEL_SECRET_KEY:-YpbinAiKey2026_32bytes!!}"
+  # Nacos 服务端鉴权凭据：token 与身份标识值随机生成，避免固定默认值入库
+  NACOS_AUTH_TOKEN="${NACOS_AUTH_TOKEN:-$(rand_b64_48)}"
+  NACOS_AUTH_IDENTITY_KEY="${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}"
+  NACOS_AUTH_IDENTITY_VALUE="${NACOS_AUTH_IDENTITY_VALUE:-$(rand_hex 32)}"
+  # 内部 Feign 调用凭证（/internal/** 守卫，auth/system/ai 共享一致值），随机生成
+  INTERNAL_TOKEN="${INTERNAL_TOKEN:-$(rand_hex 32)}"
+  # Redis：Docker 模式随机密码（与 compose requirepass / Nacos 共享配置一致）；
+  # NO_DOCKER 用外部 Redis，默认留空=不认证（导入 Nacos 时删 password 行），有密码时以 REDIS_PASSWORD=xxx 传入
+  if [ "$NO_DOCKER" = "1" ]; then
+    REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+  else
+    REDIS_PASSWORD="${REDIS_PASSWORD:-$(rand_hex 16)}"
+  fi
   cat > "$ENV_FILE" <<EOF
 # 由 install.sh 生成
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
+NACOS_AUTH_TOKEN=$NACOS_AUTH_TOKEN
+NACOS_AUTH_IDENTITY_KEY=$NACOS_AUTH_IDENTITY_KEY
+NACOS_AUTH_IDENTITY_VALUE=$NACOS_AUTH_IDENTITY_VALUE
+INTERNAL_TOKEN=$INTERNAL_TOKEN
+REDIS_PASSWORD=$REDIS_PASSWORD
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
 ADMIN_UI_PORT=$ADMIN_UI_PORT
@@ -332,6 +434,27 @@ else
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
+fi
+
+# 向后兼容：旧 .env 缺新增凭据键时补生成（幂等；避免 compose :? 强制校验失败）
+env_key_backfill() { # $1=键名 $2=取值命令（仅缺键时才执行，命令为内部固定串）
+  local key="$1" val
+  if ! grep -q "^${key}=" "$ENV_FILE"; then
+    val="$(eval "$2")"
+    printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    export "$key=$val"
+    warn "已为旧 .env 补生成 ${key}"
+  fi
+}
+env_key_backfill NACOS_AUTH_TOKEN 'rand_b64_48'
+env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
+env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
+env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
+if [ "$NO_DOCKER" = "1" ]; then
+  env_key_backfill REDIS_PASSWORD 'printf ""'
+else
+  env_key_backfill REDIS_PASSWORD 'rand_hex 16'
 fi
 
 # ---------- [5.5/7] 启动基础设施并初始化（Nacos 配置 + MySQL 库表）----------
@@ -377,10 +500,23 @@ if [ -n "$NACOS_TOKEN" ]; then
   NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
   for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-miniapp; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
-      # 占位符替换：仓库 nacos yaml 不提交真实密码，导入前用 .env 实际值填充
-      # （目前仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}）
+      # 占位符替换：仓库 nacos yaml 不提交真实密码/凭证，导入前用 .env 实际值填充
+      # （仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}/${REDIS_PASSWORD}/${INTERNAL_TOKEN}；
+      #   替换键名与 yaml 占位符完全一致）
       TMP_CFG="/tmp/nacos-${cfg}.yaml"
-      sed "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
+      if [ -n "${REDIS_PASSWORD:-}" ]; then
+        sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+            -e "s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
+            -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
+            "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
+      else
+        # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码；
+        # INTERNAL_TOKEN 仍无条件替换（缺失/为空时 system 守卫 fail-closed，见 ypbin.internal.token 注释）
+        sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+            -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
+            -e "/password: \${REDIS_PASSWORD}/d" \
+            "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
+      fi
       curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
         -H "accessToken: $NACOS_TOKEN" \
         --data-urlencode "dataId=$cfg.yaml" \

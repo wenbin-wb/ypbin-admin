@@ -16,12 +16,14 @@ import cn.ypbin.admin.system.entity.SysRole;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserPost;
 import cn.ypbin.admin.system.entity.SysUserRole;
+import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
+import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
@@ -70,6 +72,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
+    private final SysUserSocialMapper userSocialMapper;
     private final SysRoleMapper roleMapper;
     private final SysPostMapper postMapper;
     private final OnlineUserService onlineUserService;
@@ -176,6 +179,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
+        // 防幽灵：同手机号的已删历史用户若残留旧缓存，不清则新用户可能读到旧快照
+        SysCache.evictUserByPhone(phone);
     }
 
     @Override
@@ -241,6 +246,13 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (!updated) {
             throw new BusinessException("用户状态更新失败");
         }
+        // 清 username/phone 快照缓存（id 键由 @CacheEvict 清），避免启用/禁用后旧状态快照残留
+        // 导致登录仍命中旧状态；禁用时强制下线既有会话
+        SysCache.evictUser(user.getId(), user.getUsername());
+        SysCache.evictUserByPhone(user.getPhone());
+        if (UserStatusEnum.DISABLED.getCode().equals(status)) {
+            onlineUserService.kickoutByUserId(user.getId());
+        }
     }
 
     @Override
@@ -248,7 +260,10 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Transactional(rollbackFor = Exception.class)
     @CacheEvict(keys = {"'sys:user:id:' + #id"})
     public void deleteUser(Long id) {
-        getManageableUser(id);
+        SysUser existing = getManageableUser(id);
+        // 删除前取回第三方绑定（手机号随后置空，旧号缓存须用删除前值清理）
+        List<SysUserSocial> socials = userSocialMapper.selectList(
+            new LambdaQueryWrapper<SysUserSocial>().eq(SysUserSocial::getUserId, id));
         boolean phoneCleared = update(new LambdaUpdateWrapper<SysUser>()
             .eq(SysUser::getId, id)
             .set(SysUser::getPhone, null));
@@ -257,6 +272,17 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
+        // 清理第三方绑定行与绑定缓存（防 openId 永久占用、社交登录读到已删用户）
+        userSocialMapper.delete(new LambdaQueryWrapper<SysUserSocial>()
+            .eq(SysUserSocial::getUserId, id));
+        for (SysUserSocial social : socials) {
+            SysCache.evictSocialBinding(id, social.getPlatform(), social.getOpenId());
+        }
+        // 清理 username/phone/role/perm 永久缓存键并强制下线，防幽灵身份与旧角色残留
+        SysCache.evictUser(existing.getId(), existing.getUsername());
+        SysCache.evictUserByPhone(existing.getPhone());
+        SysCache.evictUserAuth(id);
+        onlineUserService.kickoutByUserId(id);
     }
 
     @Override
@@ -277,6 +303,10 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         update.setPwdResetTime(LocalDateTime.now());
         updateById(update);
         accountSupport.recordPasswordHistory(id, encoded);
+        // 改密后清用户快照缓存并强制下线既有会话，要求重新登录（防旧口令会话长期有效）
+        SysCache.evictUser(id, user.getUsername());
+        SysCache.evictUserByPhone(user.getPhone());
+        onlineUserService.kickoutByUserId(id);
     }
 
     @Override

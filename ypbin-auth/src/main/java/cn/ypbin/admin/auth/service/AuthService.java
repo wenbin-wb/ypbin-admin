@@ -11,6 +11,7 @@ package cn.ypbin.admin.auth.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.auth.dto.LoginReq;
+import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
@@ -18,6 +19,7 @@ import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
+import cn.ypbin.starter.captcha.core.CaptchaService;
 import cn.ypbin.starter.cloud.feign.support.FeignResponses;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
@@ -26,6 +28,7 @@ import java.util.Objects;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
+import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -45,13 +48,26 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthService {
 
+    /** 登录行为验证码开关参数键 */
+    private static final String KEY_LOGIN_CAPTCHA_ENABLED = "LOGIN_CAPTCHA_ENABLED";
+
     private final ISystemClient permissionFeignClient;
     private final LoginSupport loginSupport;
+    private final AuthConfigReader configReader;
+    private final CaptchaService captchaService;
+    private final PasswordAttemptLimiter attemptLimiter;
 
     /**
      * 账号密码登录。
      */
     public LoginResp login(LoginReq req, String ip) {
+        // 开关开启时强制行为验证码（一次性消费，校验失败即拒绝），防脚本爆破
+        if (configReader.getBoolean(KEY_LOGIN_CAPTCHA_ENABLED, false)) {
+            requireCaptchaPassed(req);
+        }
+        // 账号维度错误尝试锁定（与手机验证码入口一致：账号 + IP 维度）
+        attemptLimiter.checkLocked(req.getUsername(), ip);
+
         SysUser user = SysCache.getUserByUsername(req.getUsername());
         if (user == null || (req.getTenantId() != null
             && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
@@ -59,13 +75,33 @@ public class AuthService {
         }
         // 密码不入缓存（安全），校验走 system 直查库比对
         R<Boolean> verifyResp = permissionFeignClient.verifyPassword(user.getId(), req.getPassword());
-        if (verifyResp == null || !verifyResp.isSuccess() || !Boolean.TRUE.equals(verifyResp.getData())) {
+        boolean passwordOk = verifyResp != null && verifyResp.isSuccess()
+            && Boolean.TRUE.equals(verifyResp.getData());
+        if (!passwordOk) {
+            attemptLimiter.recordFailure(req.getUsername(), ip);
             throw new BusinessException("用户名或密码错误");
         }
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
+        attemptLimiter.reset(req.getUsername(), ip);
         return loginSupport.completeLogin(user, "ACCOUNT");
+    }
+
+    /**
+     * 强制校验登录请求携带的行为验证码（开关开启时调用）。
+     *
+     * @param req 登录请求
+     */
+    private void requireCaptchaPassed(LoginReq req) {
+        if (req.getCaptchaId() == null || req.getCaptchaId().isBlank()
+            || req.getCaptchaTrack() == null) {
+            throw new BusinessException("请先完成行为验证码");
+        }
+        boolean ok = captchaService.verify(req.getCaptchaId(), req.getCaptchaTrack());
+        if (!ok) {
+            throw new BusinessException("验证码校验失败，请重试");
+        }
     }
 
     /**

@@ -37,11 +37,15 @@
 **方式一：一键脚本**（自动完成环境检查→拉取 starter/admin→构建 starter→打包 5 服务→启动→健康检查）：
 
 ```bash
-# Docker 模式（部署指定分支，例如 feature/miniapp-backend）
+# Docker 模式（生产服务器，含 Nacos/Redis/MySQL 基础设施）
+# GitHub 可直连时（默认部署 main 分支；加 -b 可指定分支，如 -b feature/miniapp-backend）：
 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -b feature/miniapp-backend
 
-# 默认部署 main 分支（静默免确认）
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -y
+# 国内服务器（GitHub 不可达，自动降级 Gitee 同名镜像，需先在 Gitee 建 ypbin-* 三镜像并开启自动同步）：
+bash <(curl -fsSL https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh) -b feature/miniapp-backend
+
+# 仓库源策略：默认探测 GitHub（3s 快超时）→ 不可达切 Gitee → 均不可达请显式指定
+# YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；拉基础镜像困难时可加 REGISTRY_PREFIX=docker.m.daocloud.io/
 
 # 无 Docker 模式（本机/轻量服务器，java -jar 直接启动；需外部 Nacos/Redis/MySQL）
 NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD=xxx \

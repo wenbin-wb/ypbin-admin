@@ -38,11 +38,18 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
 
     @Override
     public List<AiPromptTemplateResp> listTemplates() {
+        return listTemplates(null);
+    }
+
+    @Override
+    public List<AiPromptTemplateResp> listTemplates(Integer status) {
         Long tenantId = currentTenantId();
+        // 状态：null=仅启用（与历史行为一致），0/1 精确过滤供管理端找回已停用模板
+        Integer filterStatus = status == null ? EntityStatus.ENABLED.getCode() : status;
         return templateMapper.selectList(
             new LambdaQueryWrapper<AiPromptTemplate>()
                 .eq(AiPromptTemplate::getTenantId, tenantId)
-                .eq(AiPromptTemplate::getStatus, EntityStatus.ENABLED.getCode())
+                .eq(AiPromptTemplate::getStatus, filterStatus)
                 .orderByDesc(AiPromptTemplate::getCreateTime))
             .stream().map(this::toResp).toList();
     }

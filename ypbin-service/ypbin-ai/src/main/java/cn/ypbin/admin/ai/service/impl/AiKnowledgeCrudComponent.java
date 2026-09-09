@@ -35,9 +35,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -295,12 +298,51 @@ public class AiKnowledgeCrudComponent {
         return resp;
     }
 
+    /**
+     * 校验知识库存在且归属当前租户（防跨租户访问）。
+     *
+     * @param id 知识库 ID
+     * @return 知识库实体
+     */
     public AiKnowledgeBase requireKb(Long id) {
+        if (id == null) {
+            throw new BusinessException("知识库 ID 不能为空");
+        }
         AiKnowledgeBase kb = kbMapper.selectById(id);
         if (kb == null) {
             throw new BusinessException("知识库不存在");
         }
+        Long tenantId = currentTenantId();
+        if (!tenantId.equals(kb.getTenantId())) {
+            throw new BusinessException("无权访问该知识库");
+        }
         return kb;
+    }
+
+    /**
+     * 批量校验多个知识库均存在且归属当前租户（一次 SQL 批量查询，禁逐项循环查库）。
+     * 任一项不存在或跨租户即整体拒绝。
+     *
+     * @param ids 知识库 ID 集合
+     */
+    public void requireKbs(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BusinessException("知识库 ID 不能为空");
+        }
+        Set<Long> distinctIds = new HashSet<>(ids);
+        if (distinctIds.contains(null)) {
+            throw new BusinessException("知识库 ID 不能为空");
+        }
+        List<AiKnowledgeBase> kbs = kbMapper.selectBatchIds(distinctIds);
+        if (kbs.size() != distinctIds.size()) {
+            throw new BusinessException("知识库不存在");
+        }
+        Long tenantId = currentTenantId();
+        boolean crossTenant = kbs.stream()
+            .anyMatch(kb -> !tenantId.equals(kb.getTenantId()));
+        if (crossTenant) {
+            throw new BusinessException("无权访问该知识库");
+        }
     }
 
     public AiDocument requireDoc(Long knowledgeBaseId, Long docId) {

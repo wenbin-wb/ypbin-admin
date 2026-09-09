@@ -145,6 +145,8 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         if (!updateById(config)) {
             throw new BusinessException("参数更新失败");
         }
+        // 键可被修改：旧键的 Redis 缓存须一并清除（新键由 @CacheEvict 清），防读侧取旧值
+        SysCache.evictConfig(existing.getConfigKey());
         publishConfigChanged(existing.getConfigGroup(), req.getConfigGroup());
     }
 
@@ -194,6 +196,8 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             if (!updateById(config)) {
                 throw new BusinessException("参数更新失败：" + config.getConfigKey());
             }
+            // 每个变更键逐个失效 Redis 缓存（auth 等跨服务读取经 SysCache），防开关/密钥变更不生效
+            SysCache.evictConfig(config.getConfigKey());
         }
         publishConfigChanged(configGroup);
     }

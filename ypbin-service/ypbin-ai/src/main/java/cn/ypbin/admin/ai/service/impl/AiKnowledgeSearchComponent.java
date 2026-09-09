@@ -57,6 +57,8 @@ public class AiKnowledgeSearchComponent {
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
     public String query(Long knowledgeBaseId, String question) {
+        // 检索前校验知识库归属（防跨租户知识库内容泄露）
+        requireKb(knowledgeBaseId);
         AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
         if (aiChatService == null) {
             throw new BusinessException("AI 对话服务未配置，请在【AI 配置】中添加对话模型");
@@ -104,6 +106,8 @@ public class AiKnowledgeSearchComponent {
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
             return List.of();
         }
+        // 批量校验全部知识库归属（任一跨租户/不存在即整体拒绝），防多库联合检索泄露他租户原文
+        crudComponent.requireKbs(knowledgeBaseIds);
         recordQuery(knowledgeBaseIds.get(0), question, "MULTIPLE");
         List<String> kbIds = knowledgeBaseIds.stream().map(String::valueOf).toList();
         return execSearch(() -> ragService.searchMultiple(kbIds, question, topKPerKb, 10)

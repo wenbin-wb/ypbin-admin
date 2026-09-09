@@ -27,6 +27,7 @@ import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -52,6 +53,8 @@ public class NoticePublishServiceImpl implements NoticePublishService {
     private static final int MAX_RETRIES = 3;
     private static final int ERROR_MAX_LENGTH = 1000;
     private static final int BATCH_SIZE = 100;
+    /** 单次批量插入的投递记录条数上限，防止单条多值 INSERT 过长触发包体限制 */
+    private static final int INSERT_BATCH_SIZE = 1000;
     private static final Set<String> CHANNELS = Set.of("site", "email", "sms");
 
     /** 投递状态：待投递 */
@@ -87,9 +90,12 @@ public class NoticePublishServiceImpl implements NoticePublishService {
             throw new BusinessException("公告没有可投递的目标用户");
         }
         LocalDateTime now = LocalDateTime.now();
+        // 全体公告的目标用户×通道可达数万条，先在内存组装后分块批量插入，避免事务内逐条 insert
+        List<SysNoticeDelivery> deliveries = new ArrayList<>(targets.size() * channels.size());
         for (SysUser user : targets) {
             for (String channel : channels) {
                 SysNoticeDelivery delivery = new SysNoticeDelivery();
+                delivery.setId(IdWorker.getId());
                 delivery.setTenantId(notice.getTenantId());
                 delivery.setNoticeId(notice.getId());
                 delivery.setPublishVersion(publishVersion);
@@ -101,8 +107,21 @@ public class NoticePublishServiceImpl implements NoticePublishService {
                 delivery.setNextRetryTime(now);
                 delivery.setCreateTime(now);
                 delivery.setUpdateTime(now);
-                deliveryMapper.insert(delivery);
+                deliveries.add(delivery);
             }
+        }
+        insertInBatches(deliveries);
+    }
+
+    /**
+     * 按固定批次调用批量插入，整体仍处于发布事务内，事务边界不变。
+     *
+     * @param deliveries 投递记录列表（非空）
+     */
+    private void insertInBatches(List<SysNoticeDelivery> deliveries) {
+        for (int fromIndex = 0; fromIndex < deliveries.size(); fromIndex += INSERT_BATCH_SIZE) {
+            int toIndex = Math.min(fromIndex + INSERT_BATCH_SIZE, deliveries.size());
+            deliveryMapper.insertBatch(deliveries.subList(fromIndex, toIndex));
         }
     }
 

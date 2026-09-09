@@ -58,10 +58,17 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     @Override
     public List<AiModelConfigResp> listModels(String modelType) {
+        return listModels(modelType, null);
+    }
+
+    @Override
+    public List<AiModelConfigResp> listModels(String modelType, Integer status) {
         Long tenantId = currentTenantId();
+        // 状态：null=仅启用（与历史行为一致），0/1 精确过滤供管理端找回已停用模型
+        Integer filterStatus = status == null ? EntityStatus.ENABLED.getCode() : status;
         LambdaQueryWrapper<AiModelConfig> wrapper = new LambdaQueryWrapper<AiModelConfig>()
             .eq(AiModelConfig::getTenantId, tenantId)
-            .eq(AiModelConfig::getStatus, EntityStatus.ENABLED.getCode());
+            .eq(AiModelConfig::getStatus, filterStatus);
         if (modelType != null && !modelType.isBlank()) {
             wrapper.eq(AiModelConfig::getModelType, modelType);
         }

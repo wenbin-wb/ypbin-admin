@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
+import cn.ypbin.admin.system.api.feign.config.InternalTokenFeignConfiguration;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
@@ -32,7 +33,9 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author wenbin
  * @since 2026-09-01
  */
-@FeignClient(name = "ypbin-system", path = "/internal", fallback = ISystemClientFallback.class)
+@FeignClient(name = "ypbin-system", path = "/internal",
+    configuration = InternalTokenFeignConfiguration.class,
+    fallback = ISystemClientFallback.class)
 public interface ISystemClient {
 
     /**
