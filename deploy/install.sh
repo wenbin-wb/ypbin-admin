@@ -25,7 +25,12 @@
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
 #   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
 #   REDIS_HOST=localhost REDIS_PORT=6379
+#   REDIS_PASSWORD=                Redis 密码（Docker 模式自动随机生成；NO_DOCKER 用外部 Redis
+#                                  有密码时须传入（导入 Nacos 共享配置用），无认证可留空）
 #   MYSQL_ROOT_PASSWORD=           Docker 模式内建 MySQL 密码（必填）
+#   NACOS_AUTH_TOKEN= NACOS_AUTH_IDENTITY_KEY= NACOS_AUTH_IDENTITY_VALUE=
+#                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
+#                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
 #   NO_DOCKER=1                    无 Docker 模式：java -jar 直接启动
 # ============================================================
 
@@ -264,13 +269,45 @@ fi
 # ---------- [5/7] 生成配置 ----------
 info "[5/7] 生成 .env 配置"
 ENV_FILE="$ROOT/ypbin-admin/deploy/.env"
+
+# 安全随机凭据生成（Nacos JWT 密钥要求 Base64 解码 ≥32 字节；hex 与 base64 字符集对 sed/compose 均安全）
+rand_b64_48() { # Base64（解码 48 字节）
+  local v
+  v="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
+  [ -n "$v" ] || v="$(head -c 48 /dev/urandom | base64 2>/dev/null | tr -d '\n')"
+  [ -n "$v" ] || die "无法生成随机凭据（缺 openssl/base64），请手工 export NACOS_AUTH_TOKEN 后重跑"
+  printf '%s' "$v"
+}
+rand_hex() { # $1=字节数，输出 2 倍长度小写十六进制
+  local v
+  v="$(openssl rand -hex "$1" 2>/dev/null)"
+  [ -n "$v" ] || v="$(head -c "$1" /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  [ -n "$v" ] || die "无法生成随机凭据（缺 openssl/od），请手工 export 对应变量后重跑"
+  printf '%s' "$v"
+}
+
 if [ ! -f "$ENV_FILE" ]; then
   MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
   AI_MODEL_SECRET_KEY="${AI_MODEL_SECRET_KEY:-YpbinAiKey2026_32bytes!!}"
+  # Nacos 服务端鉴权凭据：token 与身份标识值随机生成，避免固定默认值入库
+  NACOS_AUTH_TOKEN="${NACOS_AUTH_TOKEN:-$(rand_b64_48)}"
+  NACOS_AUTH_IDENTITY_KEY="${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}"
+  NACOS_AUTH_IDENTITY_VALUE="${NACOS_AUTH_IDENTITY_VALUE:-$(rand_hex 32)}"
+  # Redis：Docker 模式随机密码（与 compose requirepass / Nacos 共享配置一致）；
+  # NO_DOCKER 用外部 Redis，默认留空=不认证（导入 Nacos 时删 password 行），有密码时以 REDIS_PASSWORD=xxx 传入
+  if [ "$NO_DOCKER" = "1" ]; then
+    REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+  else
+    REDIS_PASSWORD="${REDIS_PASSWORD:-$(rand_hex 16)}"
+  fi
   cat > "$ENV_FILE" <<EOF
 # 由 install.sh 生成
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
+NACOS_AUTH_TOKEN=$NACOS_AUTH_TOKEN
+NACOS_AUTH_IDENTITY_KEY=$NACOS_AUTH_IDENTITY_KEY
+NACOS_AUTH_IDENTITY_VALUE=$NACOS_AUTH_IDENTITY_VALUE
+REDIS_PASSWORD=$REDIS_PASSWORD
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
 ADMIN_UI_PORT=$ADMIN_UI_PORT
@@ -285,6 +322,26 @@ else
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
+fi
+
+# 向后兼容：旧 .env 缺新增凭据键时补生成（幂等；避免 compose :? 强制校验失败）
+env_key_backfill() { # $1=键名 $2=取值命令（仅缺键时才执行，命令为内部固定串）
+  local key="$1" val
+  if ! grep -q "^${key}=" "$ENV_FILE"; then
+    val="$(eval "$2")"
+    printf '%s=%s\n' "$key" "$val" >> "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    export "$key=$val"
+    warn "已为旧 .env 补生成 ${key}"
+  fi
+}
+env_key_backfill NACOS_AUTH_TOKEN 'rand_b64_48'
+env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
+env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
+if [ "$NO_DOCKER" = "1" ]; then
+  env_key_backfill REDIS_PASSWORD 'printf ""'
+else
+  env_key_backfill REDIS_PASSWORD 'rand_hex 16'
 fi
 
 # ---------- [5.5/7] 启动基础设施并初始化（Nacos 配置 + MySQL 库表）----------
@@ -331,9 +388,18 @@ if [ -n "$NACOS_TOKEN" ]; then
   for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
       # 占位符替换：仓库 nacos yaml 不提交真实密码，导入前用 .env 实际值填充
-      # （目前仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}）
+      # （仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}/${REDIS_PASSWORD}；替换键名与 yaml 占位符完全一致）
       TMP_CFG="/tmp/nacos-${cfg}.yaml"
-      sed "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
+      if [ -n "${REDIS_PASSWORD:-}" ]; then
+        sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+            -e "s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
+            "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
+      else
+        # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码
+        sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+            -e "/password: \${REDIS_PASSWORD}/d" \
+            "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
+      fi
       curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
         -H "accessToken: $NACOS_TOKEN" \
         --data-urlencode "dataId=$cfg.yaml" \

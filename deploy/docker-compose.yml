@@ -18,9 +18,11 @@ services:
     environment:
       MODE: standalone
       PREFER_HOST_MODE: hostname
-      NACOS_AUTH_TOKEN: V6km96ahL8f9qnJAsjXdwKcFedfH85D+U4LzKmzz9z8kn5yb4sp7HMmt0a91rTKW
-      NACOS_AUTH_IDENTITY_KEY: serverIdentity
-      NACOS_AUTH_IDENTITY_VALUE: security
+      # Nacos 鉴权凭据一律来自 deploy/.env（install.sh 自动生成随机值，禁止硬编码入库；
+      # NACOS_AUTH_TOKEN 需为 Base64 且解码后 ≥32 字节，缺失时 compose 直接报错）
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?请在deploy/.env设置NACOS_AUTH_TOKEN}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?请在deploy/.env设置NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?请在deploy/.env设置NACOS_AUTH_IDENTITY_VALUE}
     ports:
       - "8848:8848"
       - "9848:9848"
@@ -40,13 +42,15 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ypbin-redis
-    command: ["redis-server", "--appendonly", "yes"]
+    # 开启持久化并强制 requirepass（密码来自 .env，与 Nacos 共享配置 spring.data.redis.password 一致）
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    # 仅绑定本机回环：容器间经 compose 网络互访，无需对宿主机全网卡暴露
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - ypbin-redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
