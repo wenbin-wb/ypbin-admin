@@ -85,6 +85,43 @@ ok()   { echo -e "\033[32m✓  $*\033[0m"; }
 warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
+# —— 国内服务器 APT/Docker 源自愈（Ubuntu/Debian）——
+# 检测官方国外源并备份切换为阿里镜像（sources.list 旧格式 + .sources deb822 均处理）；
+# 随后为 docker-compose-plugin 配置阿里 docker-ce 源。备份保留在 /etc/apt/*.bak*，失败不覆盖原配置。
+apt_docker_ce_selfheal() {
+  [ -f /etc/os-release ] || return 1
+  local distro codename id
+  id="$(. /etc/os-release && echo "$ID")"
+  case "$id" in ubuntu|debian) ;; *) return 1 ;; esac
+  codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+  # 1) 备份并切换官方源 -> 阿里镜像（仅当确实指向官方国外域名且备份不存在时）
+  local changed=0
+  if [ -f /etc/apt/sources.list ] && grep -qE '(archive\.ubuntu\.com|security\.ubuntu\.com|deb\.debian\.org)' /etc/apt/sources.list; then
+    cp -a /etc/apt/sources.list "/etc/apt/sources.list.bak.ypbin" 2>/dev/null || true
+    sed -i -E 's|(https?://)archive\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)security\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)deb\.debian\.org|\1mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null && changed=1
+  fi
+  for f in /etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] || continue
+    if grep -qE '(archive\.ubuntu\.com|security\.ubuntu\.com|deb\.debian\.org)' "$f"; then
+      cp -a "$f" "$f.bak.ypbin" 2>/dev/null || true
+      sed -i -E 's|(https?://)archive\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)security\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)deb\.debian\.org|\1mirrors.aliyun.com|g' "$f" 2>/dev/null && changed=1
+    fi
+  done
+  [ "$changed" = "1" ] && { warn "系统 APT 源已切换阿里镜像（原文件备份 .bak.ypbin）"; apt-get update -y >/dev/null 2>&1 || true; }
+  # 2) 配置阿里 docker-ce 源（compose 插件所在），再装
+  if ! docker compose version >/dev/null 2>&1; then
+    if [ ! -f /etc/apt/keyrings/docker.asc ]; then
+      install -m 0755 -d /etc/apt/keyrings 2>/dev/null || true
+      curl -fsSL "https://mirrors.aliyun.com/docker-ce/linux/${id}/gpg" 2>/dev/null | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null && {
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/${id} ${codename} stable" > /etc/apt/sources.list.d/docker.list 2>/dev/null || true
+        apt-get update -y >/dev/null 2>&1 || true
+      }
+    fi
+    apt-get install -y docker-compose-plugin >/dev/null 2>&1 || apt-get install -y docker-compose-v2 >/dev/null 2>&1 || return 1
+  fi
+  docker compose version >/dev/null 2>&1
+}
+
 # 从 admin pom 提取 ypbin-starter.version（形如 <ypbin-starter.version>2.2.3</...>）
 starter_version_from_pom() {
   local pom="$1"
@@ -197,7 +234,10 @@ if [ "$NO_DOCKER" = "0" ]; then
     warn "Docker Compose 插件缺失，尝试自动安装 docker-compose-plugin ..."
     apt-get update -y >/dev/null 2>&1 || true
     if ! apt-get install -y docker-compose-plugin >/dev/null 2>&1 && ! apt-get install -y docker-compose-v2 >/dev/null 2>&1; then
-      die "Docker Compose 插件安装失败：请手动执行 apt-get update && apt-get install -y docker-compose-plugin 后重跑"
+      warn "常规安装失败，尝试国内 APT/Docker 源自愈（官方国外源在国内常不可达）..."
+      if ! apt_docker_ce_selfheal; then
+        die "Docker Compose 插件安装失败：国内服务器请先切换 APT 源为国内镜像并配置 docker-ce 源后重跑（详见 README 国内部署说明）"
+      fi
     fi
     docker compose version >/dev/null 2>&1 || die "Docker Compose 插件安装后仍不可用，请检查 docker 服务后重跑"
   fi
