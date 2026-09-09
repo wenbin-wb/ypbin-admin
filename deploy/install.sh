@@ -6,9 +6,9 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 #
 # 国内服务器（GitHub 不可达，推荐走 Gitee 镜像源一键）：
-#   bash <(curl -fsSL https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh)
+#   bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
 #   仓库源自动探测：默认直连 GitHub（3s 快超时）；不可达自动降级为 Gitee 同名镜像
-#   （gitee.com/wenbin-wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
+#   （gitee.com/wenbin_wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
 #   两者都不可达时按下方 YPBIN_REPO 手工指定镜像/代理前缀后重跑。
 #
 # 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
@@ -27,8 +27,8 @@
 # 自定义参数（环境变量覆盖）：
 #   YPBIN_ROOT=/opt/ypbin/main      部署根目录（默认 /opt/ypbin/main）
 #   YPBIN_REPO=https://github.com/wenbin-wb   显式仓库前缀（跳过自动探测；可指向 Gitee
-#                                   镜像 gitee.com/wenbin-wb 或 ghproxy 等代理前缀）
-#   GITEE_REPO=https://gitee.com/wenbin-wb    自动降级目标（默认 Gitee 同名镜像）
+#                                   镜像 gitee.com/wenbin_wb 或 ghproxy 等代理前缀）
+#   GITEE_REPO=https://gitee.com/wenbin_wb    自动降级目标（默认 Gitee 同名镜像）
 #   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
 #   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
@@ -54,7 +54,7 @@ trap 'echo "!! 脚本执行失败于第 ${LINENO} 行"' ERR
 # 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
 SCRIPT_VERSION="2026.09.01.1"
 SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
-GITEE_SCRIPT_URL="https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh"
+GITEE_SCRIPT_URL="https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh"
 # 脚本源连通探测（3s 快超时）：GitHub raw 不可达时降级 Gitee raw（内容同源）
 resolve_script_url() {
   if [ -n "${YPBIN_SCRIPT_URL:-}" ]; then printf '%s' "$SCRIPT_URL"; return; fi
@@ -85,6 +85,13 @@ ok()   { echo -e "\033[32m✓  $*\033[0m"; }
 warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
+# 从 admin pom 提取 ypbin-starter.version（形如 <ypbin-starter.version>2.2.3</...>）
+starter_version_from_pom() {
+  local pom="$1"
+  [ -f "$pom" ] || return 1
+  sed -n 's/.*<ypbin-starter.version>\([^<]*\)<\/ypbin-starter.version>.*/\1/p' "$pom" | head -1
+}
+
 # ---------- 参数 ----------
 # 默认独立目录（与单体版 /opt/ypbin/boot 分开，避免代码互相覆盖/分支冲突，两版本可共存）
 ROOT="${YPBIN_ROOT:-/opt/ypbin/main}"
@@ -94,10 +101,12 @@ ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
 ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
-STARTER_VERSION="2.2.3"
+# starter 版本：从 admin 仓库 pom 的 ypbin-starter.version 自动解析（唯一事实源，
+# 与 CI dispatch 自动升级保持一致），无需手工同步；目录未就绪时留空，由 [3/7] 构建前解析。
+STARTER_VERSION="${STARTER_VERSION:-}"
 # 仓库源（GitHub / Gitee 镜像自动探测；显式 YPBIN_REPO 优先）
 REPO_BASE=""
-GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin-wb}"
+GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin_wb}"
 GITHUB_REPO="https://github.com/wenbin-wb"
 # 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE，[2/7] 前调用一次
 resolve_repo_base() {
@@ -244,7 +253,7 @@ pull_repo() { # $1=仓库目录 $2=分支
     local url repo_name
     url="$(git remote get-url origin 2>/dev/null || true)"
     if [ -z "${YPBIN_REPO:-}" ] && [ -n "$url" ]; then
-      # 镜像与官方仓库同名（gitee.com/wenbin-wb/ypbin-*），按 URL 域名判定后拼同名镜像 URL
+      # 镜像与官方仓库同名（gitee.com/wenbin_wb/ypbin-*），按 URL 域名判定后拼同名镜像 URL
       repo_name="$(basename "$repo")"
       case "$url" in
         *github.com*)
@@ -278,10 +287,18 @@ ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD
 fi
 
 # ---------- [3/7] 构建 starter ----------
+# 版本自动解析：优先环境变量，其次 admin pom（与仓库依赖一致，升级自动跟随）
+if [ -z "$STARTER_VERSION" ]; then
+  STARTER_VERSION="$(starter_version_from_pom "$ROOT/ypbin-admin/pom.xml" || true)"
+fi
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
   info "[3/7] 跳过构建（restart 模式）"
 else
+if [ -n "$STARTER_VERSION" ]; then
 info "[3/7] 构建 starter $STARTER_VERSION（微服务依赖其新能力）"
+else
+info "[3/7] 构建 starter（版本自动从 admin pom 解析，未取到将强制构建）"
+fi
 # 交互询问是否重构建 starter（对齐单体；-y 或已有构建产物时可选跳过）
 if [ "$ASSUME_YES" != "1" ]; then
   if ! confirm "重新构建 starter（最新代码，约 3-6 分钟）？选 n 则用 .m2 已有包"; then
@@ -297,9 +314,11 @@ if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
   fi
   ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
 else
-  # 确认本地仓库有 2.2.1（没有则强制构建）
-  if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.2.1" ]; then
-    warn "本地 Maven 仓库无 starter 2.2.1，强制构建"
+  # 确认本地仓库已有解析出的 starter 版本（没有则强制构建）
+  if [ -n "$STARTER_VERSION" ] && [ -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/$STARTER_VERSION" ]; then
+    ok "使用本地 Maven 仓库已有 starter $STARTER_VERSION"
+  else
+    [ -n "$STARTER_VERSION" ] && warn "本地 Maven 仓库无 starter $STARTER_VERSION，强制构建" || warn "未能解析 starter 版本，强制构建最新代码"
     cd "$ROOT/ypbin-starter"
     mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20 \
       || die "starter 构建失败（完整日志 /tmp/starter-build.log）"

@@ -41,7 +41,7 @@
 # GitHub 可直连时：
 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 # 国内服务器（GitHub 不可达，自动降级 Gitee 同名镜像，需先在 Gitee 建 ypbin-* 三镜像并开启自动同步）：
-bash <(curl -fsSL https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh)
+bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
 # 仓库源策略：默认探测 GitHub（3s 快超时）→ 不可达切 Gitee → 均不可达请显式指定
 # YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；拉基础镜像困难时可加 REGISTRY_PREFIX=docker.m.daocloud.io/
 
