@@ -528,23 +528,38 @@ else
   info "[5.5/7] 启动基础设施（Nacos/Redis/MySQL）"
   cd "$ROOT/ypbin-admin/deploy"
   # 官方 Docker Hub 在国内常不可达：REGISTRY_PREFIX 显式指定 → 只试该前缀；
-  # 未指定时先试官方源，失败自动逐个尝试国内公共镜像加速前缀（首个成功即用）。
-  DOCKER_REGISTRY_CANDIDATES="${REGISTRY_PREFIX:-docker.io} docker.m.daocloud.io docker.1ms.run dockerpull.org docker.xuanyuan.me hub.rat.dev"
-  infra_up() { # $1=REGISTRY_PREFIX 值（docker.io=官方）
-    if [ "$1" = "docker.io" ] || [ -z "$1" ]; then
+  # 未指定时先试官方源，再对"连通性探测通过"的国内公共镜像加速逐个尝试（首个成功即用）。
+  REGISTRY_CANDIDATE_DOMAINS="docker.m.daocloud.io docker.1ms.run docker.1panel.live docker.1panel.top hub.rat.dev dockerpull.org docker.xuanyuan.me dockerproxy.cn docker.rainbond.cc"
+  DOCKER_REGISTRY_CANDIDATES=""
+  for d in $REGISTRY_CANDIDATE_DOMAINS; do
+    # registry v2 探活（3s 快超时）：不通立即跳过，避免逐个 docker pull 干等超时
+    if timeout 4 curl -fsSI -o /dev/null "https://$d/v2/" 2>/dev/null; then
+      DOCKER_REGISTRY_CANDIDATES="$DOCKER_REGISTRY_CANDIDATES ${d}/"
+    else
+      warn "镜像加速 ${d} 探活失败，跳过"
+    fi
+  done
+  [ -n "${REGISTRY_PREFIX:-}" ] && DOCKER_REGISTRY_CANDIDATES="${REGISTRY_PREFIX%/}/"
+  infra_up() { # $1=REGISTRY_PREFIX(含尾/或空=官方)
+    if [ -z "$1" ]; then
       REGISTRY_PREFIX= docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql
     else
       REGISTRY_PREFIX="$1" docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql
     fi
   }
   infra_ok=0
-  for reg in $DOCKER_REGISTRY_CANDIDATES; do
+  # 官方源先试；随后逐个尝试探测通过的国内加速
+  for reg in "" $DOCKER_REGISTRY_CANDIDATES; do
     if infra_up "$reg" >/tmp/infra-up.log 2>&1; then
-      [ "$reg" != "docker.io" ] && { ok "基础设施镜像经镜像加速拉取成功：$reg"; echo "REGISTRY_PREFIX=$reg" >> "$ENV_FILE"; warn "已将 REGISTRY_PREFIX=$reg 写入 .env（后续 compose up 复用）"; }
+      if [ -n "$reg" ]; then
+        ok "基础设施镜像经镜像加速拉取成功：${reg%/}"
+        echo "REGISTRY_PREFIX=$reg" >> "$ENV_FILE"
+        warn "已将 REGISTRY_PREFIX=$reg 写入 .env（后续 compose up 复用）"
+      fi
       infra_ok=1
       break
     fi
-    [ "$reg" != "docker.io" ] && warn "镜像加速 ${reg} 不可用，尝试下一个..."
+    [ -n "$reg" ] && warn "镜像加速 ${reg%/} 拉取失败，尝试下一个..."
   done
   if [ "$infra_ok" != "1" ]; then
     tail -5 /tmp/infra-up.log 2>/dev/null || true
