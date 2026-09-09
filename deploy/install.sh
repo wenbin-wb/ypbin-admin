@@ -527,7 +527,29 @@ if [ "$NO_DOCKER" = "1" ]; then
 else
   info "[5.5/7] 启动基础设施（Nacos/Redis/MySQL）"
   cd "$ROOT/ypbin-admin/deploy"
-  docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql 2>&1 | tail -20
+  # 官方 Docker Hub 在国内常不可达：REGISTRY_PREFIX 显式指定 → 只试该前缀；
+  # 未指定时先试官方源，失败自动逐个尝试国内公共镜像加速前缀（首个成功即用）。
+  DOCKER_REGISTRY_CANDIDATES="${REGISTRY_PREFIX:-docker.io} docker.m.daocloud.io docker.1ms.run dockerpull.org docker.xuanyuan.me hub.rat.dev"
+  infra_up() { # $1=REGISTRY_PREFIX 值（docker.io=官方）
+    if [ "$1" = "docker.io" ] || [ -z "$1" ]; then
+      REGISTRY_PREFIX= docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql
+    else
+      REGISTRY_PREFIX="$1" docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql
+    fi
+  }
+  infra_ok=0
+  for reg in $DOCKER_REGISTRY_CANDIDATES; do
+    if infra_up "$reg" >/tmp/infra-up.log 2>&1; then
+      [ "$reg" != "docker.io" ] && { ok "基础设施镜像经镜像加速拉取成功：$reg"; echo "REGISTRY_PREFIX=$reg" >> "$ENV_FILE"; warn "已将 REGISTRY_PREFIX=$reg 写入 .env（后续 compose up 复用）"; }
+      infra_ok=1
+      break
+    fi
+    [ "$reg" != "docker.io" ] && warn "镜像加速 ${reg} 不可用，尝试下一个..."
+  done
+  if [ "$infra_ok" != "1" ]; then
+    tail -5 /tmp/infra-up.log 2>/dev/null || true
+    die "基础设施镜像拉取失败（Docker Hub 与国内加速均不可达）：请手动 export REGISTRY_PREFIX=<可用加速前缀> 后重跑"
+  fi
 fi
 
 NACOS_CONSOLE_URL="${NACOS_CONSOLE_URL:-http://localhost:8080}"
