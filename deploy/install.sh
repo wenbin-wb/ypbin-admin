@@ -532,12 +532,13 @@ else
   REGISTRY_CANDIDATE_DOMAINS="docker.m.daocloud.io docker.1ms.run docker.1panel.live docker.1panel.top hub.rat.dev dockerpull.org docker.xuanyuan.me dockerproxy.cn docker.rainbond.cc"
   DOCKER_REGISTRY_CANDIDATES=""
   for d in $REGISTRY_CANDIDATE_DOMAINS; do
-    # registry v2 探活（3s 快超时）：不通立即跳过，避免逐个 docker pull 干等超时
-    if timeout 4 curl -fsSI -o /dev/null "https://$d/v2/" 2>/dev/null; then
-      DOCKER_REGISTRY_CANDIDATES="$DOCKER_REGISTRY_CANDIDATES ${d}/"
-    else
-      warn "镜像加速 ${d} 探活失败，跳过"
-    fi
+    # registry v2 探活（5s 快超时）：200/301/302/401 均视为可达（401 为正常未认证响应，
+    # 不能用 curl -f——会把 401 误判失败跳过可达源）；其余状态/超时视为不通立即跳过
+    code=$(timeout 5 curl -sI -o /dev/null -w '%{http_code}' "https://$d/v2/" 2>/dev/null)
+    case "$code" in
+      200|301|302|401) DOCKER_REGISTRY_CANDIDATES="$DOCKER_REGISTRY_CANDIDATES ${d}/" ;;
+      *) warn "镜像加速 ${d} 探活失败(HTTP ${code:-不通})，跳过" ;;
+    esac
   done
   [ -n "${REGISTRY_PREFIX:-}" ] && DOCKER_REGISTRY_CANDIDATES="${REGISTRY_PREFIX%/}/"
   infra_up() { # $1=REGISTRY_PREFIX(含尾/或空=官方)
