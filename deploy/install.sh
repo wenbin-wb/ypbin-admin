@@ -193,7 +193,15 @@ info "[1/7] 检查并安装依赖"
 command -v git >/dev/null 2>&1 || { apt-get update -y && apt-get install -y git; }
 if [ "$NO_DOCKER" = "0" ]; then
   command -v docker >/dev/null 2>&1 || die "Docker 未安装（NO_DOCKER=1 可跳过 Docker 用 java -jar 启动）"
-  docker compose version >/dev/null 2>&1 || die "Docker Compose 插件未安装"
+  if ! docker compose version >/dev/null 2>&1; then
+    warn "Docker Compose 插件缺失，尝试自动安装 docker-compose-plugin ..."
+    apt-get update -y >/dev/null 2>&1 || true
+    if ! apt-get install -y docker-compose-plugin >/dev/null 2>&1 && ! apt-get install -y docker-compose-v2 >/dev/null 2>&1; then
+      die "Docker Compose 插件安装失败：请手动执行 apt-get update && apt-get install -y docker-compose-plugin 后重跑"
+    fi
+    docker compose version >/dev/null 2>&1 || die "Docker Compose 插件安装后仍不可用，请检查 docker 服务后重跑"
+  fi
+  ok "Docker $(docker --version | awk '{print $3}') + Compose $(docker compose version --short 2>/dev/null)"
 fi
 if ! command -v java >/dev/null 2>&1; then
   apt-get install -y openjdk-21-jdk-headless 2>/dev/null || die "JDK 21 安装失败"
