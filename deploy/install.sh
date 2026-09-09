@@ -145,15 +145,18 @@ STARTER_VERSION="${STARTER_VERSION:-}"
 REPO_BASE=""
 GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin_wb}"
 GITHUB_REPO="https://github.com/wenbin-wb"
-# 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE，[2/7] 前调用一次
+# 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE。
+# 注意：函数 stdout 只输出 URL（供 $(...) 捕获）；一切提示走 REPO_SWITCHED_NOTE/die(stderr)，
+# 避免 ANSI/文案污染被命令替换吞入变量。
 resolve_repo_base() {
-  [ -n "$REPO_BASE" ] && { echo "$REPO_BASE"; return; }
+  REPO_SWITCHED_NOTE=""
   if [ -n "${YPBIN_REPO:-}" ]; then REPO_BASE="$YPBIN_REPO"; echo "$REPO_BASE"; return; fi
+  if [ -n "$REPO_BASE" ]; then echo "$REPO_BASE"; return; fi
   if curl -fsSI -m 3 -o /dev/null "https://github.com" 2>/dev/null; then
     REPO_BASE="$GITHUB_REPO"
   elif curl -fsSI -m 3 -o /dev/null "https://gitee.com" 2>/dev/null; then
-    warn "GitHub 不可达，仓库源自动降级为 Gitee 镜像：${GITEE_REPO}（请在 Gitee 建同名镜像并开启自动同步）"
     REPO_BASE="$GITEE_REPO"
+    REPO_SWITCHED_NOTE="GitHub 不可达，仓库源自动降级为 Gitee 镜像：${GITEE_REPO}（请在 Gitee 建同名镜像并开启自动同步）"
   else
     die "GitHub 与 Gitee 均不可达：请配置代理或显式指定 YPBIN_REPO（如 https://ghproxy.com/https://github.com/wenbin-wb）后重跑"
   fi
@@ -319,7 +322,11 @@ if [ "${SKIP_PULL:-0}" = "1" ]; then
 else
 info "[2/7] 拉取代码"
 REPO_BASE="$(resolve_repo_base)"
-ok "仓库源：$REPO_BASE"
+if [ -n "${REPO_SWITCHED_NOTE:-}" ]; then
+  warn "$REPO_SWITCHED_NOTE"
+else
+  ok "仓库源：$REPO_BASE"
+fi
 mkdir -p "$ROOT"
 cd "$ROOT"
 # 仓库可能由不同用户/上次部署创建，root 操作需豁免 dubious ownership
