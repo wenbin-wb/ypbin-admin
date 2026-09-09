@@ -54,3 +54,10 @@ ypbin:
   security:
     identity:
       enabled: true
+  # ---------- 内部 Feign 调用凭证（/internal/** 服务间调用守卫）----------
+  # 网关鉴权不覆盖 Feign 直连的 /internal/** 端点：system 服务守卫校验 X-Internal-Token 与
+  # 本凭证一致，未配置（缺失/为空）即 fail-closed 拒绝。auth/system/ai 三服务同处本共享配置
+  # （值一致），Feign 侧从同一键读取并写入凭证头；install.sh 导入 Nacos 时替换为
+  # deploy/.env 的 INTERNAL_TOKEN（仓库不提交真实值）。
+  internal:
+    token: ${INTERNAL_TOKEN}

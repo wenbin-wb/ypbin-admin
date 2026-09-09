@@ -31,6 +31,8 @@
 #   NACOS_AUTH_TOKEN= NACOS_AUTH_IDENTITY_KEY= NACOS_AUTH_IDENTITY_VALUE=
 #                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
 #                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
+#   INTERNAL_TOKEN=                /internal/** 服务间 Feign 调用凭证（守卫校验，自动随机生成，
+#                                  auth/system/ai 共享一致值，一般无需手传）
 #   NO_DOCKER=1                    无 Docker 模式：java -jar 直接启动
 # ============================================================
 
@@ -293,6 +295,8 @@ if [ ! -f "$ENV_FILE" ]; then
   NACOS_AUTH_TOKEN="${NACOS_AUTH_TOKEN:-$(rand_b64_48)}"
   NACOS_AUTH_IDENTITY_KEY="${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}"
   NACOS_AUTH_IDENTITY_VALUE="${NACOS_AUTH_IDENTITY_VALUE:-$(rand_hex 32)}"
+  # 内部 Feign 调用凭证（/internal/** 守卫，auth/system/ai 共享一致值），随机生成
+  INTERNAL_TOKEN="${INTERNAL_TOKEN:-$(rand_hex 32)}"
   # Redis：Docker 模式随机密码（与 compose requirepass / Nacos 共享配置一致）；
   # NO_DOCKER 用外部 Redis，默认留空=不认证（导入 Nacos 时删 password 行），有密码时以 REDIS_PASSWORD=xxx 传入
   if [ "$NO_DOCKER" = "1" ]; then
@@ -307,6 +311,7 @@ AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
 NACOS_AUTH_TOKEN=$NACOS_AUTH_TOKEN
 NACOS_AUTH_IDENTITY_KEY=$NACOS_AUTH_IDENTITY_KEY
 NACOS_AUTH_IDENTITY_VALUE=$NACOS_AUTH_IDENTITY_VALUE
+INTERNAL_TOKEN=$INTERNAL_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
@@ -338,6 +343,7 @@ env_key_backfill() { # $1=键名 $2=取值命令（仅缺键时才执行，命�
 env_key_backfill NACOS_AUTH_TOKEN 'rand_b64_48'
 env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
 env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
+env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
 if [ "$NO_DOCKER" = "1" ]; then
   env_key_backfill REDIS_PASSWORD 'printf ""'
 else
@@ -387,16 +393,20 @@ if [ -n "$NACOS_TOKEN" ]; then
   NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
   for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai; do
     if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
-      # 占位符替换：仓库 nacos yaml 不提交真实密码，导入前用 .env 实际值填充
-      # （仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}/${REDIS_PASSWORD}；替换键名与 yaml 占位符完全一致）
+      # 占位符替换：仓库 nacos yaml 不提交真实密码/凭证，导入前用 .env 实际值填充
+      # （仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}/${REDIS_PASSWORD}/${INTERNAL_TOKEN}；
+      #   替换键名与 yaml 占位符完全一致）
       TMP_CFG="/tmp/nacos-${cfg}.yaml"
       if [ -n "${REDIS_PASSWORD:-}" ]; then
         sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
             -e "s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
+            -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       else
-        # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码
+        # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码；
+        # INTERNAL_TOKEN 仍无条件替换（缺失/为空时 system 守卫 fail-closed，见 ypbin.internal.token 注释）
         sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+            -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
             -e "/password: \${REDIS_PASSWORD}/d" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       fi
