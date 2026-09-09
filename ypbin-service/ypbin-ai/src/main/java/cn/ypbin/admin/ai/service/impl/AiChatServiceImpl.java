@@ -80,6 +80,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
     private final AiChatRoleMapper roleMapper;
+    private final AiKnowledgeCrudComponent knowledgeCrudComponent;
 
     /** starter AI 对话服务（可选注入：AI 未启用时不影响服务启动） */
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
@@ -87,10 +88,12 @@ public class AiChatServiceImpl implements AiChatSessionService {
     public AiChatServiceImpl(AiChatSessionMapper sessionMapper,
                              AiChatMessageMapper messageMapper,
                              AiChatRoleMapper roleMapper,
+                             AiKnowledgeCrudComponent knowledgeCrudComponent,
                              ObjectProvider<AiChatService> aiChatServiceProvider) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.roleMapper = roleMapper;
+        this.knowledgeCrudComponent = knowledgeCrudComponent;
         this.aiChatServiceProvider = aiChatServiceProvider;
     }
 
@@ -188,6 +191,11 @@ public class AiChatServiceImpl implements AiChatSessionService {
         AiChatService aiSvc = aiChatServiceProvider.getIfAvailable();
         if (aiSvc == null) {
             return errorEmitter("AI 模块未启用，请配置 ypbin.ai.enabled=true");
+        }
+
+        // RAG 分支：进入检索前校验知识库归属（防跨租户知识库内容泄露），失败时提前拒绝、不落用户消息
+        if (req.getKnowledgeBaseId() != null) {
+            knowledgeCrudComponent.requireKb(req.getKnowledgeBaseId());
         }
 
         // 落库用户消息

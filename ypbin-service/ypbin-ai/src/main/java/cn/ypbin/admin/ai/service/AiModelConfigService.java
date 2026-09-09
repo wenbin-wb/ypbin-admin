@@ -32,6 +32,14 @@ public interface AiModelConfigService {
      */
     List<AiModelConfigResp> listModels(String modelType);
 
+    /**
+     * 按模型类型与状态查询配置（API Key 脱敏）。
+     *
+     * @param modelType 模型类型，{@code null} 时返回全部
+     * @param status    状态过滤（null=仅启用，0/1 精确过滤供管理端找回已停用模型）
+     */
+    List<AiModelConfigResp> listModels(String modelType, Integer status);
+
     /** 新增模型配置 */
     void createModel(AiModelConfigSaveReq req);
 

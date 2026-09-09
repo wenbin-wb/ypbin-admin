@@ -10,7 +10,9 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.system.entity.SysPost;
+import cn.ypbin.admin.system.entity.SysUserPost;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
+import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.model.req.PostSaveReq;
 import cn.ypbin.admin.system.model.resp.PostResp;
 import cn.ypbin.admin.system.service.SysPostService;
@@ -33,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> implements SysPostService {
+
+    private final SysUserPostMapper userPostMapper;
 
     @Override
     public List<PostResp> listPosts() {
@@ -72,6 +76,9 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePost(Long id) {
+        // 级联清理用户-岗位引用，避免残留关联行
+        userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>()
+            .eq(SysUserPost::getPostId, id));
         if (!removeById(id)) {
             throw new BusinessException("岗位删除失败");
         }

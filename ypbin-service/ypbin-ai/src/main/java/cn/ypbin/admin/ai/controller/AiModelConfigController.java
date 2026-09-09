@@ -48,8 +48,9 @@ public class AiModelConfigController {
     @GetMapping
     @SaCheckPermission("ai:model:list")
     public R<List<AiModelConfigResp>> listModels(
-            @RequestParam(value = "modelType", required = false) String modelType) {
-        return R.ok(modelConfigService.listModels(modelType));
+            @RequestParam(value = "modelType", required = false) String modelType,
+            @RequestParam(value = "status", required = false) Integer status) {
+        return R.ok(modelConfigService.listModels(modelType, status));
     }
 
     @Idempotent

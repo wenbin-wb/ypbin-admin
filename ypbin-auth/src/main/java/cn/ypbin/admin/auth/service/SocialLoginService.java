@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.auth.service;
 
+import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysUser;
@@ -42,12 +43,15 @@ public class SocialLoginService {
     private final SocialService socialService;
     private final ISystemClient systemClient;
     private final LoginSupport loginSupport;
+    private final SocialAuthRegistryInitializer registryInitializer;
 
     /**
      * 用授权码完成第三方登录。已绑定的直接登录；未绑定的抛出提示引导先绑定。
      */
     public LoginResp login(String source, SocialCallbackReq req) {
         String normalizedSource = normalizeSource(source);
+        // 回调前即时校验平台启用状态并同步最新配置（平台已停用直接拒绝，防止停用平台仍可登录）
+        registryInitializer.ensurePlatformRegistered(normalizedSource);
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
 
         SysUserSocial binding = SysCache.getSocialBinding(normalizedSource, authUser.getUuid());
@@ -63,6 +67,8 @@ public class SocialLoginService {
      */
     public void bind(String source, SocialCallbackReq req) {
         String normalizedSource = normalizeSource(source);
+        // 绑定同样即时校验平台启用状态（停用后禁止继续绑定）
+        registryInitializer.ensurePlatformRegistered(normalizedSource);
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
         Long userId = currentUserId();
 

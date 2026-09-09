@@ -30,6 +30,14 @@ public interface AiPromptTemplateService {
     List<AiPromptTemplateResp> listTemplates();
 
     /**
+     * 查询模板列表并支持按状态过滤。
+     *
+     * @param status 状态过滤（null=仅启用，0/1 精确过滤供管理端找回已停用模板）
+     * @return 按创建时间倒序的模板列表
+     */
+    List<AiPromptTemplateResp> listTemplates(Integer status);
+
+    /**
      * 新增模板（归属当前租户）。
      *
      * @param req 模板信息

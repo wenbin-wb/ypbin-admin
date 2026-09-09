@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -43,8 +44,9 @@ public class AiChatRoleController {
 
     @GetMapping
     @SaCheckPermission("ai:role:list")
-    public R<List<AiChatRoleResp>> listRoles() {
-        return R.ok(roleService.listRoles());
+    public R<List<AiChatRoleResp>> listRoles(
+            @RequestParam(value = "status", required = false) Integer status) {
+        return R.ok(roleService.listRoles(status));
     }
 
     @Idempotent

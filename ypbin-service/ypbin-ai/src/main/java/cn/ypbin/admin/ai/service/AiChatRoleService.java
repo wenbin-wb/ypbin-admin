@@ -21,8 +21,16 @@ import java.util.List;
  */
 public interface AiChatRoleService {
 
-    /** 角色列表（内置 + 当前租户自定义，含收藏状态） */
+    /** 角色列表（内置 + 当前租户自定义，含收藏状态）；不带参数仅查启用角色 */
     List<AiChatRoleResp> listRoles();
+
+    /**
+     * 角色列表并支持按状态过滤。
+     *
+     * @param status 状态过滤（null=仅启用，与默认行为一致；0/1 精确过滤，供管理端找回已停用角色）
+     * @return 角色列表
+     */
+    List<AiChatRoleResp> listRoles(Integer status);
 
     /** 创建自定义角色 */
     Long createRole(AiChatRoleSaveReq req);

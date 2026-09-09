@@ -34,6 +34,9 @@ public class AiChatRoleResp {
     /** 角色头像 */
     private String avatar;
 
+    /** 系统提示词（编辑回填必需，创建/更新均从请求落库） */
+    private String systemPrompt;
+
     /** 分类 */
     private String category;
 

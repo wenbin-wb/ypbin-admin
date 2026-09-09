@@ -11,7 +11,11 @@ package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysDept;
+import cn.ypbin.admin.system.entity.SysRoleDept;
+import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.mapper.SysDeptMapper;
+import cn.ypbin.admin.system.mapper.SysRoleDeptMapper;
+import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.model.req.DeptSaveReq;
 import cn.ypbin.admin.system.model.resp.DeptResp;
 import cn.ypbin.admin.system.service.SysDeptService;
@@ -20,6 +24,7 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
  * @since 2026-08-01
  */
 @Service
+@RequiredArgsConstructor
 public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> implements SysDeptService {
+
+    private final SysUserMapper userMapper;
+    private final SysRoleDeptMapper roleDeptMapper;
 
     @Override
     public List<DeptResp> tree() {
@@ -75,7 +84,17 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
         if (hasChildren) {
             throw new BusinessException("存在子部门，不能删除");
         }
-        removeById(id);
+        // 删除前校验部门下仍有用户引用，避免用户落入无部门状态
+        if (userMapper.selectCount(new LambdaQueryWrapper<SysUser>()
+            .eq(SysUser::getDeptId, id)) > 0) {
+            throw new BusinessException("该部门下仍有用户，不能删除");
+        }
+        // 清理角色-部门数据权限引用
+        roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>()
+            .eq(SysRoleDept::getDeptId, id));
+        if (!removeById(id)) {
+            throw new BusinessException("删除部门失败");
+        }
     }
 
     private List<DeptResp> buildTree(List<SysDept> depts, Long pid) {

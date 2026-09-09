@@ -22,9 +22,14 @@ import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
+import cn.ypbin.starter.cache.util.CacheUtils;
+import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +50,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal")
 @RequiredArgsConstructor
 public class SystemClientImpl implements ISystemClient {
+
+    /** 密码校验限频键前缀（按用户维度，防任意 userId 在线口令爆破） */
+    private static final String VERIFY_PASSWORD_LIMIT_KEY = "internal:verify:";
+
+    /** 密码校验每分钟允许的最大尝试次数 */
+    private static final long VERIFY_PASSWORD_MAX_PER_MINUTE = 10L;
+
+    /** 密码校验限频窗口时长 */
+    private static final Duration VERIFY_PASSWORD_WINDOW = Duration.ofMinutes(1);
+
+    /** 整键命中即脱敏的系统参数（与列表页掩码口径一致，防密钥经 internal 出网） */
+    private static final List<String> SENSITIVE_CONFIG_SUFFIXES = List.of(
+        "_SECRET", "_PASSWORD", "_TOKEN", "_ACCESS_KEY", "_PRIVATE_KEY", "_API_KEY");
+
+    /** 打码符 */
+    private static final String MASK_PREFIX = "****";
 
     private final SysPermissionService permissionService;
     private final SysUserService userService;
@@ -115,7 +136,11 @@ public class SystemClientImpl implements ISystemClient {
         value.setConfigKey(configKey);
         SysConfig config = configMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
             .eq(SysConfig::getConfigKey, configKey), false);
-        value.setConfigValue(config == null ? "" : config.getConfigValue());
+        String rawValue = config == null ? "" : config.getConfigValue();
+        // 密钥/口令类参数禁止经 internal 出网（纵深防御：即使凭证被泄露，密钥也不得明文返回）。
+        // 已核验 auth 经本接口仅读取非敏感键（LOGIN_*/SMS_CODE_*/SMS_TEMPLATE_ID），不受影响；
+        // 短信/邮件等密钥由 system 本地缓存直读，不走本接口。
+        value.setConfigValue(maskIfSensitive(configKey, rawValue));
         return R.ok(value);
     }
 
@@ -123,7 +148,47 @@ public class SystemClientImpl implements ISystemClient {
     @PostMapping("/verify-password")
     public R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
         @RequestParam("rawPassword") String rawPassword) {
+        requireVerifyNotExceeded(userId);
         return R.ok(userService.verifyPassword(userId, rawPassword));
+    }
+
+    /**
+     * 密码校验频控：INCR + 首次设置过期时间。INCR 与 EXPIRE 非原子，
+     * 极端并发下可能少设一次过期（键更早过期，窗口变短），仅放宽限制方向，
+     * 不会出现超窗累积，可接受；不做 Lua 以保持最小改动。
+     *
+     * @param userId 用户 ID
+     */
+    private void requireVerifyNotExceeded(Long userId) {
+        String key = VERIFY_PASSWORD_LIMIT_KEY + userId;
+        long attempts = CacheUtils.increment(key, 1);
+        if (attempts == 1L) {
+            CacheUtils.expire(key, VERIFY_PASSWORD_WINDOW);
+        }
+        if (attempts > VERIFY_PASSWORD_MAX_PER_MINUTE) {
+            throw new BusinessException(GlobalErrorCode.TOO_MANY_REQUESTS,
+                "密码校验过于频繁，请稍后重试");
+        }
+    }
+
+    /**
+     * 系统参数键命中敏感后缀时对值脱敏（仅保留末 4 位，其余打码）。
+     *
+     * @param configKey 参数键
+     * @param rawValue  原始值
+     * @return 脱敏后的值（非敏感键原样返回）
+     */
+    private static String maskIfSensitive(String configKey, String rawValue) {
+        if (configKey == null || rawValue == null || rawValue.isBlank()) {
+            return rawValue;
+        }
+        String upperKey = configKey.toUpperCase(Locale.ROOT);
+        boolean sensitive = SENSITIVE_CONFIG_SUFFIXES.stream().anyMatch(upperKey::endsWith);
+        if (!sensitive) {
+            return rawValue;
+        }
+        return rawValue.length() <= 4 ? MASK_PREFIX
+            : MASK_PREFIX + rawValue.substring(rawValue.length() - 4);
     }
 
     @Override

@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system;
 
+import cn.ypbin.admin.common.config.InternalProperties;
 import cn.ypbin.admin.common.config.LicenseIssuerProperties;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
@@ -23,7 +24,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  */
 @SpringBootApplication
 @MapperScan("cn.ypbin.admin.**.mapper")
-@EnableConfigurationProperties(LicenseIssuerProperties.class)
+@EnableConfigurationProperties({LicenseIssuerProperties.class, InternalProperties.class})
 public class SystemServiceApplication {
 
     public static void main(String[] args) {

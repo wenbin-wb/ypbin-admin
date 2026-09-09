@@ -227,6 +227,10 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
                 throw new BusinessException("父菜单不存在或不能作为父节点");
             }
         }
+        if (excludeId != null) {
+            // 新父节点不得为自身后代，防止成环后 buildRouteTree/buildMenuTree 递归爆栈
+            rejectDescendantParent(pid, excludeId);
+        }
         if (isNameExists(req.getName(), excludeId)) {
             throw new BusinessException("菜单名称已存在：" + req.getName());
         }
@@ -244,6 +248,32 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
         }
         if (TYPE_LINK.equals(req.getType()) && !StringUtils.hasText(req.getLink())) {
             throw new BusinessException("外链菜单的外链地址不能为空");
+        }
+    }
+
+    /**
+     * 校验把节点 {@code nodeId} 挂到新父节点 {@code newPid} 下是否会成环：
+     * 沿 newPid 的 pid 链上溯，若途中遇到 nodeId 说明 nodeId 会成为自身祖先（即其自身后代），拒绝。
+     * 全量菜单一次性加载后在内存判定，避免逐级 getById 的 N+1 查询。
+     *
+     * @param newPid 新父节点 ID
+     * @param nodeId 待移动节点 ID
+     */
+    private void rejectDescendantParent(Long newPid, Long nodeId) {
+        if (AdminConstants.ROOT_PARENT_ID.equals(newPid)) {
+            return;
+        }
+        Map<Long, Long> parentById = list().stream().collect(Collectors.toMap(
+            SysMenu::getId,
+            menu -> menu.getPid() == null ? AdminConstants.ROOT_PARENT_ID : menu.getPid(),
+            (first, ignored) -> first));
+        Long cursor = newPid;
+        Set<Long> visited = new HashSet<>();
+        while (cursor != null && !AdminConstants.ROOT_PARENT_ID.equals(cursor) && visited.add(cursor)) {
+            if (nodeId.equals(cursor)) {
+                throw new BusinessException("父菜单不能选择自身或其子菜单");
+            }
+            cursor = parentById.get(cursor);
         }
     }
 

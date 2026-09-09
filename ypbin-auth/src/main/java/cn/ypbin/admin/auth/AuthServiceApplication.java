@@ -12,6 +12,7 @@ package cn.ypbin.admin.auth;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Auth 服务启动器（微服务版）。
@@ -21,6 +22,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.auth", "cn.ypbin.admin.system.api"})
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
+@EnableScheduling
 public class AuthServiceApplication {
 
     public static void main(String[] args) {

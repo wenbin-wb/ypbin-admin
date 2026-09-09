@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -43,8 +44,9 @@ public class AiPromptTemplateController {
 
     @GetMapping
     @SaCheckPermission("ai:prompt:list")
-    public R<List<AiPromptTemplateResp>> list() {
-        return R.ok(promptTemplateService.listTemplates());
+    public R<List<AiPromptTemplateResp>> list(
+            @RequestParam(value = "status", required = false) Integer status) {
+        return R.ok(promptTemplateService.listTemplates(status));
     }
 
     @Log(value = "新增提示词模板", module = "Prompt模板")

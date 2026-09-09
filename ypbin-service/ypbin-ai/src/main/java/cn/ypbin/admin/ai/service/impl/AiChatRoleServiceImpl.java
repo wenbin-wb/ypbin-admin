@@ -45,13 +45,20 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
 
     @Override
     public List<AiChatRoleResp> listRoles() {
+        return listRoles(null);
+    }
+
+    @Override
+    public List<AiChatRoleResp> listRoles(Integer status) {
         Long userId = IdentityContext.getUserId().orElse(null);
         Long tenantId = currentTenantId();
-        // 内置角色（tenant_id=0）与当前租户自定义角色，忽略租户拦截以读取内置角色
+        // 内置角色（tenant_id=0）与当前租户自定义角色，忽略租户拦截以读取内置角色；
+        // 状态：null=仅启用（默认行为），0/1 精确过滤供管理端找回已停用角色
+        Integer filterStatus = status == null ? EntityStatus.ENABLED.getCode() : status;
         List<AiChatRole> roles = TenantContext.executeIgnore(() ->
             roleMapper.selectList(
                 new LambdaQueryWrapper<AiChatRole>()
-                    .eq(AiChatRole::getStatus, EntityStatus.ENABLED.getCode())
+                    .eq(AiChatRole::getStatus, filterStatus)
                     .and(w -> w.eq(AiChatRole::getTenantId, 0)
                         .or().eq(AiChatRole::getTenantId, tenantId))
                     .orderByAsc(AiChatRole::getSort)));
