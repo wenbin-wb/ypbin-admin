@@ -52,6 +52,12 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
 
 自定义参数（环境变量）：`YPBIN_ROOT`（部署根目录，默认 /opt/ypbin/main）、`BRANCH`（默认 main）、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
 
+**分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
+
+**网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
+
+**初始口令**：业务超管在种子 `deploy/sql/002-data.sql`（bcrypt，首登立即改密）；MySQL/Redis/Nacos/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos/XXL-JOB 控制台默认 `nacos/nacos`、`admin/123456`。
+
 **方式二：手动**：
 
 ```bash
