@@ -130,14 +130,16 @@ starter_version_from_pom() {
 }
 
 # ---------- 参数 ----------
-# 默认独立目录（与单体版 /opt/ypbin/boot 分开，避免代码互相覆盖/分支冲突，两版本可共存）
-ROOT="${YPBIN_ROOT:-/opt/ypbin/main}"
+# BRANCH/ROOT：支持 -b/--branch 指定分支；ROOT 默认按分支隔离(/opt/ypbin/<分支>,
+# main 保持 /opt/ypbin/main)，与单体版 /opt/ypbin/boot 等分开，避免代码互相覆盖/分支冲突，
+# 多分支可共存；可用 --root 或 YPBIN_ROOT 显式覆盖。
 BRANCH="${BRANCH:-main}"
+ROOT=""
+ROOT_CLI=""
 NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
-ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
 # starter 版本：从 admin 仓库 pom 的 ypbin-starter.version 自动解析（唯一事实源，
 # 与 CI dispatch 自动升级保持一致），无需手工同步；目录未就绪时留空，由 [3/7] 构建前解析。
 STARTER_VERSION="${STARTER_VERSION:-}"
@@ -165,12 +167,31 @@ resolve_repo_base() {
 
 # ---------- 交互模式 ----------
 # 默认交互（人工确认关键步骤）；-y/--yes 全自动跳过所有确认（CI/无头环境，对齐单体脚本）
+usage() {
+  echo "ypbin-admin 一键部署脚本"
+  echo "用法: bash install.sh [选项]"
+  echo "  -b, --branch <name>   部署分支（默认 main；自动隔离目录 /opt/ypbin/<分支>）"
+  echo "  --root <dir>          部署目录（默认按分支隔离；main 为 /opt/ypbin/main）"
+  echo "  -y, --yes             全自动跳过所有交互确认"
+  echo "环境变量：YPBIN_REPO / GITEE_REPO / REGISTRY_PREFIX / NO_DOCKER 等（见脚本头部注释）"
+}
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -y|--yes) ASSUME_YES=1; shift ;;
-    *) shift ;;
+    -b|--branch) BRANCH="${2:-$BRANCH}"; shift 2 ;;
+    --root) ROOT_CLI="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) warn "未知参数忽略: $1"; shift ;;
   esac
 done
+# ROOT 计算：--root > YPBIN_ROOT > 分支隔离默认(分支内 / 替换为 - 防路径嵌套)
+if [ -n "$ROOT_CLI" ]; then ROOT="$ROOT_CLI"
+elif [ -n "${YPBIN_ROOT:-}" ]; then ROOT="$YPBIN_ROOT"
+else
+  _safe="${BRANCH//\//-}"
+  ROOT="/opt/ypbin/${_safe}"
+fi
+ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
 
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
@@ -740,6 +761,8 @@ else
   info "[6/7] Docker 模式：compose 启动（含 Nacos/Redis/MySQL 基础设施）"
   cd "$ROOT/ypbin-admin/deploy"
   # 微服务 compose 已内嵌基础设施（nacos/redis/mysql），单文件拉起全链路
+  export DOCKER_BUILDKIT=0
+  # legacy builder: FROM 基础镜像优先取本地 docker images(离线/受限环境可先 docker load 再构建,避免 buildkit 联网解析元数据卡死)
   docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d --build
 fi
 
