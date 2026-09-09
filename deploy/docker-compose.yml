@@ -43,14 +43,14 @@ services:
     image: redis:7-alpine
     container_name: ypbin-redis
     # 开启持久化并强制 requirepass（密码来自 .env，与 Nacos 共享配置 spring.data.redis.password 一致）
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?请在deploy/.env设置REDIS_PASSWORD}"]
     # 仅绑定本机回环：容器间经 compose 网络互访，无需对宿主机全网卡暴露
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - ypbin-redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?请在deploy/.env设置REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10

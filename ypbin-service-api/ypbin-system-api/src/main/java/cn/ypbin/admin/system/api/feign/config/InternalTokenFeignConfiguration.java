@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.api.feign.config;
 
+import cn.ypbin.admin.system.api.constant.InternalTokenConstants;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,12 +35,6 @@ public class InternalTokenFeignConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTokenFeignConfiguration.class);
 
-    /** 内部调用凭证配置键（各服务经环境变量注入同一值） */
-    public static final String TOKEN_PROPERTY = "ypbin.internal.token";
-
-    /** 内部调用凭证请求头（与 system-svc 守卫一致） */
-    public static final String TOKEN_HEADER = "X-Internal-Token";
-
     /**
      * 为 system-svc Feign 客户端注入携带内部凭证的请求拦截器。
      *
@@ -54,15 +49,15 @@ public class InternalTokenFeignConfiguration {
 
             @Override
             public void apply(RequestTemplate template) {
-                String token = environment.getProperty(TOKEN_PROPERTY, "");
+                String token = environment.getProperty(InternalTokenConstants.TOKEN_PROPERTY, "");
                 if (token == null || token.isBlank()) {
                     if (warned.compareAndSet(false, true)) {
                         log.warn("[system-api] 未配置内部调用凭证 {}（建议环境变量注入），"
-                            + "system-svc /internal/** 调用将被拒绝", TOKEN_PROPERTY);
+                            + "system-svc /internal/** 调用将被拒绝", InternalTokenConstants.TOKEN_PROPERTY);
                     }
                     return;
                 }
-                template.header(TOKEN_HEADER, token);
+                template.header(InternalTokenConstants.TOKEN_HEADER, token);
             }
         };
     }

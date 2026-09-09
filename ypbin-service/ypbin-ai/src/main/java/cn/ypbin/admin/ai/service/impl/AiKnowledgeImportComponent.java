@@ -67,8 +67,8 @@ public class AiKnowledgeImportComponent {
     /** Sitemap 单次导入 URL 上限 */
     private static final int SITEMAP_MAX_URLS = 100;
 
-    /** RSS 单次导入条目上限 */
-    private static final int RSS_MAX_ENTRIES = 50;
+    /** RSS 单次导入尝试条数上限（成功与失败均计数，防止条目连续失败时无界抓取） */
+    private static final int RSS_MAX_ATTEMPTS = 50;
 
     /** 导入地址长度上限（防御超长 URL 探测） */
     private static final int MAX_URL_LENGTH = 2048;
@@ -118,7 +118,8 @@ public class AiKnowledgeImportComponent {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            throw new BusinessException("抓取 URL 失败：" + e.getMessage());
+            log.error("[ypbin-ai] 抓取 URL 失败: url={}", url, e);
+            throw new BusinessException("抓取 URL 失败：" + url);
         }
         if (content.isBlank()) {
             throw new BusinessException("页面内容为空，无法导入：" + url);
@@ -163,7 +164,8 @@ public class AiKnowledgeImportComponent {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            throw new BusinessException("解析 Sitemap 失败：" + e.getMessage());
+            log.error("[ypbin-ai] 解析 Sitemap 失败: url={}", sitemapUrl, e);
+            throw new BusinessException("解析 Sitemap 失败：" + sitemapUrl);
         }
         if (urls.isEmpty()) {
             throw new BusinessException("Sitemap 中未找到有效 URL");
@@ -198,17 +200,20 @@ public class AiKnowledgeImportComponent {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            throw new BusinessException("解析 RSS/Atom 失败：" + e.getMessage());
+            log.error("[ypbin-ai] 解析 RSS/Atom 失败: url={}", feedUrl, e);
+            throw new BusinessException("解析 RSS/Atom 失败：" + feedUrl);
         }
         if (entries.isEmpty()) {
             throw new BusinessException("RSS 中没有文章条目");
         }
         List<AiDocumentVO> results = new ArrayList<>();
-        int imported = 0;
+        int attempted = 0;
         for (SyndEntry entry : entries) {
-            if (imported >= RSS_MAX_ENTRIES) {
+            // 以「已尝试条数」封顶（成功与失败均计数），失败条目不逃逸上限导致无界重试
+            if (attempted >= RSS_MAX_ATTEMPTS) {
                 break;
             }
+            attempted++;
             try {
                 String entryUrl = entry.getLink();
                 String entryTitle = entry.getTitle() != null ? entry.getTitle() : "entry";
@@ -227,7 +232,6 @@ public class AiKnowledgeImportComponent {
                 } else if (entryUrl != null && !entryUrl.isBlank()) {
                     results.add(importSingleUrl(knowledgeBaseId, entryUrl, entryTitle));
                 }
-                imported++;
             } catch (Exception e) {
                 log.warn("[ypbin-ai] RSS entry 导入失败: title={} err={}",
                     entry.getTitle(), e.getMessage());
@@ -342,7 +346,22 @@ public class AiKnowledgeImportComponent {
             return true;
         }
         if (address instanceof Inet4Address) {
-            int firstByte = address.getAddress()[0] & 0xFF;
+            byte[] ipv4 = address.getAddress();
+            int firstByte = ipv4[0] & 0xFF;
+            int secondByte = ipv4[1] & 0xFF;
+            // 100.64.0.0/10 运营商级 NAT（CGNAT）保留段：云厂商元数据服务地址亦落此段
+            // （如阿里云 100.100.100.200），Java 的 isSiteLocalAddress 不覆盖该段，须显式拦截
+            if (firstByte == 100 && (secondByte & 0xC0) == 0x40) {
+                return true;
+            }
+            // 192.0.0.0/24 IANA 协议分配保留段（含 192.0.0.9/.10 等特殊用途地址）
+            if (firstByte == 192 && secondByte == 0) {
+                return true;
+            }
+            // 198.18.0.0/15 IANA 基准测试保留段
+            if (firstByte == 198 && (secondByte & 0xFE) == 0x12) {
+                return true;
+            }
             // 224.0.0.0/4 组播（已单独判定）+ 240.0.0.0/4 保留
             return firstByte >= 224;
         }

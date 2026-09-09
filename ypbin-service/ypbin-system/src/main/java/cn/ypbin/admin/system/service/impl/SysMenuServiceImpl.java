@@ -256,6 +256,9 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
      * 沿 newPid 的 pid 链上溯，若途中遇到 nodeId 说明 nodeId 会成为自身祖先（即其自身后代），拒绝。
      * 全量菜单一次性加载后在内存判定，避免逐级 getById 的 N+1 查询。
      *
+     * <p>本方法在事务内基于一次全量快照判定（防环判定先于更新执行），DB 无环约束且管理面
+     * 操作低频，两笔并发迁移交错互移成环属极端低频，未额外加锁，判定漏网概率可接受。</p>
+     *
      * @param newPid 新父节点 ID
      * @param nodeId 待移动节点 ID
      */

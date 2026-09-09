@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.config;
 
 import cn.ypbin.admin.common.config.InternalProperties;
+import cn.ypbin.admin.system.api.constant.InternalTokenConstants;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,9 +37,6 @@ public class InternalTokenGuardInterceptor implements HandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTokenGuardInterceptor.class);
 
-    /** 内部调用凭证请求头 */
-    public static final String TOKEN_HEADER = "X-Internal-Token";
-
     private final InternalProperties internalProperties;
 
     public InternalTokenGuardInterceptor(InternalProperties internalProperties) {
@@ -55,7 +53,7 @@ public class InternalTokenGuardInterceptor implements HandlerInterceptor {
                 request.getRequestURI());
             throw new BusinessException(GlobalErrorCode.UNAUTHORIZED, "内部调用凭证未配置，请先配置 ypbin.internal.token");
         }
-        String presented = request.getHeader(TOKEN_HEADER);
+        String presented = request.getHeader(InternalTokenConstants.TOKEN_HEADER);
         if (presented == null
             || !MessageDigest.isEqual(
                 configured.getBytes(StandardCharsets.UTF_8),

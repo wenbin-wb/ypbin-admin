@@ -38,6 +38,7 @@ public interface AiQueryLogMapper extends BaseMapper<AiQueryLog> {
                COUNT(*) AS queryCount
         FROM ai_query_log
         WHERE tenant_id = #{tenantId} AND create_time BETWEEN #{from} AND #{to}
+          AND is_deleted = 0
         GROUP BY DATE_FORMAT(create_time, '%Y-%m-%d')
         ORDER BY statDate
         """)
@@ -60,7 +61,7 @@ public interface AiQueryLogMapper extends BaseMapper<AiQueryLog> {
             SELECT COALESCE(SUBSTRING(TRIM(REGEXP_REPLACE(TRIM(query), '[[:space:]]+', ' ')), 1, 100), '')
                    AS normQuery
             FROM ai_query_log
-            WHERE tenant_id = #{tenantId}
+            WHERE tenant_id = #{tenantId} AND is_deleted = 0
         ) q
         GROUP BY normQuery
         ORDER BY queryCount DESC, normQuery

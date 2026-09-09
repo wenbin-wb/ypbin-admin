@@ -32,7 +32,7 @@ public interface AiUsageLogMapper extends BaseMapper<AiUsageLog> {
      * @return 含 chatCount/tokenTotal 的映射
      */
     @Select("SELECT COUNT(*) AS chatCount, COALESCE(SUM(total_tokens), 0) AS tokenTotal "
-        + "FROM ai_usage_log WHERE tenant_id = #{tenantId}")
+        + "FROM ai_usage_log WHERE tenant_id = #{tenantId} AND is_deleted = 0")
     Map<String, Object> selectSummaryByTenant(@Param("tenantId") Long tenantId);
 
     /**
@@ -49,6 +49,7 @@ public interface AiUsageLogMapper extends BaseMapper<AiUsageLog> {
                COALESCE(SUM(total_tokens), 0) AS tokenTotal
         FROM ai_usage_log
         WHERE tenant_id = #{tenantId} AND create_time BETWEEN #{from} AND #{to}
+          AND is_deleted = 0
         GROUP BY DATE_FORMAT(create_time, '%Y-%m-%d')
         ORDER BY statDate
         """)
@@ -69,6 +70,7 @@ public interface AiUsageLogMapper extends BaseMapper<AiUsageLog> {
                COALESCE(SUM(total_tokens), 0) AS tokenTotal
         FROM ai_usage_log
         WHERE tenant_id = #{tenantId} AND create_time BETWEEN #{from} AND #{to}
+          AND is_deleted = 0
         GROUP BY DATE_FORMAT(create_time, '%Y-%m-%d')
         ORDER BY statDate
         """)
@@ -86,7 +88,7 @@ public interface AiUsageLogMapper extends BaseMapper<AiUsageLog> {
         SELECT model_name AS modelName,
                COALESCE(SUM(total_tokens), 0) AS tokenTotal
         FROM ai_usage_log
-        WHERE tenant_id = #{tenantId}
+        WHERE tenant_id = #{tenantId} AND is_deleted = 0
         GROUP BY model_name
         """)
     List<Map<String, Object>> selectTokensGroupByModel(@Param("tenantId") Long tenantId);
@@ -102,7 +104,7 @@ public interface AiUsageLogMapper extends BaseMapper<AiUsageLog> {
                COALESCE(SUM(total_tokens), 0) AS tokenTotal,
                COALESCE(AVG(CASE WHEN latency_ms > 0 THEN latency_ms END), 0) AS avgLatencyMs
         FROM ai_usage_log
-        WHERE tenant_id = #{tenantId}
+        WHERE tenant_id = #{tenantId} AND is_deleted = 0
         """)
     Map<String, Object> selectSummaryStatsByTenant(@Param("tenantId") Long tenantId);
 }
