@@ -192,6 +192,15 @@ else
   ROOT="/opt/ypbin/${_safe}"
 fi
 ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
+# 分支/独立目录部署：docker compose 项目名必须唯一——不同分支的 compose 若同在
+# "deploy" 目录名下会共用同一项目名，导致 MySQL/Redis 等命名卷与网络互相串用
+# （典型事故：feature 部署复用了 main 的 MySQL 卷 → root 密码不匹配 Access denied）。
+# main 部署保持默认（无前缀），其余按 ROOT 生成唯一前缀；仍注意同机并行需端口/容器名不冲突。
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+if [ -z "$COMPOSE_PROJECT_NAME" ] && [ "$ROOT" != "/opt/ypbin/main" ]; then
+  COMPOSE_PROJECT_NAME="ypbin$(printf '%s' "$ROOT" | md5sum 2>/dev/null | cut -c1-10)"
+fi
+[ -n "$COMPOSE_PROJECT_NAME" ] && export COMPOSE_PROJECT_NAME
 
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
@@ -570,19 +579,31 @@ else
     fi
   }
   infra_ok=0
-  # 官方源先试；随后逐个尝试探测通过的国内加速
-  for reg in "" $DOCKER_REGISTRY_CANDIDATES; do
-    if infra_up "$reg" >/tmp/infra-up.log 2>&1; then
-      if [ -n "$reg" ]; then
-        ok "基础设施镜像经镜像加速拉取成功：${reg%/}"
-        echo "REGISTRY_PREFIX=$reg" >> "$ENV_FILE"
-        warn "已将 REGISTRY_PREFIX=$reg 写入 .env（后续 compose up 复用）"
-      fi
+  # 本地已具备全部基础设施镜像（如经 docker load 导入）→ 直接起，不联网拉取；
+  # up 失败且因自定义网络网段与残留旧网络重叠时，清理无容器使用的网络后重试一次
+  infra_up_retry() { # 先官方起；失败清理残留网络再起一次；仍失败交候选循环
+    infra_up "" || { docker network prune -f >/dev/null 2>&1; infra_up ""; }
+  }
+  if docker image inspect mysql:8.4 nacos/nacos-server:v3.2.4 redis:7-alpine >/dev/null 2>&1; then
+    if infra_up_retry >/tmp/infra-up.log 2>&1; then
       infra_ok=1
-      break
     fi
-    [ -n "$reg" ] && warn "镜像加速 ${reg%/} 拉取失败，尝试下一个..."
-  done
+  fi
+  # 本地镜像缺失或官方/本地起失败 → 逐个尝试探测通过的国内加速
+  if [ "$infra_ok" != "1" ]; then
+    for reg in $DOCKER_REGISTRY_CANDIDATES; do
+      if infra_up "$reg" >/tmp/infra-up.log 2>&1; then
+        if [ -n "$reg" ]; then
+          ok "基础设施镜像经镜像加速拉取成功：${reg%/}"
+          echo "REGISTRY_PREFIX=$reg" >> "$ENV_FILE"
+          warn "已将 REGISTRY_PREFIX=$reg 写入 .env（后续 compose up 复用）"
+        fi
+        infra_ok=1
+        break
+      fi
+      [ -n "$reg" ] && warn "镜像加速 ${reg%/} 拉取失败，尝试下一个..."
+    done
+  fi
   if [ "$infra_ok" != "1" ]; then
     tail -5 /tmp/infra-up.log 2>/dev/null || true
     die "基础设施镜像拉取失败（Docker Hub 与国内加速均不可达）：请手动 export REGISTRY_PREFIX=<可用加速前缀> 后重跑"
