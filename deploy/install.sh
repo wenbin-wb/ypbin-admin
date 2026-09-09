@@ -225,6 +225,38 @@ else
   SKIP_PULL=0 SKIP_BUILD=0
 fi
 
+# —— 启用 apt universe/multiverse（maven 等位于 universe，部分镜像默认仅 main/restricted）——
+apt_ensure_universe() {
+  local touched=0 f
+  for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] || continue
+    if grep -qE '^Components:.*universe' "$f" 2>/dev/null; then continue; fi
+    if grep -qE '^Components:' "$f" 2>/dev/null; then
+      sed -i 's/^Components: \(.*\)$/Components: \1 universe multiverse/' "$f" && touched=1
+    elif grep -qE '^[[:space:]]*deb[[:space:]]' "$f" 2>/dev/null; then
+      # legacy 单行式（deb uri suite main restricted）
+      if ! grep -qE '^deb .*universe' "$f"; then
+        sed -i -E 's/^([[:space:]]*deb[[:space:]]+\S+[[:space:]]+\S+[[:space:]]+(main|restricted)([[:space:]]|$))/\1 universe multiverse\3/' "$f" && touched=1
+      fi
+    fi
+  done
+  if [ "$touched" = "1" ]; then
+    warn "已启用 universe/multiverse 组件（maven 等依赖包）"
+    apt-get update -y >/dev/null 2>&1 || true
+  fi
+}
+
+# —— 阿里 Apache Maven 镜像兜底安装（apt 源缺失/过旧时）——
+install_maven_from_mirror() {
+  local ver="3.9.9" dest="/opt/apache-maven-${ver}" url
+  url="https://mirrors.aliyun.com/apache/maven/maven-3/${ver}/binaries/apache-maven-${ver}-bin.tar.gz"
+  warn "apt 安装 Maven 失败，改从阿里镜像下载 Maven ${ver} ..."
+  curl -fsSL -o /tmp/apache-maven.tar.gz "$url" || return 1
+  tar -xzf /tmp/apache-maven.tar.gz -C /opt 2>/dev/null || return 1
+  ln -sf "${dest}/bin/mvn" /usr/local/bin/mvn
+  command -v mvn >/dev/null 2>&1
+}
+
 # ---------- [1/7] 环境准备 ----------
 info "[1/7] 检查并安装依赖"
 command -v git >/dev/null 2>&1 || { apt-get update -y && apt-get install -y git; }
@@ -247,7 +279,13 @@ if ! command -v java >/dev/null 2>&1; then
   apt-get install -y openjdk-21-jdk-headless 2>/dev/null || die "JDK 21 安装失败"
 fi
 if ! command -v mvn >/dev/null 2>&1; then
-  apt-get install -y maven 2>/dev/null || die "Maven 安装失败"
+  if ! apt-get install -y maven >/dev/null 2>&1; then
+    # maven 位于 universe 组件：先启用组件再装，仍失败走阿里镜像二进制
+    apt_ensure_universe
+    if ! apt-get install -y maven >/dev/null 2>&1; then
+      install_maven_from_mirror || die "Maven 安装失败：apt 与阿里镜像均不可用（网络？）"
+    fi
+  fi
 fi
 JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
 export JAVA_HOME
