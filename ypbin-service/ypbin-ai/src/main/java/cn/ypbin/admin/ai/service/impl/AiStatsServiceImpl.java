@@ -12,7 +12,6 @@ package cn.ypbin.admin.ai.service.impl;
 import cn.ypbin.admin.ai.entity.AiDocument;
 import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.ai.entity.AiQueryLog;
-import cn.ypbin.admin.ai.entity.AiUsageLog;
 import cn.ypbin.admin.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.ai.mapper.AiQueryLogMapper;
@@ -27,7 +26,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -73,39 +71,37 @@ public class AiStatsServiceImpl implements AiStatsService {
     public List<Map<String, Object>> daily(int days) {
         Long tenantId = currentTenantId();
         int range = days > 0 && days <= 90 ? days : 30;
-        LocalDateTime from = LocalDate.now().minusDays(range - 1L).atStartOfDay();
-        LocalDateTime to = LocalDate.now().plusDays(1).atStartOfDay();
+        LocalDate today = LocalDate.now();
+        LocalDateTime from = today.minusDays(range - 1L).atStartOfDay();
+        LocalDateTime to = today.plusDays(1).atStartOfDay();
 
-        List<AiUsageLog> usageLogs = usageLogMapper.selectList(
-            new LambdaQueryWrapper<AiUsageLog>()
-                .eq(AiUsageLog::getTenantId, tenantId)
-                .between(AiUsageLog::getCreateTime, from, to));
-        List<AiQueryLog> queryLogs = queryLogMapper.selectList(
-            new LambdaQueryWrapper<AiQueryLog>()
-                .eq(AiQueryLog::getTenantId, tenantId)
-                .between(AiQueryLog::getCreateTime, from, to));
+        // SQL 层按天聚合用量与问答日志，避免窗口内全量行拉取后在 JVM 汇总
+        List<Map<String, Object>> usageRows = usageLogMapper.selectDailySummaryByTenant(tenantId, from, to);
+        List<Map<String, Object>> queryRows = queryLogMapper.selectDailyCountByTenant(tenantId, from, to);
 
         Map<String, Map<String, Object>> byDay = new LinkedHashMap<>();
         // 预填充缺失日期，保证趋势图连续
         for (int i = 0; i < range; i++) {
-            String day = LocalDate.now().minusDays(range - 1L - i).toString();
+            String day = today.minusDays(range - 1L - i).toString();
             byDay.put(day, new LinkedHashMap<>(Map.of(
                 "date", day, "chatCount", 0L, "queryCount", 0L, "tokenCount", 0L)));
         }
-        usageLogs.forEach(log -> {
-            Map<String, Object> cell = byDay.get(log.getCreateTime().toLocalDate().toString());
+        for (Map<String, Object> row : usageRows) {
+            Map<String, Object> cell = byDay.get(row.get("statDate"));
             if (cell != null) {
-                cell.put("chatCount", (long) cell.get("chatCount") + 1);
+                cell.put("chatCount", (long) cell.get("chatCount")
+                    + ((Number) row.get("chatCount")).longValue());
                 cell.put("tokenCount", (long) cell.get("tokenCount")
-                    + (log.getTotalTokens() == null ? 0L : log.getTotalTokens().longValue()));
+                    + ((Number) row.get("tokenTotal")).longValue());
             }
-        });
-        queryLogs.forEach(log -> {
-            Map<String, Object> cell = byDay.get(log.getCreateTime().toLocalDate().toString());
+        }
+        for (Map<String, Object> row : queryRows) {
+            Map<String, Object> cell = byDay.get(row.get("statDate"));
             if (cell != null) {
-                cell.put("queryCount", (long) cell.get("queryCount") + 1);
+                cell.put("queryCount", (long) cell.get("queryCount")
+                    + ((Number) row.get("queryCount")).longValue());
             }
-        });
+        }
         return new ArrayList<>(byDay.values());
     }
 
@@ -113,16 +109,12 @@ public class AiStatsServiceImpl implements AiStatsService {
     public List<Map<String, Object>> hotQueries(int limit) {
         Long tenantId = currentTenantId();
         int topN = limit > 0 && limit <= 50 ? limit : 10;
-        List<AiQueryLog> logs = queryLogMapper.selectList(
-            new LambdaQueryWrapper<AiQueryLog>().eq(AiQueryLog::getTenantId, tenantId));
-        Map<String, Long> grouped = logs.stream()
-            .collect(Collectors.groupingBy(
-                l -> normalizeQuery(l.getQuery()),
-                Collectors.counting()));
-        return grouped.entrySet().stream()
-            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-            .limit(topN)
-            .map(e -> Map.<String, Object>of("query", e.getKey(), "count", e.getValue()))
+        // SQL 层归一化问题文本（去首尾空白、折叠空白、截断 100 字符）后分组计数，避免全表拉取
+        List<Map<String, Object>> rows = queryLogMapper.selectHotQueries(tenantId, topN);
+        return rows.stream()
+            .map(row -> Map.<String, Object>of(
+                "query", row.get("normQuery"),
+                "count", row.get("queryCount")))
             .toList();
     }
 
@@ -138,15 +130,6 @@ public class AiStatsServiceImpl implements AiStatsService {
                 "name", kb.getName(),
                 "docCount", kb.getDocCount() != null ? kb.getDocCount() : 0))
             .toList();
-    }
-
-    /** 热词归一化：去首尾空白、折叠空白、截断，避免换行/超长污染统计 */
-    private static String normalizeQuery(String query) {
-        if (query == null) {
-            return "";
-        }
-        String trimmed = query.trim().replaceAll("\\s+", " ");
-        return trimmed.length() > 100 ? trimmed.substring(0, 100) : trimmed;
     }
 
     private static Long currentTenantId() {

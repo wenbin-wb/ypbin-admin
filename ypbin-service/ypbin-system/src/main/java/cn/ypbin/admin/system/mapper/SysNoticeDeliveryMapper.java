@@ -12,6 +12,8 @@ package cn.ypbin.admin.system.mapper;
 import cn.ypbin.admin.system.entity.SysNoticeDelivery;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
@@ -22,6 +24,29 @@ import org.apache.ibatis.annotations.Update;
  * @since 2026-08-09
  */
 public interface SysNoticeDeliveryMapper extends BaseMapper<SysNoticeDelivery> {
+
+    /**
+     * 批量插入投递记录（单条多值 INSERT）。
+     *
+     * <p>公告全体发布时目标用户×通道的投递记录可达数万条，逐条 insert 会产生同等数量
+     * 的单行写入并拉长发布事务；改为一次多值 INSERT 后事务内往返次数大幅下降。</p>
+     *
+     * @param deliveries 待插入的投递记录集合（必须非空，由调用方分块传入）
+     * @return 影响行数
+     */
+    @Insert("<script>"
+        + "INSERT INTO sys_notice_delivery"
+        + " (id, tenant_id, notice_id, publish_version, receiver_user_id,"
+        + "  channel, target_address, delivery_status, retry_count,"
+        + "  next_retry_time, create_time, update_time)"
+        + " VALUES "
+        + "<foreach collection='deliveries' item='d' separator=','>"
+        + " (#{d.id}, #{d.tenantId}, #{d.noticeId}, #{d.publishVersion}, #{d.receiverUserId},"
+        + "  #{d.channel}, #{d.targetAddress}, #{d.deliveryStatus}, #{d.retryCount},"
+        + "  #{d.nextRetryTime}, #{d.createTime}, #{d.updateTime})"
+        + "</foreach>"
+        + "</script>")
+    int insertBatch(@Param("deliveries") Collection<SysNoticeDelivery> deliveries);
 
     @Update("""
         UPDATE sys_notice_delivery
