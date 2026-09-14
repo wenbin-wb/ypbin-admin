@@ -27,9 +27,12 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -233,6 +236,22 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
     }
 
     private String generateInviteCode() {
+        // 一次性生成 10 个候选邀请码，单次 IN 查询批量排除正在使用中的邀请码，杜绝循环查 DB
+        List<String> candidates = new ArrayList<>(10);
+        for (int i = 0; i < 10; i++) {
+            candidates.add(String.valueOf(100000 + RANDOM.nextInt(900000)));
+        }
+        Set<String> usedCodes = list(new LambdaQueryWrapper<FamilymenuRoom>()
+            .select(FamilymenuRoom::getInviteCode)
+            .in(FamilymenuRoom::getInviteCode, candidates))
+            .stream()
+            .map(FamilymenuRoom::getInviteCode)
+            .collect(Collectors.toSet());
+        for (String c : candidates) {
+            if (!usedCodes.contains(c)) {
+                return c;
+            }
+        }
         return String.valueOf(100000 + RANDOM.nextInt(900000));
     }
 

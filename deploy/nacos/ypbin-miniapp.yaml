@@ -1,10 +1,16 @@
 # ============================================================
--- ypbin-miniapp 服务配置（Nacos 配置中心）
--- Data ID: ypbin-miniapp.yaml | Group: DEFAULT_GROUP | 格式: YAML
+# ypbin-miniapp 服务配置（Nacos 配置中心）
+# Data ID: ypbin-miniapp.yaml | Group: DEFAULT_GROUP | 格式: YAML
 # ============================================================
 
 ypbin:
+  # 身份头来源校验：仅信任带网关签名标记的身份头；未配置密钥则拒绝启动（fail-fast）
+  cloud:
+    feign:
+      trusted-source-token: ${GATEWAY_SIGN_TOKEN}
+      require-trusted-source: true
   security:
     interceptor: false
     excludes:
       - /actuator/**
+
