@@ -28,7 +28,7 @@
         <ypbin-starter.version>3.0.0</ypbin-starter.version>
         <sa-token.version>1.46.0</sa-token.version>
         <sms4j.version>3.3.5</sms4j.version>
-        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
+        <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
         <lombok.version>1.18.46</lombok.version>
         <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
     </properties>
