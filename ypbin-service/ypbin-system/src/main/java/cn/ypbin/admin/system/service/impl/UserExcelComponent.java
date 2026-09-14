@@ -87,7 +87,7 @@ public class UserExcelComponent {
             .toList();
 
         Map<Long, String> deptMap = deptIds.isEmpty() ? Map.of() :
-            deptMapper.selectBatchIds(deptIds).stream()
+            deptMapper.selectByIds(deptIds).stream()
                 .collect(Collectors.toMap(SysDept::getId, SysDept::getName, (k1, k2) -> k1));
 
         List<UserExportVo> list = users.stream().map(u -> {

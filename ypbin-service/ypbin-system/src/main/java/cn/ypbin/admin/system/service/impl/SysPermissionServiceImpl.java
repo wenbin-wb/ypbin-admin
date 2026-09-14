@@ -49,7 +49,7 @@ public class SysPermissionServiceImpl implements SysPermissionService, PlatformU
                 return List.of(AdminConstants.ALL_PERMISSION);
             }
             SysUser user = userMapper.selectById(userId);
-            if (user == null || user.getStatus() == null || user.getStatus() != 1) {
+            if (user == null || !EntityStatus.ENABLED.getCode().equals(user.getStatus())) {
                 return List.of();
             }
             boolean platformUser = AdminConstants.USER_TYPE_PLATFORM.equals(user.getUserType());
@@ -78,7 +78,7 @@ public class SysPermissionServiceImpl implements SysPermissionService, PlatformU
     public boolean isPlatformUser(Long userId) {
         return TenantContext.executeIgnore(() -> userMapper.selectCount(new LambdaQueryWrapper<SysUser>()
             .eq(SysUser::getId, userId)
-            .eq(SysUser::getUserType, "PLATFORM")
+            .eq(SysUser::getUserType, AdminConstants.USER_TYPE_PLATFORM)
             .eq(SysUser::getStatus, EntityStatus.ENABLED.getCode())
             .eq(SysUser::getIsDeleted, 0)) > 0);
     }

@@ -7,6 +7,10 @@
 ypbin:
   tenant:
     enabled: true
+    # fail-closed：无租户上下文时拒绝执行（而非放行跨租户查询）。
+    # 登录、匿名分享、定时任务等本无租户上下文的路径已用 @TenantIgnore / TenantContext.executeIgnore 显式放行，
+    # 若上线后出现「缺少租户上下文」报错，说明该路径漏了显式忽略声明，应补声明而非关闭本开关。
+    fail-on-missing-tenant: true
     # 不做租户隔离的全局表（与单体版对齐）
     ignore-tables:
       - sys_menu
@@ -27,6 +31,11 @@ ypbin:
       - sys_auth_template
       - sys_template_menu
       - sys_license
+  # 身份头来源校验：仅信任带网关签名标记的身份头；未配置密钥则拒绝启动（fail-fast）
+  cloud:
+    feign:
+      trusted-source-token: ${GATEWAY_SIGN_TOKEN}
+      require-trusted-source: true
   data-permission:
     enabled: true
   # 本应用是授权签发端，不启用 starter License 自保护

@@ -35,4 +35,13 @@ public class UserImportResult implements Serializable {
 
     /** 失败原因列表 */
     private List<String> failureMessages = new ArrayList<>();
+
+    /**
+     * 失败原因列表（返回不可变副本，避免外部修改内部状态）。
+     *
+     * @return 失败原因
+     */
+    public List<String> getFailureMessages() {
+        return List.copyOf(failureMessages);
+    }
 }

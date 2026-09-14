@@ -41,9 +41,7 @@
 # GitHub 可直连时（默认部署 main 分支；加 -b 可指定分支，如 -b feature/miniapp-backend）：
 bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -b feature/miniapp-backend
 
-# 国内服务器（GitHub 不可达，自动降级 Gitee 同名镜像，需先在 Gitee 建 ypbin-* 三镜像并开启自动同步）：
-bash <(curl -fsSL https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh) -b feature/miniapp-backend
-
+bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh) -b feature/miniapp-backend
 # 仓库源策略：默认探测 GitHub（3s 快超时）→ 不可达切 Gitee → 均不可达请显式指定
 # YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；拉基础镜像困难时可加 REGISTRY_PREFIX=docker.m.daocloud.io/
 
@@ -56,6 +54,12 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
 - 命令行参数：`-b, --branch <分支名>`（指定代码分支）、`--root <目录>`（指定部署目录）、`-y, --yes`（免确认自动运行）；
 - 目录自动隔离：当未指定 `--root` 时，脚本将自动按分支名隔离目录（例如 `feature/miniapp-backend` 自动部署在 `/opt/ypbin/feature-miniapp-backend`，主分支在 `/opt/ypbin/main`），彻底杜绝多分支部署相互污染；
 - 环境变量覆盖：`BRANCH`、`YPBIN_ROOT`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`。
+
+**分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
+
+**网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
+
+**初始口令**：业务超管在种子 `deploy/sql/002-data.sql`（bcrypt，首登立即改密）；MySQL/Redis/Nacos/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos/XXL-JOB 控制台默认 `nacos/nacos`、`admin/123456`。
 
 **方式二：手动**：
 

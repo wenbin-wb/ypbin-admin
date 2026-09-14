@@ -12,6 +12,7 @@ package cn.ypbin.admin.ai.service.impl;
 import cn.ypbin.admin.ai.entity.AiQueryLog;
 import cn.ypbin.admin.ai.mapper.AiQueryLogMapper;
 import cn.ypbin.admin.ai.model.resp.KbQueryResult;
+import cn.ypbin.admin.common.util.LogSanitizer;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -155,7 +156,7 @@ public class AiKnowledgeSearchComponent {
             queryLogMapper.insert(logEntry);
         } catch (Exception e) {
             log.warn("[ypbin-ai] 记录检索日志失败: kbId={} query={} err={}",
-                knowledgeBaseId, query, e.getMessage());
+                knowledgeBaseId, LogSanitizer.sanitize(query), LogSanitizer.sanitize(e.getMessage()));
         }
     }
 

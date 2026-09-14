@@ -11,13 +11,12 @@ package cn.ypbin.admin.ai.service.impl;
 
 import cn.ypbin.admin.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.common.util.LogSanitizer;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;
 import com.rometools.rome.io.SyndFeedInput;
 import java.io.StringReader;
-import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -32,6 +31,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.http.client.InetAddressFilter;
 import org.springframework.stereotype.Component;
 
 /**
@@ -82,7 +82,16 @@ public class AiKnowledgeImportComponent {
     /** 重定向拒绝时的可读提示 */
     private static final String REDIRECT_REJECT_HINT = "（已拒绝跟随重定向，请使用最终直达地址）";
 
+    /**
+     * 出站地址白名单过滤器：仅匹配公网可路由地址（Boot 4.1 内置完整特殊用途网段清单），
+     * 用于阻断 SSRF（内网、环回、链路本地、CGNAT 元数据段等）。
+     */
+    private static final InetAddressFilter EXTERNAL_ADDRESS_FILTER = InetAddressFilter.externalAddresses();
+
     private final AiKnowledgeCrudComponent crudComponent;
+
+    /** 统一收口的抓取客户端：内置 SSRF 校验与瞬时故障重试 */
+    private final AiUrlFetcher urlFetcher;
 
     public List<AiDocumentVO> importFromUrl(Long knowledgeBaseId, AiDocumentImportReq req) {
         crudComponent.requireKb(knowledgeBaseId);
@@ -104,8 +113,7 @@ public class AiKnowledgeImportComponent {
         String content;
         String title;
         try {
-            Connection.Response response = guardedConnection(url).execute();
-            ensureSuccessful(response, url);
+            Connection.Response response = urlFetcher.fetch(url);
             var htmlDoc = response.parse();
             title = (customTitle != null && !customTitle.isBlank())
                 ? customTitle : htmlDoc.title();
@@ -118,7 +126,7 @@ public class AiKnowledgeImportComponent {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("[ypbin-ai] 抓取 URL 失败: url={}", url, e);
+            log.error("[ypbin-ai] 抓取 URL 失败: url={}", LogSanitizer.sanitize(url), e);
             throw new BusinessException("抓取 URL 失败：" + url);
         }
         if (content.isBlank()) {
@@ -135,10 +143,7 @@ public class AiKnowledgeImportComponent {
         List<String> urls;
         try {
             // 站点地图为 XML：内容类型忽略校验
-            Connection.Response response = guardedConnection(sitemapUrl)
-                .ignoreContentType(true)
-                .execute();
-            ensureSuccessful(response, sitemapUrl);
+            Connection.Response response = urlFetcher.fetchIgnoringContentType(sitemapUrl);
             var xml = response.parse();
             // 优先 urlset 的 loc；若为 sitemapindex，则只取一层子 sitemap 的 url（递归深度封顶 2 层）
             Elements locs = xml.select("urlset > url > loc");
@@ -149,10 +154,8 @@ public class AiKnowledgeImportComponent {
                         break;
                     }
                     try {
-                        Connection.Response subResponse = guardedConnection(sub.text())
-                            .ignoreContentType(true)
-                            .execute();
-                        ensureSuccessful(subResponse, sub.text());
+                        Connection.Response subResponse =
+                            urlFetcher.fetchIgnoringContentType(sub.text());
                         locs.addAll(subResponse.parse().select("urlset > url > loc"));
                     } catch (Exception e) {
                         log.warn("[ypbin-ai] sitemap 子文件解析失败: url={} err={}",
@@ -164,7 +167,7 @@ public class AiKnowledgeImportComponent {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("[ypbin-ai] 解析 Sitemap 失败: url={}", sitemapUrl, e);
+            log.error("[ypbin-ai] 解析 Sitemap 失败: url={}", LogSanitizer.sanitize(sitemapUrl), e);
             throw new BusinessException("解析 Sitemap 失败：" + sitemapUrl);
         }
         if (urls.isEmpty()) {
@@ -191,16 +194,13 @@ public class AiKnowledgeImportComponent {
         List<SyndEntry> entries;
         try {
             // Feed 以文本抓取（受超时/大小上限/目标校验约束），再交给 Rome 解析，避免直接 URL 抓取无约束
-            Connection.Response response = guardedConnection(feedUrl)
-                .ignoreContentType(true)
-                .execute();
-            ensureSuccessful(response, feedUrl);
+            Connection.Response response = urlFetcher.fetchIgnoringContentType(feedUrl);
             SyndFeed feed = new SyndFeedInput().build(new StringReader(response.body()));
             entries = feed.getEntries() != null ? feed.getEntries() : List.of();
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("[ypbin-ai] 解析 RSS/Atom 失败: url={}", feedUrl, e);
+            log.error("[ypbin-ai] 解析 RSS/Atom 失败: url={}", LogSanitizer.sanitize(feedUrl), e);
             throw new BusinessException("解析 RSS/Atom 失败：" + feedUrl);
         }
         if (entries.isEmpty()) {
@@ -244,10 +244,12 @@ public class AiKnowledgeImportComponent {
      * 构造受防护的 Jsoup 连接：先做协议/目标地址校验，再显式设置超时、响应体上限与
      * 禁止重定向（重定向会绕过域名层校验，直接拒绝并要求使用直达地址）。
      *
+     * <p>包级可见供 {@link AiUrlFetcher} 复用，使 SSRF 校验与抓取重试在同一收口内。</p>
+     *
      * @param url 目标地址
      * @return Jsoup 连接
      */
-    private static Connection guardedConnection(String url) {
+    static Connection guardedConnection(String url) {
         requireSafeHttpUrl(url);
         return Jsoup.connect(url)
             .userAgent(USER_AGENT)
@@ -262,7 +264,7 @@ public class AiKnowledgeImportComponent {
      * @param response 响应
      * @param url      目标地址（用于提示）
      */
-    private static void ensureSuccessful(Connection.Response response, String url) {
+    static void ensureSuccessful(Connection.Response response, String url) {
         int status = response.statusCode();
         if (status >= 300 && status < 400) {
             throw new BusinessException(
@@ -330,45 +332,17 @@ public class AiKnowledgeImportComponent {
     }
 
     /**
-     * 单地址黑名单判定。
+     * 单地址黑名单判定：仅放行「公网可路由地址」，其余（环回、链路本地、私网、CGNAT、
+     * 组播、文档/基准测试/协议保留等特殊用途网段）一律拦截。
      *
-     * <p>覆盖：环回（127.0.0.0/8、::1）、链路本地（169.254.0.0/16、fe80::/10）、
-     * 私网（10/8、172.16.0.0/12、192.168/16、fc00::/7 ULA、fec0::/10 site-local）、
-     * 未指定（0.0.0.0、::）、组播与 IPv4 保留/实验段（224.0.0.0/4 起）。</p>
+     * <p>判定委托 Spring Boot 4.1 的 {@link InetAddressFilter#externalAddresses()}——它由框架维护
+     * 完整的特殊用途网段清单（含 {@code 100.64.0.0/10} CGNAT，即云厂商元数据服务段如
+     * 100.100.100.200），比自行枚举更全面且随版本更新，避免遗漏新保留段。</p>
      *
      * @param address 解析出的地址
      * @return 命中黑名单返回 true
      */
     private static boolean isBlockedAddress(InetAddress address) {
-        if (address.isAnyLocalAddress() || address.isLoopbackAddress()
-            || address.isLinkLocalAddress() || address.isSiteLocalAddress()
-            || address.isMulticastAddress()) {
-            return true;
-        }
-        if (address instanceof Inet4Address) {
-            byte[] ipv4 = address.getAddress();
-            int firstByte = ipv4[0] & 0xFF;
-            int secondByte = ipv4[1] & 0xFF;
-            // 100.64.0.0/10 运营商级 NAT（CGNAT）保留段：云厂商元数据服务地址亦落此段
-            // （如阿里云 100.100.100.200），Java 的 isSiteLocalAddress 不覆盖该段，须显式拦截
-            if (firstByte == 100 && (secondByte & 0xC0) == 0x40) {
-                return true;
-            }
-            // 192.0.0.0/24 IANA 协议分配保留段（含 192.0.0.9/.10 等特殊用途地址）
-            if (firstByte == 192 && secondByte == 0) {
-                return true;
-            }
-            // 198.18.0.0/15 IANA 基准测试保留段
-            if (firstByte == 198 && (secondByte & 0xFE) == 0x12) {
-                return true;
-            }
-            // 224.0.0.0/4 组播（已单独判定）+ 240.0.0.0/4 保留
-            return firstByte >= 224;
-        }
-        if (address instanceof Inet6Address) {
-            byte[] bytes = address.getAddress();
-            return (bytes[0] & 0xFE) == 0xFC;
-        }
-        return false;
+        return !EXTERNAL_ADDRESS_FILTER.matches(address);
     }
 }

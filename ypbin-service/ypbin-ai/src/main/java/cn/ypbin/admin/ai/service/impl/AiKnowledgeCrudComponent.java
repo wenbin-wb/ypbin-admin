@@ -21,6 +21,7 @@ import cn.ypbin.admin.ai.model.req.AiKnowledgeBaseUpdateReq;
 import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.ai.model.resp.AiKnowledgeBaseResp;
 import cn.ypbin.admin.ai.service.AiDocumentVectorizer;
+import cn.ypbin.admin.common.util.LogSanitizer;
 import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageQuery;
@@ -169,7 +170,8 @@ public class AiKnowledgeCrudComponent {
                 results.add(uploadDocument(knowledgeBaseId, file));
             } catch (Exception e) {
                 failed++;
-                log.warn("[ypbin-ai] 批量上传单个文件失败: filename={}", file.getOriginalFilename(), e);
+                log.warn("[ypbin-ai] 批量上传单个文件失败: filename={}",
+                LogSanitizer.sanitize(file.getOriginalFilename()), e);
             }
         }
         if (failed > 0 && results.isEmpty()) {
@@ -333,7 +335,7 @@ public class AiKnowledgeCrudComponent {
         if (distinctIds.contains(null)) {
             throw new BusinessException("知识库 ID 不能为空");
         }
-        List<AiKnowledgeBase> kbs = kbMapper.selectBatchIds(distinctIds);
+        List<AiKnowledgeBase> kbs = kbMapper.selectByIds(distinctIds);
         if (kbs.size() != distinctIds.size()) {
             throw new BusinessException("知识库不存在");
         }
@@ -366,7 +368,12 @@ public class AiKnowledgeCrudComponent {
             Files.createDirectories(dir);
             String safeName = (filename == null || filename.isBlank())
                 ? "document" : filename.replaceAll("[\\\\/:*?\"<>|]", "_");
-            Path target = dir.resolve(docId + "-" + safeName);
+            Path normalizedDir = dir.normalize();
+            Path target = normalizedDir.resolve(docId + "-" + safeName).normalize();
+            // 纵深防御：即便文件名清洗规则被绕过，也保证最终路径仍落在目标目录内（防路径穿越）
+            if (!target.startsWith(normalizedDir)) {
+                throw new BusinessException("文件名非法，拒绝落盘");
+            }
             Files.write(target, bytes);
             return target.toAbsolutePath().toString();
         } catch (IOException e) {

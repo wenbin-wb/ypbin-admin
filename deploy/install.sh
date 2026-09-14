@@ -6,9 +6,9 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
 #
 # 国内服务器（GitHub 不可达，推荐走 Gitee 镜像源一键）：
-#   bash <(curl -fsSL https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh)
+#   bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
 #   仓库源自动探测：默认直连 GitHub（3s 快超时）；不可达自动降级为 Gitee 同名镜像
-#   （gitee.com/wenbin-wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
+#   （gitee.com/wenbin_wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
 #   两者都不可达时按下方 YPBIN_REPO 手工指定镜像/代理前缀后重跑。
 #
 # 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
@@ -30,8 +30,8 @@
 #   -y, --yes                      跳过所有交互确认（自动模式）
 #   YPBIN_ROOT=/opt/ypbin/main      部署根目录（默认 /opt/ypbin/main，未指定时按分支自动推导隔离目录）
 #   YPBIN_REPO=https://github.com/wenbin-wb   显式仓库前缀（跳过自动探测；可指向 Gitee
-#                                   镜像 gitee.com/wenbin-wb 或 ghproxy 等代理前缀）
-#   GITEE_REPO=https://gitee.com/wenbin-wb    自动降级目标（默认 Gitee 同名镜像）
+#                                   镜像 gitee.com/wenbin_wb 或 ghproxy 等代理前缀）
+#   GITEE_REPO=https://gitee.com/wenbin_wb    自动降级目标（默认 Gitee 同名镜像）
 #   BRANCH=main    admin 分支（默认 main）
 #   NACOS_ADDR=localhost:8848      Nacos 地址（NO_DOCKER 模式必填）
 #   DB_HOST=localhost DB_PORT=3306 DB_NAME=ypbin_admin DB_USER=root DB_PASSWORD=
@@ -39,11 +39,16 @@
 #   REDIS_PASSWORD=                Redis 密码（Docker 模式自动随机生成；NO_DOCKER 用外部 Redis
 #                                  有密码时须传入（导入 Nacos 共享配置用），无认证可留空）
 #   MYSQL_ROOT_PASSWORD=           Docker 模式内建 MySQL 密码（必填）
+#   AI_MODEL_SECRET_KEY=           AI 模型 API Key 的加密密钥（**必填**，16/24/32 字节）。
+#                                  用于加解密库内已存的模型密钥，**必须长期保持不变**——换新值后旧密文
+#                                  无法解密。生成：openssl rand -base64 32
 #   NACOS_AUTH_TOKEN= NACOS_AUTH_IDENTITY_KEY= NACOS_AUTH_IDENTITY_VALUE=
 #                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
 #                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
 #   INTERNAL_TOKEN=                /internal/** 服务间 Feign 调用凭证（守卫校验，自动随机生成，
 #                                  auth/system/ai 共享一致值，一般无需手传）
+#   GATEWAY_SIGN_TOKEN=            网关身份头签名标记（防伪造，自动随机生成；gateway 签发、
+#                                  auth/system/ai 校验，一般无需手传）
 #   REGISTRY_PREFIX=               Docker 镜像加速前缀（如 docker.m.daocloud.io/；留空=官方源）
 #   NO_DOCKER=1                    无 Docker 模式：java -jar 直接启动
 # ============================================================
@@ -67,7 +72,7 @@ done
 # 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
 SCRIPT_VERSION="2026.09.08.1"
 SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
-GITEE_SCRIPT_URL="https://gitee.com/wenbin-wb/ypbin-admin/raw/main/deploy/install.sh"
+GITEE_SCRIPT_URL="https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh"
 # 脚本源连通探测（3s 快超时）：GitHub raw 不可达时降级 Gitee raw（内容同源）
 resolve_script_url() {
   if [ -n "${YPBIN_SCRIPT_URL:-}" ]; then printf '%s' "$SCRIPT_URL"; return; fi
@@ -98,65 +103,127 @@ ok()   { echo -e "\033[32m✓  $*\033[0m"; }
 warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
+<<<<<<< HEAD
 # ---------- 参数解析（支持命令行参数与环境变量） ----------
 BRANCH="${BRANCH:-main}"
 CUSTOM_ROOT="${YPBIN_ROOT:-}"
+=======
+# —— 国内服务器 APT/Docker 源自愈（Ubuntu/Debian）——
+# 检测官方国外源并备份切换为阿里镜像（sources.list 旧格式 + .sources deb822 均处理）；
+# 随后为 docker-compose-plugin 配置阿里 docker-ce 源。备份保留在 /etc/apt/*.bak*，失败不覆盖原配置。
+apt_docker_ce_selfheal() {
+  [ -f /etc/os-release ] || return 1
+  local distro codename id
+  id="$(. /etc/os-release && echo "$ID")"
+  case "$id" in ubuntu|debian) ;; *) return 1 ;; esac
+  codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+  # 1) 备份并切换官方源 -> 阿里镜像（仅当确实指向官方国外域名且备份不存在时）
+  local changed=0
+  if [ -f /etc/apt/sources.list ] && grep -qE '(archive\.ubuntu\.com|security\.ubuntu\.com|deb\.debian\.org)' /etc/apt/sources.list; then
+    cp -a /etc/apt/sources.list "/etc/apt/sources.list.bak.ypbin" 2>/dev/null || true
+    sed -i -E 's|(https?://)archive\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)security\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)deb\.debian\.org|\1mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null && changed=1
+  fi
+  for f in /etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] || continue
+    if grep -qE '(archive\.ubuntu\.com|security\.ubuntu\.com|deb\.debian\.org)' "$f"; then
+      cp -a "$f" "$f.bak.ypbin" 2>/dev/null || true
+      sed -i -E 's|(https?://)archive\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)security\.ubuntu\.com|\1mirrors.aliyun.com|g; s|(https?://)deb\.debian\.org|\1mirrors.aliyun.com|g' "$f" 2>/dev/null && changed=1
+    fi
+  done
+  [ "$changed" = "1" ] && { warn "系统 APT 源已切换阿里镜像（原文件备份 .bak.ypbin）"; apt-get update -y >/dev/null 2>&1 || true; }
+  # 2) 配置阿里 docker-ce 源（compose 插件所在），再装
+  if ! docker compose version >/dev/null 2>&1; then
+    if [ ! -f /etc/apt/keyrings/docker.asc ]; then
+      install -m 0755 -d /etc/apt/keyrings 2>/dev/null || true
+      curl -fsSL "https://mirrors.aliyun.com/docker-ce/linux/${id}/gpg" 2>/dev/null | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null && {
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/${id} ${codename} stable" > /etc/apt/sources.list.d/docker.list 2>/dev/null || true
+        apt-get update -y >/dev/null 2>&1 || true
+      }
+    fi
+    apt-get install -y docker-compose-plugin >/dev/null 2>&1 || apt-get install -y docker-compose-v2 >/dev/null 2>&1 || return 1
+  fi
+  docker compose version >/dev/null 2>&1
+}
+
+# 从 admin pom 提取 ypbin-starter.version（形如 <ypbin-starter.version>2.2.3</...>）
+starter_version_from_pom() {
+  local pom="$1"
+  [ -f "$pom" ] || return 1
+  sed -n 's/.*<ypbin-starter.version>\([^<]*\)<\/ypbin-starter.version>.*/\1/p' "$pom" | head -1
+}
+
+# ---------- 参数 ----------
+# BRANCH/ROOT：支持 -b/--branch 指定分支；ROOT 默认按分支隔离(/opt/ypbin/<分支>,
+# main 保持 /opt/ypbin/main)，与单体版 /opt/ypbin/boot 等分开，避免代码互相覆盖/分支冲突，
+# 多分支可共存；可用 --root 或 YPBIN_ROOT 显式覆盖。
+BRANCH="${BRANCH:-main}"
+ROOT=""
+ROOT_CLI=""
 NO_DOCKER="${NO_DOCKER:-0}"
 ASSUME_YES="${ASSUME_YES:-0}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-19000}"
-STARTER_VERSION="2.2.3"
+# starter 版本：从 admin 仓库 pom 的 ypbin-starter.version 自动解析（唯一事实源，
+# 与 CI dispatch 自动升级保持一致），无需手工同步；目录未就绪时留空，由 [3/7] 构建前解析。
+STARTER_VERSION="${STARTER_VERSION:-}"
 # 仓库源（GitHub / Gitee 镜像自动探测；显式 YPBIN_REPO 优先）
 REPO_BASE=""
-GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin-wb}"
+GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin_wb}"
 GITHUB_REPO="https://github.com/wenbin-wb"
-# 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE，[2/7] 前调用一次
+# 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE。
+# 注意：函数 stdout 只输出 URL（供 $(...) 捕获）；一切提示走 REPO_SWITCHED_NOTE/die(stderr)，
+# 避免 ANSI/文案污染被命令替换吞入变量。
 resolve_repo_base() {
-  [ -n "$REPO_BASE" ] && { echo "$REPO_BASE"; return; }
+  REPO_SWITCHED_NOTE=""
   if [ -n "${YPBIN_REPO:-}" ]; then REPO_BASE="$YPBIN_REPO"; echo "$REPO_BASE"; return; fi
+  if [ -n "$REPO_BASE" ]; then echo "$REPO_BASE"; return; fi
   if curl -fsSI -m 3 -o /dev/null "https://github.com" 2>/dev/null; then
     REPO_BASE="$GITHUB_REPO"
   elif curl -fsSI -m 3 -o /dev/null "https://gitee.com" 2>/dev/null; then
-    warn "GitHub 不可达，仓库源自动降级为 Gitee 镜像：${GITEE_REPO}（请在 Gitee 建同名镜像并开启自动同步）"
     REPO_BASE="$GITEE_REPO"
+    REPO_SWITCHED_NOTE="GitHub 不可达，仓库源自动降级为 Gitee 镜像：${GITEE_REPO}（请在 Gitee 建同名镜像并开启自动同步）"
   else
     die "GitHub 与 Gitee 均不可达：请配置代理或显式指定 YPBIN_REPO（如 https://ghproxy.com/https://github.com/wenbin-wb）后重跑"
   fi
   echo "$REPO_BASE"
 }
 
+# ---------- 交互模式 ----------
+# 默认交互（人工确认关键步骤）；-y/--yes 全自动跳过所有确认（CI/无头环境，对齐单体脚本）
+usage() {
+  echo "ypbin-admin 一键部署脚本"
+  echo "用法: bash install.sh [选项]"
+  echo "  -b, --branch <name>   部署分支（默认 main；自动隔离目录 /opt/ypbin/<分支>）"
+  echo "  --root <dir>          部署目录（默认按分支隔离；main 为 /opt/ypbin/main）"
+  echo "  -y, --yes             全自动跳过所有交互确认"
+  echo "环境变量：YPBIN_REPO / GITEE_REPO / REGISTRY_PREFIX / NO_DOCKER 等（见脚本头部注释）"
+}
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -b|--branch)
-      [[ -n "${2:-}" ]] || die "--branch 参数缺少分支名称"
-      BRANCH="$2"
-      shift 2
-      ;;
-    --root)
-      [[ -n "${2:-}" ]] || die "--root 参数缺少路径"
-      CUSTOM_ROOT="$2"
-      shift 2
-      ;;
-    -y|--yes)
-      ASSUME_YES=1
-      shift
-      ;;
-    -h|--help)
-      echo "用法: $0 [-b|--branch <分支名>] [--root <部署目录>] [-y|--yes]"
-      echo "示例: $0 -b feature/miniapp-backend"
-      exit 0
-      ;;
-    *)
-      shift
-      ;;
+    -y|--yes) ASSUME_YES=1; shift ;;
+    -b|--branch) BRANCH="${2:-$BRANCH}"; shift 2 ;;
+    --root) ROOT_CLI="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) warn "未知参数忽略: $1"; shift ;;
   esac
 done
-
-# 如果未指定 ROOT，按分支名自动推导隔离目录（去除特殊符号，如 feature/xxx -> feature-xxx）
-# 避免不同分支部署在同一目录导致代码/配置互相污染
-SAFE_BRANCH_TAG=$(echo "$BRANCH" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
-ROOT="${CUSTOM_ROOT:-/opt/ypbin/${SAFE_BRANCH_TAG}}"
+# ROOT 计算：--root > YPBIN_ROOT > 分支隔离默认(分支内 / 替换为 - 防路径嵌套)
+if [ -n "$ROOT_CLI" ]; then ROOT="$ROOT_CLI"
+elif [ -n "${YPBIN_ROOT:-}" ]; then ROOT="$YPBIN_ROOT"
+else
+  _safe="${BRANCH//\//-}"
+  ROOT="/opt/ypbin/${_safe}"
+fi
 ADMIN_UI_DIST_DIR="${ADMIN_UI_DIST_DIR:-$ROOT/ypbin-admin/admin-ui-dist}"
+# 分支/独立目录部署：docker compose 项目名必须唯一——不同分支的 compose 若同在
+# "deploy" 目录名下会共用同一项目名，导致 MySQL/Redis 等命名卷与网络互相串用
+# （典型事故：feature 部署复用了 main 的 MySQL 卷 → root 密码不匹配 Access denied）。
+# main 部署保持默认（无前缀），其余按 ROOT 生成唯一前缀；仍注意同机并行需端口/容器名不冲突。
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
+if [ -z "$COMPOSE_PROJECT_NAME" ] && [ "$ROOT" != "/opt/ypbin/main" ]; then
+  COMPOSE_PROJECT_NAME="ypbin$(printf '%s' "$ROOT" | md5sum 2>/dev/null | cut -c1-10)"
+fi
+[ -n "$COMPOSE_PROJECT_NAME" ] && export COMPOSE_PROJECT_NAME
 
 # 服务清单（目录名:jar名:端口）
 SERVICES="ypbin-gateway:ypbin-gateway:18080
@@ -228,18 +295,67 @@ else
   SKIP_PULL=0 SKIP_BUILD=0
 fi
 
+# —— 启用 apt universe/multiverse（maven 等位于 universe，部分镜像默认仅 main/restricted）——
+apt_ensure_universe() {
+  local touched=0 f
+  for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] || continue
+    if grep -qE '^Components:.*universe' "$f" 2>/dev/null; then continue; fi
+    if grep -qE '^Components:' "$f" 2>/dev/null; then
+      sed -i 's/^Components: \(.*\)$/Components: \1 universe multiverse/' "$f" && touched=1
+    elif grep -qE '^[[:space:]]*deb[[:space:]]' "$f" 2>/dev/null; then
+      # legacy 单行式（deb uri suite main restricted）
+      if ! grep -qE '^deb .*universe' "$f"; then
+        sed -i -E 's/^([[:space:]]*deb[[:space:]]+\S+[[:space:]]+\S+[[:space:]]+(main|restricted)([[:space:]]|$))/\1 universe multiverse\3/' "$f" && touched=1
+      fi
+    fi
+  done
+  if [ "$touched" = "1" ]; then
+    warn "已启用 universe/multiverse 组件（maven 等依赖包）"
+    apt-get update -y >/dev/null 2>&1 || true
+  fi
+}
+
+# —— 阿里 Apache Maven 镜像兜底安装（apt 源缺失/过旧时）——
+install_maven_from_mirror() {
+  local ver="3.9.9" dest="/opt/apache-maven-${ver}" url
+  url="https://mirrors.aliyun.com/apache/maven/maven-3/${ver}/binaries/apache-maven-${ver}-bin.tar.gz"
+  warn "apt 安装 Maven 失败，改从阿里镜像下载 Maven ${ver} ..."
+  curl -fsSL -o /tmp/apache-maven.tar.gz "$url" || return 1
+  tar -xzf /tmp/apache-maven.tar.gz -C /opt 2>/dev/null || return 1
+  ln -sf "${dest}/bin/mvn" /usr/local/bin/mvn
+  command -v mvn >/dev/null 2>&1
+}
+
 # ---------- [1/7] 环境准备 ----------
 info "[1/7] 检查并安装依赖"
 command -v git >/dev/null 2>&1 || { apt-get update -y && apt-get install -y git; }
 if [ "$NO_DOCKER" = "0" ]; then
   command -v docker >/dev/null 2>&1 || die "Docker 未安装（NO_DOCKER=1 可跳过 Docker 用 java -jar 启动）"
-  docker compose version >/dev/null 2>&1 || die "Docker Compose 插件未安装"
+  if ! docker compose version >/dev/null 2>&1; then
+    warn "Docker Compose 插件缺失，尝试自动安装 docker-compose-plugin ..."
+    apt-get update -y >/dev/null 2>&1 || true
+    if ! apt-get install -y docker-compose-plugin >/dev/null 2>&1 && ! apt-get install -y docker-compose-v2 >/dev/null 2>&1; then
+      warn "常规安装失败，尝试国内 APT/Docker 源自愈（官方国外源在国内常不可达）..."
+      if ! apt_docker_ce_selfheal; then
+        die "Docker Compose 插件安装失败：国内服务器请先切换 APT 源为国内镜像并配置 docker-ce 源后重跑（详见 README 国内部署说明）"
+      fi
+    fi
+    docker compose version >/dev/null 2>&1 || die "Docker Compose 插件安装后仍不可用，请检查 docker 服务后重跑"
+  fi
+  ok "Docker $(docker --version | awk '{print $3}') + Compose $(docker compose version --short 2>/dev/null)"
 fi
 if ! command -v java >/dev/null 2>&1; then
   apt-get install -y openjdk-21-jdk-headless 2>/dev/null || die "JDK 21 安装失败"
 fi
 if ! command -v mvn >/dev/null 2>&1; then
-  apt-get install -y maven 2>/dev/null || die "Maven 安装失败"
+  if ! apt-get install -y maven >/dev/null 2>&1; then
+    # maven 位于 universe 组件：先启用组件再装，仍失败走阿里镜像二进制
+    apt_ensure_universe
+    if ! apt-get install -y maven >/dev/null 2>&1; then
+      install_maven_from_mirror || die "Maven 安装失败：apt 与阿里镜像均不可用（网络？）"
+    fi
+  fi
 fi
 JAVA_HOME="${JAVA_HOME:-$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")}"
 export JAVA_HOME
@@ -273,7 +389,11 @@ if [ "${SKIP_PULL:-0}" = "1" ]; then
 else
 info "[2/7] 拉取代码"
 REPO_BASE="$(resolve_repo_base)"
-ok "仓库源：$REPO_BASE"
+if [ -n "${REPO_SWITCHED_NOTE:-}" ]; then
+  warn "$REPO_SWITCHED_NOTE"
+else
+  ok "仓库源：$REPO_BASE"
+fi
 mkdir -p "$ROOT"
 cd "$ROOT"
 # 仓库可能由不同用户/上次部署创建，root 操作需豁免 dubious ownership
@@ -293,7 +413,7 @@ pull_repo() { # $1=仓库目录 $2=分支
     local url repo_name
     url="$(git remote get-url origin 2>/dev/null || true)"
     if [ -z "${YPBIN_REPO:-}" ] && [ -n "$url" ]; then
-      # 镜像与官方仓库同名（gitee.com/wenbin-wb/ypbin-*），按 URL 域名判定后拼同名镜像 URL
+      # 镜像与官方仓库同名（gitee.com/wenbin_wb/ypbin-*），按 URL 域名判定后拼同名镜像 URL
       repo_name="$(basename "$repo")"
       case "$url" in
         *github.com*)
@@ -327,10 +447,18 @@ ok "代码就绪（starter@$(git -C "$ROOT/ypbin-starter" rev-parse --short HEAD
 fi
 
 # ---------- [3/7] 构建 starter ----------
+# 版本自动解析：优先环境变量，其次 admin pom（与仓库依赖一致，升级自动跟随）
+if [ -z "$STARTER_VERSION" ]; then
+  STARTER_VERSION="$(starter_version_from_pom "$ROOT/ypbin-admin/pom.xml" || true)"
+fi
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
   info "[3/7] 跳过构建（restart 模式）"
 else
+if [ -n "$STARTER_VERSION" ]; then
 info "[3/7] 构建 starter $STARTER_VERSION（微服务依赖其新能力）"
+else
+info "[3/7] 构建 starter（版本自动从 admin pom 解析，未取到将强制构建）"
+fi
 # 交互询问是否重构建 starter（对齐单体；-y 或已有构建产物时可选跳过）
 if [ "$ASSUME_YES" != "1" ]; then
   if ! confirm "重新构建 starter（最新代码，约 3-6 分钟）？选 n 则用 .m2 已有包"; then
@@ -346,9 +474,11 @@ if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
   fi
   ok "starter $STARTER_VERSION 已装入本地 Maven 仓库"
 else
-  # 确认本地仓库有 2.2.1（没有则强制构建）
-  if [ ! -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/2.2.1" ]; then
-    warn "本地 Maven 仓库无 starter 2.2.1，强制构建"
+  # 确认本地仓库已有解析出的 starter 版本（没有则强制构建）
+  if [ -n "$STARTER_VERSION" ] && [ -d "$HOME/.m2/repository/cn/ypbin/ypbin-starter-core/$STARTER_VERSION" ]; then
+    ok "使用本地 Maven 仓库已有 starter $STARTER_VERSION"
+  else
+    [ -n "$STARTER_VERSION" ] && warn "本地 Maven 仓库无 starter $STARTER_VERSION，强制构建" || warn "未能解析 starter 版本，强制构建最新代码"
     cd "$ROOT/ypbin-starter"
     mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20 \
       || die "starter 构建失败（完整日志 /tmp/starter-build.log）"
@@ -397,13 +527,18 @@ rand_hex() { # $1=字节数，输出 2 倍长度小写十六进制
 
 if [ ! -f "$ENV_FILE" ]; then
   MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
-  AI_MODEL_SECRET_KEY="${AI_MODEL_SECRET_KEY:-YpbinAiKey2026_32bytes!!}"
+  # AI 模型密钥的加密密钥：不接受内置默认值——公开已知的默认值等同未加密；也不随机生成——
+  # 一旦换新 .env（分支部署各自目录）旧密文将永久无法解密。必须由运维显式提供且长期保持不变。
+  AI_MODEL_SECRET_KEY="${AI_MODEL_SECRET_KEY:-}"
+  [ -n "$AI_MODEL_SECRET_KEY" ] \
+    || die "未设置 AI_MODEL_SECRET_KEY（AI 模型 API Key 的加密密钥，16/24/32 字节，须长期保持不变）。生成：openssl rand -base64 32"
   # Nacos 服务端鉴权凭据：token 与身份标识值随机生成，避免固定默认值入库
   NACOS_AUTH_TOKEN="${NACOS_AUTH_TOKEN:-$(rand_b64_48)}"
   NACOS_AUTH_IDENTITY_KEY="${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}"
   NACOS_AUTH_IDENTITY_VALUE="${NACOS_AUTH_IDENTITY_VALUE:-$(rand_hex 32)}"
   # 内部 Feign 调用凭证（/internal/** 守卫，auth/system/ai 共享一致值），随机生成
   INTERNAL_TOKEN="${INTERNAL_TOKEN:-$(rand_hex 32)}"
+  GATEWAY_SIGN_TOKEN="${GATEWAY_SIGN_TOKEN:-$(rand_hex 32)}"
   # Redis：Docker 模式随机密码（与 compose requirepass / Nacos 共享配置一致）；
   # NO_DOCKER 用外部 Redis，默认留空=不认证（导入 Nacos 时删 password 行），有密码时以 REDIS_PASSWORD=xxx 传入
   if [ "$NO_DOCKER" = "1" ]; then
@@ -419,6 +554,7 @@ NACOS_AUTH_TOKEN=$NACOS_AUTH_TOKEN
 NACOS_AUTH_IDENTITY_KEY=$NACOS_AUTH_IDENTITY_KEY
 NACOS_AUTH_IDENTITY_VALUE=$NACOS_AUTH_IDENTITY_VALUE
 INTERNAL_TOKEN=$INTERNAL_TOKEN
+GATEWAY_SIGN_TOKEN=$GATEWAY_SIGN_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
@@ -451,11 +587,33 @@ env_key_backfill NACOS_AUTH_TOKEN 'rand_b64_48'
 env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
 env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
 env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
+env_key_backfill GATEWAY_SIGN_TOKEN 'rand_hex 32'
 if [ "$NO_DOCKER" = "1" ]; then
   env_key_backfill REDIS_PASSWORD 'printf ""'
 else
   env_key_backfill REDIS_PASSWORD 'rand_hex 16'
 fi
+
+# AI_MODEL_SECRET_KEY 不在补生成范围内：它加密库内数据，不能自动生成（换值即旧密文不可解密）。
+# 这里做「存在性 + 长度」前置校验，覆盖「旧 .env 尚未包含该键」「未通过环境变量传入」「长度非法」三种情况，
+# 把失败点从第 6 步 compose 的 :? 与更晚的 AI 服务启动，提前到配置阶段；也避免再次退化成公开默认值。
+check_required_key() { # $1=键名 $2=生成命令提示 $3=允许的字节长度（空格分隔）
+  local key="$1" hint="$2" allowed="$3" val bytes
+  # 环境变量优先（与脚本其它键一致：显式 export 的应生效），其次读 .env
+  val="${!key:-}"
+  if [ -z "$val" ]; then
+    val="$(grep -E "^${key}=" "$ENV_FILE" | tail -1 | cut -d= -f2- || true)"
+  fi
+  if [ -z "$val" ]; then
+    die "${key} 未配置（${hint}）。请写入 ${ENV_FILE}，或在执行本脚本前 export ${key}=... 后重跑"
+  fi
+  bytes="$(printf '%s' "$val" | wc -c | tr -d ' ')"
+  case " $allowed " in
+    *" $bytes "*) ;;
+    *) die "${key} 长度必须为 ${allowed} 字节（当前 ${bytes} 字节，${hint}）" ;;
+  esac
+}
+check_required_key AI_MODEL_SECRET_KEY '生成：openssl rand -base64 32' '16 24 32'
 
 # ---------- [5.5/7] 启动基础设施并初始化（Nacos 配置 + MySQL 库表）----------
 # Docker 模式：先只启动基础设施（nacos/redis/mysql），配置导入和建库完成后再启动业务服务
@@ -464,7 +622,57 @@ if [ "$NO_DOCKER" = "1" ]; then
 else
   info "[5.5/7] 启动基础设施（Nacos/Redis/MySQL）"
   cd "$ROOT/ypbin-admin/deploy"
-  docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql 2>&1 | tail -20
+  # 官方 Docker Hub 在国内常不可达：REGISTRY_PREFIX 显式指定 → 只试该前缀；
+  # 未指定时先试官方源，再对"连通性探测通过"的国内公共镜像加速逐个尝试（首个成功即用）。
+  REGISTRY_CANDIDATE_DOMAINS="docker.m.daocloud.io docker.1ms.run docker.1panel.live docker.1panel.top hub.rat.dev dockerpull.org docker.xuanyuan.me dockerproxy.cn docker.rainbond.cc"
+  DOCKER_REGISTRY_CANDIDATES=""
+  for d in $REGISTRY_CANDIDATE_DOMAINS; do
+    # registry v2 探活（5s 快超时）：200/301/302/401 均视为可达（401 为正常未认证响应，
+    # 不能用 curl -f——会把 401 误判失败跳过可达源）；其余状态/超时视为不通立即跳过
+    code=$(timeout 5 curl -sI -o /dev/null -w '%{http_code}' "https://$d/v2/" 2>/dev/null || true)  # 探活失败不中断(set -e)
+    case "$code" in
+      200|301|302|401) DOCKER_REGISTRY_CANDIDATES="$DOCKER_REGISTRY_CANDIDATES ${d}/" ;;
+      *) warn "镜像加速 ${d} 探活失败(HTTP ${code:-不通})，跳过" ;;
+    esac
+  done
+  [ -n "${REGISTRY_PREFIX:-}" ] && DOCKER_REGISTRY_CANDIDATES="${REGISTRY_PREFIX%/}/"
+  infra_up() { # $1=REGISTRY_PREFIX(含尾/或空=官方)
+    if [ -z "$1" ]; then
+      REGISTRY_PREFIX= docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql
+    else
+      REGISTRY_PREFIX="$1" docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d nacos redis mysql
+    fi
+  }
+  infra_ok=0
+  # 本地已具备全部基础设施镜像（如经 docker load 导入）→ 直接起，不联网拉取；
+  # up 失败且因自定义网络网段与残留旧网络重叠时，清理无容器使用的网络后重试一次
+  infra_up_retry() { # 先官方起；失败清理残留网络再起一次；仍失败交候选循环
+    infra_up "" || { docker network prune -f >/dev/null 2>&1; infra_up ""; }
+  }
+  if docker image inspect mysql:8.4 nacos/nacos-server:v3.2.4 redis:7-alpine >/dev/null 2>&1; then
+    if infra_up_retry >/tmp/infra-up.log 2>&1; then
+      infra_ok=1
+    fi
+  fi
+  # 本地镜像缺失或官方/本地起失败 → 逐个尝试探测通过的国内加速
+  if [ "$infra_ok" != "1" ]; then
+    for reg in $DOCKER_REGISTRY_CANDIDATES; do
+      if infra_up "$reg" >/tmp/infra-up.log 2>&1; then
+        if [ -n "$reg" ]; then
+          ok "基础设施镜像经镜像加速拉取成功：${reg%/}"
+          echo "REGISTRY_PREFIX=$reg" >> "$ENV_FILE"
+          warn "已将 REGISTRY_PREFIX=$reg 写入 .env（后续 compose up 复用）"
+        fi
+        infra_ok=1
+        break
+      fi
+      [ -n "$reg" ] && warn "镜像加速 ${reg%/} 拉取失败，尝试下一个..."
+    done
+  fi
+  if [ "$infra_ok" != "1" ]; then
+    tail -5 /tmp/infra-up.log 2>/dev/null || true
+    die "基础设施镜像拉取失败（Docker Hub 与国内加速均不可达）：请手动 export REGISTRY_PREFIX=<可用加速前缀> 后重跑"
+  fi
 fi
 
 NACOS_CONSOLE_URL="${NACOS_CONSOLE_URL:-http://localhost:8080}"
@@ -508,12 +716,14 @@ if [ -n "$NACOS_TOKEN" ]; then
         sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
             -e "s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
             -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
+            -e "s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       else
         # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码；
         # INTERNAL_TOKEN 仍无条件替换（缺失/为空时 system 守卫 fail-closed，见 ypbin.internal.token 注释）
         sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
             -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
+            -e "s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
             -e "/password: \${REDIS_PASSWORD}/d" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       fi
@@ -639,6 +849,8 @@ else
   info "[6/7] Docker 模式：compose 启动（含 Nacos/Redis/MySQL 基础设施）"
   cd "$ROOT/ypbin-admin/deploy"
   # 微服务 compose 已内嵌基础设施（nacos/redis/mysql），单文件拉起全链路
+  export DOCKER_BUILDKIT=0
+  # legacy builder: FROM 基础镜像优先取本地 docker images(离线/受限环境可先 docker load 再构建,避免 buildkit 联网解析元数据卡死)
   docker compose -f docker-compose.yml --env-file "$ENV_FILE" up -d --build
 fi
 

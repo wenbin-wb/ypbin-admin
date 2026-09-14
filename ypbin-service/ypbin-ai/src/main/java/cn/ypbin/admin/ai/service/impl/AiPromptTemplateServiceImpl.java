@@ -92,8 +92,8 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     /**
      * 查询模板并校验归属当前租户。
      *
-     * @param id 模板 ID
-     * @return 模板实体
+     * @param tpl 模板实体
+     * @return 响应视图
      */
     private AiPromptTemplateResp toResp(AiPromptTemplate tpl) {
         AiPromptTemplateResp resp = new AiPromptTemplateResp();

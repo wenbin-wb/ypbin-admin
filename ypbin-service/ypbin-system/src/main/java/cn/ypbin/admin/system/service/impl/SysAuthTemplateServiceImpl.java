@@ -48,6 +48,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateMapper, SysAuthTemplate>
     implements SysAuthTemplateService {
 
+    /**
+     * 逻辑删除标记值：{@code is_deleted = 1} 表示已删除（约定见 starter 的 {@code BaseEntity#isDeleted}）。
+     *
+     * <p>注意 {@code getIsDeleted()} 的类型是 {@code Integer}，不能用 {@code Boolean.TRUE.equals(...)} 比较——
+     * 那是「Boolean 与 Integer 比 equals」，**恒为 false**，会让删除校验形同虚设。</p>
+     */
+    private static final Integer DELETED_FLAG = 1;
+
+
     private final SysTemplateMenuMapper templateMenuMapper;
     private final SysTenantMapper tenantMapper;
     private final SysMenuMapper menuMapper;
@@ -149,7 +158,8 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
             throw new BusinessException("无法确定当前租户");
         }
         SysTenant tenant = tenantMapper.selectById(tenantId);
-        if (tenant == null || tenant.getStatus() == null || tenant.getStatus() != 1 || Boolean.TRUE.equals(tenant.getIsDeleted())) {
+        if (tenant == null || tenant.getStatus() == null || tenant.getStatus() != 1
+            || DELETED_FLAG.equals(tenant.getIsDeleted())) {
             throw new BusinessException("当前租户不存在或已禁用");
         }
         if (tenant.getTemplateId() == null) {
@@ -157,7 +167,7 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
         }
         SysAuthTemplate template = getById(tenant.getTemplateId());
         if (template == null || template.getStatus() == null || template.getStatus() != 1
-            || Boolean.TRUE.equals(template.getIsDeleted())) {
+            || DELETED_FLAG.equals(template.getIsDeleted())) {
             throw new BusinessException("当前租户的权限模板不存在或已禁用");
         }
         return resolveAvailableMenuIds(listMenuIds(template.getId()));

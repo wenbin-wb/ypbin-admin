@@ -18,6 +18,7 @@ import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
@@ -40,9 +41,16 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiWidgetServiceImpl implements AiWidgetService {
 
+    /** 复用同一 SecureRandom：每次 new 既浪费熵源，也可能产生相关性 */
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+
     private static final Logger log = LoggerFactory.getLogger(AiWidgetServiceImpl.class);
 
     private static final int TOKEN_BYTES = 16;
+
+    /** 匿名问答同步等待上限：远程模型无响应时及时失败，避免请求线程无限阻塞 */
+    private static final Duration ANSWER_BLOCK_TIMEOUT = Duration.ofSeconds(120);
 
     private final AiKnowledgeBaseMapper kbMapper;
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
@@ -92,11 +100,12 @@ public class AiWidgetServiceImpl implements AiWidgetService {
                 () -> aiChatService.chatWithKnowledge(
                         "widget-" + kb.getId(), question, String.valueOf(kb.getId()))
                     .collectList()
-                    .block());
+                    .block(ANSWER_BLOCK_TIMEOUT));
             return tokens == null ? "" : String.join("", tokens);
         } catch (IllegalStateException e) {
             // 模型未配置/密钥缺失等环境问题：记录日志并向调用方暴露明确的业务错误（非静默降级）
-            log.warn("[ypbin-ai] 挂件问答失败: token={} err={}", token, e.getMessage());
+            // 不记录 token：它是访问该挂件的凭据，落日志等于泄露；改用知识库 ID 关联排查
+            log.warn("[ypbin-ai] 挂件问答失败: kbId={} err={}", kb.getId(), e.getMessage());
             throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加对话模型");
         }
     }
@@ -127,7 +136,7 @@ public class AiWidgetServiceImpl implements AiWidgetService {
 
     private String generateToken() {
         byte[] bytes = new byte[TOKEN_BYTES];
-        new SecureRandom().nextBytes(bytes);
+        SECURE_RANDOM.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
     }
 }

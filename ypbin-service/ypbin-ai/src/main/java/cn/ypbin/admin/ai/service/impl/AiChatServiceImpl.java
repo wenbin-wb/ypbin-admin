@@ -29,6 +29,7 @@ import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import cn.ypbin.starter.tenant.core.TenantThreadLocalAccessor;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,9 @@ public class AiChatServiceImpl implements AiChatSessionService {
     /** 自动截取标题的最大长度（字符） */
     private static final int TITLE_MAX_LENGTH = 50;
 
+    /** 重新生成时同步等待上限：远程模型无响应时及时失败，避免请求线程无限阻塞 */
+    private static final Duration REGENERATE_BLOCK_TIMEOUT = Duration.ofSeconds(120);
+
     /** 单轮对话落库消息数（用户消息 + 助手回复） */
     private static final int MESSAGES_PER_TURN = 2;
 
@@ -115,7 +119,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
             .filter(Objects::nonNull)
             .collect(Collectors.toSet());
         Map<Long, AiChatRole> roleById = roleIds.isEmpty() ? Map.of()
-            : roleMapper.selectBatchIds(roleIds).stream()
+            : roleMapper.selectByIds(roleIds).stream()
                 .collect(Collectors.toMap(AiChatRole::getId, role -> role));
         return sessions.stream().map(session -> toSessionResp(session, roleById)).toList();
     }
@@ -312,7 +316,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         String reply;
         if (rolePrompt != null) {
             reply = aiSvc.chatWithSystemPrompt(convId, rolePrompt, lastUserContent)
-                .collectList().blockOptional().orElse(List.of())
+                .collectList().blockOptional(REGENERATE_BLOCK_TIMEOUT).orElse(List.of())
                 .stream().collect(Collectors.joining());
         } else {
             reply = aiSvc.chat(convId, lastUserContent);

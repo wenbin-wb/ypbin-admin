@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.config;
 
 import cn.ypbin.admin.common.config.InternalProperties;
+import cn.ypbin.admin.common.util.LogSanitizer;
 import cn.ypbin.admin.system.api.constant.InternalTokenConstants;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
@@ -50,7 +51,7 @@ public class InternalTokenGuardInterceptor implements HandlerInterceptor {
         if (configured == null || configured.isBlank()) {
             // 凭证未配置时整体拒绝（fail-closed），严禁静默放行
             log.error("[system] 内部调用凭证未配置（ypbin.internal.token），已拒绝 /internal/** 请求：uri={}",
-                request.getRequestURI());
+                LogSanitizer.sanitize(request.getRequestURI()));
             throw new BusinessException(GlobalErrorCode.UNAUTHORIZED, "内部调用凭证未配置，请先配置 ypbin.internal.token");
         }
         String presented = request.getHeader(InternalTokenConstants.TOKEN_HEADER);
@@ -58,7 +59,8 @@ public class InternalTokenGuardInterceptor implements HandlerInterceptor {
             || !MessageDigest.isEqual(
                 configured.getBytes(StandardCharsets.UTF_8),
                 presented.getBytes(StandardCharsets.UTF_8))) {
-            log.warn("[system] 内部调用凭证校验失败，已拒绝：uri={}", request.getRequestURI());
+            log.warn("[system] 内部调用凭证校验失败，已拒绝：uri={}",
+                LogSanitizer.sanitize(request.getRequestURI()));
             throw new BusinessException(GlobalErrorCode.UNAUTHORIZED, "内部调用凭证校验失败");
         }
         return true;

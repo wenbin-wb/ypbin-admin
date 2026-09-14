@@ -58,6 +58,10 @@ ypbin:
   gateway:
     auth:
       enabled: true
+      # 身份头签名：网关在写入 X-User-Id 等身份头的同时签发该标记，
+      # 下游 service 据此判定身份头来源可信（防直连伪造身份经 Feign 放大越权）。
+      # 值与 auth/system/ai 的 ypbin.cloud.feign.trusted-source-token 必须一致。
+      trusted-source-token: ${GATEWAY_SIGN_TOKEN}
       # 白名单路径（无需登录即可访问）
       exclude-paths:
         - /auth/login

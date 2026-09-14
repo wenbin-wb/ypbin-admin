@@ -6,6 +6,14 @@
 ypbin:
   tenant:
     enabled: true
+    # fail-closed：无租户上下文时拒绝执行；匿名分享/挂件问答已用
+    # TenantContext.executeWithTenant 显式绑定知识库所属租户，SSE/异步链路已用 executeIgnore 放行。
+    fail-on-missing-tenant: true
+  # 身份头来源校验：仅信任带网关签名标记的身份头；未配置密钥则拒绝启动（fail-fast）
+  cloud:
+    feign:
+      trusted-source-token: ${GATEWAY_SIGN_TOKEN}
+      require-trusted-source: true
   data-permission:
     enabled: true
   # ai 为下游业务服务，登录态由网关校验并注入身份头；
