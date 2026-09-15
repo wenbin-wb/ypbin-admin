@@ -92,6 +92,11 @@ ypbin:
   tenant:
     enabled: true               # 行级租户隔离
     column: tenant_id           # 租户列名
+    # 无租户上下文时是否快速失败（starter 3.0.0 起默认 true，此处显式声明以固定行为）：
+    # 旧版会拼出 tenant_id = NULL、查询恒空，故障被静默掩盖；现在直接抛业务异常 409。
+    # 因此无登录态的查询（登录前按用户名查用户、定时任务、启动初始化等）必须显式
+    # 用 TenantContext.executeIgnore / runWithTenant 绑定意图——本工程这几处已按此约定实现。
+    fail-on-missing-tenant: true
     ignore-tables:              # 不做租户隔离的全局表
       - sys_menu
       - sys_tenant
