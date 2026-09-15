@@ -1,0 +1,26 @@
+# 统一编辑器行为（IDEA / VS Code / 命令行工具），避免缩进与行尾在不同机器上漂移。
+# 注：Java 侧另有 spotless（含 palantir-java-format）作为构建期硬门禁，本文件只是编辑器层的约定。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.xml]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{sh,bash}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

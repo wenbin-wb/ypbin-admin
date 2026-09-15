@@ -21,6 +21,13 @@ updates:
           - "org.mockito*"
           - "org.testcontainers*"
           - "com.tngtech.archunit*"
+      # 静态分析工具链：Error Prone 与 NullAway 存在版本耦合（新版 EP 会改变插件调用方式），
+      # 必须同批升级、同批验证，避免只升其一导致「插件起不来/分析空转」
+      analysis:
+        patterns:
+          - "com.google.errorprone*"
+          - "com.uber.nullaway*"
+          - "org.jspecify*"
     labels:
       - dependencies
 
