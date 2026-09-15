@@ -70,25 +70,48 @@ done
 # /opt/ypbin 由 root 创建（部署目录），非 root 用户构建会因写 target/ 权限失败；
 # 自动 sudo -E 以 root 重新执行本脚本。管道执行（bash <(curl ...)）时脚本无真实文件，
 # 先下载到 /tmp 再 sudo 执行（与单体脚本一致）。
-SCRIPT_VERSION="2026.09.08.1"
+SCRIPT_VERSION="2026.09.16.1"
 SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh}"
-GITEE_SCRIPT_URL="https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh"
-# 脚本源连通探测（3s 快超时）：GitHub raw 不可达时降级 Gitee raw（内容同源）
+GITEE_SCRIPT_URL="${GITEE_SCRIPT_URL:-https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh}"
+# 所有对外 curl 一律带硬超时：libcurl 默认连接超时为 300 秒，国内网络对 GitHub 常见
+# 「SYN 黑洞」（既不 reset 也不响应），无超时的 curl 会静默挂起约 5 分钟后才报
+# `curl: (28) Failed to connect to raw.githubusercontent.com port 443 after ~279000 ms`。
+CURL_CONNECT_TIMEOUT=8
+CURL_MAX_TIME=60
+# 脚本源连通探测（3s 快超时）：GitHub raw 不可达时降级 Gitee raw（内容同源）。
+# 注意：本函数在「工具函数」区之前执行，warn 尚未定义，提示必须直接写 stderr。
+# stdout 只输出 URL，避免 ANSI/文案被 $( ) 吞进变量。
 resolve_script_url() {
-  if [ -n "${YPBIN_SCRIPT_URL:-}" ]; then printf '%s' "$SCRIPT_URL"; return; fi
-  if curl -fsSI -m 3 -o /dev/null "$SCRIPT_URL" 2>/dev/null; then
+  if [ -n "${YPBIN_SCRIPT_URL:-}" ]; then printf '%s' "$SCRIPT_URL"; return 0; fi
+  if curl -fsSI --connect-timeout 3 --max-time 5 -o /dev/null "$SCRIPT_URL" 2>/dev/null; then
     printf '%s' "$SCRIPT_URL"
   else
-    warn "GitHub raw 不可达，脚本源降级为 Gitee：${GITEE_SCRIPT_URL}"
+    printf '!  GitHub raw 不可达（3s 探测超时），脚本源降级为 Gitee：%s\n' "$GITEE_SCRIPT_URL" >&2
     printf '%s' "$GITEE_SCRIPT_URL"
   fi
+}
+# 备用脚本源：$1 为一个源，返回另一个源（两源互为镜像，用于下载失败兜底重试）
+alternate_script_url() {
+  if [ "$1" = "$SCRIPT_URL" ]; then printf '%s' "$GITEE_SCRIPT_URL"; else printf '%s' "$SCRIPT_URL"; fi
+}
+# 下载脚本自身到 $1，双源兜底；成功返回 0，两源均失败返回 1
+download_self() {
+  local dest="$1" src alt
+  src="$(resolve_script_url)"
+  if curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -o "$dest" "$src" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$dest"
+  alt="$(alternate_script_url "$src")"
+  printf '!  脚本源 %s 下载失败，改用备用源重试：%s\n' "$src" "$alt" >&2
+  curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -o "$dest" "$alt"
 }
 if [ "$(id -u)" != "0" ]; then
   if command -v sudo >/dev/null 2>&1; then
     SELF="/tmp/ypbin-install.sh"
     if [ ! -f "$SELF" ] || ! grep -q "SCRIPT_VERSION=\"${SCRIPT_VERSION}\"" "$SELF" 2>/dev/null; then
       echo "非 root 用户，下载脚本并用 sudo 提权执行..."
-      curl -fsSL -o "$SELF" "$(resolve_script_url)" || { echo "下载脚本失败（GitHub/Gitee 均不可达，请检查网络或代理）" >&2; exit 1; }
+      download_self "$SELF" || { rm -f "$SELF"; echo "下载脚本失败（GitHub/Gitee 均不可达，请检查网络或代理）" >&2; exit 1; }
       chmod +x "$SELF"
     fi
     exec sudo -E bash "$SELF" "$@"
@@ -103,11 +126,10 @@ ok()   { echo -e "\033[32m✓  $*\033[0m"; }
 warn() { echo -e "\033[33m!  $*\033[0m"; }
 die()  { echo -e "\033[31m✗  $*\033[0m" >&2; exit 1; }
 
-<<<<<<< HEAD
-# ---------- 参数解析（支持命令行参数与环境变量） ----------
+# ---------- 参数预读（供下方「交互式分支确认」使用；正式解析见「参数」区） ----------
 BRANCH="${BRANCH:-main}"
 CUSTOM_ROOT="${YPBIN_ROOT:-}"
-=======
+
 # —— 国内服务器 APT/Docker 源自愈（Ubuntu/Debian）——
 # 检测官方国外源并备份切换为阿里镜像（sources.list 旧格式 + .sources deb822 均处理）；
 # 随后为 docker-compose-plugin 配置阿里 docker-ce 源。备份保留在 /etc/apt/*.bak*，失败不覆盖原配置。
@@ -135,7 +157,7 @@ apt_docker_ce_selfheal() {
   if ! docker compose version >/dev/null 2>&1; then
     if [ ! -f /etc/apt/keyrings/docker.asc ]; then
       install -m 0755 -d /etc/apt/keyrings 2>/dev/null || true
-      curl -fsSL "https://mirrors.aliyun.com/docker-ce/linux/${id}/gpg" 2>/dev/null | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null && {
+      curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time 30 "https://mirrors.aliyun.com/docker-ce/linux/${id}/gpg" 2>/dev/null | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null && {
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/${id} ${codename} stable" > /etc/apt/sources.list.d/docker.list 2>/dev/null || true
         apt-get update -y >/dev/null 2>&1 || true
       }
@@ -171,21 +193,20 @@ REPO_BASE=""
 GITEE_REPO="${GITEE_REPO:-https://gitee.com/wenbin_wb}"
 GITHUB_REPO="https://github.com/wenbin-wb"
 # 探测 GitHub 连通（3s 快超时）；显式指定或探测成功后赋值 REPO_BASE。
-# 注意：函数 stdout 只输出 URL（供 $(...) 捕获）；一切提示走 REPO_SWITCHED_NOTE/die(stderr)，
-# 避免 ANSI/文案污染被命令替换吞入变量。
+# 注意：本函数直接改调用方变量（REPO_BASE / REPO_SWITCHED_NOTE），**不要**用 $( ) 捕获——
+# 命令替换会开子 shell，函数内赋的 REPO_SWITCHED_NOTE 传不出来（降级提示会静默丢失）。
 resolve_repo_base() {
   REPO_SWITCHED_NOTE=""
-  if [ -n "${YPBIN_REPO:-}" ]; then REPO_BASE="$YPBIN_REPO"; echo "$REPO_BASE"; return; fi
-  if [ -n "$REPO_BASE" ]; then echo "$REPO_BASE"; return; fi
-  if curl -fsSI -m 3 -o /dev/null "https://github.com" 2>/dev/null; then
+  if [ -n "${YPBIN_REPO:-}" ]; then REPO_BASE="$YPBIN_REPO"; return 0; fi
+  if [ -n "$REPO_BASE" ]; then return 0; fi
+  if curl -fsSI --connect-timeout 3 --max-time 5 -o /dev/null "https://github.com" 2>/dev/null; then
     REPO_BASE="$GITHUB_REPO"
-  elif curl -fsSI -m 3 -o /dev/null "https://gitee.com" 2>/dev/null; then
+  elif curl -fsSI --connect-timeout 3 --max-time 5 -o /dev/null "https://gitee.com" 2>/dev/null; then
     REPO_BASE="$GITEE_REPO"
     REPO_SWITCHED_NOTE="GitHub 不可达，仓库源自动降级为 Gitee 镜像：${GITEE_REPO}（请在 Gitee 建同名镜像并开启自动同步）"
   else
     die "GitHub 与 Gitee 均不可达：请配置代理或显式指定 YPBIN_REPO（如 https://ghproxy.com/https://github.com/wenbin-wb）后重跑"
   fi
-  echo "$REPO_BASE"
 }
 
 # ---------- 交互模式 ----------
@@ -261,7 +282,7 @@ if [ "$ASSUME_YES" != "1" ]; then
   fi
 fi
 
-info "部署参数：ROOT=$ROOT 分支=$BRANCH NO_DOCKER=$NO_DOCKER"
+info "部署参数：ROOT=$ROOT 分支=$BRANCH NO_DOCKER=$NO_DOCKER（脚本版本 $SCRIPT_VERSION）"
 
 # ---------- 操作模式选择（对齐单体脚本；-y 跳过）----------
 # full=全新部署/完整更新（拉代码+构建+启动） backend=只更新后端（构建+重启）
@@ -321,7 +342,7 @@ install_maven_from_mirror() {
   local ver="3.9.9" dest="/opt/apache-maven-${ver}" url
   url="https://mirrors.aliyun.com/apache/maven/maven-3/${ver}/binaries/apache-maven-${ver}-bin.tar.gz"
   warn "apt 安装 Maven 失败，改从阿里镜像下载 Maven ${ver} ..."
-  curl -fsSL -o /tmp/apache-maven.tar.gz "$url" || return 1
+  curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time 300 -o /tmp/apache-maven.tar.gz "$url" || return 1
   tar -xzf /tmp/apache-maven.tar.gz -C /opt 2>/dev/null || return 1
   ln -sf "${dest}/bin/mvn" /usr/local/bin/mvn
   command -v mvn >/dev/null 2>&1
@@ -388,7 +409,7 @@ if [ "${SKIP_PULL:-0}" = "1" ]; then
   info "[2/7] 跳过拉取代码（restart 模式）"
 else
 info "[2/7] 拉取代码"
-REPO_BASE="$(resolve_repo_base)"
+resolve_repo_base
 if [ -n "${REPO_SWITCHED_NOTE:-}" ]; then
   warn "$REPO_SWITCHED_NOTE"
 else
@@ -468,7 +489,9 @@ if [ "$ASSUME_YES" != "1" ]; then
 fi
 if [ "${SKIP_STARTER_BUILD:-0}" != "1" ]; then
   cd "$ROOT/ypbin-starter"
-  # 完整输出错误（不吞日志）：失败时打印 maven 日志尾部
+  # 完整输出错误（不吞日志）：失败时打印 maven 日志尾部。构建期间 stdout 被 tee|tail 接管，
+  # 终端会长时间无输出（约 3-6 分钟）——先提示，避免被误判为「脚本卡死/网络挂起」。
+  info "开始构建 starter（约 3-6 分钟，期间本终端无输出属正常；日志文件 /tmp/starter-build.log）"
   if ! mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20; then
     die "starter 构建失败（完整日志 /tmp/starter-build.log）"
   fi
@@ -480,6 +503,7 @@ else
   else
     [ -n "$STARTER_VERSION" ] && warn "本地 Maven 仓库无 starter $STARTER_VERSION，强制构建" || warn "未能解析 starter 版本，强制构建最新代码"
     cd "$ROOT/ypbin-starter"
+    info "开始构建 starter（约 3-6 分钟，期间本终端无输出属正常；日志文件 /tmp/starter-build.log）"
     mvn -DskipTests -Djacoco.skip=true install 2>&1 | tee /tmp/starter-build.log | tail -20 \
       || die "starter 构建失败（完整日志 /tmp/starter-build.log）"
   fi
@@ -681,7 +705,7 @@ NACOS_PASSWORD="${NACOS_PASSWORD:-nacos}"
 
 # 等待 Nacos Console 就绪（v3 独立 Console 端口）
 for i in $(seq 1 60); do
-  if curl -fsS "$NACOS_CONSOLE_URL/v3/console/health/readiness" >/dev/null 2>&1; then
+  if curl -fsS --connect-timeout 3 --max-time 5 "$NACOS_CONSOLE_URL/v3/console/health/readiness" >/dev/null 2>&1; then
     break
   fi
   if [ "$i" = "60" ]; then
@@ -691,13 +715,13 @@ for i in $(seq 1 60); do
 done
 
 # 初始化 Nacos 管理员（幂等；已有管理员时忽略失败）
-curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/auth/user/admin" \
+curl -fsS --connect-timeout 5 --max-time 30 -X POST "$NACOS_CONSOLE_URL/v3/auth/user/admin" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   --data-urlencode "username=$NACOS_USERNAME" \
   --data-urlencode "password=$NACOS_PASSWORD" >/dev/null 2>&1 || true
 
 # 登录获取 accessToken
-NACOS_TOKEN=$(curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/auth/user/login" \
+NACOS_TOKEN=$(curl -fsS --connect-timeout 5 --max-time 30 -X POST "$NACOS_CONSOLE_URL/v3/auth/user/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   --data-urlencode "username=$NACOS_USERNAME" \
   --data-urlencode "password=$NACOS_PASSWORD" 2>/dev/null | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' || true)
@@ -727,7 +751,7 @@ if [ -n "$NACOS_TOKEN" ]; then
             -e "/password: \${REDIS_PASSWORD}/d" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       fi
-      curl -fsS -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
+      curl -fsS --connect-timeout 5 --max-time 60 -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
         -H "accessToken: $NACOS_TOKEN" \
         --data-urlencode "dataId=$cfg.yaml" \
         --data-urlencode "groupName=DEFAULT_GROUP" \
@@ -804,7 +828,7 @@ else
       aarch64|arm64) NODE_ARCH="arm64" ;;
       *) die "不支持的架构 $ARCH，请本地构建后上传" ;;
     esac
-    curl -fsSL --max-time 120 -o /tmp/node.tar.xz \
+    curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time 120 -o /tmp/node.tar.xz \
       "https://npmmirror.com/mirrors/node/v22.18.0/node-v22.18.0-linux-${NODE_ARCH}.tar.xz" \
       || die "Node 下载失败"
     mkdir -p /usr/local/lib/nodejs
@@ -858,7 +882,7 @@ fi
 info "[7/7] 健康检查（等待服务就绪，最多 120 秒）"
 GATEWAY_PORT=18080
 for i in $(seq 1 24); do
-  if curl -fsS "http://localhost:$GATEWAY_PORT/actuator/health" >/dev/null 2>&1; then
+  if curl -fsS --connect-timeout 3 --max-time 10 "http://localhost:$GATEWAY_PORT/actuator/health" >/dev/null 2>&1; then
     ok "网关健康检查通过"
     break
   fi
