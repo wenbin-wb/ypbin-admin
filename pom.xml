@@ -150,4 +150,25 @@
         </plugins>
     </build>
 
+    <profiles>
+        <!--
+          非发布的开发/度量模块：由 activeByDefault 提供，使默认构建（CI 的 `mvn -B clean verify`）与本地
+          `mvn test` 都包含架构约束门禁；而激活任一显式 profile（如 `-Pxxx`）后本 profile 失效 →
+          门禁模块不进入该次反应堆。这样它的空 jar（无 sources/javadoc）不会混进任何发布/部署产物。
+
+          ⚠️ 与 starter 侧同源的副作用（见 ypbin-starter/pom.xml 的 dev-only profile 注释）：
+          只要显式激活了别的 profile，架构门禁就**不会**执行——所以「没报错」不等于「检查过」，
+          单独跑门禁请用 `mvn -pl ypbin-architecture-tests -am test`（不加 `-P`）。
+          非发布模块必须写在本 profile 里、不得写进顶层 <modules>，由 ModulePublishingTest 校验。
+        -->
+        <profile>
+            <id>dev-only</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <modules>
+                <module>ypbin-architecture-tests</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>

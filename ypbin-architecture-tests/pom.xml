@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cn.ypbin.admin</groupId>
+        <artifactId>ypbin-admin</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>ypbin-architecture-tests</artifactId>
+    <name>${project.artifactId}</name>
+    <description>架构约束测试：把 admin 铁律变为构建失败（禁内联全限定类名/禁 Collections.emptyXxx/禁 @Data/禁 Enum.ordinal/禁循环内 DB-RPC/实体继承例外清单显式）</description>
+
+    <properties>
+        <!-- 纯测试模块：不发布、不打进任何服务的产物，也不该出现在别人的依赖树里 -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- 与 ypbin-starter-architecture-tests 同版本（starter 侧由 ypbin-starter-dependencies 管理，
+             本仓不复用 starter 的 dependencies pom，故在此显式钉住，避免两仓规则库行为分叉） -->
+        <archunit.version>1.5.0</archunit.version>
+    </properties>
+
+    <dependencies>
+        <!-- 分析对象：admin 各模块的主源码与字节码，故以 test 作用域聚合（不污染任何其它模块） -->
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-common</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-system-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-ai-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-system</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-ai</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-auth</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-gateway</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ArchUnit：字节码级架构断言（版本与 starter 侧一致） -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JUnit 5 + AssertJ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
