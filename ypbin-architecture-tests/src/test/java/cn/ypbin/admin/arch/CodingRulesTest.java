@@ -91,9 +91,9 @@ class CodingRulesTest {
     }
 
     @Test
-    @DisplayName("@Transactional 必须显式声明 rollbackFor（受检异常否则漏回滚）")
+    @DisplayName("@Transactional 必须显式声明 rollbackFor（方法级与类级都要，否则受检异常漏回滚）")
     void transactionalShouldAlwaysDeclareRollbackFor() {
-        List<String> violations = transactionalMethodsWithoutRollbackFor(classes);
+        List<String> violations = transactionalMembersWithoutRollbackFor(classes);
         assertThat(violations)
             .as("写操作的 @Transactional 必须带 rollbackFor = Exception.class；"
                 + "注意 @TransactionalEventListener 不是 @Transactional，不该被判违规")
@@ -142,9 +142,17 @@ class CodingRulesTest {
         return value != null;
     }
 
-    static List<String> transactionalMethodsWithoutRollbackFor(JavaClasses classes) {
+    static List<String> transactionalMembersWithoutRollbackFor(JavaClasses classes) {
         List<String> violations = new ArrayList<>();
         for (JavaClass clazz : classes) {
+            // 类级 @Transactional 会作用于该类全部方法，缺 rollbackFor 同样在受检异常上漏回滚
+            List<JavaAnnotation<JavaClass>> classAnnotations = clazz.getAnnotations().stream()
+                .filter(annotation -> annotation.getRawType().getName().equals(TRANSACTIONAL))
+                .toList();
+            if (!classAnnotations.isEmpty()
+                && !classAnnotations.stream().anyMatch(CodingRulesTest::declaresRollbackFor)) {
+                violations.add(clazz.getName() + "（类级注解）");
+            }
             for (JavaMethod method : clazz.getMethods()) {
                 List<JavaAnnotation<JavaMethod>> annotations = method.getAnnotations().stream()
                     .filter(annotation -> annotation.getRawType().getName().equals(TRANSACTIONAL))

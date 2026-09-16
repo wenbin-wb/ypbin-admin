@@ -19,6 +19,7 @@ import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,7 +60,9 @@ class ArchRuleSelfCheckTest {
     private static JavaClasses syntheticClasses() {
         return new ClassFileImporter().importClasses(
             PrintStackViolation.class, SystemOutViolation.class, FieldInjectionViolation.class,
-            TxMissingRollbackFor.class, TxWithRollbackFor.class, TxEventListenerOnly.class);
+            TxMissingRollbackFor.class, TxWithRollbackFor.class, TxEventListenerOnly.class,
+            TxClassLevelMissingRollbackFor.class, TxClassLevelWithRollbackFor.class,
+            TxClassLevelOkButMethodOverrides.class);
     }
 
     @Test
@@ -91,20 +94,25 @@ class ArchRuleSelfCheckTest {
     }
 
     @Test
-    @DisplayName("@Transactional 缺 rollbackFor 应命中；带 rollbackFor 与 @TransactionalEventListener 不得命中")
+    @DisplayName("@Transactional 缺 rollbackFor 应命中（方法级/类级）；合规写法与 @TransactionalEventListener 不得命中")
     void transactionalRollbackForDetectionShouldBeAccurate() {
-        // 命中：@Transactional 未声明 rollbackFor（本仓 2026-09-16 主源码实为 0 处）
-        assertThat(CodingRulesTest.transactionalMethodsWithoutRollbackFor(
-            new ClassFileImporter().importClasses(TxMissingRollbackFor.class)))
-            .hasSize(1);
-        // 放过：显式声明 rollbackFor
-        assertThat(CodingRulesTest.transactionalMethodsWithoutRollbackFor(
-            new ClassFileImporter().importClasses(TxWithRollbackFor.class)))
-            .isEmpty();
+        // 命中：方法级 @Transactional 未声明 rollbackFor（本仓 2026-09-16 主源码实为 0 处）
+        assertThat(violationsOf(TxMissingRollbackFor.class)).hasSize(1);
+        // 放过：方法级显式声明 rollbackFor
+        assertThat(violationsOf(TxWithRollbackFor.class)).isEmpty();
         // 放过：@TransactionalEventListener 是另一个注解（本仓恰有 2 处，不能误判）
-        assertThat(CodingRulesTest.transactionalMethodsWithoutRollbackFor(
-            new ClassFileImporter().importClasses(TxEventListenerOnly.class)))
-            .isEmpty();
+        assertThat(violationsOf(TxEventListenerOnly.class)).isEmpty();
+        // 命中：**类级** @Transactional 未声明 rollbackFor（会作用于该类全部方法）
+        assertThat(violationsOf(TxClassLevelMissingRollbackFor.class)).hasSize(1);
+        // 放过：类级显式声明 rollbackFor
+        assertThat(violationsOf(TxClassLevelWithRollbackFor.class)).isEmpty();
+        // 命中：类级合规，但方法级注解覆盖且自身未声明 rollbackFor（方法级会覆盖类级语义）
+        assertThat(violationsOf(TxClassLevelOkButMethodOverrides.class)).hasSize(1);
+    }
+
+    private static List<String> violationsOf(Class<?> syntheticClass) {
+        return CodingRulesTest.transactionalMembersWithoutRollbackFor(
+            new ClassFileImporter().importClasses(syntheticClass));
     }
 
     @Test
@@ -162,6 +170,31 @@ class ArchRuleSelfCheckTest {
 
         @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
         public void onCommitted() {
+        }
+    }
+
+    /** 合成违规：类级 @Transactional 未声明 rollbackFor */
+    @Transactional
+    static class TxClassLevelMissingRollbackFor {
+
+        public void save() {
+        }
+    }
+
+    /** 合成合规：类级 @Transactional 显式声明 rollbackFor */
+    @Transactional(rollbackFor = Exception.class)
+    static class TxClassLevelWithRollbackFor {
+
+        public void save() {
+        }
+    }
+
+    /** 合成违规：类级合规，但方法级注解覆盖且未声明 rollbackFor */
+    @Transactional(rollbackFor = Exception.class)
+    static class TxClassLevelOkButMethodOverrides {
+
+        @Transactional
+        public void save() {
         }
     }
 }

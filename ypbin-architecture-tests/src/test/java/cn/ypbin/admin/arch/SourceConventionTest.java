@@ -50,9 +50,6 @@ import org.junit.jupiter.api.Test;
  */
 class SourceConventionTest {
 
-    /** 聚合模块目录名（用于向上定位仓库根） */
-    private static final String MODULE_DIR = "ypbin-architecture-tests";
-
     /** 应统一为 List.of/Map.of/Set.of 的 Collections 工厂调用 */
     private static final Pattern LEGACY_COLLECTION_FACTORY =
         Pattern.compile("Collections\\.(?:emptyList|emptyMap|emptySet|singletonList|singletonMap|singleton)\\(");
@@ -139,8 +136,11 @@ class SourceConventionTest {
         "误报：候选补全地址回退尝试（for 遍历 completionUrls，命中首个非 404 即 break），"
             + "循环次数与数据量无关，不存在 N+1；规则只看「循环体里有没有 RPC 接收者」，识别不了 break 语义");
 
-    private static Path repoRoot;
-
+    /**
+     * 构建实体继承例外清单。
+     *
+     * @return 类简单名 → 理由
+     */
     private static Map<String, String> buildEntityBaseExemptions() {
         Map<String, String> exemptions = new LinkedHashMap<>();
         // ① 异步/消费者线程写入，取不到 Sa-Token 上下文
@@ -158,38 +158,6 @@ class SourceConventionTest {
         // ③ 成批写入的投递明细（历史既有形态，本轮门禁只登记不判定）
         exemptions.put("SysNoticeDelivery", "公告投递明细（成批写入），无审计/逻辑删除语义");
         return Map.copyOf(exemptions);
-    }
-
-    @BeforeAll
-    static void locateRepoRoot() {
-        // 本模块位于 <repo>/ypbin-architecture-tests，向上定位含聚合 pom 的目录
-        Path current = Path.of("").toAbsolutePath();
-        while (current != null) {
-            Path pom = current.resolve("pom.xml");
-            if (Files.exists(pom) && Files.exists(current.resolve(MODULE_DIR))) {
-                repoRoot = current;
-                return;
-            }
-            current = current.getParent();
-        }
-        throw new IllegalStateException(
-            "未能定位 ypbin-admin 仓库根目录（当前目录：" + Path.of("").toAbsolutePath() + "）");
-    }
-
-    /** 收集仓库内全部主源码文件（排除 target 与测试源码） */
-    private static List<Path> mainSources() throws IOException {
-        try (Stream<Path> stream = Files.walk(repoRoot)) {
-            return stream
-                .filter(Files::isRegularFile)
-                .filter(path -> path.toString().endsWith(".java"))
-                .filter(path -> path.toString().replace('\\', '/').contains("/src/main/java/"))
-                .filter(path -> !path.toString().contains("/target/"))
-                .toList();
-        }
-    }
-
-    private static String relative(Path file) {
-        return repoRoot.relativize(file).toString().replace('\\', '/');
     }
 
     /**
@@ -427,7 +395,7 @@ class SourceConventionTest {
     @DisplayName("禁止内联全限定类名（import/package 行除外）")
     void shouldNotUseInlineFullyQualifiedClassNames() throws IOException {
         List<String> violations = new ArrayList<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
             String[] lines = code.split("\n", -1);
             for (int index = 0; index < lines.length; index++) {
@@ -437,7 +405,7 @@ class SourceConventionTest {
                 }
                 Matcher matcher = INLINE_FQCN.matcher(lines[index]);
                 if (matcher.find()) {
-                    violations.add(relative(file) + ":" + (index + 1) + " → " + matcher.group(1));
+                    violations.add(SourceScan.relative(file) + ":" + (index + 1) + " → " + matcher.group(1));
                 }
             }
         }
@@ -451,12 +419,12 @@ class SourceConventionTest {
     @DisplayName("集合字面量统一用 List.of/Map.of/Set.of，禁用 Collections.emptyXxx/singletonXxx")
     void shouldUseImmutableFactoriesInsteadOfCollectionsHelpers() throws IOException {
         List<String> violations = new ArrayList<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
             String[] lines = code.split("\n", -1);
             for (int index = 0; index < lines.length; index++) {
                 if (LEGACY_COLLECTION_FACTORY.matcher(lines[index]).find()) {
-                    violations.add(relative(file) + ":" + (index + 1));
+                    violations.add(SourceScan.relative(file) + ":" + (index + 1));
                 }
             }
         }
@@ -469,10 +437,10 @@ class SourceConventionTest {
     @DisplayName("@Data 仅允许用于 @ConfigurationProperties 配置绑定类（实体/DTO 一律 @Getter @Setter）")
     void lombokDataShouldOnlyBeUsedOnConfigurationProperties() throws IOException {
         List<String> violations = new ArrayList<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String source = Files.readString(file, StandardCharsets.UTF_8);
             if (LOMBOK_DATA.matcher(source).find() && !CONFIGURATION_PROPERTIES.matcher(source).find()) {
-                violations.add(relative(file));
+                violations.add(SourceScan.relative(file));
             }
         }
         assertThat(violations)
@@ -485,12 +453,12 @@ class SourceConventionTest {
     @DisplayName("禁止显式调用 Enum.ordinal()（存库/传参一律用 code）")
     void shouldNotCallEnumOrdinalExplicitly() throws IOException {
         List<String> violations = new ArrayList<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
             String[] lines = code.split("\n", -1);
             for (int index = 0; index < lines.length; index++) {
                 if (ENUM_ORDINAL_CALL.matcher(lines[index]).find()) {
-                    violations.add(relative(file) + ":" + (index + 1));
+                    violations.add(SourceScan.relative(file) + ":" + (index + 1));
                 }
             }
         }
@@ -504,7 +472,7 @@ class SourceConventionTest {
     void loopsMustNotCallDbOrRpc() throws IOException {
         List<String> violations = new ArrayList<>();
         Set<String> consumedExemptions = new LinkedHashSet<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
             String className = file.getFileName().toString().replace(".java", "");
             for (LoopDbCall call : loopDbCallsInLoops(code)) {
@@ -513,7 +481,7 @@ class SourceConventionTest {
                     consumedExemptions.add(exemptionKey);
                     continue;
                 }
-                violations.add(relative(file) + ":" + call.line() + " → " + call.signature() + "()");
+                violations.add(SourceScan.relative(file) + ":" + call.line() + " → " + call.signature() + "()");
             }
         }
         assertThat(violations)
@@ -533,14 +501,14 @@ class SourceConventionTest {
         Set<String> baseTypes = Set.of("BaseEntity", "TenantBaseEntity");
         List<String> discovered = new ArrayList<>();
         List<String> violations = new ArrayList<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
             if (!code.contains("@TableName(")) {
                 continue;
             }
             Matcher declaration = CLASS_DECLARATION.matcher(code);
             if (!declaration.find()) {
-                violations.add(relative(file) + " → 命中 @TableName 但未能解析类声明（规则需同步更新）");
+                violations.add(SourceScan.relative(file) + " → 命中 @TableName 但未能解析类声明（规则需同步更新）");
                 continue;
             }
             String simpleName = declaration.group(1);
@@ -552,7 +520,7 @@ class SourceConventionTest {
             }
             discovered.add(simpleName);
             if (!ENTITY_BASE_EXEMPTIONS.containsKey(simpleName)) {
-                violations.add(relative(file) + " → 实体 " + simpleName
+                violations.add(SourceScan.relative(file) + " → 实体 " + simpleName
                     + " 既未继承 BaseEntity/TenantBaseEntity，也不在显式例外清单中");
             }
         }
@@ -667,12 +635,12 @@ class SourceConventionTest {
     @DisplayName("源码剥离后大括号必须平衡（否则多条规则会静默失明）")
     void strippingShouldPreserveBraceBalance() throws IOException {
         List<String> violations = new ArrayList<>();
-        for (Path file : mainSources()) {
+        for (Path file : SourceScan.mainSources()) {
             String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
             long open = code.chars().filter(ch -> ch == '{').count();
             long close = code.chars().filter(ch -> ch == '}').count();
             if (open != close) {
-                violations.add(relative(file) + " → 剥离后 { =" + open + " 而 } =" + close);
+                violations.add(SourceScan.relative(file) + " → 剥离后 { =" + open + " 而 } =" + close);
             }
         }
         assertThat(violations)
