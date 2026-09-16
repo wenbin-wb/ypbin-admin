@@ -88,9 +88,11 @@ public class LoginSupport {
         StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
         recordLoginTerminal(ip, userAgent);
         updateLastLoginTime(user.getId());
-        // 埋点上报置于最后：只有登录确实完成才产出 auth.user.login（失败只记堆栈，不回噬业务）
+        // 先取令牌再上报：即便埋点在最坏情况下抛错，业务结果也已成型，
+        // 不会出现「会话已建立、令牌却没返回」的孤儿会话窗口
+        LoginResp resp = new LoginResp(LoginHelper.getTokenValue());
         loginEventTracker.recordLogin(user, authType, ip, userAgent);
-        return new LoginResp(LoginHelper.getTokenValue());
+        return resp;
     }
 
     /**

@@ -154,6 +154,24 @@ class LoginEventTrackerTest {
     }
 
     /**
+     * {@code Error}（如 {@code NoClassDefFoundError}）同样不得穿透到业务：
+     * 缺类/静态初始化失败在埋点链路里是可恢复的，绝不能因此让登录请求失败。
+     */
+    @Test
+    void errorFromRecorderShouldAlsoBeSwallowed() {
+        TrackRecorder recorder = mock(TrackRecorder.class);
+        doThrow(new NoClassDefFoundError("缺少埋点依赖类")).when(recorder).record(any(TrackEvent.class));
+        LoginEventTracker tracker = new LoginEventTracker(providerOf(recorder));
+
+        tracker.recordLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA);
+
+        assertThat(appender.list).hasSize(1);
+        assertThat(appender.list.get(0).getLevel()).isEqualTo(Level.ERROR);
+        assertThat(appender.list.get(0).getThrowableProxy().getClassName())
+            .isEqualTo(NoClassDefFoundError.class.getName());
+    }
+
+    /**
      * 埋点未启用（{@code ypbin.tracking.enabled} 未开）：不采集是配置语义，但必须留一行 WARN 指明原因，
      * 且只提示一次（不能每次登录都刷屏）。
      */
