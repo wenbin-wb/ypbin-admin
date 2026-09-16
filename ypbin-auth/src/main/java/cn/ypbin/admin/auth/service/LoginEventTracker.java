@@ -52,11 +52,12 @@ import org.springframework.stereotype.Component;
  * （{@code TrackRecorder.java:31-32}），但事件构造期会校验必填项
  * （{@code TrackEvent.java:93-99}），故此处必须整体兜底。</p>
  *
- * <p><strong>为什么连 {@code Error} 也兜</strong>：{@code NoClassDefFoundError} /
- * {@code ExceptionInInitializerError} 这类 {@code Error} 在埋点链路里是可恢复的（缺类、静态初始化失败），
- * 一旦穿透就会让「已经建立 sa-token 会话」的登录请求失败——用户拿不到令牌、服务端却留了会话。
- * starter 的消费者线程同样按 {@code RuntimeException | Error} 兜底
- * （{@code TrackFlusher.java:114} 的 {@code start()}），本类与之保持同一口径。</p>
+ * <p><strong>兜哪些异常</strong>：{@code RuntimeException}（埋点链路自身故障）与
+ * {@code LinkageError}（缺类 / 静态初始化失败——可选依赖缺失时的典型形态，
+ * {@code NoClassDefFoundError}、{@code ExceptionInInitializerError} 都是它的子类）。
+ * <b>刻意不兜</b> {@code VirtualMachineError}（OOM / StackOverflow）与 {@code ThreadDeath}：
+ * 那是 JVM 级致命状态，继续执行并打日志既不安全也无意义。
+ * <b>整个方法体都在 try 内</b>——包括从容器取 Bean 那一步，因为依赖缺失正是在那里冒出来的。</p>
  *
  * <p><strong>payload 只放白名单属性</strong>：登录仅 {@code authType}（取值 ACCOUNT/PHONE/SOCIAL），
  * 登出为空表；密码、令牌、手机号等敏感值一律不进 payload（也不进日志）。</p>
@@ -123,18 +124,20 @@ public class LoginEventTracker {
      */
     private void record(String eventCode, Map<String, Object> payload, @Nullable Long userId,
                         @Nullable Long tenantId, String ip, @Nullable String userAgent) {
-        TrackRecorder recorder = recorderProvider.getIfAvailable();
-        if (recorder == null) {
-            warnDisabledOnce();
-            return;
-        }
         try {
+            // Bean 解析也在 try 内：可选依赖缺失（NoClassDefFoundError）正是从这一行冒出来的
+            TrackRecorder recorder = recorderProvider.getIfAvailable();
+            if (recorder == null) {
+                warnDisabledOnce();
+                return;
+            }
             TrackRequestContext context = new TrackRequestContext(normalize(ip), normalize(userAgent),
                 resolveTraceId(), userId, tenantId);
             recorder.record(new TrackEvent(UUID.randomUUID().toString(), eventCode, Instant.now(),
                 null, null, null, null, null, null, SUCCESS, payload, context));
-        } catch (RuntimeException | Error ex) {
-            // 含 Error：埋点不得反噬业务（与 starter TrackFlusher#start 的口径一致），但仍留完整堆栈
+        } catch (RuntimeException | LinkageError ex) {
+            // 只兜「埋点链路故障」与「缺类/静态初始化失败」两族，且仍留完整堆栈；
+            // 不兜 VirtualMachineError/ThreadDeath（JVM 级致命，继续执行无意义）
             log.error("[ypbin-admin] 上报埋点事件失败，事件未采集（不影响业务），eventCode={}, userId={}",
                 eventCode, userId, ex);
         }

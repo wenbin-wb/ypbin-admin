@@ -10,6 +10,7 @@
 package cn.ypbin.admin.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -154,11 +155,11 @@ class LoginEventTrackerTest {
     }
 
     /**
-     * {@code Error}（如 {@code NoClassDefFoundError}）同样不得穿透到业务：
-     * 缺类/静态初始化失败在埋点链路里是可恢复的，绝不能因此让登录请求失败。
+     * {@code LinkageError}（{@code NoClassDefFoundError}/{@code ExceptionInInitializerError} 的父类）
+     * 同样不得穿透到业务：缺类/静态初始化失败在埋点链路里是可恢复的，绝不能因此让登录请求失败。
      */
     @Test
-    void errorFromRecorderShouldAlsoBeSwallowed() {
+    void linkageErrorFromRecorderShouldAlsoBeSwallowed() {
         TrackRecorder recorder = mock(TrackRecorder.class);
         doThrow(new NoClassDefFoundError("缺少埋点依赖类")).when(recorder).record(any(TrackEvent.class));
         LoginEventTracker tracker = new LoginEventTracker(providerOf(recorder));
@@ -199,5 +200,40 @@ class LoginEventTrackerTest {
         // 空串不写进维度（与 starter 的 TrackRequestContextResolver 归一策略一致）
         assertThat(captor.getValue().context().clientIp()).isNull();
         assertThat(captor.getValue().context().userAgent()).isNull();
+    }
+
+    /**
+     * 取埋点 Bean 这一步（{@code ObjectProvider#getIfAvailable}）抛 {@code LinkageError} 时也不得穿透：
+     * 可选依赖缺失正是从这一行冒出来的，它必须在 try 覆盖范围内（复核意见，2026-09-16）。
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    void linkageErrorFromBeanLookupShouldAlsoBeSwallowed() {
+        ObjectProvider<TrackRecorder> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenThrow(new NoClassDefFoundError("埋点模块不在类路径"));
+        LoginEventTracker tracker = new LoginEventTracker(provider);
+
+        tracker.recordLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA);
+        tracker.recordLogout(42L, 7L, "10.0.0.8", CHROME_UA);
+
+        assertThat(appender.list).hasSize(2);
+        assertThat(appender.list).allSatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getThrowableProxy()).isNotNull();
+        });
+    }
+
+    /**
+     * 致命 JVM 错误（{@code VirtualMachineError}/{@code ThreadDeath}）**刻意不兜**：
+     * 吞掉它们既不安全也无意义。这里钉住该边界，避免有人顺手把 catch 放宽成 {@code Throwable}。
+     */
+    @Test
+    void virtualMachineErrorShouldNotBeSwallowed() {
+        TrackRecorder recorder = mock(TrackRecorder.class);
+        doThrow(new OutOfMemoryError("模拟堆耗尽")).when(recorder).record(any(TrackEvent.class));
+        LoginEventTracker tracker = new LoginEventTracker(providerOf(recorder));
+
+        assertThatThrownBy(() -> tracker.recordLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA))
+            .isInstanceOf(OutOfMemoryError.class);
     }
 }

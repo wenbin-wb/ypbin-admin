@@ -381,18 +381,21 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (roleIds == null || roleIds.isEmpty()) {
             return;
         }
-        for (Long roleId : new HashSet<>(roleIds)) {
-            userRoleMapper.insert(new SysUserRole(userId, roleId));
-        }
+        // 先构建整批、再一次性批量写：逐条 insert 会让 N 个角色变成 N 次数据库往返
+        List<SysUserRole> rows = new HashSet<>(roleIds).stream()
+            .map(roleId -> new SysUserRole(userId, roleId))
+            .toList();
+        userRoleMapper.insertBatch(rows);
     }
 
     private void assignPosts(Long userId, List<Long> postIds) {
         if (postIds == null || postIds.isEmpty()) {
             return;
         }
-        for (Long postId : new HashSet<>(postIds)) {
-            userPostMapper.insert(new SysUserPost(userId, postId));
-        }
+        List<SysUserPost> rows = new HashSet<>(postIds).stream()
+            .map(postId -> new SysUserPost(userId, postId))
+            .toList();
+        userPostMapper.insertBatch(rows);
     }
 
     private UserResp toResp(SysUser user) {

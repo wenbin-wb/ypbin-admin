@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -282,6 +283,36 @@ class LoginSupportTest {
 
             assertThat(resp.getAccessToken()).isEqualTo("mock-token");
             verify(systemClient).updateLastLoginTime(42L);
+        }
+    }
+
+    /**
+     * 顺序断言：令牌先取、埋点后报。取令牌就失败时，绝不能先产出一条「登录成功」的埋点事件，
+     * 否则事件口径与业务结果会分叉（复核意见：原顺序无测试保护，2026-09-16）。
+     */
+    @Test
+    void loginEventMustBeReportedOnlyAfterTokenIsResolved() {
+        ISystemClient systemClient = mock(ISystemClient.class);
+        LoginEventTracker tracker = mock(LoginEventTracker.class);
+        LoginSupport support = new LoginSupport(systemClient, tracker);
+
+        try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
+            MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
+            MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+
+            loginHelper.when(() -> LoginHelper.login(any(), any(), any())).thenAnswer(inv -> null);
+            loginHelper.when(LoginHelper::getTokenValue)
+                .thenThrow(new IllegalStateException("取令牌失败"));
+            sysCache.when(() -> SysCache.getUserRoleCodes(42L)).thenReturn(List.of());
+            stpUtil.when(StpUtil::getSession).thenReturn(mock(SaSession.class));
+            stpUtil.when(StpUtil::getTokenSession).thenReturn(mock(SaSession.class));
+
+            try {
+                support.completeLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA);
+            } catch (IllegalStateException expected) {
+                // 预期：取令牌失败直接抛出
+            }
+            verify(tracker, never()).recordLogin(any(), any(), any(), any());
         }
     }
 }

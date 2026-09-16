@@ -31,6 +31,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,14 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserExcelComponent {
 
     private static final Logger log = LoggerFactory.getLogger(UserExcelComponent.class);
+
+    /**
+     * 单条多值 INSERT 的行数上限。
+     *
+     * <p>导入行数由上传文件决定（不可控），一次性拼进单条 INSERT 会有 {@code max_allowed_packet} 风险，
+     * 故按固定大小分块——这是「分块批量写」而非逐行往返。</p>
+     */
+    private static final int INSERT_BATCH_SIZE = 500;
 
     /** 导入默认初始密码（行内未填密码时使用） */
     private static final String DEFAULT_PASSWORD = "123456";
@@ -147,7 +156,8 @@ public class UserExcelComponent {
         // 记录本文件内已成功导入的用户名/手机号，拦截文件内重复
         Set<String> importedUsernames = new HashSet<>();
         Set<String> importedPhones = new HashSet<>();
-
+        // 待落库的用户：循环内只做校验与构建，落库在循环外分块批量写（避免 N 行 = N 次往返）
+        List<SysUser> pending = new ArrayList<>();
         for (UserImportVo vo : list) {
             rowNum++;
             if (!StringUtils.hasText(vo.getUsername())) {
@@ -187,7 +197,7 @@ public class UserExcelComponent {
             if (StringUtils.hasText(vo.getEmail())) {
                 user.setEmail(vo.getEmail().trim());
             }
-            userMapper.insert(user);
+            pending.add(user);
             importedUsernames.add(username);
             if (phone != null) {
                 importedPhones.add(phone);
@@ -197,7 +207,25 @@ public class UserExcelComponent {
             SysCache.evictUserByPhone(phone);
             result.setSuccessCount(result.getSuccessCount() + 1);
         }
+        insertInBatches(pending);
         return result;
+    }
+
+    /**
+     * 按固定批次批量写入用户。
+     *
+     * <p>整个导入方法处于同一事务（{@code @Transactional(rollbackFor = Exception.class)}），
+     * 因此批量写与逐行写在成败语义上等价：任一行失败都会整体回滚，本就不存在「前面已插入」的部分成功。
+     * 主键与 create_user/create_time 由 MyBatis-Plus 参数处理阶段回填（与内置 insert 同一机制），
+     * 故循环内不再需要 {@code userMapper.insert}。</p>
+     *
+     * @param users 待落库用户（非空）
+     */
+    private void insertInBatches(List<SysUser> users) {
+        for (int fromIndex = 0; fromIndex < users.size(); fromIndex += INSERT_BATCH_SIZE) {
+            int toIndex = Math.min(fromIndex + INSERT_BATCH_SIZE, users.size());
+            userMapper.insertBatch(users.subList(fromIndex, toIndex));
+        }
     }
 
     private String normalizePhone(String phone) {

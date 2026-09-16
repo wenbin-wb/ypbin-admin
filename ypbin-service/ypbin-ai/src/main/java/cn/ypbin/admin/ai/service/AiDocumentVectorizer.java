@@ -21,6 +21,7 @@ import cn.ypbin.starter.ai.rag.DocumentLoader;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -105,6 +106,7 @@ public class AiDocumentVectorizer {
                 .eq(AiDocumentChunk::getDocumentId, docId));
             // 向量化线程内无请求上下文，租户 ID 只查一次供全部分块复用，避免循环内查库
             Long tenantId = tenantIdOf(knowledgeBaseId);
+            List<AiDocumentChunk> rows = new ArrayList<>(chunks.size());
             for (int i = 0; i < chunks.size(); i++) {
                 Document chunk = chunks.get(i);
                 String text = chunk.getText() == null ? "" : chunk.getText();
@@ -116,8 +118,11 @@ public class AiDocumentVectorizer {
                 row.setContent(text);
                 row.setCharCount(text.length());
                 row.setCreateTime(LocalDateTime.now());
-                chunkMapper.insert(row);
+                rows.add(row);
             }
+            // 循环内只构建内存行（避免 N 次数据库往返），循环外一次多值 INSERT；
+            // 未分块：若单文档分块数达到 max_allowed_packet 量级，需按固定大小分块（参考 NoticePublishServiceImpl）
+            chunkMapper.insertBatch(rows);
             log.debug("[ypbin-ai] 分块落库完成: docId={}, chunks={}", docId, chunks.size());
         } catch (Exception e) {
             log.warn("[ypbin-ai] 分块落库失败（不影响向量化）: docId={} err={}", docId, e.getMessage());

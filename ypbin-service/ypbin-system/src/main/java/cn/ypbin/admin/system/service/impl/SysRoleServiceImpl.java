@@ -273,18 +273,21 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         if (menuIds == null || menuIds.isEmpty()) {
             return;
         }
-        for (Long menuId : new HashSet<>(menuIds)) {
-            roleMenuMapper.insert(new SysRoleMenu(roleId, menuId));
-        }
+        // 先构建整批、再一次性批量写（关联表复合主键、无审计列，不涉及主键回填）
+        List<SysRoleMenu> rows = new HashSet<>(menuIds).stream()
+            .map(menuId -> new SysRoleMenu(roleId, menuId))
+            .toList();
+        roleMenuMapper.insertBatch(rows);
     }
 
     private void assignDepartments(Long roleId, List<Long> deptIds) {
         if (deptIds == null || deptIds.isEmpty()) {
             return;
         }
-        for (Long deptId : new HashSet<>(deptIds)) {
-            roleDeptMapper.insert(new SysRoleDept(roleId, deptId));
-        }
+        List<SysRoleDept> rows = new HashSet<>(deptIds).stream()
+            .map(deptId -> new SysRoleDept(roleId, deptId))
+            .toList();
+        roleDeptMapper.insertBatch(rows);
     }
 
     private Long currentTenantId() {

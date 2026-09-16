@@ -212,8 +212,10 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
         if (menuIds == null || menuIds.isEmpty()) {
             return;
         }
-        for (Long menuId : new HashSet<>(menuIds)) {
-            templateMenuMapper.insert(new SysTemplateMenu(templateId, menuId));
-        }
+        // 先构建整批、再一次性批量写（关联表复合主键、无审计列，不涉及主键回填）
+        List<SysTemplateMenu> rows = new HashSet<>(menuIds).stream()
+            .map(menuId -> new SysTemplateMenu(templateId, menuId))
+            .toList();
+        templateMenuMapper.insertBatch(rows);
     }
 }

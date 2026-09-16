@@ -88,8 +88,8 @@ public class LoginSupport {
         StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
         recordLoginTerminal(ip, userAgent);
         updateLastLoginTime(user.getId());
-        // 先取令牌再上报：即便埋点在最坏情况下抛错，业务结果也已成型，
-        // 不会出现「会话已建立、令牌却没返回」的孤儿会话窗口
+        // 先取令牌再上报：埋点真出问题时（如取令牌本身失败）不会先产出一条「登录成功」事件，
+        // 事件与业务结果保持同源；上报侧自身已保证不抛（见 LoginEventTracker）
         LoginResp resp = new LoginResp(LoginHelper.getTokenValue());
         loginEventTracker.recordLogin(user, authType, ip, userAgent);
         return resp;

@@ -11,7 +11,13 @@ package cn.ypbin.admin.system.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import cn.ypbin.admin.system.entity.SysRoleDept;
+import cn.ypbin.admin.system.entity.SysRoleMenu;
+import cn.ypbin.admin.system.entity.SysTemplateMenu;
 import cn.ypbin.admin.system.entity.SysTrackEventDaily;
+import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.entity.SysUserPost;
+import cn.ypbin.admin.system.entity.SysUserRole;
 import cn.ypbin.admin.system.entity.SysTrackSession;
 import cn.ypbin.admin.system.entity.SysTrackUserDaily;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
@@ -92,6 +98,13 @@ class TrackAggregateSqlMappingTest {
         assertInsertColumns(SysTrackEventDailyMapper.class, SysTrackEventDaily.class);
         assertInsertColumns(SysTrackUserDailyMapper.class, SysTrackUserDaily.class);
         assertInsertColumns(SysTrackSessionMapper.class, SysTrackSession.class);
+        // 由「禁循环内 DB」门禁暴露出的逐行写入改为批量后新增的 insertBatch：列清单必须与实体字段对得上
+        assertInsertColumns(SysUserMapper.class, SysUser.class);
+        assertInsertColumns(SysUserRoleMapper.class, SysUserRole.class);
+        assertInsertColumns(SysUserPostMapper.class, SysUserPost.class);
+        assertInsertColumns(SysRoleMenuMapper.class, SysRoleMenu.class);
+        assertInsertColumns(SysRoleDeptMapper.class, SysRoleDept.class);
+        assertInsertColumns(SysTemplateMenuMapper.class, SysTemplateMenu.class);
     }
 
     @Test
