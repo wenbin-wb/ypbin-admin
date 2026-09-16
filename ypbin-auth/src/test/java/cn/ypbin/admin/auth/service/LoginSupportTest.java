@@ -26,12 +26,15 @@ import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUserHelper;
+import cn.ypbin.starter.tracking.core.TrackEvent;
+import cn.ypbin.starter.tracking.core.TrackRecorder;
 import cn.dev33.satoken.session.SaSession;
 import cn.dev33.satoken.stp.StpUtil;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * {@link LoginSupport} 单元测试。
@@ -42,6 +45,9 @@ import org.mockito.MockedStatic;
  * @since 2026-09-01
  */
 class LoginSupportTest {
+
+    /** 登录埋点上报器：本类只断言「被调用且不阻断」，事件构造细节由 LoginEventTrackerTest 覆盖 */
+    private final LoginEventTracker loginEventTracker = mock(LoginEventTracker.class);
 
     /** 用于断言终端信息的 User-Agent（Chrome on Windows） */
     private static final String CHROME_UA =
@@ -61,7 +67,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldWriteSessionAndReturnToken() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -89,7 +95,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldRecordTerminalInfoForOnlineUser() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -122,7 +128,7 @@ class LoginSupportTest {
     @Test
     void shouldRecordTerminalWithoutUserAgent() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -153,7 +159,7 @@ class LoginSupportTest {
     @Test
     void terminalRecordFailureShouldNotBreakLogin() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -175,7 +181,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldFallbackEmptyRolesWhenCacheFails() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -199,7 +205,7 @@ class LoginSupportTest {
     @Test
     void updateLastLoginTimeFailureShouldNotBreakLogin() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -217,6 +223,65 @@ class LoginSupportTest {
             LoginResp resp = support.completeLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA);
 
             assertThat(resp.getAccessToken()).isEqualTo("mock-token");
+        }
+    }
+
+    /**
+     * 三个登录入口（账号密码 / 短信 / 第三方）都经 {@link LoginSupport} 收尾，
+     * 因此这里按三种 authType 各跑一次，钉死「三入口全覆盖」，并确认上报发生在登录成功之后。
+     */
+    @Test
+    void completeLoginShouldReportLoginEventForEveryAuthType() {
+        ISystemClient systemClient = mock(ISystemClient.class);
+        LoginEventTracker tracker = mock(LoginEventTracker.class);
+        LoginSupport support = new LoginSupport(systemClient, tracker);
+
+        try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
+            MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
+            MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+
+            loginHelper.when(() -> LoginHelper.login(any(), any(), any())).thenAnswer(inv -> null);
+            loginHelper.when(LoginHelper::getTokenValue).thenReturn("mock-token");
+            sysCache.when(() -> SysCache.getUserRoleCodes(42L)).thenReturn(List.of());
+            stpUtil.when(StpUtil::getSession).thenReturn(mock(SaSession.class));
+            stpUtil.when(StpUtil::getTokenSession).thenReturn(mock(SaSession.class));
+
+            SysUser user = buildUser();
+            for (String authType : List.of("ACCOUNT", "PHONE", "SOCIAL")) {
+                support.completeLogin(user, authType, "10.0.0.8", CHROME_UA);
+                verify(tracker).recordLogin(user, authType, "10.0.0.8", CHROME_UA);
+            }
+        }
+    }
+
+    /**
+     * 埋点链路故障（本测试用真实 {@link LoginEventTracker} + 抛异常的 TrackRecorder 模拟）
+     * 不得反噬登录：令牌照常返回，异常被包在埋点侧并记完整堆栈。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void loginEventReportingFailureShouldNotBreakLogin() {
+        ISystemClient systemClient = mock(ISystemClient.class);
+        TrackRecorder recorder = mock(TrackRecorder.class);
+        doThrow(new IllegalStateException("埋点队列不可用")).when(recorder).record(any(TrackEvent.class));
+        ObjectProvider<TrackRecorder> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(recorder);
+        LoginSupport support = new LoginSupport(systemClient, new LoginEventTracker(provider));
+
+        try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
+            MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
+            MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+
+            loginHelper.when(() -> LoginHelper.login(any(), any(), any())).thenAnswer(inv -> null);
+            loginHelper.when(LoginHelper::getTokenValue).thenReturn("mock-token");
+            sysCache.when(() -> SysCache.getUserRoleCodes(42L)).thenReturn(List.of());
+            stpUtil.when(StpUtil::getSession).thenReturn(mock(SaSession.class));
+            stpUtil.when(StpUtil::getTokenSession).thenReturn(mock(SaSession.class));
+
+            LoginResp resp = support.completeLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA);
+
+            assertThat(resp.getAccessToken()).isEqualTo("mock-token");
+            verify(systemClient).updateLastLoginTime(42L);
         }
     }
 }

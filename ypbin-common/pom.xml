@@ -49,7 +49,14 @@
             <artifactId>ypbin-starter-log</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- 测试（RemoteLogDao / 自动装配优先级） -->
+        <!-- 埋点"跨服务上报"装配（RemoteTrackAutoConfiguration）编译期依赖：与 starter-log 同理
+             必须 optional——否则每个 common 消费者都会被强推 starter-tracking（含其采集端点自动配置）。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tracking</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- 测试（RemoteLogDao / RemoteTrackEventSink / 自动装配优先级） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

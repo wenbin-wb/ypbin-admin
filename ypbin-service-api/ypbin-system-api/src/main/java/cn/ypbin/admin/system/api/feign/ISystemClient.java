@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
+import cn.ypbin.starter.tracking.core.TrackEvent;
 import java.util.List;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -176,4 +177,21 @@ public interface ISystemClient {
      */
     @PostMapping("/log-ingest")
     R<Void> ingestLog(@RequestBody LogRecord logRecord);
+
+    /**
+     * 上报一批后端业务埋点事件（auth 等无埋点落库能力的调用方专用）。
+     *
+     * <p>承载的是 starter 采集模型 {@link TrackEvent} 本身，system 侧直接交给其容器内的
+     * {@code TrackRecorder}（唯一写入口，未登记事件码在此被拒绝），因此「事件码登记校验 →
+     * 有界队列 → 消费者线程 → {@code sys_track_event} 落库」全仓只有一份实现；
+     * 调用方只是搬运，不做任何字段改名映射。</p>
+     *
+     * <p>失败语义：system 不可达或埋点未启用时返回失败 {@code R}，调用方必须据
+     * {@code R.success}/{@code R.code} 判定并记完整堆栈（禁止静默丢弃）。</p>
+     *
+     * @param events 待落库事件；调用方须已在请求线程上捕获 IP/UA/链路 ID/用户等上下文
+     * @return 统一响应体
+     */
+    @PostMapping("/track-ingest")
+    R<Void> ingestTrackEvents(@RequestBody List<TrackEvent> events);
 }

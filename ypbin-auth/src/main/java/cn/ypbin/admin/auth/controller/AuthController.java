@@ -54,10 +54,13 @@ public class AuthController {
 
     /**
      * 退出登录。
+     *
+     * <p>与登录入口一致：IP 与 User-Agent 在 Controller 从请求上下文取、往下传，
+     * 让 Service 层不依赖 HTTP 工具（也便于单测）。</p>
      */
     @PostMapping("/logout")
     public R<Void> logout() {
-        authService.logout();
+        authService.logout(WebRequestUtils.ip(), WebRequestUtils.header(HttpHeaders.USER_AGENT));
         return R.ok();
     }
 

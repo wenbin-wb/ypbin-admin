@@ -35,3 +35,14 @@ ypbin:
 # ---------- SSE 推送 ----------
   sse:
     enabled: true
+
+# ---------- 埋点（ypbin-starter-tracking）----------
+# 登录/登出事件（auth.user.login / auth.user.logout）由本服务产出——三个登录入口都在 auth，
+# 必须在此打开开关，否则 auth 不装配采集链路，漏斗里的「登录」这一步恒为空（只留一行 WARN）。
+# 落库去向：auth 无数据源，事件经 ypbin-common 的 RemoteTrackEventSink 上报 system 的
+# /internal/track-ingest，再到 sys_track_event（该端点走内部凭证，不经网关）。
+# 刻意不开 ingest-enabled：auth 不是客户端事件的上报入口（那是 system 的 /tracking/ingest），
+# 不开就少一个匿名可写端点。
+  tracking:
+    enabled: true
+    app-id: ypbin-admin-auth

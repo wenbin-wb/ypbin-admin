@@ -28,11 +28,14 @@ import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.dao.LogDao;
 import cn.ypbin.starter.log.model.LogRecord;
+import cn.ypbin.starter.tracking.core.TrackEvent;
+import cn.ypbin.starter.tracking.core.TrackRecorder;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -78,6 +81,15 @@ public class SystemClientImpl implements ISystemClient {
     private final SysMenuService menuService;
     /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
     private final LogDao logDao;
+
+    /**
+     * 埋点采集门面（可选）：只有 {@code ypbin.tracking.enabled=true} 时 starter 才装配它。
+     *
+     * <p>刻意用 {@link ObjectProvider} 而不是直接注入：埋点开关关闭时本 Bean 不存在，
+     * 直接注入会让整个 system 服务启动失败（把「可选能力」变成「启动硬依赖」）。
+     * 但取不到时也<b>不能静默丢弃</b>事件——那样上报方会以为成功，故显式失败返回（见方法体）。</p>
+     */
+    private final ObjectProvider<TrackRecorder> trackRecorderProvider;
 
     @Override
     @GetMapping("/permissions")
@@ -275,6 +287,27 @@ public class SystemClientImpl implements ISystemClient {
     @PostMapping("/log-ingest")
     public R<Void> ingestLog(@RequestBody LogRecord logRecord) {
         logDao.add(logRecord);
+        return R.ok();
+    }
+
+    /**
+     * 接收 auth 等无落库能力的服务上报的后端业务埋点事件。
+     *
+     * <p>只把事件交给容器内的 {@link TrackRecorder}（starter 的唯一写入口，未登记事件码在此被拒绝），
+     * 因此「事件码登记校验 → 有界队列 → 消费者线程 → {@code SysTrackEventSink} 落库」全仓只有一份实现，
+     * 本端点不做任何二次映射。刻意不加 {@code @Log}：否则一次埋点上报会再触发一条操作日志采集。</p>
+     *
+     * <p>异常不吞：埋点未启用时显式抛错（{@code R.success=false}），由调用方记完整堆栈——
+     * 若静默返回成功，「登录事件没落库」将没有任何痕迹。</p>
+     */
+    @Override
+    @PostMapping("/track-ingest")
+    public R<Void> ingestTrackEvents(@RequestBody List<TrackEvent> events) {
+        TrackRecorder recorder = trackRecorderProvider.getIfAvailable();
+        if (recorder == null) {
+            throw new BusinessException("埋点未启用，无法接收事件上报（请检查 ypbin.tracking.enabled）");
+        }
+        recorder.record(events);
         return R.ok();
     }
 }

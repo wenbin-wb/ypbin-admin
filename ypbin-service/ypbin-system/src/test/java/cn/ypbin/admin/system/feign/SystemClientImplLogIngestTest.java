@@ -26,12 +26,18 @@ import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.log.model.LogRecord;
+import cn.ypbin.starter.tracking.core.TrackEvent;
+import cn.ypbin.starter.tracking.core.TrackRecorder;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * 内部日志上报端点测试：{@code POST /internal/log-ingest} 必须复用既有的
@@ -47,7 +53,14 @@ class SystemClientImplLogIngestTest {
 
     private final SysLogMapper logMapper = mock(SysLogMapper.class);
 
+    /** 埋点门面：{@code ypbin.tracking.enabled=true} 时 starter 才装配它 */
+    private final TrackRecorder trackRecorder = mock(TrackRecorder.class);
+
     private SystemClientImpl controller() {
+        return controllerWith(providerOf(trackRecorder));
+    }
+
+    private SystemClientImpl controllerWith(ObjectProvider<TrackRecorder> recorderProvider) {
         return new SystemClientImpl(
             mock(SysPermissionService.class),
             mock(SysUserService.class),
@@ -55,7 +68,20 @@ class SystemClientImplLogIngestTest {
             mock(SocialConfigReader.class),
             mock(SocialBindService.class),
             mock(SysMenuService.class),
-            new DbLogProviders.DbLogDao(logMapper));
+            new DbLogProviders.DbLogDao(logMapper),
+            recorderProvider);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<TrackRecorder> providerOf(TrackRecorder recorder) {
+        ObjectProvider<TrackRecorder> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(recorder);
+        return provider;
+    }
+
+    private TrackEvent loginEvent() {
+        return new TrackEvent("evt-1", "auth.user.login", Instant.parse("2026-09-16T02:30:00Z"),
+            null, null, null, null, null, null, true, Map.of("authType", "ACCOUNT"));
     }
 
     private LogRecord fullRecord() {
@@ -125,5 +151,32 @@ class SystemClientImplLogIngestTest {
         assertThatThrownBy(() -> controller().ingestLog(fullRecord()))
             .isInstanceOf(RuntimeException.class)
             .hasMessageContaining("sys_log 写入失败");
+    }
+
+    /**
+     * 埋点上报端点必须把事件交给 starter 的唯一写入口 {@code TrackRecorder}
+     * （事件码登记校验 / 有界队列 / 消费者线程 / 落库全在那一侧），端点自己不做映射。
+     */
+    @Test
+    void trackIngestShouldDelegateToTrackRecorder() {
+        List<TrackEvent> events = List.of(loginEvent());
+
+        R<Void> result = controller().ingestTrackEvents(events);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(trackRecorder).record(events);
+    }
+
+    /**
+     * 埋点未启用（Bean 不存在）时必须显式失败，不得静默返回成功——
+     * 否则上报方会以为「登录事件已落库」，实际什么都没发生。
+     */
+    @Test
+    void trackIngestShouldFailExplicitlyWhenTrackingDisabled() {
+        SystemClientImpl client = controllerWith(providerOf(null));
+
+        assertThatThrownBy(() -> client.ingestTrackEvents(List.of(loginEvent())))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("ypbin.tracking.enabled");
     }
 }

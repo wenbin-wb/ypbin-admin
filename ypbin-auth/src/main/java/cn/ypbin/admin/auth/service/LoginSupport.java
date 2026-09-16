@@ -54,6 +54,8 @@ public class LoginSupport {
 
     private final ISystemClient systemClient;
 
+    private final LoginEventTracker loginEventTracker;
+
     /**
      * 完成登录并返回令牌。
      *
@@ -86,6 +88,8 @@ public class LoginSupport {
         StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
         recordLoginTerminal(ip, userAgent);
         updateLastLoginTime(user.getId());
+        // 埋点上报置于最后：只有登录确实完成才产出 auth.user.login（失败只记堆栈，不回噬业务）
+        loginEventTracker.recordLogin(user, authType, ip, userAgent);
         return new LoginResp(LoginHelper.getTokenValue());
     }
 
