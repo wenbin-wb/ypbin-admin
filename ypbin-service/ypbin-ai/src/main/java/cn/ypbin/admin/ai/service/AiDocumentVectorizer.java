@@ -49,6 +49,9 @@ public class AiDocumentVectorizer {
 
     private final AiDocumentMapper documentMapper;
     private final AiKnowledgeBaseMapper kbMapper;
+    /** 单条多值 INSERT 的行数上限（分块批量写，规避 max_allowed_packet） */
+    private static final int INSERT_BATCH_SIZE = 500;
+
     private final AiDocumentChunkMapper chunkMapper;
     private final ObjectProvider<AiRagService> ragServiceProvider;
 
@@ -100,6 +103,25 @@ public class AiDocumentVectorizer {
      * <p>向量化重试时会重新切片，必须先清旧数据再写入，避免与向量库不一致。
      * 落库失败仅记录日志不阻断向量化主流程（分块可视化是诊断旁路）。</p>
      */
+    /**
+     * 按固定批次批量写入分块。
+     *
+     * <p><b>语义变化（有意）</b>：此前逐条 {@code insert} 且本方法无事务，失败时前面已写入的分块会留下
+     * （部分成功）；改为单条多值 INSERT 后一批全有全无。分块是「整份文档」的派生数据，半份分块毫无意义，
+     * 故全有全无更符合语义；失败仍由外层 catch 记 WARN，不阻断向量化主流程。</p>
+     *
+     * <p>分块数由文档大小决定（不可控），故按 {@code INSERT_BATCH_SIZE} 分块以规避
+     * {@code max_allowed_packet}——这是分块批量写，不是逐行往返。</p>
+     *
+     * @param rows 待落库分块
+     */
+    private void insertChunksInBatches(List<AiDocumentChunk> rows) {
+        for (int fromIndex = 0; fromIndex < rows.size(); fromIndex += INSERT_BATCH_SIZE) {
+            int toIndex = Math.min(fromIndex + INSERT_BATCH_SIZE, rows.size());
+            chunkMapper.insertBatch(rows.subList(fromIndex, toIndex));
+        }
+    }
+
     private void persistChunks(Long docId, Long knowledgeBaseId, List<Document> chunks) {
         try {
             chunkMapper.delete(new LambdaUpdateWrapper<AiDocumentChunk>()
@@ -120,9 +142,8 @@ public class AiDocumentVectorizer {
                 row.setCreateTime(LocalDateTime.now());
                 rows.add(row);
             }
-            // 循环内只构建内存行（避免 N 次数据库往返），循环外一次多值 INSERT；
-            // 未分块：若单文档分块数达到 max_allowed_packet 量级，需按固定大小分块（参考 NoticePublishServiceImpl）
-            chunkMapper.insertBatch(rows);
+            // 循环内只构建内存行（避免 N 次数据库往返），循环外按固定大小分块批量写
+            insertChunksInBatches(rows);
             log.debug("[ypbin-ai] 分块落库完成: docId={}, chunks={}", docId, chunks.size());
         } catch (Exception e) {
             log.warn("[ypbin-ai] 分块落库失败（不影响向量化）: docId={} err={}", docId, e.getMessage());

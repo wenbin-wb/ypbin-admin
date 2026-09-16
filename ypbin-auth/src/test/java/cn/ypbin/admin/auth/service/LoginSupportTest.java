@@ -10,6 +10,7 @@
 package cn.ypbin.admin.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -307,11 +308,9 @@ class LoginSupportTest {
             stpUtil.when(StpUtil::getSession).thenReturn(mock(SaSession.class));
             stpUtil.when(StpUtil::getTokenSession).thenReturn(mock(SaSession.class));
 
-            try {
-                support.completeLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA);
-            } catch (IllegalStateException expected) {
-                // 预期：取令牌失败直接抛出
-            }
+            assertThatThrownBy(() -> support.completeLogin(buildUser(), "ACCOUNT", "10.0.0.8", CHROME_UA))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("取令牌失败");
             verify(tracker, never()).recordLogin(any(), any(), any(), any());
         }
     }

@@ -129,6 +129,9 @@ class SourceConventionTest {
     private static final Map<String, String> LOOP_DB_EXEMPTIONS = Map.of(
         "NoticePublishServiceImpl#deliveryMapper.insertBatch",
         "分块批量插入：按 INSERT_BATCH_SIZE 切块后每块一次 insertBatch（见 insertInBatches），非逐行往返",
+        "AiDocumentVectorizer#chunkMapper.insertBatch",
+        "分块批量插入：分块数由文档大小决定（不可控），按 INSERT_BATCH_SIZE 分块后每块一次 insertBatch，"
+            + "规避 max_allowed_packet，非逐行往返",
         "UserExcelComponent#userMapper.insertBatch",
         "分块批量插入：导入行数由上传文件决定（不可控），按 INSERT_BATCH_SIZE 分块后每块一次 insertBatch，"
             + "规避 max_allowed_packet，非逐行往返",

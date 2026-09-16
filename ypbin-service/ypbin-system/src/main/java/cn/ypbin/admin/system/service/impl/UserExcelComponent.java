@@ -202,13 +202,25 @@ public class UserExcelComponent {
             if (phone != null) {
                 importedPhones.add(phone);
             }
-            // 导入直插绕过 createUser，需同步清 username/phone 永久缓存键防旧快照残留
-            SysCache.evictUser(null, username);
-            SysCache.evictUserByPhone(phone);
             result.setSuccessCount(result.getSuccessCount() + 1);
         }
         insertInBatches(pending);
+        // 缓存清空必须在落库之后：SysCache 回源带「空值哨兵」防穿透缓存，
+        // 若先清缓存后落库，导入窗口内的登录/短信登录会把「用户不存在」写进缓存且此后不再清理
+        evictImportedUserCaches(pending);
         return result;
+    }
+
+    /**
+     * 落库后清理导入用户的 username / phone 永久缓存键（导入直插绕过 createUser，防旧快照残留）。
+     *
+     * @param users 已落库用户
+     */
+    private void evictImportedUserCaches(List<SysUser> users) {
+        for (SysUser user : users) {
+            SysCache.evictUser(null, user.getUsername());
+            SysCache.evictUserByPhone(user.getPhone());
+        }
     }
 
     /**

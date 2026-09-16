@@ -57,7 +57,9 @@ import org.springframework.stereotype.Component;
  * {@code NoClassDefFoundError}、{@code ExceptionInInitializerError} 都是它的子类）。
  * <b>刻意不兜</b> {@code VirtualMachineError}（OOM / StackOverflow）与 {@code ThreadDeath}：
  * 那是 JVM 级致命状态，继续执行并打日志既不安全也无意义。
- * <b>整个方法体都在 try 内</b>——包括从容器取 Bean 那一步，因为依赖缺失正是在那里冒出来的。</p>
+ * <b>整个方法体都在 try 内</b>——包括从容器取 Bean 那一步，因为依赖缺失正是在那里冒出来的。
+ * 边界：<b>非 {@code LinkageError} 的其它 {@code Error}</b>（如 {@code AssertionError}、
+ * {@code ServiceConfigurationError}）仍会穿透到调用方，这是有意的取舍（不在业务路径上兜所有 Error）。</p>
  *
  * <p><strong>payload 只放白名单属性</strong>：登录仅 {@code authType}（取值 ACCOUNT/PHONE/SOCIAL），
  * 登出为空表；密码、令牌、手机号等敏感值一律不进 payload（也不进日志）。</p>
