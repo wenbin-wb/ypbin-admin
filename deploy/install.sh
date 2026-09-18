@@ -934,8 +934,11 @@ else
   # 为空 → 不带前缀，直接用 Docker 守护进程默认源（其配置的 registry-mirrors；无配置即官方 Docker Hub）。
   infra_registry_prefix="${REGISTRY_PREFIX:-}"
   if [ -n "$infra_registry_prefix" ]; then
-    infra_registry_desc="显式前缀 ${infra_registry_prefix%/}/"
-    info "基础设施镜像按显式 REGISTRY_PREFIX=${infra_registry_prefix%/}/ 拉取"
+    # 归一化尾斜杠（与旧探测路径一致）：`docker.m.daocloud.io` 与 `docker.m.daocloud.io/` 等价；
+    # 缺尾斜杠会拼出 `docker.m.daocloud.iomysql:8.4` 这类无效引用，拉取必然失败。
+    infra_registry_prefix="${infra_registry_prefix%/}/"
+    infra_registry_desc="显式前缀 ${infra_registry_prefix}"
+    info "基础设施镜像按显式 REGISTRY_PREFIX=${infra_registry_prefix} 拉取"
   else
     infra_registry_desc="机器默认（Docker 守护进程 registry-mirrors，无配置即官方 Docker Hub）"
     info "基础设施镜像走机器默认源，不做镜像加速探测"
