@@ -105,6 +105,8 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
             snapshot.setSnapshotJson(objectMapper.writeValueAsString(resp));
             save(snapshot);
         } catch (JacksonException e) {
+            // BusinessException 没有 (String, Throwable) 构造器，日志是唯一能留下根因的地方
+            log.error("序列化结算快照失败；roomId={}", roomId, e);
             throw new BusinessException("序列化结算快照失败");
         }
 

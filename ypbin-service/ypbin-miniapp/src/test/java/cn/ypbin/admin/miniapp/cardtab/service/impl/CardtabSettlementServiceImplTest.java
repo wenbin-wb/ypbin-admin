@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoom;
+import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomMember;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabSettlementSnapshot;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomEventMapper;
@@ -33,8 +34,10 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -55,6 +58,7 @@ class CardtabSettlementServiceImplTest {
     private CardtabRoomMapper roomMapper;
     private CardtabRoomMemberMapper memberMapper;
     private CardtabSettlementSnapshotMapper snapshotMapper;
+    private CardtabRoomEventMapper eventMapper;
     private CardtabSettlementServiceImpl service;
 
     @BeforeEach
@@ -62,8 +66,9 @@ class CardtabSettlementServiceImplTest {
         roomMapper = mock(CardtabRoomMapper.class);
         memberMapper = mock(CardtabRoomMemberMapper.class);
         snapshotMapper = mock(CardtabSettlementSnapshotMapper.class);
+        eventMapper = mock(CardtabRoomEventMapper.class);
         service = new CardtabSettlementServiceImpl(roomMapper, memberMapper,
-            mock(CardtabRoomEventMapper.class), new ObjectMapper());
+            eventMapper, new ObjectMapper());
     }
 
     private CardtabRoom room(String status) {
@@ -96,6 +101,9 @@ class CardtabSettlementServiceImplTest {
             .containsExactly("小红", "阿明", "老王");
         assertThat(resp.getRankings()).extracting(CardtabSettlementResp.RankingItem::getRankNo)
             .containsExactly(1, 2, 3);
+        // 出参 ID 必须一并锁定：只断名字会让「ID 传错」的回归漏网
+        assertThat(resp.getRankings()).extracting(CardtabSettlementResp.RankingItem::getMemberId)
+            .containsExactly(2L, 1L, 3L);
         assertThat(resp.getShareText()).contains("小红：+100").contains("阿明：-40");
     }
 
@@ -110,9 +118,13 @@ class CardtabSettlementServiceImplTest {
 
         assertThat(resp.getTransfers()).hasSize(2);
         // 债务人按欠款降序：老王(60) 先配，再是阿明(40)；债权人为小红(100)
+        assertThat(resp.getTransfers().getFirst().getFromMemberId()).isEqualTo(3L);
+        assertThat(resp.getTransfers().getFirst().getToMemberId()).isEqualTo(1L);
         assertThat(resp.getTransfers().getFirst().getFromName()).isEqualTo("老王");
         assertThat(resp.getTransfers().getFirst().getToName()).isEqualTo("小红");
         assertThat(resp.getTransfers().getFirst().getAmount()).isEqualByComparingTo("60");
+        assertThat(resp.getTransfers().get(1).getFromMemberId()).isEqualTo(2L);
+        assertThat(resp.getTransfers().get(1).getToMemberId()).isEqualTo(1L);
         assertThat(resp.getTransfers().get(1).getFromName()).isEqualTo("阿明");
         assertThat(resp.getTransfers().get(1).getAmount()).isEqualByComparingTo("40");
         // 转账总额守恒：等于所有欠款之和
@@ -158,6 +170,31 @@ class CardtabSettlementServiceImplTest {
         assertThatThrownBy(() -> service.getSettlement(ROOM_ID))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("房间不存在");
+    }
+
+    @Test
+    @DisplayName("结算落库：写出快照 JSON、更新房间状态并记一条流水（写路径此前完全没测）")
+    void saveSettlementShouldPersistSnapshotAndEvent() {
+        CardtabRoom active = room("ACTIVE");
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(active);
+        when(memberMapper.selectList(any())).thenReturn(List.of(
+            member(1, "小红", "30"), member(2, "阿明", "-30")));
+        when(snapshotMapper.insert(any(CardtabSettlementSnapshot.class))).thenReturn(1);
+        // save(...) 走父类 ServiceImpl 的 baseMapper
+        ReflectionTestUtils.setField(service, "baseMapper", snapshotMapper);
+
+        CardtabSettlementResp resp = service.saveSettlement(ROOM_ID);
+
+        assertThat(resp.getStatus()).isEqualTo("SETTLED");
+        ArgumentCaptor<CardtabSettlementSnapshot> snapshot =
+            ArgumentCaptor.forClass(CardtabSettlementSnapshot.class);
+        verify(snapshotMapper).insert(snapshot.capture());
+        assertThat(snapshot.getValue().getRoomId()).isEqualTo(ROOM_ID);
+        // 快照里必须真的有账单内容（不是空壳 JSON）
+        assertThat(snapshot.getValue().getSnapshotJson()).contains("小红").contains("转账建议");
+        assertThat(active.getRoomStatus()).isEqualTo("SETTLED");
+        verify(roomMapper).updateById(active);
+        verify(eventMapper).insert(any(CardtabRoomEvent.class));
     }
 
     @Test

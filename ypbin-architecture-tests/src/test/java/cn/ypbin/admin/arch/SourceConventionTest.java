@@ -81,6 +81,9 @@ class SourceConventionTest {
     private static final Pattern CACHE_KEY_CONSTANT =
         Pattern.compile("static final String \\w+\\s*=\\s*\"([^\"]+)\";");
 
+    /** {@code catch (...) {} } 子句（用于「禁空 catch」铁律的源码级兜底）。 */
+    private static final Pattern CATCH_CLAUSE = Pattern.compile("catch\\s*\\([^)]*\\)\\s*\\{");
+
     /** 跨服务契约模块（api）的源码根：它必须与持久化实体解耦。 */
     private static final String API_MODULE_SOURCE =
         "ypbin-service-api/ypbin-system-api/src/main/java";
@@ -461,6 +464,36 @@ class SourceConventionTest {
         return ENTITY_PACKAGE_REFERENCE.matcher(stripCommentsAndLiterals(source)).find();
     }
 
+    /**
+     * 收集「空 catch」（含「只写了注释」的 catch）所在行号。
+     *
+     * <p><b>为什么需要它</b>：铁律「禁静默吞异常/静默降级」此前**只有评审靠自觉**，没有任何门禁——
+     * 2026-09-18 的独立复核用变异验证证明：把 miniapp 的一处 {@code log.warn} 换成空 catch，
+     * 全仓 283 项测试（含 37 项架构门禁）照样全绿。本规则把它变成构建失败。</p>
+     *
+     * <p>入参必须是 {@link #stripCommentsAndLiterals} 处理过的文本，这样「只写注释的 catch」也会被判定为空。</p>
+     *
+     * @param strippedSource 已剥离注释与字面量的源码
+     * @return 空 catch 的行号列表
+     */
+    static List<Integer> emptyCatchLines(String strippedSource) {
+        List<Integer> lines = new ArrayList<>();
+        Matcher matcher = CATCH_CLAUSE.matcher(strippedSource);
+        while (matcher.find()) {
+            int open = strippedSource.indexOf('{', matcher.start());
+            // 注意：matchingBrace 返回的是「闭括号之后」的下标（既有实现如此，用于区间计算），
+            // 这里要取闭括号本身，故减一——本规则的自检正是靠一个 off-by-one 用例发现的
+            int closeExclusive = matchingBrace(strippedSource, open);
+            if (open < 0 || closeExclusive <= 0) {
+                continue;
+            }
+            if (strippedSource.substring(open + 1, closeExclusive - 1).isBlank()) {
+                lines.add(lineNumber(strippedSource, matcher.start()));
+            }
+        }
+        return lines;
+    }
+
     // ------------------------------------------------------------------ 规则
 
     @Test
@@ -762,6 +795,41 @@ class SourceConventionTest {
             .as("这些 @CacheEvict 的 key 在 SysCache 中不存在：失效会打在不再被读取的键上（静默失效）。"
                 + "改缓存 key 时必须同步改失效注解，或把 key 收进 SysCache 常量")
             .isEmpty();
+    }
+
+    @Test
+    @DisplayName("禁止空 catch（含只写注释的 catch）——把「禁静默吞异常」铁律变成构建失败")
+    void noEmptyCatchBlocks() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : SourceScan.mainSources()) {
+            String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
+            for (int line : emptyCatchLines(code)) {
+                violations.add(SourceScan.relative(file) + ":" + line);
+            }
+        }
+        assertThat(violations)
+            .as("空 catch 会把故障吞得无影无踪。要么记日志（含完整堆栈 log.warn/error(..., ex)），"
+                + "要么显式抛出/转换异常；注释不算处理")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("空 catch 检测应命中空体与仅注释体、放过有处理的 catch（规则有效性自检）")
+    void emptyCatchDetectionShouldBeAccurate() {
+        // 命中：完全空的 catch
+        assertThat(emptyCatchLines(stripCommentsAndLiterals(
+            "try { a(); } catch (Exception e) { }"))).hasSize(1);
+        // 命中：只写了注释的 catch（剥离后为空——注释不算处理）
+        assertThat(emptyCatchLines(stripCommentsAndLiterals(
+            "try { a(); } catch (Exception e) {\n    // 忽略\n}"))).hasSize(1);
+        // 放过：记了日志 / 显式抛出 / 有赋值
+        assertThat(emptyCatchLines(stripCommentsAndLiterals(
+            "try { a(); } catch (Exception e) { log.warn(\"x\", e); }"))).isEmpty();
+        assertThat(emptyCatchLines(stripCommentsAndLiterals(
+            "try { a(); } catch (Exception e) { throw new BusinessException(\"x\"); }"))).isEmpty();
+        // 放过：嵌套 try 里外层有处理（不能因为内层空体错判）
+        assertThat(emptyCatchLines(stripCommentsAndLiterals(
+            "try { a(); } catch (Exception e) { b(); }"))).isEmpty();
     }
 
     @Test
