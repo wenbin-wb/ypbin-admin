@@ -206,8 +206,8 @@ resolve_starter_build_ref() {
     # （认证失败、远端未配置、DNS 失败等都会走到这里，表现相同）。
     warn "无法从远程更新 tag（改用本地已有 tag）。git fetch 的原始输出："
     # 脱敏：远端 URL 若内嵌了 user:token@ 形式的凭据，git 的报错会原样回显，这里先抹掉再打印
-    printf '%s\n' "$fetch_err" | head -n 3 \
-      | sed -E 's#(https?://)[^@/[:space:]]+@#\1<redacted>@#g' | sed 's/^/    /'
+    printf '%s\n' "$fetch_err" | sed -n '1,3p' \
+      | sed -E 's#(https?://)[^@/[:space:]]+@#\1<redacted>@#g' | sed 's/^/    /' || true
     info "  自查：git -C $repo remote -v；git -C $repo fetch --tags   # 亲手复现并看真实报错"
   fi
   if git -C "$repo" rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1; then
@@ -503,12 +503,13 @@ install_frontend_deps() {
   # 就已生效的配置，本步骤不再改任何参数、也不清理 node_modules/store，即**原样重跑**。
   # 因此它只对「瞬时网络抖动」有意义；确定性失败（磁盘不足、registry 不可达、lockfile 与 package.json
   # 不一致、需重新编译的原生依赖等）会必然复现——下面按这个口径如实说明，不夸大成"已修复"。
+  cp "$PNPM_LOG" /tmp/ypbin-pnpm-install-first.log 2>/dev/null || true   # 重试的 tee 会截断 PNPM_LOG，先留档首次失败
   warn "前端依赖安装失败。已完成 fetch-timeout/fetch-retries/network-concurrency 放宽（首次尝试前即已生效），现原样重试一次 pnpm install……"
   warn "（该重试仅对瞬时网络抖动有效；若为确定性失败会再次失败，原因按随后打印的日志与自查命令判断）"
   if (cd "$ui_dir" && pnpm install 2>&1) | tee "$PNPM_LOG"; then
     return 0
   fi
-  warn "前端依赖安装仍失败（含重试一次 pnpm install，均返回非 0）"
+  warn "前端依赖安装仍失败（含重试一次 pnpm install，均返回非 0；首次失败日志已留档 /tmp/ypbin-pnpm-install-first.log）"
   pnpm_diagnose_install_failure "$PNPM_LOG" || true
   return 1
 }
@@ -542,7 +543,7 @@ verify_frontend_mount() {
   done
   warn "强制重建后仍读不到 index.html —— 这类现象的成因不止一种，**具体原因需按下面命令的实际输出判断**，脚本不代下结论："
   warn "宿主机产物：$(ls -l "$ADMIN_UI_DIST_DIR/index.html" 2>/dev/null || echo '不存在')"
-  info "  1) docker inspect $container --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{\"\\n\"}}{{end}}'"
+  info "  1) docker inspect $container --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{\"\\\\n\"}}{{end}}'"
   info "     # 挂载源/目标是否就是预期目录：compose 未挂载或挂错时这里一眼可见"
   info "  2) docker exec $container ls -l /usr/share/nginx/html   # 容器内实际内容（空目录 vs 有文件）"
   info "  3) docker exec $container grep -RE 'root|alias' /etc/nginx/conf.d/   # nginx 的 root/alias 与本挂载点是否一致"
@@ -590,7 +591,7 @@ ensure_mysql_auth() {
     info "  2) docker logs --tail 50 ypbin-mysql   # 或 docker compose -f $ROOT/ypbin-admin/deploy/docker-compose.yml logs --tail 50 mysql"
     info "     # 卷已存在时初始化日志会体现「跳过密码应用」；出现账号/host 相关告警则指向权限面"
     info "  3) docker volume ls | grep ypbin-mysql-data   # 数据卷是否早已存在"
-    info "  4) grep -q '^MYSQL_ROOT_PASSWORD=..' $ENV_FILE && echo '.env 中该密码已设置' || echo '.env 中该密码为空或缺失'"
+    info "  4) grep -qE '^MYSQL_ROOT_PASSWORD=.' $ENV_FILE && echo '.env 中该密码已设置' || echo '.env 中该密码为空或缺失'"
     info "     # 只报「是否已设置」，不打印真值（避免密码进入终端回滚/日志）"
     info "  条件式判读（按上面实际输出对号，条件不成立就不要照做下方处置）："
     info "  · 若 3) 显示卷早已存在、且 .env 的密码是后来重新生成的 ⇒ 卷内初始化的密码与 .env 不一致（下方处置适用）"
@@ -1307,16 +1308,30 @@ if [ -n "$NACOS_TOKEN" ]; then
     fi
   done
 else
-  # 复现一次登录请求只为拿到「HTTP 状态 + 响应正文」这一手判据；accessToken 一律脱敏后再打印
-  # （正常情况下此处不会有 token，但若是响应格式变化导致上面解析失败，脱敏可避免把令牌打到终端）。
-  warn "Nacos 登录未拿到 accessToken，跳过配置导入。登录请求的 HTTP 状态与响应（accessToken 已脱敏）："
-  printf '%s\n' "$(curl -sS -w '\n    http_code=%{http_code}' \
+  # 复现一次登录请求只为拿到「HTTP 状态 + 响应正文」这一手判据；token 一律脱敏后再打印。
+  # ⚠️ 此处**刻意不用 `| head -c` 截断**：head 读够就退出会让上游 sed 拿到 EPIPE（Broken pipe）并返回 4，
+  # 在 `set -euo pipefail`（本脚本第 60 行，全文无 set +e）下会直接中止整个脚本——响应体超过管道缓冲区
+  # （如反向代理返回的大 HTML 错误页）时必现。改用 bash 子串截断，不产生任何 EPIPE 风险。
+  warn "Nacos 登录未拿到 accessToken，跳过配置导入。登录请求的 HTTP 状态与响应（token 已脱敏）："
+  NACOS_LOGIN_RESP="$(curl -sS -w '\n    http_code=%{http_code}' \
     -X POST "$NACOS_CONSOLE_URL/v3/auth/user/login" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "username=$NACOS_USERNAME" \
-    --data-urlencode "password=$NACOS_PASSWORD" 2>&1 || true)" \
-    | sed -E 's/("(access)?[Tt]oken"[[:space:]]*:[[:space:]]*")[^"]*/\1<redacted>/g' \
-    | head -c 800 | sed 's/^/    /'
+    --data-urlencode "password=$NACOS_PASSWORD" 2>&1 || true)"
+  # ⚠️ curl 的 -w 状态行在**响应体之后**：若只打印前 800 字符，大响应体（正是本次修的那个场景）会把
+  # 状态码挤掉，而"HTTP 状态"恰是本处要给出的判据。故先把状态行单独取出来打印，再打印截断后的正文。
+  # 只认**捕获结果的最后一行**，且必须是 -w 的精确形态（4 空格 + http_code=<数字> 整行）：
+  #   ① curl 的 -w 文本是追加在响应体之后的，所以真值一定在最后一行；
+  #   ② 不在正文里"找" http_code=数字 —— 那会把响应体里的字符串当成 HTTP 状态报出去，正是本轮要杜绝的
+  #      「把不可靠的值当结论」。取不到就显示"未取到"，绝不猜。
+  NACOS_LOGIN_CODE="$(printf '%s\n' "$NACOS_LOGIN_RESP" | tail -n 1 \
+    | sed -n 's/^    http_code=\([0-9][0-9]*\)$/\1/p')"
+  printf '    http_code=%s（正文只打印前 800 字符；完整响应见下方自查命令 curl -v）\n' "${NACOS_LOGIN_CODE:-未取到}"
+  # 脱敏按「键名里含 token 的 JSON 字段」匹配（accessToken/refreshToken/idToken/access_token/Token/x-token…）；
+  # 宁可多抹几个非密字段，也不把凭据漏出去。
+  printf '%s\n' "${NACOS_LOGIN_RESP:0:800}" \
+    | sed -E 's/("[A-Za-z0-9_.-]*[Tt]oken[A-Za-z0-9_.-]*"[[:space:]]*:[[:space:]]*")[^"]*/\1<redacted>/g' \
+    | sed 's/^/    /' || true
   info "  自查：用户名/密码是否与 Nacos 实际一致（默认 nacos/nacos，本次用 $NACOS_USERNAME）；"
   info "  1) docker compose -f $ROOT/ypbin-admin/deploy/docker-compose.yml logs --tail 50 nacos | grep -i -E 'auth|user|login'"
   info "  2) 上述 http_code 与响应正文即判据：401/403 属凭据面，5xx/连接失败属服务面，请按其实际内容判断（脚本不代下结论）。"
