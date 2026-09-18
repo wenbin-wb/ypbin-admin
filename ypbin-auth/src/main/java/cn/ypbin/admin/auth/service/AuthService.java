@@ -15,7 +15,7 @@ import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
@@ -76,7 +76,7 @@ public class AuthService {
         // 账号维度错误尝试锁定（与手机验证码入口一致：账号 + IP 维度）
         attemptLimiter.checkLocked(req.getUsername(), ip);
 
-        SysUser user = SysCache.getUserByUsername(req.getUsername());
+        SysUserDto user = SysCache.getUserByUsername(req.getUsername());
         if (user == null || (req.getTenantId() != null
             && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
             throw new BusinessException("用户名或密码错误");

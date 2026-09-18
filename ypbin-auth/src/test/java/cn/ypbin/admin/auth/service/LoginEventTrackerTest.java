@@ -22,7 +22,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import cn.ypbin.starter.tracking.core.TrackingEventCodes;
@@ -77,8 +77,8 @@ class LoginEventTrackerTest {
         RequestContextHolder.resetRequestAttributes();
     }
 
-    private SysUser buildUser() {
-        SysUser user = new SysUser();
+    private SysUserDto buildUser() {
+        SysUserDto user = new SysUserDto();
         user.setId(42L);
         user.setUsername("alice");
         user.setTenantId(7L);

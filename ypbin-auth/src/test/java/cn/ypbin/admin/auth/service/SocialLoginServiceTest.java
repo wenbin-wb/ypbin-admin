@@ -19,8 +19,8 @@ import static org.mockito.Mockito.when;
 import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
@@ -70,8 +70,8 @@ class SocialLoginServiceTest {
         return user;
     }
 
-    private SysUserSocial binding() {
-        SysUserSocial social = new SysUserSocial();
+    private SysUserSocialDto binding() {
+        SysUserSocialDto social = new SysUserSocialDto();
         social.setUserId(42L);
         social.setPlatform("github");
         social.setOpenId("openid-123");

@@ -10,7 +10,7 @@
 package cn.ypbin.admin.ai.tool;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
@@ -55,7 +55,7 @@ public class AdminAiTools {
         if (resp == null || !resp.isSuccess() || resp.getData() == null) {
             return "系统服务暂不可用，请稍后重试";
         }
-        List<SysUser> users = resp.getData();
+        List<SysUserDto> users = resp.getData();
         if (users.isEmpty()) {
             return "未找到匹配用户：" + keyword;
         }

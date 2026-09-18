@@ -9,8 +9,8 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -65,17 +65,17 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<SysUser> getUserByUsername(String username) {
+    public R<SysUserDto> getUserByUsername(String username) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> getUserById(Long userId) {
+    public R<SysUserDto> getUserById(Long userId) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> getUserByPhone(String phone) {
+    public R<SysUserDto> getUserByPhone(String phone) {
         return unavailable();
     }
 
@@ -85,7 +85,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<SysUser>> searchUsers(String keyword) {
+    public R<List<SysUserDto>> searchUsers(String keyword) {
         return unavailable();
     }
 
@@ -115,7 +115,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<SysUserSocial> getSocialBinding(String platform, String openId) {
+    public R<SysUserSocialDto> getSocialBinding(String platform, String openId) {
         return unavailable();
     }
 
@@ -141,7 +141,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<SysUserSocial>> listSocialBindings(Long userId) {
+    public R<List<SysUserSocialDto>> listSocialBindings(Long userId) {
         return unavailable();
     }
 

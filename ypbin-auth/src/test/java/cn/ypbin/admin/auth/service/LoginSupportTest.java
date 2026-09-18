@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
@@ -56,8 +56,8 @@ class LoginSupportTest {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
             + "Chrome/120.0.0.0 Safari/537.36";
 
-    private SysUser buildUser() {
-        SysUser user = new SysUser();
+    private SysUserDto buildUser() {
+        SysUserDto user = new SysUserDto();
         user.setId(42L);
         user.setUsername("alice");
         user.setRealName("爱丽丝");
@@ -248,7 +248,7 @@ class LoginSupportTest {
             stpUtil.when(StpUtil::getSession).thenReturn(mock(SaSession.class));
             stpUtil.when(StpUtil::getTokenSession).thenReturn(mock(SaSession.class));
 
-            SysUser user = buildUser();
+            SysUserDto user = buildUser();
             for (String authType : List.of("ACCOUNT", "PHONE", "SOCIAL")) {
                 support.completeLogin(user, authType, "10.0.0.8", CHROME_UA);
                 verify(tracker).recordLogin(user, authType, "10.0.0.8", CHROME_UA);

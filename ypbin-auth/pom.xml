@@ -40,10 +40,19 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-common</artifactId>
         </dependency>
-        <!-- 系统域共享（实体/Feign） -->
+        <!-- 系统域共享（Feign 契约 + DTO）。
+             排除 ypbin-starter-data：auth 无数据源，按 SKILL「auth/ai 不直连共享库」的约定，
+             不得传递依赖 MyBatis-Plus；一旦有人在此模块引用实体类型，编译期就会因缺类而失败
+             （这就是本排除项的强制作用，别再把它删掉）。 -->
         <dependency>
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-system-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>cn.ypbin</groupId>
+                    <artifactId>ypbin-starter-data</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- 安全：sa-token 登录态/密码加密/LoginHelper -->
         <dependency>

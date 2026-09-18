@@ -18,6 +18,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.mapper.SysLogMapper;
 import cn.ypbin.admin.system.provider.DbLogProviders;
@@ -78,10 +79,12 @@ class SystemClientImplUserByIdTest {
         user.setId(USER_ID);
         when(userService.getByIdGlobal(USER_ID)).thenReturn(user);
 
-        R<SysUser> response = controller.getUserById(USER_ID);
+        R<SysUserDto> response = controller.getUserById(USER_ID);
 
         assertThat(response.isSuccess()).isTrue();
-        assertThat(response.getData()).isSameAs(user);
+        // 契约返回视图而非实体：断言投影结果（不再是同一引用），委托行为由下方 verify 证明
+        assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().getId()).isEqualTo(USER_ID);
         verify(userService).getByIdGlobal(USER_ID);
         // 反向证明：走 getById 会在无租户上下文的匿名链路被 fail-closed 拦截
         verify(userService, never()).getById(any());
@@ -93,7 +96,7 @@ class SystemClientImplUserByIdTest {
     void shouldReturnNullDataWhenUserMissing() {
         when(userService.getByIdGlobal(USER_ID)).thenReturn(null);
 
-        R<SysUser> response = controller.getUserById(USER_ID);
+        R<SysUserDto> response = controller.getUserById(USER_ID);
 
         assertThat(response.isSuccess()).isTrue();
         assertThat(response.getData()).isNull();
