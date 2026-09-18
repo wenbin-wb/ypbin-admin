@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
+import java.util.stream.Stream;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,14 @@ class SourceConventionTest {
     /** 缓存 key 常量声明（{@code private static final String X = "sys:...";}）。 */
     private static final Pattern CACHE_KEY_CONSTANT =
         Pattern.compile("static final String \\w+\\s*=\\s*\"([^\"]+)\";");
+
+    /** 跨服务契约模块（api）的源码根：它必须与持久化实体解耦。 */
+    private static final String API_MODULE_SOURCE =
+        "ypbin-service-api/ypbin-system-api/src/main/java";
+
+    /** 持久化实体的包名引用。 */
+    private static final Pattern ENTITY_PACKAGE_REFERENCE =
+        Pattern.compile("cn\\.ypbin\\.admin\\.system\\.entity\\.");
 
     /** 缓存 key 的唯一定义处：所有失效注解都必须与它对齐。 */
     private static final String CACHE_KEY_SOURCE =
@@ -432,6 +441,26 @@ class SourceConventionTest {
         return violations;
     }
 
+    /**
+     * 判定某源码是否构成「契约模块引用了持久化实体」违规。
+     *
+     * <p><b>为什么需要这条规则</b>：实体继承 {@code BaseEntity}（`starter-data`/MyBatis-Plus）。
+     * 契约模块一旦引用实体，所有调用方就被迫传递依赖 starter-data——无数据源的 auth 因此中招
+     * （实测：连 Mockito 为 {@code ISystemClient} 建 mock 都会因签名里的实体无法加载而失败）。
+     * 2026-09-18 修掉该问题后，把「投影类不许放回 api 模块」从注释变成构建失败。</p>
+     *
+     * @param source              待判定源码
+     * @param insideEntityPackage 该文件是否位于实体包自身内部（实体包内部的自引用不算违规）
+     * @return 是否违规
+     */
+    static boolean referencesEntityOutsideEntityPackage(String source, boolean insideEntityPackage) {
+        if (insideEntityPackage) {
+            return false;
+        }
+        // 先剥离注释与字面量：只把「真实代码引用」算违规，避免注释/文档里提到类名即被误判
+        return ENTITY_PACKAGE_REFERENCE.matcher(stripCommentsAndLiterals(source)).find();
+    }
+
     // ------------------------------------------------------------------ 规则
 
     @Test
@@ -733,6 +762,39 @@ class SourceConventionTest {
             .as("这些 @CacheEvict 的 key 在 SysCache 中不存在：失效会打在不再被读取的键上（静默失效）。"
                 + "改缓存 key 时必须同步改失效注解，或把 key 收进 SysCache 常量")
             .isEmpty();
+    }
+
+    @Test
+    @DisplayName("跨服务契约模块（system-api）不得引用持久化实体（实体继承 BaseEntity，引用即把 MyBatis 拖给调用方）")
+    void apiModuleMustNotReferencePersistenceEntities() throws IOException {
+        Path apiRoot = SourceScan.repoRoot().resolve(API_MODULE_SOURCE);
+        Path entityRoot = apiRoot.resolve("cn/ypbin/admin/system/entity");
+        assertThat(Files.isDirectory(apiRoot)).as("未找到契约模块源码根：" + API_MODULE_SOURCE).isTrue();
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> paths = Files.walk(apiRoot)) {
+            for (Path file : paths.filter(path -> path.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                if (referencesEntityOutsideEntityPackage(source, file.startsWith(entityRoot))) {
+                    violations.add(SourceScan.relative(file));
+                }
+            }
+        }
+        assertThat(violations)
+            .as("契约模块引用了持久化实体：调用方会被迫传递依赖 starter-data（auth 因此中过招）。"
+                + "实体→视图的投影请放在 service 模块（如 system 的 feign/support/UserViewConverter）")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("契约模块实体引用检测应命中跨包引用、放过实体包内部自引用（规则有效性自检）")
+    void apiEntityReferencePatternShouldBeAccurate() {
+        String referencing = "import cn.ypbin.admin.system.entity.SysUser;\n";
+        assertThat(referencesEntityOutsideEntityPackage(referencing, false)).isTrue();
+        // 实体包内部的自引用（instanceof/checkcast/同包类）不算违规
+        assertThat(referencesEntityOutsideEntityPackage(referencing, true)).isFalse();
+        // 只写 DTO / 视图不违规
+        assertThat(referencesEntityOutsideEntityPackage(
+            "import cn.ypbin.admin.system.model.dto.SysUserDto;\n", false)).isFalse();
     }
 
     @Test

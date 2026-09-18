@@ -22,7 +22,9 @@ description: ypbin-admin 后端开发与合规审计标准。开发任何 Contro
 >    **`auth` 不依赖 `ypbin-starter-data`（已由构建强制）**：`ypbin-auth/pom.xml` 对 `ypbin-system-api` 显式
 >    `exclusions` 掉了 starter-data，所以**任何在 auth 里引用实体类型（`system.entity.*`）的代码都编译不过**——
 >    请只用 `SysUserDto`/`SysUserSocialDto` 等 api 层视图。跨服务契约**不得暴露持久化实体**（实体继承 `BaseEntity`，
->    暴露即把 MyBatis 拖给调用方）；实体→视图的投影统一放 `api/convert/UserViewConverter`。
+>    暴露即把 MyBatis 拖给调用方）；实体→视图的投影统一放 **`ypbin-system` 的 `feign/support/UserViewConverter`**。
+>    **它必须留在 service 模块**（要引用实体）：放进 api 模块会让已排除 starter-data 的 auth 拿到一个
+>    「能加载、一解析方法就 `NoClassDefFoundError`」的类；该约束现已由 `SourceConventionTest` 的架构规则强制。
 >    `ai` 不受此排除约束：它有自己独立的 `ai_*` 表与 Mapper，「不直连共享库」指的是**不访问 system 的表**。
 >    **改缓存 key 时**必须同步改 `@CacheEvict`（已由 `SourceConventionTest` 门禁强制），否则失效静默打在旧键上。
 > 4. **`@PlatformAccess` 来自 starter**：`cn.ypbin.starter.security.platform.PlatformAccess`（微服务版），单体版是 `cn.ypbin.admin.modules.system.annotation.PlatformAccess`。平台用户判定实现 starter 的 `PlatformUserChecker` SPI。
