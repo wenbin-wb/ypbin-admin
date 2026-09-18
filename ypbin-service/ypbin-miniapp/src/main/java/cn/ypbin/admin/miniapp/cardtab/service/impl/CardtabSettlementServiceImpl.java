@@ -27,7 +27,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -122,8 +121,8 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
         resp.setStatus(room.getRoomStatus());
 
         if (CollectionUtils.isEmpty(members)) {
-            resp.setRankings(Collections.emptyList());
-            resp.setTransfers(Collections.emptyList());
+            resp.setRankings(List.of());
+            resp.setTransfers(List.of());
             resp.setShareText("本局暂无成员");
             return resp;
         }

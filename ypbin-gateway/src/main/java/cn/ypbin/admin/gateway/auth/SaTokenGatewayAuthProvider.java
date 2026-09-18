@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.gateway.auth;
 
+import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.starter.gateway.auth.GatewayAuthProvider;
 import cn.ypbin.starter.gateway.auth.GatewayAuthResult;
@@ -52,7 +53,7 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
                 return Mono.just(GatewayAuthResult.failure("登录用户不存在"));
             }
             return Mono.just(GatewayAuthResult.success(buildTrustedHeaders(loginUser)));
-        } catch (cn.dev33.satoken.exception.NotLoginException e) {
+        } catch (NotLoginException e) {
             // 仅未登录/过期走 401 语义；其它异常按服务端错误记录后拒绝
             return Mono.just(GatewayAuthResult.failure("登录状态已过期，请重新登录"));
         }

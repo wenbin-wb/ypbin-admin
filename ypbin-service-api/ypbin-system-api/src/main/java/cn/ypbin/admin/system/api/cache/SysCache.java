@@ -10,14 +10,17 @@
 package cn.ypbin.admin.system.api.cache;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.cloud.feign.support.FeignResponses;
 import cn.ypbin.starter.core.util.SpringUtils;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 系统域共享数据缓存（永久缓存 + 主动失效）。
@@ -27,24 +30,32 @@ import java.util.List;
  * 数据变更时由 system 服务写操作显式调用 {@link #evictUser}/{@link #evictUserAuth} 清缓存，
  * 读侧下次访问自然回源——只要数据未变更，永远命中缓存。</p>
  *
- * <p>安全约束：用户缓存**不存密码**（回填前 {@code password} 置空），密码校验走
- * {@code ISystemClient.verifyPassword} 直查库比对，改密即时生效、缓存无敏感字段。</p>
+ * <p>安全约束：用户缓存**不存密码**——缓存的载荷是不含 {@code password} 字段的只读视图
+ * （{@code SysUserDto}），故「不落敏感字段」由类型结构保证，而非靠回填前手工置空；
+ * 密码校验走 {@code ISystemClient.verifyPassword} 直查库比对，改密即时生效。</p>
  *
  * @author wenbin
  * @since 2026-09-01
  */
 public final class SysCache {
 
-    private static final String USERNAME_KEY = "sys:user:username:";
-    private static final String USER_ID_KEY = "sys:user:id:";
-    private static final String PHONE_KEY = "sys:user:phone:";
+    /*
+     * 为何用户/绑定快照的 key 带 v2：这三个 key 的历史载荷是**实体**（SysUser），
+     * 而 CacheService#getOrLoad 对命中值是「无类型校验的强转」，且这些 key 是**永久缓存**——
+     * 若沿用旧 key，升级后会读到旧实体对象并在强转处抛 ClassCastException（登录直接不可用）。
+     * 因此载荷收窄为 DTO 的同时把 key 升到 v2：新代码读 v2、旧 v1 键自然失效不再被读取
+     * （其残留可在首次部署后手动 DEL，非必需）。同类约束见 SysUserServiceImpl 的 @CacheEvict。
+     */
+    private static final String USERNAME_KEY = "sys:user:v2:username:";
+    private static final String USER_ID_KEY = "sys:user:v2:id:";
+    private static final String PHONE_KEY = "sys:user:v2:phone:";
     private static final String ROLE_USER_KEY = "sys:role:user:";
     private static final String PERM_USER_KEY = "sys:perm:user:";
     private static final String CONFIG_KEY = "sys:config:key:";
     private static final String SOCIAL_CONFIG_KEY = "sys:social:config:";
     private static final String SOCIAL_CONFIGS_KEY = "sys:social:configs";
-    private static final String SOCIAL_BINDING_KEY = "sys:social:binding:";
-    private static final String SOCIAL_BINDINGS_USER_KEY = "sys:social:bindings:";
+    private static final String SOCIAL_BINDING_KEY = "sys:social:v2:binding:";
+    private static final String SOCIAL_BINDINGS_USER_KEY = "sys:social:v2:bindings:";
     private static final String SOCIAL_BOUND_KEY = "sys:social:bound:";
     private static final String SOCIAL_ACCOUNT_BOUND_KEY = "sys:social:account-bound:";
 
@@ -65,26 +76,26 @@ public final class SysCache {
     }
 
     /**
-     * 按用户名取用户（登录用），永久缓存。回填时密码置空，缓存不落敏感字段。
+     * 按用户名取用户（登录用），永久缓存。缓存载荷为不含密码的只读视图。
      */
-    public static SysUser getUserByUsername(String username) {
+    public static @Nullable SysUserDto getUserByUsername(String username) {
         return CacheUtils.getOrLoad(
             USERNAME_KEY + username,
-            SysUser.class,
-            () -> sanitize(FeignResponses.dataOrThrow(feignClient().getUserByUsername(username),
-                "系统服务暂不可用，请稍后重试")),
+            SysUserDto.class,
+            () -> FeignResponses.dataOrThrow(feignClient().getUserByUsername(username),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
     /**
-     * 按 ID 取用户，永久缓存。回填时密码置空。
+     * 按 ID 取用户，永久缓存。缓存载荷为不含密码的只读视图。
      */
-    public static SysUser getUserById(Long userId) {
+    public static @Nullable SysUserDto getUserById(Long userId) {
         return CacheUtils.getOrLoad(
             USER_ID_KEY + userId,
-            SysUser.class,
-            () -> sanitize(FeignResponses.dataOrThrow(feignClient().getUserById(userId),
-                "系统服务暂不可用，请稍后重试")),
+            SysUserDto.class,
+            () -> FeignResponses.dataOrThrow(feignClient().getUserById(userId),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -136,18 +147,43 @@ public final class SysCache {
         if (userId == null) {
             return;
         }
-        CacheUtils.delete(List.of(ROLE_USER_KEY + userId, PERM_USER_KEY + userId));
+        evictUserAuth(List.of(userId));
     }
 
     /**
-     * 按手机号取用户（短信登录用），永久缓存。回填时密码置空。
+     * 批量清除多个用户的角色/权限缓存（角色授权、菜单权限码、租户权限模板变更后调用）。
+     *
+     * <p>合并全部受影响用户的键后**只发一次**删除请求，避免按用户逐个清理造成 N 次缓存往返
+     * （受影响用户数即读写放大倍数）。空集合短路，元素为 null 时跳过。</p>
+     *
+     * @param userIds 受影响用户 ID 集合，允许为 null/空
      */
-    public static SysUser getUserByPhone(String phone) {
+    public static void evictUserAuth(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        List<String> keys = new ArrayList<>();
+        for (Long userId : userIds) {
+            if (userId == null) {
+                continue;
+            }
+            keys.add(ROLE_USER_KEY + userId);
+            keys.add(PERM_USER_KEY + userId);
+        }
+        if (!keys.isEmpty()) {
+            CacheUtils.delete(keys);
+        }
+    }
+
+    /**
+     * 按手机号取用户（短信登录用），永久缓存。缓存载荷为不含密码的只读视图。
+     */
+    public static @Nullable SysUserDto getUserByPhone(String phone) {
         return CacheUtils.getOrLoad(
             PHONE_KEY + phone,
-            SysUser.class,
-            () -> sanitize(FeignResponses.dataOrThrow(feignClient().getUserByPhone(phone),
-                "系统服务暂不可用，请稍后重试")),
+            SysUserDto.class,
+            () -> FeignResponses.dataOrThrow(feignClient().getUserByPhone(phone),
+                "系统服务暂不可用，请稍后重试"),
             null);
     }
 
@@ -220,10 +256,10 @@ public final class SysCache {
     /**
      * 按平台与 openId 查第三方绑定（第三方登录用），永久缓存。
      */
-    public static SysUserSocial getSocialBinding(String platform, String openId) {
+    public static @Nullable SysUserSocialDto getSocialBinding(String platform, String openId) {
         return CacheUtils.getOrLoad(
             SOCIAL_BINDING_KEY + platform + ":" + openId,
-            SysUserSocial.class,
+            SysUserSocialDto.class,
             () -> FeignResponses.dataOrThrow(feignClient().getSocialBinding(platform, openId),
                 "系统服务暂不可用，请稍后重试"),
             null);
@@ -256,10 +292,10 @@ public final class SysCache {
     /**
      * 用户已绑定的平台列表，永久缓存。
      */
-    public static List<SysUserSocial> listSocialBindings(Long userId) {
+    public static List<SysUserSocialDto> listSocialBindings(Long userId) {
         return CacheUtils.getOrLoad(
             SOCIAL_BINDINGS_USER_KEY + userId,
-            (Class<List<SysUserSocial>>) (Class<?>) List.class,
+            (Class<List<SysUserSocialDto>>) (Class<?>) List.class,
             () -> FeignResponses.dataOrThrow(feignClient().listSocialBindings(userId),
                 "系统服务暂不可用，请稍后重试"),
             null);
@@ -279,16 +315,5 @@ public final class SysCache {
         if (userId != null) {
             CacheUtils.delete(SOCIAL_BINDINGS_USER_KEY + userId);
         }
-    }
-
-    /**
-     * 缓存回填前脱敏：密码置空（缓存不落敏感字段，改密即时生效）。
-     */
-    private static SysUser sanitize(SysUser user) {
-        if (user == null) {
-            return null;
-        }
-        user.setPassword(null);
-        return user;
     }
 }

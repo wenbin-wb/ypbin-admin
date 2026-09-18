@@ -144,7 +144,11 @@ VALUES (1, 'site', '系统名称', 'SITE_NAME', 'ypbin-admin', 1, 1, NOW(), 1, 0
        (71, 'social', '微信开放平台是否启用', 'SOCIAL_WECHAT_OPEN_ENABLED', 'false', 1, 1, NOW(), 1, 0),
        (72, 'social', '支付宝是否启用', 'SOCIAL_ALIPAY_ENABLED', 'false', 1, 1, NOW(), 1, 0),
        (73, 'social', '钉钉是否启用', 'SOCIAL_DINGTALK_ENABLED', 'false', 1, 1, NOW(), 1, 0),
-       (74, 'social', '支付宝公钥', 'SOCIAL_ALIPAY_PUBLIC_KEY', '', 1, 1, NOW(), 1, 0);
+       (74, 'social', '支付宝公钥', 'SOCIAL_ALIPAY_PUBLIC_KEY', '', 1, 1, NOW(), 1, 0),
+       -- 敏感词库：@SensitiveWordFilter 的词源（见 cn.ypbin.admin.system.provider.DbSensitiveWordProvider）。
+       -- 多个词用英文/中文逗号、分号或换行分隔；词库在应用启动期读取一次，改完需重启服务才生效。
+       -- 默认留空：此时启动日志会 WARN 提示「过滤不会命中任何词」，请按实际内容治理要求填写。
+       (80, 'content', '敏感词库', 'SENSITIVE_WORDS', '', 1, 1, NOW(), 1, 0);
 
 -- =============================================================
 -- 菜单树（platform_only=1 为平台专用菜单；0 为租户可见）
@@ -168,6 +172,8 @@ VALUES (3001, 0, 'OrgManage', 'catalog', 0, '/system/org', 'BasicLayout', 'syste
        (3004, 0, 'MonitorManage', 'catalog', 1, '/system/monitor', 'BasicLayout', 'system.monitor.title', 'carbon:activity', 7, NOW(), 1, 0),
        (3003, 0, 'SysManage', 'catalog', 1, '/system/sys', 'BasicLayout', 'system.sys.title', 'carbon:settings-adjust', 8, NOW(), 1, 0),
        (3008, 0, 'LicenseManage', 'catalog', 1, '/system/license-manage', 'BasicLayout', 'system.license.title', 'carbon:license', 9, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES (3009, 0, 'TrackingManage', 'catalog', 1, '/tracking', 'BasicLayout', 'tracking.title', 'carbon:chart-line-data', 10, NOW(), 1, 0);
 
 -- 接口文档（内嵌 iframe 打开后端 springdoc 的 swagger-ui）
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, iframe_src, title, icon, sort, create_time, status, is_deleted)
@@ -259,6 +265,16 @@ VALUES (270, 3004, 'SystemLog', 'menu', 1, '/system/log', '/system/log/list', 's
 
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (280, 3004, 'SystemOnlineUser', 'menu', 1, '/system/online-user', '/system/online-user/list', 'system:online-user:list', 'system.onlineUser.title', 'carbon:user-online', 8, NOW(), 1, 0);
+
+-- 埋点管理（3009，挂在系统监控 3004 下）：分析 / 事件列表 / 事件目录
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (3010, 3009, 'TrackingEventList', 'menu', 1, '/tracking/events', '/tracking/events/list', 'system:track:list', 'tracking.events.title', 'carbon:document', 1, NOW(), 1, 0),
+       (3011, 3009, 'TrackingEventCatalog', 'menu', 1, '/tracking/catalog', '/tracking/catalog/list', 'system:track:list', 'tracking.catalog.title', 'carbon:catalog', 2, NOW(), 1, 0),
+       (3013, 3009, 'TrackingAnalysis', 'menu', 1, '/tracking/analysis', '/tracking/analysis/list', 'system:track:list', 'tracking.analysis.title', 'carbon:analytics', 3, NOW(), 1, 0),
+       (3014, 3009, 'TrackingFunnel', 'menu', 1, '/tracking/funnel', '/tracking/funnel/list', 'system:track:list', 'tracking.funnel.title', 'carbon:activity', 4, NOW(), 1, 0),
+       (3015, 3009, 'TrackingRetention', 'menu', 1, '/tracking/retention', '/tracking/retention/list', 'system:track:list', 'tracking.retention.title', 'carbon:chart-line-data', 5, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (3012, 3009, 'TrackingEventExport', 'button', 1, 'system:track:export', 'tracking.event.export', 3, NOW(), 1, 0);
 INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
 VALUES (28001, 280, 'SystemOnlineUserKickout', 'button', 1, 'system:online-user:kickout', 'common.kickout', 1, NOW(), 1, 0);
 

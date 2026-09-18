@@ -20,7 +20,7 @@ import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMemberResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuRoomDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuRoomService;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
@@ -28,7 +28,6 @@ import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -170,7 +169,7 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
             .orderByAsc(FamilymenuMember::getId));
 
         if (CollectionUtils.isEmpty(list)) {
-            return Collections.emptyList();
+            return List.of();
         }
         return list.stream().map(m -> {
             FamilymenuMemberResp r = new FamilymenuMemberResp();
@@ -206,13 +205,13 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
             .orderByDesc(FamilymenuMember::getCreateTime));
 
         if (CollectionUtils.isEmpty(members)) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         List<Long> roomIds = members.stream().map(FamilymenuMember::getRoomId).toList();
         List<FamilymenuRoom> rooms = listByIds(roomIds);
         if (CollectionUtils.isEmpty(rooms)) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         return rooms.stream().map(r -> getRoomDetail(r.getId())).toList();
@@ -257,7 +256,7 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
 
     private String resolveUserName(Long userId) {
         try {
-            R<SysUser> r = systemClient.getUserById(userId);
+            R<SysUserDto> r = systemClient.getUserById(userId);
             if (r != null && r.isSuccess() && r.getData() != null) {
                 String n = r.getData().getNickname();
                 if (StringUtils.hasText(n)) return n;

@@ -26,7 +26,6 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,7 +133,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
     @Override
     public List<FamilymenuOrderResp> getOrderHistory(Long roomId) {
         if (roomId == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         List<FamilymenuOrder> orders = list(new LambdaQueryWrapper<FamilymenuOrder>()
             .eq(FamilymenuOrder::getRoomId, roomId)
@@ -142,7 +141,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             .orderByDesc(FamilymenuOrder::getId));
 
         if (CollectionUtils.isEmpty(orders)) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         return orders.stream().map(o -> {
@@ -179,7 +178,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             .orderByAsc(FamilymenuOrderDetail::getId));
 
         if (CollectionUtils.isEmpty(list)) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         // 批量查询成员昵称映射（防止 N+1）

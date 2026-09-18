@@ -15,7 +15,7 @@ import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
@@ -25,11 +25,13 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -56,11 +58,17 @@ public class AuthService {
     private final AuthConfigReader configReader;
     private final CaptchaService captchaService;
     private final PasswordAttemptLimiter attemptLimiter;
+    private final LoginEventTracker loginEventTracker;
 
     /**
      * 账号密码登录。
+     *
+     * @param req       登录请求
+     * @param ip        客户端 IP
+     * @param userAgent 客户端 User-Agent 原始串，可空
+     * @return 登录结果
      */
-    public LoginResp login(LoginReq req, String ip) {
+    public LoginResp login(LoginReq req, String ip, String userAgent) {
         // 开关开启时强制行为验证码（一次性消费，校验失败即拒绝），防脚本爆破
         if (configReader.getBoolean(KEY_LOGIN_CAPTCHA_ENABLED, false)) {
             requireCaptchaPassed(req);
@@ -68,7 +76,7 @@ public class AuthService {
         // 账号维度错误尝试锁定（与手机验证码入口一致：账号 + IP 维度）
         attemptLimiter.checkLocked(req.getUsername(), ip);
 
-        SysUser user = SysCache.getUserByUsername(req.getUsername());
+        SysUserDto user = SysCache.getUserByUsername(req.getUsername());
         if (user == null || (req.getTenantId() != null
             && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
             throw new BusinessException("用户名或密码错误");
@@ -85,7 +93,7 @@ public class AuthService {
             throw new BusinessException("账号已被禁用");
         }
         attemptLimiter.reset(req.getUsername(), ip);
-        return loginSupport.completeLogin(user, "ACCOUNT");
+        return loginSupport.completeLogin(user, "ACCOUNT", ip, userAgent);
     }
 
     /**
@@ -106,9 +114,20 @@ public class AuthService {
 
     /**
      * 退出登录。
+     *
+     * <p>登出埋点（{@code auth.user.logout}）在<b>销毁会话之前</b>取用户维度、在销毁之后上报：
+     * userId/tenantId 只存在于 sa-token 会话，{@code LoginHelper.logout()} 之后再也取不到。
+     * 上报失败不影响登出结果（{@code LoginEventTracker} 只记堆栈不外抛）。</p>
+     *
+     * @param ip        客户端 IP（由 Controller 从请求上下文取，保持 Service 不依赖 HTTP 工具）
+     * @param userAgent 客户端 User-Agent 原始串，可空
      */
-    public void logout() {
+    public void logout(String ip, @Nullable String userAgent) {
+        Optional<LoginUser> loginUser = UserContext.getLoginUser();
+        Long userId = loginUser.map(LoginUser::getId).orElse(null);
+        Long tenantId = loginUser.map(LoginUser::getTenantId).orElse(null);
         LoginHelper.logout();
+        loginEventTracker.recordLogout(userId, tenantId, ip, userAgent);
     }
 
     /**

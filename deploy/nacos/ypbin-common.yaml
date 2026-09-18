@@ -27,6 +27,19 @@ spring:
       # 与 compose 内建 Redis 的 requirepass 一致；NO_DOCKER 外部 Redis 且未设密码时该行被删除=不认证）
       password: ${REDIS_PASSWORD}
 
+# ---------- Feign 显式超时（本仓铁律：远程调用禁止使用无超时默认 Client）----------
+# ypbin-system 客户端是 auth/ai 唯一的跨服务通道（权限/用户/配置/日志上报），在此显式钉死；
+# 覆盖 starter 注入的默认值（连接 5000ms / 读取 10000ms，见 starter-cloud-core
+# FeignDefaultsEnvironmentPostProcessor:76-79）。读取 5000ms 意味着 system 慢于 5s 即失败并走
+# ISystemClientFallback（返回失败 R，不静默），日志上报路径据此上抛异常而非无声丢失。
+  cloud:
+    openfeign:
+      client:
+        config:
+          ypbin-system:
+            connect-timeout: 2000
+            read-timeout: 5000
+
 # ---------- Sa-Token（auth/gateway 共享会话）----------
 sa-token:
   token-name: Authorization

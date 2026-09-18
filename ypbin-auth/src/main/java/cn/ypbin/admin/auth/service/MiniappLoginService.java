@@ -11,7 +11,7 @@ package cn.ypbin.admin.auth.service;
 
 import cn.ypbin.admin.auth.dto.MiniappLoginReq;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.jspecify.annotations.Nullable;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -57,20 +58,21 @@ public class MiniappLoginService {
      * @param req 登录请求参数
      * @return 登录令牌响应
      */
-    public LoginResp login(MiniappLoginReq req) {
+    public LoginResp login(MiniappLoginReq req, String clientIp, @Nullable String userAgent) {
         String openid = resolveOpenid(req.getAppid(), req.getCode());
         if (!StringUtils.hasText(openid)) {
             throw new BusinessException("获取微信用户身份失败");
         }
 
         String username = "wx_" + openid;
-        R<SysUser> userRes = systemClient.getOrCreateMiniappUser(username, req.getNickname(), req.getAvatarUrl());
+        R<SysUserDto> userRes =
+            systemClient.getOrCreateMiniappUser(username, req.getNickname(), req.getAvatarUrl());
         if (userRes == null || !userRes.isSuccess() || userRes.getData() == null) {
             throw new BusinessException("创建或获取小程序用户失败: " + (userRes != null ? userRes.getMessage() : "远程服务无响应"));
         }
 
-        SysUser user = userRes.getData();
-        return loginSupport.completeLogin(user, "MINIAPP");
+        SysUserDto user = userRes.getData();
+        return loginSupport.completeLogin(user, "MINIAPP", clientIp, userAgent);
     }
 
     /**

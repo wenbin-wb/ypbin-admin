@@ -24,7 +24,7 @@ import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabRoomDetailResp;
 import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabRoomMemberResp;
 import cn.ypbin.admin.miniapp.cardtab.service.CardtabRoomService;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -36,7 +36,6 @@ import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +110,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
             summary.setRecentRooms(recentRooms.stream().map(this::toSimpleRoomResp).toList());
             summary.setMonthRoomCount((int) histPage.getTotal());
         } else {
-            summary.setRecentRooms(Collections.emptyList());
+            summary.setRecentRooms(List.of());
         }
 
         // 计算今日积分变动
@@ -188,7 +187,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         if (!CollectionUtils.isEmpty(events.getRecords())) {
             resp.setRecentEvents(events.getRecords().stream().map(this::toEventResp).toList());
         } else {
-            resp.setRecentEvents(Collections.emptyList());
+            resp.setRecentEvents(List.of());
         }
 
         return resp;
@@ -343,7 +342,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
             .orderByDesc(CardtabRoomMember::getCreateTime));
 
         if (CollectionUtils.isEmpty(memberPage.getRecords())) {
-            return PageResult.of(Collections.emptyList(), 0, current, size);
+            return PageResult.of(List.of(), 0, current, size);
         }
 
         List<Long> roomIds = memberPage.getRecords().stream().map(CardtabRoomMember::getRoomId).toList();
@@ -381,7 +380,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
 
     private String resolveUserName(Long userId) {
         try {
-            R<SysUser> r = systemClient.getUserById(userId);
+            R<SysUserDto> r = systemClient.getUserById(userId);
             if (r != null && r.isSuccess() && r.getData() != null) {
                 String n = r.getData().getNickname();
                 if (StringUtils.hasText(n)) return n;

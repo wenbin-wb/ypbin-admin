@@ -40,10 +40,19 @@
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-common</artifactId>
         </dependency>
-        <!-- 系统域共享（实体/Feign） -->
+        <!-- 系统域共享（Feign 契约 + DTO）。
+             排除 ypbin-starter-data：auth 无数据源，按 SKILL「auth/ai 不直连共享库」的约定，
+             不得传递依赖 MyBatis-Plus；一旦有人在此模块引用实体类型，编译期就会因缺类而失败
+             （这就是本排除项的强制作用，别再把它删掉）。 -->
         <dependency>
             <groupId>cn.ypbin.admin</groupId>
             <artifactId>ypbin-system-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>cn.ypbin</groupId>
+                    <artifactId>ypbin-starter-data</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- 安全：sa-token 登录态/密码加密/LoginHelper -->
         <dependency>
@@ -71,6 +80,12 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-log</artifactId>
         </dependency>
+        <!-- 异步执行（@EnableAsync 自动装配 + 统一线程池）：登录日志经 /internal/log-ingest 上报 system，
+             属阻塞式 RPC；不引入本模块时 LogEventListener 的 @Async 被静默忽略，Feign 调用会占用登录请求线程 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-async</artifactId>
+        </dependency>
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-tools</artifactId>
@@ -79,6 +94,13 @@
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-cache</artifactId>
+        </dependency>
+        <!-- 埋点（登录/登出事件上报）：starter 的 TrackRecorder + 事件目录在 auth 侧生效，
+             实际落库经 ypbin-common 的 RemoteTrackEventSink 上报 system（auth 无数据源）。
+             注意：还须在 Nacos 的 ypbin-auth.yaml 打开 ypbin.tracking.enabled，否则只记一次 WARN 不采集。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tracking</artifactId>
         </dependency>
         <!-- 短信（SmsUtils 发验证码） -->
         <dependency>

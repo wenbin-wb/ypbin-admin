@@ -38,22 +38,24 @@
 
 ```bash
 # Docker 模式（生产服务器，含 Nacos/Redis/MySQL 基础设施）
-# GitHub 可直连时（默认部署 main 分支；加 -b 可指定分支，如 -b feature/miniapp-backend）：
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh) -b feature/miniapp-backend
-
-bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh) -b feature/miniapp-backend
+# GitHub 可直连时：
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+# 国内服务器（GitHub 不可达，自动降级 Gitee 同名镜像，需先在 Gitee 建 ypbin-* 三镜像并开启自动同步）：
+bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
 # 仓库源策略：默认探测 GitHub（3s 快超时）→ 不可达切 Gitee → 均不可达请显式指定
-# YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；拉基础镜像困难时可加 REGISTRY_PREFIX=docker.m.daocloud.io/
+# YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；
+# 镜像源：默认用机器默认（Docker 守护进程 registry-mirrors，无配置即官方 Docker Hub），脚本不做镜像源探测；
+# 拉基础镜像困难时显式 export REGISTRY_PREFIX=docker.m.daocloud.io/（作用于基础设施与 xxl-job/nginx 镜像）
 
 # 无 Docker 模式（本机/轻量服务器，java -jar 直接启动；需外部 Nacos/Redis/MySQL）
 NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD=xxx \
-  bash deploy/install.sh -b feature/miniapp-backend
+  bash deploy/install.sh
 ```
 
 自定义参数：
 - 命令行参数：`-b, --branch <分支名>`（指定代码分支）、`--root <目录>`（指定部署目录）、`-y, --yes`（免确认自动运行）；
-- 目录自动隔离：当未指定 `--root` 时，脚本将自动按分支名隔离目录（例如 `feature/miniapp-backend` 自动部署在 `/opt/ypbin/feature-miniapp-backend`，主分支在 `/opt/ypbin/main`），彻底杜绝多分支部署相互污染；
-- 环境变量覆盖：`BRANCH`、`YPBIN_ROOT`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`。
+- 目录自动隔离：未指定 `--root` 时按分支名隔离目录（`feature/<name>` → `/opt/ypbin/feature-<name>`，主分支 → `/opt/ypbin/main`），多分支可共存、互不污染；
+- 环境变量覆盖：`YPBIN_ROOT`、`BRANCH`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
 
 **分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
 

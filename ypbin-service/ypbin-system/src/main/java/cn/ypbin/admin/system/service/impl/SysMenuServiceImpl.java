@@ -193,6 +193,9 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
 
     /**
      * 菜单权限标识/结构变更后，清除拥有该菜单（经角色）的所有用户的权限缓存（权限码可能已变）。
+     *
+     * <p>精确失效：只清受影响用户的 {@code sys:role:user:*}、{@code sys:perm:user:*}，不做整体清除。
+     * 受影响用户可能很多，故合并键后一次性删除，避免逐个用户一次缓存往返。</p>
      */
     private void evictMenuUsersCache(Long menuId) {
         List<SysRoleMenu> roleMenus = roleMenuMapper.selectList(
@@ -204,7 +207,7 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
         List<Long> roleIds = roleMenus.stream().map(SysRoleMenu::getRoleId).distinct().toList();
         List<SysUserRole> userRoles = userRoleMapper.selectList(
             new LambdaQueryWrapper<SysUserRole>().in(SysUserRole::getRoleId, roleIds));
-        userRoles.stream().map(SysUserRole::getUserId).distinct().forEach(SysCache::evictUserAuth);
+        SysCache.evictUserAuth(userRoles.stream().map(SysUserRole::getUserId).distinct().toList());
     }
 
     private void validateMenu(MenuSaveReq req, Long excludeId) {

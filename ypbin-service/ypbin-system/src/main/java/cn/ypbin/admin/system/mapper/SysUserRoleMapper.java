@@ -11,8 +11,10 @@ package cn.ypbin.admin.system.mapper;
 
 import cn.ypbin.admin.system.entity.SysUserRole;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Select;
 
 /**
@@ -31,4 +33,20 @@ public interface SysUserRoleMapper extends BaseMapper<SysUserRole> {
      */
     @Select("SELECT role_id FROM sys_user_role WHERE user_id = #{userId}")
     List<Long> selectRoleIdsByUserId(@Param("userId") Long userId);
+
+    /**
+     * 批量插入用户-角色关联行（单条多值 INSERT）。
+     *
+     * <p>复合主键表没有代理主键、也没有审计列，故不涉及主键回填；用户-角色关联的规模由一次请求的入参决定，
+     * 逐条 insert 会产生同等数量的单行往返（N+1 写）。</p>
+     *
+     * @param rows 待插入行（调用方保证非空）
+     * @return 影响行数
+     */
+    @Insert("<script>"
+        + "INSERT INTO sys_user_role (user_id, role_id) VALUES "
+        + "<foreach collection='rows' item='r' separator=','>(#{r.userId}, #{r.roleId})</foreach>"
+        + "</script>")
+    int insertBatch(@Param("rows") Collection<SysUserRole> rows);
+
 }

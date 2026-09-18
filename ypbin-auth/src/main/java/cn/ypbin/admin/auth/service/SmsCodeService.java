@@ -12,7 +12,7 @@ package cn.ypbin.admin.auth.service;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
@@ -94,7 +94,7 @@ public class SmsCodeService {
      * @param phone 手机号
      * @return 用户，未注册时为空
      */
-    public SysUser getUserByPhone(String phone) {
+    public SysUserDto getUserByPhone(String phone) {
         String normalizedPhone = normalizePhone(phone);
         return SysCache.getUserByPhone(normalizedPhone);
     }

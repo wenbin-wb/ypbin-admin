@@ -31,13 +31,53 @@ ypbin:
       - sys_auth_template
       - sys_template_menu
       - sys_license
+      # 埋点事件由采集链路的消费者线程写入，该线程没有租户上下文（fail-closed 下会直接抛错）
+      - sys_track_event
+      # 埋点聚合表由 XXL-JOB 的聚合任务线程写入/读取，同样没有租户上下文
+      - sys_track_event_daily
+      - sys_track_user_daily
+      - sys_track_session
   # 身份头来源校验：仅信任带网关签名标记的身份头；未配置密钥则拒绝启动（fail-fast）
   cloud:
     feign:
       trusted-source-token: ${GATEWAY_SIGN_TOKEN}
       require-trusted-source: true
+  # 数据权限：宿主实现见 cn.ypbin.admin.system.provider.AdminDataScopeHandler。
+  # 只治理 sys_user 一张表（其余表无 dept_id 列，由处理器返回 null 放行）；
+  # 语义＝平台超管（PLATFORM + PLATFORM_SUPER 角色）不受限；其余按角色 data_scope 取并集
+  # （1 全部不加条件、2 本部门及以下含部门树后代、3 本部门、4 仅本人、5 自定义=角色绑定部门+其后代）；
+  # 无身份头/无角色/解析为空时「拒绝全部」（id = -1）并记日志，不放行全量。
+  # 租户隔离由 ypbin.tenant 拦截器独立施加，本处理器不拼 tenant_id。
   data-permission:
     enabled: true
+  # ---------- 操作日志（ypbin-starter-log）----------
+  # 落库实现见 cn.ypbin.admin.system.provider.DbLogProviders（LogDao → sys_log）。
+  # 采集项默认只有 REQUEST_PARAM/IP/CLIENT（starter Include.defaultIncludes），
+  # 不显式追加 BROWSER/OS 的话 sys_log 的 browser/os 两列恒为空。
+  # 刻意不追加 REQUEST_BODY/RESPONSE_BODY：避免大报文与敏感字段落库。
+  log:
+    enabled: true
+    includes:
+      - REQUEST_PARAM
+      - IP
+      - CLIENT
+      - BROWSER
+      - OS
+  # ---------- 埋点（ypbin-starter-tracking）----------
+  # 采集端点默认关闭，这里显式开启；端点路径 /tracking/ingest 经网关为 /system/tracking/ingest
+  # （已登记到 ypbin-gateway.yaml 的 auth.exclude-paths，否则未登录事件会被网关拒绝）。
+  tracking:
+    enabled: true
+    ingest-enabled: true
+    app-id: ypbin-admin-ui
+    # 部署在网关之后：记录真实客户端 IP（否则记到的是网关地址），需与下面的限流开关一起开
+    trust-forwarded: true
+  # ---------- 限流 ----------
+  # 同样在网关之后：按 IP 限流若不信任转发头，所有请求会共用「网关地址」这一个桶，
+  # 匿名方可低成本让正常上报全部 429。两个 trust-forwarded 必须一起开（装配期有错配告警）。
+  tools:
+    rate-limit:
+      trust-forwarded: true
   # 本应用是授权签发端，不启用 starter License 自保护
   license:
     enabled: false

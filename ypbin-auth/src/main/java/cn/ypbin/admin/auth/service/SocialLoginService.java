@@ -12,8 +12,8 @@ package cn.ypbin.admin.auth.service;
 import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -24,6 +24,7 @@ import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import me.zhyd.oauth.model.AuthCallback;
 import me.zhyd.oauth.model.AuthUser;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -47,19 +48,25 @@ public class SocialLoginService {
 
     /**
      * 用授权码完成第三方登录。已绑定的直接登录；未绑定的抛出提示引导先绑定。
+     *
+     * @param source    第三方平台标识
+     * @param req       回调请求
+     * @param clientIp  客户端 IP
+     * @param userAgent 客户端 User-Agent 原始串，可空
+     * @return 登录结果
      */
-    public LoginResp login(String source, SocialCallbackReq req) {
+    public LoginResp login(String source, SocialCallbackReq req, String clientIp, @Nullable String userAgent) {
         String normalizedSource = normalizeSource(source);
         // 回调前即时校验平台启用状态并同步最新配置（平台已停用直接拒绝，防止停用平台仍可登录）
         registryInitializer.ensurePlatformRegistered(normalizedSource);
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
 
-        SysUserSocial binding = SysCache.getSocialBinding(normalizedSource, authUser.getUuid());
+        SysUserSocialDto binding = SysCache.getSocialBinding(normalizedSource, authUser.getUuid());
         if (binding == null) {
             throw new BusinessException("第三方账号尚未绑定，请先登录已有账号完成绑定");
         }
-        SysUser user = fetchUser(binding.getUserId());
-        return loginSupport.completeLogin(user, "SOCIAL");
+        SysUserDto user = fetchUser(binding.getUserId());
+        return loginSupport.completeLogin(user, "SOCIAL", clientIp, userAgent);
     }
 
     /**
@@ -103,15 +110,14 @@ public class SocialLoginService {
      * @return 平台标识列表，无绑定返回空集合
      */
     public List<String> boundPlatforms() {
-        List<SysUserSocial> bindings = SysCache.listSocialBindings(currentUserId());
-        if (bindings == null) {
-            return List.of();
-        }
-        return bindings.stream().map(SysUserSocial::getPlatform).toList();
+        // SysCache 契约：查无数据返回空集合（不再判空）
+        return SysCache.listSocialBindings(currentUserId()).stream()
+            .map(SysUserSocialDto::getPlatform)
+            .toList();
     }
 
-    private SysUser fetchUser(Long userId) {
-        SysUser user = SysCache.getUserById(userId);
+    private SysUserDto fetchUser(Long userId) {
+        SysUserDto user = SysCache.getUserById(userId);
         if (user == null) {
             throw new BusinessException("第三方账号关联的用户不存在");
         }

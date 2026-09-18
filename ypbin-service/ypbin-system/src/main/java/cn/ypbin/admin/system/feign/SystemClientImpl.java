@@ -13,9 +13,12 @@ import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.feign.support.UserViewConverter;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
@@ -26,16 +29,22 @@ import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.log.dao.LogDao;
+import cn.ypbin.starter.log.model.LogRecord;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
+import cn.ypbin.starter.tracking.core.TrackEvent;
+import cn.ypbin.starter.tracking.core.TrackRecorder;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.Duration;
+import java.util.UUID;
+import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.util.StringUtils;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -76,6 +85,17 @@ public class SystemClientImpl implements ISystemClient {
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
     private final SysMenuService menuService;
+    /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
+    private final LogDao logDao;
+
+    /**
+     * 埋点采集门面（可选）：只有 {@code ypbin.tracking.enabled=true} 时 starter 才装配它。
+     *
+     * <p>刻意用 {@link ObjectProvider} 而不是直接注入：埋点开关关闭时本 Bean 不存在，
+     * 直接注入会让整个 system 服务启动失败（把「可选能力」变成「启动硬依赖」）。
+     * 但取不到时也<b>不能静默丢弃</b>事件——那样上报方会以为成功，故显式失败返回（见方法体）。</p>
+     */
+    private final ObjectProvider<TrackRecorder> trackRecorderProvider;
 
     @Override
     @GetMapping("/permissions")
@@ -89,6 +109,22 @@ public class SystemClientImpl implements ISystemClient {
         return R.ok(permissionService.listRoleCodes(userId));
     }
 
+    /**
+     * 平台用户判定（供 ai 的 {@code PlatformUserChecker} 实现复用）。
+     *
+     * <p>直接委托 {@code SysPermissionService#isPlatformUser}——判定口径（用户类型/启用/未删除）
+     * 与租户忽略（该方法内部 {@code TenantContext.executeIgnore}）都在 service 一处，本端点只做路由，
+     * 不在传输层重写一遍查询条件。</p>
+     *
+     * @param userId 用户 ID
+     * @return 是平台用户返回 {@code true} 的统一响应体
+     */
+    @Override
+    @GetMapping("/platform-user")
+    public R<Boolean> isPlatformUser(@RequestParam("userId") Long userId) {
+        return R.ok(permissionService.isPlatformUser(userId));
+    }
+
     @Override
     @GetMapping("/routes")
     public R<List<RouteResp>> listRoutes(@RequestParam("userId") Long userId) {
@@ -97,20 +133,32 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/user-by-username")
-    public R<SysUser> getUserByUsername(@RequestParam("username") String username) {
-        return R.ok(userService.getByUsername(username));
+    public R<SysUserDto> getUserByUsername(@RequestParam("username") String username) {
+        return R.ok(UserViewConverter.toDto(userService.getByUsername(username)));
     }
 
+    /**
+     * 按 ID 取用户（供 auth 的第三方回调等<b>匿名</b>链路使用）。
+     *
+     * <p>匿名链路必然没有网关签发的 {@code X-Tenant-Id}（{@code SaTokenGatewayAuthProvider}
+     * 仅在登录后签发），而 {@code /auth/social/callback/**} 又在网关白名单内，故这里必须走
+     * {@code getByIdGlobal}（内部 {@code TenantContext.executeIgnore}）——否则租户拦截器
+     * fail-closed 会抛「缺少租户上下文」，第三方登录直接失败。与同文件其余 6 个端点一致：
+     * 租户忽略留在 service 一处，本端点只做路由。</p>
+     *
+     * @param userId 用户 ID
+     * @return 用户统一响应体
+     */
     @Override
     @GetMapping("/user-by-id")
-    public R<SysUser> getUserById(@RequestParam("userId") Long userId) {
-        return R.ok(userService.getById(userId));
+    public R<SysUserDto> getUserById(@RequestParam("userId") Long userId) {
+        return R.ok(UserViewConverter.toDto(userService.getByIdGlobal(userId)));
     }
 
     @Override
     @GetMapping("/user-by-phone")
-    public R<SysUser> getUserByPhone(@RequestParam("phone") String phone) {
-        return R.ok(userService.getByPhone(phone));
+    public R<SysUserDto> getUserByPhone(@RequestParam("phone") String phone) {
+        return R.ok(UserViewConverter.toDto(userService.getByPhone(phone)));
     }
 
     @Override
@@ -122,8 +170,8 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/search-users")
-    public R<List<SysUser>> searchUsers(@RequestParam("keyword") String keyword) {
-        return R.ok(userService.searchUsers(keyword));
+    public R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword) {
+        return R.ok(UserViewConverter.toUserDtoList(userService.searchUsers(keyword)));
     }
 
     @Override
@@ -208,9 +256,9 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/social-binding")
-    public R<SysUserSocial> getSocialBinding(@RequestParam("platform") String platform,
+    public R<SysUserSocialDto> getSocialBinding(@RequestParam("platform") String platform,
         @RequestParam("openId") String openId) {
-        return R.ok(socialBindService.getByPlatformAndOpenId(platform, openId));
+        return R.ok(UserViewConverter.toDto(socialBindService.getByPlatformAndOpenId(platform, openId)));
     }
 
     @Override
@@ -255,13 +303,51 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/social-bindings")
-    public R<List<SysUserSocial>> listSocialBindings(@RequestParam("userId") Long userId) {
-        return R.ok(socialBindService.listByUserId(userId));
+    public R<List<SysUserSocialDto>> listSocialBindings(@RequestParam("userId") Long userId) {
+        return R.ok(UserViewConverter.toSocialDtoList(socialBindService.listByUserId(userId)));
+    }
+
+    /**
+     * 接收 auth/ai 上报的操作/登录日志并落 {@code sys_log}。
+     *
+     * <p>直接委托容器内的 {@link LogDao}（system 侧为 {@code DbLogProviders.DbLogDao}），
+     * 因此 {@code LogRecord → sys_log} 的字段映射全仓只有一份，本端点不做任何二次映射。
+     * 刻意不加 {@code @Log}：否则上报一条日志会再触发一条日志采集，形成自反馈放大。</p>
+     *
+     * <p>异常不吞：{@code LogDao} 落库失败直接上抛，由全局异常处理器转成 HTTP 200 + {@code R.code}，
+     * 调用方（{@code RemoteLogDao}）据 {@code success=false} 上抛并记完整堆栈。</p>
+     */
+    @Override
+    @PostMapping("/log-ingest")
+    public R<Void> ingestLog(@RequestBody LogRecord logRecord) {
+        logDao.add(logRecord);
+        return R.ok();
+    }
+
+    /**
+     * 接收 auth 等无落库能力的服务上报的后端业务埋点事件。
+     *
+     * <p>只把事件交给容器内的 {@link TrackRecorder}（starter 的唯一写入口，未登记事件码在此被拒绝），
+     * 因此「事件码登记校验 → 有界队列 → 消费者线程 → {@code SysTrackEventSink} 落库」全仓只有一份实现，
+     * 本端点不做任何二次映射。刻意不加 {@code @Log}：否则一次埋点上报会再触发一条操作日志采集。</p>
+     *
+     * <p>异常不吞：埋点未启用时显式抛错（{@code R.success=false}），由调用方记完整堆栈——
+     * 若静默返回成功，「登录事件没落库」将没有任何痕迹。</p>
+     */
+    @Override
+    @PostMapping("/track-ingest")
+    public R<Void> ingestTrackEvents(@RequestBody List<TrackEvent> events) {
+        TrackRecorder recorder = trackRecorderProvider.getIfAvailable();
+        if (recorder == null) {
+            throw new BusinessException("埋点未启用，无法接收事件上报（请检查 ypbin.tracking.enabled）");
+        }
+        recorder.record(events);
+        return R.ok();
     }
 
     @Override
     @PostMapping("/user-get-or-create-miniapp")
-    public R<SysUser> getOrCreateMiniappUser(@RequestParam("username") String username,
+    public R<SysUserDto> getOrCreateMiniappUser(@RequestParam("username") String username,
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar) {
         SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
@@ -291,12 +377,12 @@ public class SystemClientImpl implements ISystemClient {
                 userService.updateById(user);
             }
         }
-        return R.ok(user);
+        return R.ok(UserViewConverter.toDto(user));
     }
 
     @Override
     @PostMapping("/user-update-miniapp")
-    public R<SysUser> updateMiniappUser(@RequestParam("userId") Long userId,
+    public R<SysUserDto> updateMiniappUser(@RequestParam("userId") Long userId,
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone) {
@@ -321,6 +407,6 @@ public class SystemClientImpl implements ISystemClient {
         if (updated) {
             userService.updateById(user);
         }
-        return R.ok(user);
+        return R.ok(UserViewConverter.toDto(user));
     }
 }

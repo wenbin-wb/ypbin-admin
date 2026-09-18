@@ -75,6 +75,12 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-log</artifactId>
         </dependency>
+        <!-- 异步执行（@EnableAsync 自动装配 + 统一线程池）：本服务的 @Log 经 /internal/log-ingest 上报 system，
+             且 AiDocumentVectorizer.vectorizeAsync 早已标了 @Async（此前无本依赖被静默忽略、实为同步向量化） -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-async</artifactId>
+        </dependency>
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-tools</artifactId>

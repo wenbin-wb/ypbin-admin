@@ -17,10 +17,12 @@ import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.web.util.WebRequestUtils;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,10 +43,16 @@ public class AuthController {
 
     /**
      * 账号密码登录。
+     *
+     * <p>与手机验证码登录入口保持一致：只加 {@code @Log}，不加 {@code @Idempotent}——登录本身已由
+     * 行为验证码与账号维度锁定（{@code PasswordAttemptLimiter}）防爆破，重复提交拦截会误伤
+     * "密码输错后立即重试"的正常用户。</p>
      */
+    @Log(value = "账号密码登录", module = "认证")
     @PostMapping("/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
-        return R.ok(authService.login(req, WebRequestUtils.ip()));
+        return R.ok(authService.login(req, WebRequestUtils.ip(),
+            WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 
     /**
@@ -52,15 +60,19 @@ public class AuthController {
      */
     @PostMapping("/miniapp/login")
     public R<LoginResp> miniappLogin(@RequestBody MiniappLoginReq req) {
-        return R.ok(miniappLoginService.login(req));
+        return R.ok(miniappLoginService.login(req, WebRequestUtils.ip(),
+            WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 
     /**
      * 退出登录。
+     *
+     * <p>与登录入口一致：IP 与 User-Agent 在 Controller 从请求上下文取、往下传，
+     * 让 Service 层不依赖 HTTP 工具（也便于单测）。</p>
      */
     @PostMapping("/logout")
     public R<Void> logout() {
-        authService.logout();
+        authService.logout(WebRequestUtils.ip(), WebRequestUtils.header(HttpHeaders.USER_AGENT));
         return R.ok();
     }
 
