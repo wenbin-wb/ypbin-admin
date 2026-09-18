@@ -43,6 +43,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -58,6 +60,8 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, CardtabRoom>
     implements CardtabRoomService {
+
+    private static final Logger log = LoggerFactory.getLogger(CardtabRoomServiceImpl.class);
 
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
@@ -386,7 +390,9 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
                 if (StringUtils.hasText(n)) return n;
                 if (StringUtils.hasText(r.getData().getRealName())) return r.getData().getRealName();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            // 同 FamilymenuRoomServiceImpl：回退占位名，但必须留痕
+            log.warn("玩家显示名解析失败，回退占位名；userId={}", userId, e);
         }
         return "玩家" + (userId % 1000);
     }

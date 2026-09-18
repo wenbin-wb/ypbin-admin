@@ -22,8 +22,10 @@ import cn.ypbin.admin.miniapp.cardtab.service.CardtabSettlementService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -45,6 +47,8 @@ import org.springframework.util.CollectionUtils;
 public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlementSnapshotMapper, CardtabSettlementSnapshot>
     implements CardtabSettlementService {
 
+    private static final Logger log = LoggerFactory.getLogger(CardtabSettlementServiceImpl.class);
+
     private final CardtabRoomMapper roomMapper;
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
@@ -65,7 +69,11 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
             if (snapshot != null) {
                 try {
                     return objectMapper.readValue(snapshot.getSnapshotJson(), CardtabSettlementResp.class);
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    // 快照损坏/格式变更：仍回退实时计算（行为不变），但必须暴露出来——
+                    // 否则「账单每次都由实时重算得出」这件事永远没人知道
+                    log.warn("结算快照反序列化失败，回退实时计算；roomId={}，snapshotId={}", roomId,
+                        snapshot.getId(), e);
                 }
             }
         }
@@ -96,7 +104,7 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
             snapshot.setRoomId(roomId);
             snapshot.setSnapshotJson(objectMapper.writeValueAsString(resp));
             save(snapshot);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new BusinessException("序列化结算快照失败");
         }
 
