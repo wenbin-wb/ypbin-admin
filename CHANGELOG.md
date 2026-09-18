@@ -96,14 +96,18 @@
     视图**结构上不含 `password`/`accessToken`**），`ISystemClient` 的 6 个方法
     （`getUserByUsername`/`getUserById`/`getUserByPhone`/`searchUsers`/`getSocialBinding`/`listSocialBindings`）
     与 `ISystemClientFallback`/`SystemClientImpl` 同步改签；实体→视图的投影集中在
-    `api/convert/UserViewConverter` 一处（网关侧与缓存侧不再各写一份）。
+    `ypbin-system` 的 `feign/support/UserViewConverter` 一处（**刻意不放 api 模块**：它必须引用实体，
+    置于 api 会让已排除 `starter-data` 的 auth 拿到一个「能加载、一解析方法就 `NoClassDefFoundError`」的类）。
   - **auth 的 pom 显式排除 `ypbin-starter-data`**：一旦有人在 auth 里再引用实体类型，编译期即因缺类失败——
     这条约定从此由构建强制。`ai` **不加**该排除：它有自己独立的 `ai_*` 表与 Mapper，
     「不直连共享库」指的是不访问 system 的表，不是不许用 MyBatis。
   - **缓存 key 升版到 v2**（`sys:user:v2:*` / `sys:social:v2:*`）：用户/绑定快照是**永久缓存**，
     而 `CacheService#getOrLoad` 对命中值是「无类型校验的强转」——载荷由实体收窄为视图后若沿用旧 key，
     升级后会读到旧实体对象并在强转处抛 `ClassCastException`（登录直接不可用）。5 处 `@CacheEvict`
-    注解已同步升版；旧的 v1 键不再被读取（残留可手动 `DEL`，非必需）。
+    注解已同步升版；旧的 v1 键不再被读取。
+    **运维（可选）**：v1 用户/绑定键是永久键，如需释放内存可执行
+    `DEL sys:user:username:* sys:user:id:* sys:user:phone:* sys:social:binding:* sys:social:bindings:*`
+    （不执行也不影响正确性：新代码只读 v2 键）。
   - **新增门禁**：`SourceConventionTest` 增加「`@CacheEvict` 的 key 必须存在于 `SysCache` 的 key 常量中」，
     并带**规则有效性自检**与**变异验证**（把一处失效 key 改回 v1 → 精确转红；回滚 → 绿）。
     这类漂移此前完全静默：失效打在不再被读取的键上，改状态/改角色后登录仍用旧快照。
