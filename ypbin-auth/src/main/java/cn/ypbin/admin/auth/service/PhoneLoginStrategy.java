@@ -11,7 +11,7 @@ package cn.ypbin.admin.auth.service;
 
 import cn.ypbin.admin.auth.dto.PhoneLoginReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -69,7 +69,7 @@ public class PhoneLoginStrategy {
             throw e;
         }
 
-        SysUser user = smsCodeService.getUserByPhone(phone);
+        SysUserDto user = smsCodeService.getUserByPhone(phone);
         if (user == null || (req.getTenantId() != null
             && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
             attemptLimiter.recordFailure(phone, clientIp);

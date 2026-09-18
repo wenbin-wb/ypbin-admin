@@ -174,7 +174,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(keys = {"'sys:user:username:' + #req.username"})
+    @CacheEvict(keys = {"'sys:user:v2:username:' + #req.username"})
     public void createUser(UserSaveReq req) {
         // 先鉴权再校验/落库：数据范围是授权判断，fail-fast 可避免为越权请求白跑查重与密码策略
         validateDeptInScope(req.getDeptId());
@@ -206,7 +206,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(keys = {"'sys:user:id:' + #id", "'sys:user:username:' + #req.username"})
+    @CacheEvict(keys = {"'sys:user:v2:id:' + #id", "'sys:user:v2:username:' + #req.username"})
     public void updateUser(Long id, UserSaveReq req) {
         // 先鉴权再校验/落库：目标部门越界直接拒绝，不进入后续查重与更新
         validateDeptInScope(req.getDeptId());
@@ -255,7 +255,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(keys = {"'sys:user:id:' + #id"})
+    @CacheEvict(keys = {"'sys:user:v2:id:' + #id"})
     public void updateStatus(Long id, Integer status) {
         SysUser user = getManageableUser(id);
         if (id.equals(IdentityContext.getUserId().orElse(null)) && UserStatusEnum.DISABLED.getCode().equals(status)) {
@@ -280,7 +280,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(keys = {"'sys:user:id:' + #id"})
+    @CacheEvict(keys = {"'sys:user:v2:id:' + #id"})
     public void deleteUser(Long id) {
         SysUser existing = getManageableUser(id);
         // 删除前取回第三方绑定（手机号随后置空，旧号缓存须用删除前值清理）
@@ -310,7 +310,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Override
     @DataPermission
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(keys = {"'sys:user:id:' + #id"})
+    @CacheEvict(keys = {"'sys:user:v2:id:' + #id"})
     public void resetPassword(Long id, String password) {
         SysUser user = getManageableUser(id);
         if (!StringUtils.hasText(password)) {

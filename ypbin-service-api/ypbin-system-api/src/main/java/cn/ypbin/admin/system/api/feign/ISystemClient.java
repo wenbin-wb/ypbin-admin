@@ -10,10 +10,10 @@
 package cn.ypbin.admin.system.api.feign;
 
 import cn.ypbin.admin.system.api.feign.config.InternalTokenFeignConfiguration;
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
@@ -77,19 +77,19 @@ public interface ISystemClient {
      * 按用户名查询用户（登录用）。
      */
     @GetMapping("/user-by-username")
-    R<SysUser> getUserByUsername(@RequestParam("username") String username);
+    R<SysUserDto> getUserByUsername(@RequestParam("username") String username);
 
     /**
      * 按 ID 查询用户。
      */
     @GetMapping("/user-by-id")
-    R<SysUser> getUserById(@RequestParam("userId") Long userId);
+    R<SysUserDto> getUserById(@RequestParam("userId") Long userId);
 
     /**
      * 按手机号查询用户（手机验证码登录用）。
      */
     @GetMapping("/user-by-phone")
-    R<SysUser> getUserByPhone(@RequestParam("phone") String phone);
+    R<SysUserDto> getUserByPhone(@RequestParam("phone") String phone);
 
     /**
      * 记录最后登录时间（登录成功收尾用）。
@@ -101,7 +101,7 @@ public interface ISystemClient {
      * 按关键词搜索用户（AI 工具用，限制 10 条）。
      */
     @GetMapping("/search-users")
-    R<List<SysUser>> searchUsers(@RequestParam("keyword") String keyword);
+    R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword);
 
     /**
      * 用户计数（AI 工具统计用）。
@@ -138,7 +138,7 @@ public interface ISystemClient {
      * 按平台与 openId 查绑定（第三方登录用）。
      */
     @GetMapping("/social-binding")
-    R<SysUserSocial> getSocialBinding(@RequestParam("platform") String platform,
+    R<SysUserSocialDto> getSocialBinding(@RequestParam("platform") String platform,
         @RequestParam("openId") String openId);
 
     /**
@@ -176,7 +176,7 @@ public interface ISystemClient {
      * 用户已绑定的平台列表。
      */
     @GetMapping("/social-bindings")
-    R<List<SysUserSocial>> listSocialBindings(@RequestParam("userId") Long userId);
+    R<List<SysUserSocialDto>> listSocialBindings(@RequestParam("userId") Long userId);
 
     /**
      * 上报一条操作/登录日志（auth、ai 等无数据源的调用方专用）。

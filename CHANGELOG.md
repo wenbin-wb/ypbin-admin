@@ -87,6 +87,28 @@
 
 ### 修复
 
+- **`auth` 不再传递依赖 `ypbin-starter-data`（MyBatis-Plus）——把 SKILL 里「auth 不直连共享库」从口头约定变成编译期门禁**
+  （`TRACKING-TAILS.md` 的既有偏差 #15）。根因不在 auth 自己的 pom，而在**跨服务契约把持久化实体当 DTO 用**：
+  `ISystemClient`/`SysCache` 直接返回 `SysUser`/`SysUserSocial`，而两者继承 `BaseEntity`，
+  于是无数据源的 auth 被迫跟着依赖 starter-data（连 Mockito 为 `ISystemClient` 生成 mock 都会因签名里的实体
+  无法加载而失败——本轮的编译期实验正是这样暴露出来的）。
+  - **契约收窄为只读视图**：新增 `SysUserDto`/`SysUserSocialDto`（字段与实体**逐一同名同类型**，禁改名映射；
+    视图**结构上不含 `password`/`accessToken`**），`ISystemClient` 的 6 个方法
+    （`getUserByUsername`/`getUserById`/`getUserByPhone`/`searchUsers`/`getSocialBinding`/`listSocialBindings`）
+    与 `ISystemClientFallback`/`SystemClientImpl` 同步改签；实体→视图的投影集中在
+    `api/convert/UserViewConverter` 一处（网关侧与缓存侧不再各写一份）。
+  - **auth 的 pom 显式排除 `ypbin-starter-data`**：一旦有人在 auth 里再引用实体类型，编译期即因缺类失败——
+    这条约定从此由构建强制。`ai` **不加**该排除：它有自己独立的 `ai_*` 表与 Mapper，
+    「不直连共享库」指的是不访问 system 的表，不是不许用 MyBatis。
+  - **缓存 key 升版到 v2**（`sys:user:v2:*` / `sys:social:v2:*`）：用户/绑定快照是**永久缓存**，
+    而 `CacheService#getOrLoad` 对命中值是「无类型校验的强转」——载荷由实体收窄为视图后若沿用旧 key，
+    升级后会读到旧实体对象并在强转处抛 `ClassCastException`（登录直接不可用）。5 处 `@CacheEvict`
+    注解已同步升版；旧的 v1 键不再被读取（残留可手动 `DEL`，非必需）。
+  - **新增门禁**：`SourceConventionTest` 增加「`@CacheEvict` 的 key 必须存在于 `SysCache` 的 key 常量中」，
+    并带**规则有效性自检**与**变异验证**（把一处失效 key 改回 v1 → 精确转红；回滚 → 绿）。
+    这类漂移此前完全静默：失效打在不再被读取的键上，改状态/改角色后登录仍用旧快照。
+  - **验证**：受影响四模块 `mvn test` 全绿（`ypbin-system-api` 12 / `ypbin-common` 17 / `ypbin-auth` 30 /
+    `ypbin-system` 159 / `ypbin-ai` 21），架构测试模块 35 项全绿（含新规则）。
 - **用户名查重移出数据范围，跨部门重名改为友好业务错误**（`SysUserServiceImpl` / `UserAccountSupport` / `SysUserMapper`）：改用**语句级** `@InterceptorIgnore(dataPermission = "true")` 的全局计数语句（`countByUsernameGlobal`），不再受 `@DataPermission` 部门条件影响。
 
   `SysUserMapper`）。`uk_username` 是**不带 `tenant_id` 的全局唯一键**，而 `updateUser` 带

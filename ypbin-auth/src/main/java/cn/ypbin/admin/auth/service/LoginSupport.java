@@ -15,7 +15,7 @@ import cn.hutool.http.useragent.UserAgentUtil;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.api.cache.SysCache;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
@@ -65,7 +65,7 @@ public class LoginSupport {
      * @param userAgent 客户端 User-Agent 原始串，可空
      * @return 登录结果
      */
-    public LoginResp completeLogin(SysUser user, String authType, String ip, @Nullable String userAgent) {
+    public LoginResp completeLogin(SysUserDto user, String authType, String ip, @Nullable String userAgent) {
         LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, authType);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());

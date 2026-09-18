@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.feign;
 
+import cn.ypbin.admin.system.api.convert.UserViewConverter;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
@@ -16,6 +17,8 @@ import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
@@ -127,8 +130,8 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/user-by-username")
-    public R<SysUser> getUserByUsername(@RequestParam("username") String username) {
-        return R.ok(userService.getByUsername(username));
+    public R<SysUserDto> getUserByUsername(@RequestParam("username") String username) {
+        return R.ok(UserViewConverter.toDto(userService.getByUsername(username)));
     }
 
     /**
@@ -145,14 +148,14 @@ public class SystemClientImpl implements ISystemClient {
      */
     @Override
     @GetMapping("/user-by-id")
-    public R<SysUser> getUserById(@RequestParam("userId") Long userId) {
-        return R.ok(userService.getByIdGlobal(userId));
+    public R<SysUserDto> getUserById(@RequestParam("userId") Long userId) {
+        return R.ok(UserViewConverter.toDto(userService.getByIdGlobal(userId)));
     }
 
     @Override
     @GetMapping("/user-by-phone")
-    public R<SysUser> getUserByPhone(@RequestParam("phone") String phone) {
-        return R.ok(userService.getByPhone(phone));
+    public R<SysUserDto> getUserByPhone(@RequestParam("phone") String phone) {
+        return R.ok(UserViewConverter.toDto(userService.getByPhone(phone)));
     }
 
     @Override
@@ -164,8 +167,8 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/search-users")
-    public R<List<SysUser>> searchUsers(@RequestParam("keyword") String keyword) {
-        return R.ok(userService.searchUsers(keyword));
+    public R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword) {
+        return R.ok(UserViewConverter.toUserDtoList(userService.searchUsers(keyword)));
     }
 
     @Override
@@ -250,9 +253,9 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/social-binding")
-    public R<SysUserSocial> getSocialBinding(@RequestParam("platform") String platform,
+    public R<SysUserSocialDto> getSocialBinding(@RequestParam("platform") String platform,
         @RequestParam("openId") String openId) {
-        return R.ok(socialBindService.getByPlatformAndOpenId(platform, openId));
+        return R.ok(UserViewConverter.toDto(socialBindService.getByPlatformAndOpenId(platform, openId)));
     }
 
     @Override
@@ -297,8 +300,8 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/social-bindings")
-    public R<List<SysUserSocial>> listSocialBindings(@RequestParam("userId") Long userId) {
-        return R.ok(socialBindService.listByUserId(userId));
+    public R<List<SysUserSocialDto>> listSocialBindings(@RequestParam("userId") Long userId) {
+        return R.ok(UserViewConverter.toSocialDtoList(socialBindService.listByUserId(userId)));
     }
 
     /**

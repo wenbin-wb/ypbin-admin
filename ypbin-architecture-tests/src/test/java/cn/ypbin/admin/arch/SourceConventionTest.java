@@ -69,6 +69,21 @@ class SourceConventionTest {
     /** 配置绑定类（@Data 的唯一合法落点，与 starter 口径一致） */
     private static final Pattern CONFIGURATION_PROPERTIES = Pattern.compile("@ConfigurationProperties\\b");
 
+    /** {@code @CacheEvict(keys = {...})} 注解块（捕获 keys 数组原文，含 SpEL）。 */
+    private static final Pattern CACHE_EVICT_BLOCK =
+        Pattern.compile("@CacheEvict\\s*\\(\\s*keys\\s*=\\s*\\{([^}]*)\\}", Pattern.DOTALL);
+
+    /** SpEL 中的单引号字面量（即缓存 key 前缀）。 */
+    private static final Pattern SPEL_LITERAL = Pattern.compile("'([^']*)'");
+
+    /** 缓存 key 常量声明（{@code private static final String X = "sys:...";}）。 */
+    private static final Pattern CACHE_KEY_CONSTANT =
+        Pattern.compile("static final String \\w+\\s*=\\s*\"([^\"]+)\";");
+
+    /** 缓存 key 的唯一定义处：所有失效注解都必须与它对齐。 */
+    private static final String CACHE_KEY_SOURCE =
+        "ypbin-service-api/ypbin-system-api/src/main/java/cn/ypbin/admin/system/api/cache/SysCache.java";
+
     /** 类声明（取 extends 子句，用于实体继承体系判定） */
     private static final Pattern CLASS_DECLARATION = Pattern.compile(
         "(?m)^\\s*(?:public\\s+|abstract\\s+|final\\s+)*class\\s+(\\w+)\\s*(?:<[^>]*>)?\\s*"
@@ -387,6 +402,32 @@ class SourceConventionTest {
         return -1;
     }
 
+    /**
+     * 校验：{@code @CacheEvict} 里出现的 key 字面量必须都能在 {@code SysCache} 的 key 常量里找到。
+     *
+     * <p><b>为什么需要这条规则</b>：缓存 key 一旦改版（例如载荷由实体收窄为视图后升 v2），
+     * 若失效注解仍指向旧 key，则「失效」打在不再被读取的键上——读侧继续命中旧快照且<b>完全静默</b>
+     * （典型后果：改状态/改角色后登录仍用旧快照）。本规则把它变成构建失败。</p>
+     *
+     * @param source       待检查的源码
+     * @param declaredKeys {@code SysCache} 中声明的 key 常量集合
+     * @return 未在 {@code SysCache} 中声明的 key 字面量列表
+     */
+    static List<String> cacheEvictKeysNotDeclared(String source, Set<String> declaredKeys) {
+        List<String> violations = new ArrayList<>();
+        Matcher blocks = CACHE_EVICT_BLOCK.matcher(source);
+        while (blocks.find()) {
+            Matcher literals = SPEL_LITERAL.matcher(blocks.group(1));
+            while (literals.find()) {
+                String key = literals.group(1);
+                if (!declaredKeys.contains(key)) {
+                    violations.add(key);
+                }
+            }
+        }
+        return violations;
+    }
+
     // ------------------------------------------------------------------ 规则
 
     @Test
@@ -661,5 +702,48 @@ class SourceConventionTest {
         assertThat(loopInternalDbOrRpcCalls(stripCommentsAndLiterals(
             "// for (Long id : ids) { mapper.selectById(id); }\nString sql = \"for (...) mapper.insert(x)\";\n")))
             .isEmpty();
+    }
+
+    @Test
+    @DisplayName("@CacheEvict 的 key 必须与 SysCache 的 key 常量一致（防失效打在旧 key 上而静默不生效）")
+    void cacheEvictKeysMustMatchSysCacheConstants() throws IOException {
+        String cacheKeySource =
+            Files.readString(SourceScan.repoRoot().resolve(CACHE_KEY_SOURCE), StandardCharsets.UTF_8);
+        Set<String> declaredKeys = new LinkedHashSet<>();
+        Matcher constants = CACHE_KEY_CONSTANT.matcher(cacheKeySource);
+        while (constants.find()) {
+            declaredKeys.add(constants.group(1));
+        }
+        assertThat(declaredKeys)
+            .as("未能从 SysCache 解析出任何 key 常量——规则已失效，请检查 CACHE_KEY_CONSTANT 是否与源码脱节")
+            .isNotEmpty();
+
+        List<String> violations = new ArrayList<>();
+        for (Path file : SourceScan.mainSources()) {
+            String source = Files.readString(file, StandardCharsets.UTF_8);
+            for (String key : cacheEvictKeysNotDeclared(source, declaredKeys)) {
+                violations.add(SourceScan.relative(file) + " → " + key);
+            }
+        }
+        assertThat(violations)
+            .as("这些 @CacheEvict 的 key 在 SysCache 中不存在：失效会打在不再被读取的键上（静默失效）。"
+                + "改缓存 key 时必须同步改失效注解，或把 key 收进 SysCache 常量")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("@CacheEvict key 一致性检测应命中漂移 key、不误报合法 key（规则有效性自检）")
+    void cacheEvictKeyPatternShouldBeAccurate() {
+        Set<String> declared = Set.of("sys:user:v2:id:", "sys:user:v2:username:");
+        // 合法：与 SysCache 常量一致（单键与多键两种写法）
+        assertThat(cacheEvictKeysNotDeclared(
+            "@CacheEvict(keys = {\"'sys:user:v2:id:' + #id\"})", declared)).isEmpty();
+        assertThat(cacheEvictKeysNotDeclared(
+            "@CacheEvict(keys = {\"'sys:user:v2:id:' + #id\", \"'sys:user:v2:username:' + #req.username\"})",
+            declared)).isEmpty();
+        // 违规：漏改的旧 key（升版前形态）
+        assertThat(cacheEvictKeysNotDeclared(
+            "@CacheEvict(keys = {\"'sys:user:id:' + #id\"})", declared))
+            .containsExactly("sys:user:id:");
     }
 }

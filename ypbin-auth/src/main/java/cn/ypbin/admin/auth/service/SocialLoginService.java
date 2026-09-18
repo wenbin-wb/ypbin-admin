@@ -12,8 +12,8 @@ package cn.ypbin.admin.auth.service;
 import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -61,11 +61,11 @@ public class SocialLoginService {
         registryInitializer.ensurePlatformRegistered(normalizedSource);
         AuthUser authUser = socialService.login(normalizedSource, buildCallback(req));
 
-        SysUserSocial binding = SysCache.getSocialBinding(normalizedSource, authUser.getUuid());
+        SysUserSocialDto binding = SysCache.getSocialBinding(normalizedSource, authUser.getUuid());
         if (binding == null) {
             throw new BusinessException("第三方账号尚未绑定，请先登录已有账号完成绑定");
         }
-        SysUser user = fetchUser(binding.getUserId());
+        SysUserDto user = fetchUser(binding.getUserId());
         return loginSupport.completeLogin(user, "SOCIAL", clientIp, userAgent);
     }
 
@@ -110,15 +110,14 @@ public class SocialLoginService {
      * @return 平台标识列表，无绑定返回空集合
      */
     public List<String> boundPlatforms() {
-        List<SysUserSocial> bindings = SysCache.listSocialBindings(currentUserId());
-        if (bindings == null) {
-            return List.of();
-        }
-        return bindings.stream().map(SysUserSocial::getPlatform).toList();
+        // SysCache 契约：查无数据返回空集合（不再判空）
+        return SysCache.listSocialBindings(currentUserId()).stream()
+            .map(SysUserSocialDto::getPlatform)
+            .toList();
     }
 
-    private SysUser fetchUser(Long userId) {
-        SysUser user = SysCache.getUserById(userId);
+    private SysUserDto fetchUser(Long userId) {
+        SysUserDto user = SysCache.getUserById(userId);
         if (user == null) {
             throw new BusinessException("第三方账号关联的用户不存在");
         }

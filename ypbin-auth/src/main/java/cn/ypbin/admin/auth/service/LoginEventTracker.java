@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.auth.service;
 
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import cn.ypbin.starter.tracking.core.TrackRequestContext;
@@ -101,7 +101,7 @@ public class LoginEventTracker {
      * @param ip        客户端 IP
      * @param userAgent 客户端 User-Agent 原始串，可空
      */
-    public void recordLogin(SysUser user, String authType, String ip, @Nullable String userAgent) {
+    public void recordLogin(SysUserDto user, String authType, String ip, @Nullable String userAgent) {
         record(TrackingEventCodes.AUTH_USER_LOGIN, Map.of(PROPERTY_AUTH_TYPE, authType),
             user.getId(), user.getTenantId(), ip, userAgent);
     }
