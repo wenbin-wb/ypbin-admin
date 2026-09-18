@@ -14,6 +14,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Select;
 
 /**
@@ -44,4 +45,20 @@ public interface SysRoleDeptMapper extends BaseMapper<SysRoleDept> {
         + "<foreach collection='roleIds' item='rid' open='(' separator=',' close=')'>#{rid}</foreach>"
         + "</script>")
     List<SysRoleDept> selectDeptIdsByRoleIds(@Param("roleIds") Collection<Long> roleIds);
+
+    /**
+     * 批量插入角色-部门关联行（单条多值 INSERT）。
+     *
+     * <p>复合主键表没有代理主键、也没有审计列，故不涉及主键回填；角色-部门关联的规模由一次请求的入参决定，
+     * 逐条 insert 会产生同等数量的单行往返（N+1 写）。</p>
+     *
+     * @param rows 待插入行（调用方保证非空）
+     * @return 影响行数
+     */
+    @Insert("<script>"
+        + "INSERT INTO sys_role_dept (role_id, dept_id) VALUES "
+        + "<foreach collection='rows' item='r' separator=','>(#{r.roleId}, #{r.deptId})</foreach>"
+        + "</script>")
+    int insertBatch(@Param("rows") Collection<SysRoleDept> rows);
+
 }

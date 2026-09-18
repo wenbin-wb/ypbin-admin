@@ -51,12 +51,12 @@ public class AiStatsServiceImpl implements AiStatsService {
             new LambdaQueryWrapper<AiKnowledgeBase>().eq(AiKnowledgeBase::getTenantId, tenantId));
         long docTotal = documentMapper.selectCount(
             new LambdaQueryWrapper<AiDocument>().eq(AiDocument::getTenantId, tenantId));
-        // SQL 聚合对话数与 Token 总量，避免全表拉取
+        // SQL 聚合对话数、已回报 Token 总量与未知用量条数，避免全表拉取
         Map<String, Object> usage = usageLogMapper.selectSummaryByTenant(tenantId);
-        long chatCount = usage == null || usage.get("chatCount") == null
-            ? 0L : ((Number) usage.get("chatCount")).longValue();
-        long tokenTotal = usage == null || usage.get("tokenTotal") == null
-            ? 0L : ((Number) usage.get("tokenTotal")).longValue();
+        long chatCount = toLong(usage == null ? null : usage.get("chatCount"));
+        // 0 = 没有任何已回报用量（不等于「真实 0 用量」）；未知条数见 unknownTokenCalls
+        long tokenTotal = toLong(usage == null ? null : usage.get("tokenTotal"));
+        long unknownTokenCalls = toLong(usage == null ? null : usage.get("unknownTokenCalls"));
         long queryCount = queryLogMapper.selectCount(
             new LambdaQueryWrapper<AiQueryLog>().eq(AiQueryLog::getTenantId, tenantId));
         return Map.of(
@@ -64,7 +64,8 @@ public class AiStatsServiceImpl implements AiStatsService {
             "docTotal", docTotal,
             "chatCount", chatCount,
             "queryCount", queryCount,
-            "tokenTotal", tokenTotal);
+            "tokenTotal", tokenTotal,
+            "unknownTokenCalls", unknownTokenCalls);
     }
 
     @Override
@@ -84,15 +85,15 @@ public class AiStatsServiceImpl implements AiStatsService {
         for (int i = 0; i < range; i++) {
             String day = today.minusDays(range - 1L - i).toString();
             byDay.put(day, new LinkedHashMap<>(Map.of(
-                "date", day, "chatCount", 0L, "queryCount", 0L, "tokenCount", 0L)));
+                "date", day, "chatCount", 0L, "queryCount", 0L, "tokenCount", 0L, "unknownCount", 0L)));
         }
         for (Map<String, Object> row : usageRows) {
             Map<String, Object> cell = byDay.get(row.get("statDate"));
             if (cell != null) {
-                cell.put("chatCount", (long) cell.get("chatCount")
-                    + ((Number) row.get("chatCount")).longValue());
-                cell.put("tokenCount", (long) cell.get("tokenCount")
-                    + ((Number) row.get("tokenTotal")).longValue());
+                cell.put("chatCount", toLong(cell.get("chatCount")) + toLong(row.get("chatCount")));
+                // 已回报用量求和（NULL 由聚合层跳过，绝不折算成 0 参与求和/均值）
+                cell.put("tokenCount", toLong(cell.get("tokenCount")) + toLong(row.get("tokenTotal")));
+                cell.put("unknownCount", toLong(row.get("unknownCalls")));
             }
         }
         for (Map<String, Object> row : queryRows) {
@@ -135,5 +136,12 @@ public class AiStatsServiceImpl implements AiStatsService {
     private static Long currentTenantId() {
         return UserContext.getTenantId()
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+    }
+
+    /**
+     * SQL 聚合列取值：{@code NULL}（无任何已回报用量）按 0 展示，未知条数由 unknownCount 单独承载。
+     */
+    private static long toLong(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
     }
 }

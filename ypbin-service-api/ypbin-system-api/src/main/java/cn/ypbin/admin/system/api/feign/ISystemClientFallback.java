@@ -9,13 +9,15 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
-import cn.ypbin.admin.system.entity.SysUser;
-import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.log.model.LogRecord;
+import cn.ypbin.starter.tracking.core.TrackEvent;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -45,23 +47,35 @@ public class ISystemClientFallback implements ISystemClient {
         return unavailable();
     }
 
+    /**
+     * 平台用户判定降级：返回失败 {@code R}（{@code code=500}）。
+     *
+     * <p>刻意不返回 {@code false}：判定器（{@code AiPlatformUserChecker}）据 {@code success=false}
+     * 上抛异常并记完整堆栈。若在此返回「非平台用户」，一次 system 抖动就会被呈现成
+     * 「仅平台用户可访问」这种正常业务结论，排查时毫无痕迹（禁静默降级）。</p>
+     */
+    @Override
+    public R<Boolean> isPlatformUser(Long userId) {
+        return unavailable();
+    }
+
     @Override
     public R<List<RouteResp>> listRoutes(Long userId) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> getUserByUsername(String username) {
+    public R<SysUserDto> getUserByUsername(String username) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> getUserById(Long userId) {
+    public R<SysUserDto> getUserById(Long userId) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> getUserByPhone(String phone) {
+    public R<SysUserDto> getUserByPhone(String phone) {
         return unavailable();
     }
 
@@ -71,7 +85,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<SysUser>> searchUsers(String keyword) {
+    public R<List<SysUserDto>> searchUsers(String keyword) {
         return unavailable();
     }
 
@@ -101,7 +115,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<SysUserSocial> getSocialBinding(String platform, String openId) {
+    public R<SysUserSocialDto> getSocialBinding(String platform, String openId) {
         return unavailable();
     }
 
@@ -127,17 +141,39 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<SysUserSocial>> listSocialBindings(Long userId) {
+    public R<List<SysUserSocialDto>> listSocialBindings(Long userId) {
+        return unavailable();
+    }
+
+    /**
+     * 日志上报降级：返回失败 {@code R}（{@code code=500}）。
+     *
+     * <p>刻意不返回成功态：调用方（{@code RemoteLogDao}）据 {@code success=false} 上抛异常并记完整堆栈。
+     * 若在此假装成功，"登录日志没落库"就成了无任何痕迹的静默丢失。</p>
+     */
+    @Override
+    public R<Void> ingestLog(LogRecord logRecord) {
+        return unavailable();
+    }
+
+    /**
+     * 埋点上报降级：返回失败 {@code R}（{@code code=500}）。
+     *
+     * <p>同样刻意不返回成功态：调用方（{@code RemoteTrackEventSink}）据 {@code success=false}
+     * 记完整堆栈——若在此假装成功，「登录事件没落库」就成了无任何痕迹的静默丢失。</p>
+     */
+    @Override
+    public R<Void> ingestTrackEvents(List<TrackEvent> events) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> getOrCreateMiniappUser(String username, String nickname, String avatar) {
+    public R<SysUserDto> getOrCreateMiniappUser(String username, String nickname, String avatar) {
         return unavailable();
     }
 
     @Override
-    public R<SysUser> updateMiniappUser(Long userId, String nickname, String avatar, String phone) {
+    public R<SysUserDto> updateMiniappUser(Long userId, String nickname, String avatar, String phone) {
         return unavailable();
     }
 }

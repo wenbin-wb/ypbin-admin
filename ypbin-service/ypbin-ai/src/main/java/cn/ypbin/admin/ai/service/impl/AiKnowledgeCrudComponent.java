@@ -38,6 +38,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -163,7 +164,7 @@ public class AiKnowledgeCrudComponent {
         if (files.length > 20) {
             throw new BusinessException("单次最多上传 20 个文件");
         }
-        List<AiDocumentVO> results = new java.util.ArrayList<>();
+        List<AiDocumentVO> results = new ArrayList<>();
         int failed = 0;
         for (MultipartFile file : files) {
             try {

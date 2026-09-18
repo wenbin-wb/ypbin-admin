@@ -50,6 +50,19 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-data</artifactId>
         </dependency>
+        <!-- 日志采集模型 LogRecord：无数据源的服务（auth/ai）经 /internal/log-ingest 上报的载体。
+             直接复用采集模型，避免在 API 层再造 DTO 后在 system 侧做第二次字段映射（同一张表两份口径）。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-log</artifactId>
+        </dependency>
+        <!-- 埋点事件模型 TrackEvent：无本地埋点落库实现的服务（auth）经 /internal/track-ingest
+             上报的载体。同样直接复用采集模型，避免在 API 层再造 DTO 后在 system 侧做第二次
+             字段映射（同一张 sys_track_event 出现两份口径）。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tracking</artifactId>
+        </dependency>
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-tenant</artifactId>

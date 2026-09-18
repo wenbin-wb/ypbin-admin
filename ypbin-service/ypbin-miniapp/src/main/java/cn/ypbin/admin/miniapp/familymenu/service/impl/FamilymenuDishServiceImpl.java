@@ -21,7 +21,6 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -46,7 +45,7 @@ public class FamilymenuDishServiceImpl extends BaseServiceImpl<FamilymenuDishMap
     @Override
     public List<FamilymenuDishResp> getDishList(Long roomId, String category) {
         if (roomId == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         List<FamilymenuDish> list = list(new LambdaQueryWrapper<FamilymenuDish>()
             .eq(FamilymenuDish::getRoomId, roomId)
@@ -54,7 +53,7 @@ public class FamilymenuDishServiceImpl extends BaseServiceImpl<FamilymenuDishMap
             .orderByDesc(FamilymenuDish::getCreateTime));
 
         if (CollectionUtils.isEmpty(list)) {
-            return Collections.emptyList();
+            return List.of();
         }
         return list.stream().map(this::toDishResp).toList();
     }
@@ -105,7 +104,7 @@ public class FamilymenuDishServiceImpl extends BaseServiceImpl<FamilymenuDishMap
             .orderByAsc(FamilymenuPresetDish::getId));
 
         if (CollectionUtils.isEmpty(list)) {
-            return Collections.emptyList();
+            return List.of();
         }
         return list;
     }

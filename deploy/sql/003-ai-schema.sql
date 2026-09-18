@@ -4,6 +4,8 @@
 --       / 检索问答日志 / 文档分块 / Spring AI JDBC 会话记忆
 -- 约定：全部 tenant_id 为 BIGINT（对齐 TenantBaseEntity 的 Long tenantId）
 --       对话引擎表（ai_chat_*）承载 M1 对话引擎 2.0；旧版 ai_conversation/ai_message 已废弃移除
+-- 已有库升级：本文件只服务全新安装（install.sh 仅在库中没有表时执行 deploy/sql/*.sql）。
+--       已上线的库请执行 deploy/sql/migration/2026-09-17-ai-usage-log-outcome.sql（不在自动执行范围内）。
 -- =============================================================
 
 -- 模型配置：支持多模型动态切换，API Key 加密存储
@@ -118,18 +120,26 @@ CREATE TABLE ai_prompt_template
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Prompt 模板';
 
 -- Token 用量日志
+-- 由宿主侧 AiUsageListener 实现（ypbin-ai 的 AdminAiUsageListener）在每次 AI 调用终局时写入一行。
+-- NULL 语义（对齐 starter 的 AiUsageInfo 契约，禁止把未知折算成 0）：
+--   * 三个 token 列 NULL = 上游未回报用量（流式仅在最后分片回报；框架仅在 streamOptions == null 时
+--     才默认请求 stream_options.include_usage=true）；统计侧 SUM/AVG 天然跳过 NULL，绝不按 0 计入。
+--   * user_id NULL = 无用户上下文的入口（分享页/挂件/知识库检索问答为匿名调用）。
+--   * conversation_id NULL = 该入口没有会话实体（匿名入口传入的是 share-<kbId> 等非会话标识）。
 CREATE TABLE ai_usage_log
 (
     id              BIGINT       NOT NULL COMMENT '主键',
     tenant_id       BIGINT       NOT NULL COMMENT '租户 ID',
-    user_id         BIGINT       NOT NULL COMMENT '用户',
-    conversation_id BIGINT       NULL COMMENT '会话 ID',
+    user_id         BIGINT       NULL COMMENT '用户 ID（匿名入口无用户，NULL=未知）',
+    conversation_id BIGINT       NULL COMMENT '会话 ID（非会话入口为 NULL）',
     model_id        BIGINT       NULL COMMENT '模型配置 ID',
     model_name      VARCHAR(100) NULL COMMENT '模型名称（冗余，防改名影响统计）',
-    input_tokens    INT          NOT NULL DEFAULT 0 COMMENT '输入 Token',
-    output_tokens   INT          NOT NULL DEFAULT 0 COMMENT '输出 Token',
-    total_tokens    INT          NOT NULL DEFAULT 0 COMMENT '合计 Token',
+    input_tokens    INT          NULL COMMENT '输入 Token（NULL=上游未回报）',
+    output_tokens   INT          NULL COMMENT '输出 Token（NULL=上游未回报）',
+    total_tokens    INT          NULL COMMENT '合计 Token（NULL=上游未回报）',
     latency_ms      BIGINT       NOT NULL DEFAULT 0 COMMENT '响应耗时（ms）',
+    outcome         VARCHAR(20)  NOT NULL DEFAULT 'success' COMMENT '终局结果：success 成功 | failure 失败 | cancelled 已取消',
+    error_message   VARCHAR(500) NULL COMMENT '失败原因摘要（成功与取消为 NULL）',
     create_user     BIGINT       NULL COMMENT '创建人',
     create_time     DATETIME     NULL COMMENT '创建时间',
     update_user     BIGINT       NULL COMMENT '更新人',

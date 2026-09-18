@@ -21,6 +21,7 @@ import cn.ypbin.starter.tools.limiter.RateLimit;
 import cn.ypbin.starter.web.util.WebRequestUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -62,6 +63,7 @@ public class SmsLoginController {
     @Log(value = "手机验证码登录", module = "认证")
     @PostMapping("/sms/login")
     public R<LoginResp> smsLogin(@Valid @RequestBody PhoneLoginReq req) {
-        return R.ok(phoneLoginStrategy.login(req, WebRequestUtils.ip()));
+        return R.ok(phoneLoginStrategy.login(req, WebRequestUtils.ip(),
+            WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 }

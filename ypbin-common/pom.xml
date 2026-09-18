@@ -15,6 +15,15 @@
     <description>微服务版公共基础设施：安全上下文（LoginUser/IdentityContext）、跨域注解、常量</description>
 
     <dependencies>
+        <!-- sa-token 会话统一存 Redis：
+             网关与 auth 早已接入 Redis DAO，但 ypbin-system 等其它服务没有 => 它们在查询 sa-token 会话时
+             读的是**本 JVM 内存 DAO**（空），表现为「在线用户列表恒为空」——会话其实都在 Redis 里。
+             放在 common 让所有服务共用同一套会话存储，避免同类不一致在别处再现。 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-template</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
         <!-- 安全上下文：LoginUser/UserContext/IdentityContext（身份头模式） -->
         <dependency>
             <groupId>cn.ypbin</groupId>
@@ -25,6 +34,33 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-extension-tenant</artifactId>
             <optional>true</optional>
+        </dependency>
+        <!-- 日志"跨服务上报"装配（RemoteLogAutoConfiguration）编译期依赖：
+             auth/ai/system 各自都直接声明了这两个模块，故这里必须 optional——否则 ypbin-common 会把
+             ypbin-system-api → ypbin-starter-data（MyBatis-Plus + 数据源自动配置）与 starter-log
+             强推给每一个 common 消费者，等于绕开"谁需要谁声明"，auth 也会凭空多出一套 MyBatis。 -->
+        <dependency>
+            <groupId>cn.ypbin.admin</groupId>
+            <artifactId>ypbin-system-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-log</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- 埋点"跨服务上报"装配（RemoteTrackAutoConfiguration）编译期依赖：与 starter-log 同理
+             必须 optional——否则每个 common 消费者都会被强推 starter-tracking（含其采集端点自动配置）。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tracking</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- 测试（RemoteLogDao / RemoteTrackEventSink / 自动装配优先级） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

@@ -20,7 +20,6 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,14 +45,14 @@ public class FamilymenuWishlistServiceImpl extends BaseServiceImpl<FamilymenuWis
     @Override
     public List<FamilymenuWishlistResp> getWishList(Long roomId) {
         if (roomId == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         List<FamilymenuWishlist> list = list(new LambdaQueryWrapper<FamilymenuWishlist>()
             .eq(FamilymenuWishlist::getRoomId, roomId)
             .orderByDesc(FamilymenuWishlist::getCreateTime));
 
         if (CollectionUtils.isEmpty(list)) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         // 批量查询成员昵称（防 N+1）

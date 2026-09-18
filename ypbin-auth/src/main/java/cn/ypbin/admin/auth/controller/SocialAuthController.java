@@ -17,9 +17,11 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.social.core.SocialService;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
+import cn.ypbin.starter.web.util.WebRequestUtils;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,7 +67,8 @@ public class SocialAuthController {
     @Log(value = "第三方登录回调", module = "第三方登录")
     @PostMapping("/callback/{source}")
     public R<LoginResp> callback(@PathVariable String source, SocialCallbackReq req) {
-        return R.ok(socialLoginService.login(source, req));
+        return R.ok(socialLoginService.login(source, req, WebRequestUtils.ip(),
+            WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 
     /**

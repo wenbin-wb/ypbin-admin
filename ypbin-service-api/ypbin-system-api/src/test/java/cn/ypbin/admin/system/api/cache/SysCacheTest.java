@@ -18,13 +18,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.core.util.SpringUtils;
+import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -32,7 +35,7 @@ import org.mockito.MockedStatic;
 /**
  * {@link SysCache} 单元测试。
  *
- * <p>验证：用户缓存回填前密码置空（安全）、角色/权限缓存、失效清理。</p>
+ * <p>验证：用户/绑定缓存以「不含密码的只读视图」为载荷、缓存 key 版本、角色/权限缓存与失效清理。</p>
  *
  * @author wenbin
  * @since 2026-09-01
@@ -47,50 +50,65 @@ class SysCacheTest {
         field.set(null, null);
     }
 
-    private SysUser buildUser() {
-        SysUser user = new SysUser();
+    private SysUserDto buildUser() {
+        SysUserDto user = new SysUserDto();
         user.setId(42L);
         user.setUsername("alice");
-        user.setPassword("encoded-secret");
+        user.setRealName("爱丽丝");
+        user.setTenantId(7L);
         return user;
     }
 
     @Test
-    void getUserByUsernameShouldSanitizePasswordBeforeCaching() {
+    void getUserByUsernameShouldCachePasswordlessViewUnderV2Key() {
         ISystemClient client = org.mockito.Mockito.mock(ISystemClient.class);
-        SysUser user = buildUser();
+        SysUserDto user = buildUser();
         when(client.getUserByUsername("alice")).thenReturn(R.ok(user));
 
         try (MockedStatic<SpringUtils> springUtils = mockStatic(SpringUtils.class);
             MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
             springUtils.when(() -> SpringUtils.getBean(ISystemClient.class)).thenReturn(client);
-            // 模拟 getOrLoad：直接调 loader（密码置空发生在 loader 内）
-            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:user:username:alice"), eq(SysUser.class), any(), org.mockito.ArgumentMatchers.isNull()))
-                .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
+            // 留存真正回填进缓存的对象，验证「缓存里存的就是视图」
+            AtomicReference<Object> cachedPayload = new AtomicReference<>();
+            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:user:v2:username:alice"),
+                eq(SysUserDto.class), any(), org.mockito.ArgumentMatchers.isNull()))
+                .thenAnswer(inv -> {
+                    Object loaded = inv.getArgument(2, java.util.function.Supplier.class).get();
+                    cachedPayload.set(loaded);
+                    return loaded;
+                });
 
-            SysUser cached = SysCache.getUserByUsername("alice");
+            SysUserDto dto = SysCache.getUserByUsername("alice");
 
-            // 缓存回填前密码置空（缓存不落敏感字段）
-            assertThat(cached.getPassword()).isNull();
-            assertThat(cached.getUsername()).isEqualTo("alice");
+            // ① 缓存载荷即视图类型（key 已升 v2，旧实体载荷不会被强转读到）
+            assertThat(cachedPayload.get()).isInstanceOf(SysUserDto.class);
+            // ② 视图结构上不含密码：缓存与跨服务传递都不可能落下敏感字段（比「回填前置空」更强）
+            assertThat(Arrays.stream(SysUserDto.class.getDeclaredFields()).map(Field::getName))
+                .doesNotContain("password");
+            // ③ 字段与实体同名（禁改名映射）
+            assertThat(dto.getId()).isEqualTo(42L);
+            assertThat(dto.getUsername()).isEqualTo("alice");
+            assertThat(dto.getRealName()).isEqualTo("爱丽丝");
         }
     }
 
     @Test
-    void getUserByIdShouldSanitizePassword() {
+    void getUserByIdShouldUseV2KeyAndReturnView() {
         ISystemClient client = org.mockito.Mockito.mock(ISystemClient.class);
-        SysUser user = buildUser();
+        SysUserDto user = buildUser();
         when(client.getUserById(42L)).thenReturn(R.ok(user));
 
         try (MockedStatic<SpringUtils> springUtils = mockStatic(SpringUtils.class);
             MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
             springUtils.when(() -> SpringUtils.getBean(ISystemClient.class)).thenReturn(client);
-            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:user:id:42"), eq(SysUser.class), any(), org.mockito.ArgumentMatchers.isNull()))
+            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:user:v2:id:42"),
+                eq(SysUserDto.class), any(), org.mockito.ArgumentMatchers.isNull()))
                 .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
 
-            SysUser cached = SysCache.getUserById(42L);
+            SysUserDto dto = SysCache.getUserById(42L);
 
-            assertThat(cached.getPassword()).isNull();
+            assertThat(dto.getId()).isEqualTo(42L);
+            assertThat(dto.getUsername()).isEqualTo("alice");
         }
     }
 
@@ -119,8 +137,8 @@ class SysCacheTest {
 
             SysCache.evictUser(42L, "alice");
 
-            cacheUtils.verify(() -> CacheUtils.delete("sys:user:id:42"));
-            cacheUtils.verify(() -> CacheUtils.delete("sys:user:username:alice"));
+            cacheUtils.verify(() -> CacheUtils.delete("sys:user:v2:id:42"));
+            cacheUtils.verify(() -> CacheUtils.delete("sys:user:v2:username:alice"));
         }
     }
 
@@ -132,6 +150,33 @@ class SysCacheTest {
             SysCache.evictUserAuth(42L);
 
             cacheUtils.verify(() -> CacheUtils.delete(List.of("sys:role:user:42", "sys:perm:user:42")));
+        }
+    }
+
+    @Test
+    void evictUserAuthBulkShouldDeleteAllKeysInOneCall() {
+        try (MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
+            cacheUtils.when(() -> CacheUtils.delete(any(java.util.Collection.class))).thenReturn(4L);
+
+            // 角色授权变更后受影响用户可能很多：合并键只删一次，避免按用户逐个缓存往返
+            SysCache.evictUserAuth(List.of(7L, 8L));
+
+            cacheUtils.verify(() -> CacheUtils.delete(List.of(
+                "sys:role:user:7", "sys:perm:user:7", "sys:role:user:8", "sys:perm:user:8")));
+        }
+    }
+
+    @Test
+    void evictUserAuthBulkShouldShortCircuitOnEmptyAndSkipNullElements() {
+        try (MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
+            cacheUtils.when(() -> CacheUtils.delete(any(java.util.Collection.class))).thenReturn(2L);
+
+            SysCache.evictUserAuth(List.of());
+            cacheUtils.verifyNoInteractions();
+
+            // 关联行里出现 null userId 时跳过该元素，其余照常清理
+            SysCache.evictUserAuth(Arrays.asList(7L, null));
+            cacheUtils.verify(() -> CacheUtils.delete(List.of("sys:role:user:7", "sys:perm:user:7")));
         }
     }
 
@@ -150,7 +195,8 @@ class SysCacheTest {
 
             // 永久缓存：ttl 传 null（主动失效模式）
             cacheUtils.verify(() -> CacheUtils.getOrLoad(
-                eq("sys:user:username:alice"), eq(SysUser.class), any(), org.mockito.ArgumentMatchers.isNull()));
+                eq("sys:user:v2:username:alice"), eq(SysUserDto.class), any(),
+                org.mockito.ArgumentMatchers.isNull()));
         }
     }
 }

@@ -18,7 +18,15 @@ description: ypbin-admin 后端开发与合规审计标准。开发任何 Contro
 > **微服务版关键差异（写代码前必读）**：
 > 1. **身份上下文**：单体用 `UserContext`/`LoginHelper`（sa-token 会话）；微服务用 `IdentityContext.getUserId().orElse(null)`（身份头，网关签发 `X-User-Id` 等头）。**微服务下游严禁 `LoginHelper.getUserId()`**（无 sa-token 会话会抛异常）。
 > 2. **Feign 目录规范**：api 模块 `ypbin-system-api/.../api/feign/` 放 `ISystemClient`（`@FeignClient` + fallback）+ `ISystemClientFallback`（降级返回失败 `R` 不吞错）；service 模块 `ypbin-system/.../feign/` 放 `SystemClientImpl`（`@RestController implements ISystemClient`）。**新增跨服务数据访问，先扩展 `ISystemClient` + `SystemClientImpl`，禁止在调用方服务加 Mapper 直连**。
-> 3. **auth/ai 不直连共享库**：用户/权限/社交绑定等数据一律 Feign 调 system；auth 不依赖 `ypbin-starter-data`。高基查询经 `SysCache`（api 模块缓存类）。
+> 3. **auth/ai 不直连共享库**：用户/权限/社交绑定等数据一律 Feign 调 system；高基查询经 `SysCache`（api 模块缓存类）。
+>    **`auth` 不依赖 `ypbin-starter-data`（已由构建强制）**：`ypbin-auth/pom.xml` 对 `ypbin-system-api` 显式
+>    `exclusions` 掉了 starter-data，所以**任何在 auth 里引用实体类型（`system.entity.*`）的代码都编译不过**——
+>    请只用 `SysUserDto`/`SysUserSocialDto` 等 api 层视图。跨服务契约**不得暴露持久化实体**（实体继承 `BaseEntity`，
+>    暴露即把 MyBatis 拖给调用方）；实体→视图的投影统一放 **`ypbin-system` 的 `feign/support/UserViewConverter`**。
+>    **它必须留在 service 模块**（要引用实体）：放进 api 模块会让已排除 starter-data 的 auth 拿到一个
+>    「能加载、一解析方法就 `NoClassDefFoundError`」的类；该约束现已由 `SourceConventionTest` 的架构规则强制。
+>    `ai` 不受此排除约束：它有自己独立的 `ai_*` 表与 Mapper，「不直连共享库」指的是**不访问 system 的表**。
+>    **改缓存 key 时**必须同步改 `@CacheEvict`（已由 `SourceConventionTest` 门禁强制），否则失效静默打在旧键上。
 > 4. **`@PlatformAccess` 来自 starter**：`cn.ypbin.starter.security.platform.PlatformAccess`（微服务版），单体版是 `cn.ypbin.admin.modules.system.annotation.PlatformAccess`。平台用户判定实现 starter 的 `PlatformUserChecker` SPI。
 
 作者署名统一 `wenbin`。改动只编译验证不启动服务（见项目 memory `ypbin-admin-workflow`）。

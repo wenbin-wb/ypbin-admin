@@ -12,7 +12,7 @@ package cn.ypbin.admin.miniapp.common.controller;
 import cn.ypbin.admin.miniapp.common.model.req.UserProfileUpdateReq;
 import cn.ypbin.admin.miniapp.common.model.resp.MiniappUserResp;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.security.identity.IdentityContext;
@@ -53,7 +53,7 @@ public class MiniappCommonController {
     @GetMapping("/user/me")
     public R<MiniappUserResp> getMyProfile() {
         Long userId = currentUserId();
-        R<SysUser> userRes = systemClient.getUserById(userId);
+        R<SysUserDto> userRes = systemClient.getUserById(userId);
         if (userRes == null || !userRes.isSuccess() || userRes.getData() == null) {
             throw new BusinessException("获取当前用户信息失败");
         }
@@ -66,7 +66,8 @@ public class MiniappCommonController {
     @PostMapping("/user/me")
     public R<MiniappUserResp> updateMyProfile(@RequestBody UserProfileUpdateReq req) {
         Long userId = currentUserId();
-        R<SysUser> updateRes = systemClient.updateMiniappUser(userId, req.getNickname(), req.getAvatarUrl(), req.getPhone());
+        R<SysUserDto> updateRes =
+            systemClient.updateMiniappUser(userId, req.getNickname(), req.getAvatarUrl(), req.getPhone());
         if (updateRes == null || !updateRes.isSuccess() || updateRes.getData() == null) {
             throw new BusinessException("更新用户信息失败");
         }
@@ -117,7 +118,7 @@ public class MiniappCommonController {
             .orElseThrow(() -> new BusinessException("当前用户未登录"));
     }
 
-    private MiniappUserResp toUserResp(SysUser user) {
+    private MiniappUserResp toUserResp(SysUserDto user) {
         MiniappUserResp resp = new MiniappUserResp();
         resp.setId(user.getId());
         String username = user.getUsername() != null ? user.getUsername() : "";

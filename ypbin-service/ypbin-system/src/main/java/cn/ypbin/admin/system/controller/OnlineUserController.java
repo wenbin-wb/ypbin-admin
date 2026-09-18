@@ -10,20 +10,21 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.security.online.OnlineUserService;
 import cn.ypbin.starter.security.platform.PlatformAccess;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
-import java.util.List;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -41,10 +42,19 @@ public class OnlineUserController {
     private final OnlineUserService onlineUserService;
     private final SysUserService userService;
 
+    /**
+     * 在线用户分页列表。
+     *
+     * <p>数据来自会话存储（非数据库），分页在服务内完成后切片，属内存分页：按页码取片只减少响应体
+     * 大小，每次请求仍会枚举全部在线会话。</p>
+     *
+     * @param query 分页与关键字条件
+     * @return 在线用户分页结果
+     */
     @GetMapping("/list")
     @SaCheckPermission("system:online-user:list")
-    public R<List<OnlineUserResp>> list(@RequestParam(required = false) String keyword) {
-        return R.ok(userService.listOnlineUsers(keyword));
+    public R<PageResult<OnlineUserResp>> list(@Valid OnlineUserQuery query) {
+        return R.ok(userService.pageOnlineUsers(query));
     }
 
     @Idempotent

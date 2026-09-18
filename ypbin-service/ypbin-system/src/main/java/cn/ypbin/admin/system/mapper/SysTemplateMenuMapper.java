@@ -11,8 +11,10 @@ package cn.ypbin.admin.system.mapper;
 
 import cn.ypbin.admin.system.entity.SysTemplateMenu;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import java.util.Collection;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Select;
 
 /**
@@ -31,4 +33,20 @@ public interface SysTemplateMenuMapper extends BaseMapper<SysTemplateMenu> {
      */
     @Select("SELECT menu_id FROM sys_template_menu WHERE template_id = #{templateId}")
     List<Long> selectMenuIdsByTemplateId(@Param("templateId") Long templateId);
+
+    /**
+     * 批量插入权限模板-菜单关联行（单条多值 INSERT）。
+     *
+     * <p>复合主键表没有代理主键、也没有审计列，故不涉及主键回填；权限模板-菜单关联的规模由一次请求的入参决定，
+     * 逐条 insert 会产生同等数量的单行往返（N+1 写）。</p>
+     *
+     * @param rows 待插入行（调用方保证非空）
+     * @return 影响行数
+     */
+    @Insert("<script>"
+        + "INSERT INTO sys_template_menu (template_id, menu_id) VALUES "
+        + "<foreach collection='rows' item='r' separator=','>(#{r.templateId}, #{r.menuId})</foreach>"
+        + "</script>")
+    int insertBatch(@Param("rows") Collection<SysTemplateMenu> rows);
+
 }
