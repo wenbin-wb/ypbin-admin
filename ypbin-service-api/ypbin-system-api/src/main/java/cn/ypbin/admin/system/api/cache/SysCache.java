@@ -30,8 +30,9 @@ import org.jspecify.annotations.Nullable;
  * 数据变更时由 system 服务写操作显式调用 {@link #evictUser}/{@link #evictUserAuth} 清缓存，
  * 读侧下次访问自然回源——只要数据未变更，永远命中缓存。</p>
  *
- * <p>安全约束：用户缓存**不存密码**（回填前 {@code password} 置空），密码校验走
- * {@code ISystemClient.verifyPassword} 直查库比对，改密即时生效、缓存无敏感字段。</p>
+ * <p>安全约束：用户缓存**不存密码**——缓存的载荷是不含 {@code password} 字段的只读视图
+ * （{@code SysUserDto}），故「不落敏感字段」由类型结构保证，而非靠回填前手工置空；
+ * 密码校验走 {@code ISystemClient.verifyPassword} 直查库比对，改密即时生效。</p>
  *
  * @author wenbin
  * @since 2026-09-01
@@ -75,7 +76,7 @@ public final class SysCache {
     }
 
     /**
-     * 按用户名取用户（登录用），永久缓存。回填时密码置空，缓存不落敏感字段。
+     * 按用户名取用户（登录用），永久缓存。缓存载荷为不含密码的只读视图。
      */
     public static @Nullable SysUserDto getUserByUsername(String username) {
         return CacheUtils.getOrLoad(
@@ -87,7 +88,7 @@ public final class SysCache {
     }
 
     /**
-     * 按 ID 取用户，永久缓存。回填时密码置空。
+     * 按 ID 取用户，永久缓存。缓存载荷为不含密码的只读视图。
      */
     public static @Nullable SysUserDto getUserById(Long userId) {
         return CacheUtils.getOrLoad(
@@ -175,7 +176,7 @@ public final class SysCache {
     }
 
     /**
-     * 按手机号取用户（短信登录用），永久缓存。回填时密码置空。
+     * 按手机号取用户（短信登录用），永久缓存。缓存载荷为不含密码的只读视图。
      */
     public static @Nullable SysUserDto getUserByPhone(String phone) {
         return CacheUtils.getOrLoad(

@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.system.feign;
 
-import cn.ypbin.admin.system.api.convert.UserViewConverter;
+import cn.ypbin.admin.system.feign.support.UserViewConverter;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;

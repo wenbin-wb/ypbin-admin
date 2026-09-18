@@ -35,7 +35,7 @@ import org.mockito.MockedStatic;
 /**
  * {@link SysCache} 单元测试。
  *
- * <p>验证：用户缓存回填前密码置空（安全）、角色/权限缓存、失效清理。</p>
+ * <p>验证：用户/绑定缓存以「不含密码的只读视图」为载荷、缓存 key 版本、角色/权限缓存与失效清理。</p>
  *
  * @author wenbin
  * @since 2026-09-01

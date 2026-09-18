@@ -405,6 +405,10 @@ class SourceConventionTest {
     /**
      * 校验：{@code @CacheEvict} 里出现的 key 字面量必须都能在 {@code SysCache} 的 key 常量里找到。
      *
+     * <p><b>覆盖边界</b>：只检查 {@code @CacheEvict(keys = {...})} 里的 SpEL <b>字面量</b>；
+     * 若改用常量引用（{@code keys = KEY_CONSTANT}）或改走 {@code SysCache.evictXxx()}，本规则看不到——
+     * 新增这类写法时需一并扩展规则，别把它当成万能兜底。</p>
+     *
      * <p><b>为什么需要这条规则</b>：缓存 key 一旦改版（例如载荷由实体收窄为视图后升 v2），
      * 若失效注解仍指向旧 key，则「失效」打在不再被读取的键上——读侧继续命中旧快照且<b>完全静默</b>
      * （典型后果：改状态/改角色后登录仍用旧快照）。本规则把它变成构建失败。</p>

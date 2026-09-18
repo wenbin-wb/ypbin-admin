@@ -7,7 +7,7 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.system.api.convert;
+package cn.ypbin.admin.system.feign.support;
 
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
@@ -26,7 +26,12 @@ import org.jspecify.annotations.Nullable;
  * 连 Mockito 为 {@code ISystemClient} 生成 mock 都会因签名里的实体无法加载而失败。</p>
  *
  * <p><b>字段口径</b>：视图字段与实体<b>逐一同名同类型</b>，不做任何改名映射；
- * 转换只做「投影」，不改变任何语义。转换逻辑集中在本类，避免在网关侧与缓存侧各写一份而漂移。</p>
+ * 转换只做「投影」，不改变任何语义。转换逻辑集中在本类，避免多点各写一份而漂移。</p>
+ *
+ * <p><b>为什么本类放在 service 模块而不是 api 模块</b>：它必须引用实体类型，而实体继承
+ * {@code BaseEntity}（`starter-data`）。若把它放进 `ypbin-system-api`，则已排除 `starter-data` 的
+ * auth 会在 classpath 上拿到一个「能加载、一旦解析方法就 `NoClassDefFoundError`」的类——
+ * 那是潜伏的踩雷点。投影只在 system 侧（`SystemClientImpl`）使用，故与它同模块就近放置。</p>
  *
  * @author wenbin
  * @since 2026-09-18
