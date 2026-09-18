@@ -33,6 +33,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -48,6 +50,8 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMapper, FamilymenuRoom>
     implements FamilymenuRoomService {
+
+    private static final Logger log = LoggerFactory.getLogger(FamilymenuRoomServiceImpl.class);
 
     private final FamilymenuMemberMapper memberMapper;
     private final FamilymenuDishMapper dishMapper;
@@ -262,7 +266,10 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
                 if (StringUtils.hasText(n)) return n;
                 if (StringUtils.hasText(r.getData().getRealName())) return r.getData().getRealName();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            // 展示名解析失败（system 不可达等）仍回退占位名，但必须留痕：静默吞掉会让
+            // 「所有人都显示成占位名」这类故障没有任何线索
+            log.warn("家庭成员显示名解析失败，回退占位名；userId={}", userId, e);
         }
         return "家庭成员" + (userId % 1000);
     }
