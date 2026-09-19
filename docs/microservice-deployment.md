@@ -59,6 +59,11 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
 
 **分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
 
+> ⚠️ **`system` 与 `auth` 必须同批发布**：两者之间存在内部 Feign 契约（`/internal/user-*`）。
+> 本脚本是 docker-compose 全量重建，**不存在滚动发布**，因此当前不会撞上版本错配；
+> 但若将来改用 k8s 滚动更新/分批升级，旧 `auth` 调新 `system`（或反之）会 **404** 并导致登录失败。
+> 届时必须保留旧路径双映射或明确升级次序。
+
 **网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
 
 **初始口令**：业务超管在种子 `deploy/sql/002-data.sql`（bcrypt，首登立即改密）；MySQL/Redis/Nacos/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos/XXL-JOB 控制台默认 `nacos/nacos`、`admin/123456`。

@@ -216,16 +216,19 @@ public interface ISystemClient {
      * 基础契约不写死任何端侧语义。返回只读视图 {@link SysUserDto}
      * （与其余用户查询一致，不暴露持久化实体）。</p>
      *
-     * <p><b>创建时的展示名</b>：{@code defaultRealName} 只在<b>新建用户</b>且未传昵称时使用
-     * （传空则回退为 {@code username}）；<b>已存在用户不会被它改名</b>（只有显式传了非空昵称才更新）。
-     * 这样「空昵称时新建用户叫什么」由端侧决定，而不是硬编码在共享端点里。</p>
+     * <p><b>{@code userType} 与 {@code defaultRealName} 都是必填</b>（仅在<b>新建用户</b>时使用）：
+     * 端侧标识与「空昵称时的展示名」必须由调用方显式给出——不接受静默默认值
+     * （静默默认会让「调用方漏传」变成看不见的落库语义变化）。</p>
+     *
+     * <p><b>已存在用户不会被 {@code defaultRealName} 改名</b>（只有显式传了非空昵称才更新）；
+     * 此时这两个参数只做校验、不参与写入。</p>
      */
     @PostMapping("/user-get-or-create")
     R<SysUserDto> getOrCreateUserByUsername(@RequestParam("username") String username,
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
-        @RequestParam(value = "userType", required = false) String userType,
-        @RequestParam(value = "defaultRealName", required = false) String defaultRealName);
+        @RequestParam("userType") String userType,
+        @RequestParam("defaultRealName") String defaultRealName);
 
     /**
      * 更新用户资料（昵称、头像、手机号）。
