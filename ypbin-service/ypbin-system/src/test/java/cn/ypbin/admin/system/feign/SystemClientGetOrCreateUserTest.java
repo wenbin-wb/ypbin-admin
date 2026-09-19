@@ -44,8 +44,8 @@ import org.springframework.beans.factory.ObjectProvider;
  * 是靠独立复核读代码才发现的。三条不变量必须被钉住：</p>
  * <ol>
  *   <li>新建 + 无昵称 → 用调用方给的<b>端侧默认展示名</b>（端侧语义留在端侧）；</li>
- *   <li>新建 + 无昵称 + 未给默认名 → 回退 {@code username}；</li>
- *   <li><b>已存在用户不会被默认展示名改名</b>（只有显式传了非空昵称才更新）。</li>
+ *   <li>新建 + 端侧标识/展示名缺失或空白 → <b>显式报错且不落库</b>（不接受静默默认）；</li>
+ *   <li><b>已存在用户不会被默认展示名改名</b>（这两个参数此时不参与写入，也不做业务校验）。</li>
  * </ol>
  *
  * @author wenbin
@@ -128,7 +128,10 @@ class SystemClientGetOrCreateUserTest {
             systemClient.getOrCreateUserByUsername("wx_openid_3", null, null, "  ", "微信用户"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("userType");
-        assertThat(createdUser).as("校验失败时不得落库").isNull();
+        // 用 verify 而不是 assertThat(createdUser).isNull()：后者在本用例里恒真
+        // （createdUser 只由 save 的 Answer 赋值，而本用例故意没装那个桩）——
+        // 独立复核实证：把校验挪到 save 之后，「恒真断言」版仍 7/7 绿。
+        verify(userService, never()).save(any(SysUser.class));
     }
 
     @Test
@@ -140,7 +143,7 @@ class SystemClientGetOrCreateUserTest {
             systemClient.getOrCreateUserByUsername("wx_openid_4", null, null, "MINIAPP", null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("defaultRealName");
-        assertThat(createdUser).as("校验失败时不得落库").isNull();
+        verify(userService, never()).save(any(SysUser.class));
     }
 
     @Test
