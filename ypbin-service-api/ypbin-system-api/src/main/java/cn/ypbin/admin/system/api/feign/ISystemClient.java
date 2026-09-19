@@ -221,7 +221,7 @@ public interface ISystemClient {
      * （静默默认会让「调用方漏传」变成看不见的落库语义变化）。</p>
      *
      * <p><b>已存在用户不会被 {@code defaultRealName} 改名</b>（只有显式传了非空昵称才更新）；
-     * 此时这两个参数只做校验、不参与写入。</p>
+     * 这两个参数此时<b>不参与写入，也不做业务校验</b>（HTTP 层仍要求参数存在）。</p>
      */
     @PostMapping("/user-get-or-create")
     R<SysUserDto> getOrCreateUserByUsername(@RequestParam("username") String username,
