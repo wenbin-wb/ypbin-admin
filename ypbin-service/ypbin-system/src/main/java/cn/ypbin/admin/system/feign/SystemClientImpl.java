@@ -346,19 +346,21 @@ public class SystemClientImpl implements ISystemClient {
     }
 
     @Override
-    @PostMapping("/user-get-or-create-miniapp")
-    public R<SysUserDto> getOrCreateMiniappUser(@RequestParam("username") String username,
+    @PostMapping("/user-get-or-create")
+    public R<SysUserDto> getOrCreateUserByUsername(@RequestParam("username") String username,
         @RequestParam(value = "nickname", required = false) String nickname,
-        @RequestParam(value = "avatar", required = false) String avatar) {
+        @RequestParam(value = "avatar", required = false) String avatar,
+        @RequestParam(value = "userType", required = false) String userType) {
         SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
             .eq(SysUser::getUsername, username));
         if (user == null) {
             user = new SysUser();
             user.setUsername(username);
-            user.setRealName(StringUtils.hasText(nickname) ? nickname : "微信用户");
+            // 通用实现：不写死端侧语义（realName 兜底用 username，userType 由调用方传入）
+            user.setRealName(StringUtils.hasText(nickname) ? nickname : username);
             user.setNickname(nickname);
             user.setAvatar(avatar);
-            user.setUserType("MINIAPP");
+            user.setUserType(userType);
             user.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
             user.setStatus(1);
             userService.save(user);
@@ -381,8 +383,8 @@ public class SystemClientImpl implements ISystemClient {
     }
 
     @Override
-    @PostMapping("/user-update-miniapp")
-    public R<SysUserDto> updateMiniappUser(@RequestParam("userId") Long userId,
+    @PostMapping("/user-update-profile")
+    public R<SysUserDto> updateUserProfile(@RequestParam("userId") Long userId,
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone) {

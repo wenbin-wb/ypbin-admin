@@ -45,6 +45,9 @@ public class MiniappLoginService {
     private static final Logger log = LoggerFactory.getLogger(MiniappLoginService.class);
     private static final String WX_AUTH_URL = "https://api.weixin.qq.com/sns/jscode2session?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code";
 
+    /** 端侧标识：小程序（基础契约不写死，由本端侧传入）。 */
+    private static final String USER_TYPE_MINIAPP = "MINIAPP";
+
     private final ISystemClient systemClient;
     private final LoginSupport loginSupport;
     private final ObjectMapper objectMapper;
@@ -66,13 +69,14 @@ public class MiniappLoginService {
 
         String username = "wx_" + openid;
         R<SysUserDto> userRes =
-            systemClient.getOrCreateMiniappUser(username, req.getNickname(), req.getAvatarUrl());
+            systemClient.getOrCreateUserByUsername(username, req.getNickname(), req.getAvatarUrl(),
+                USER_TYPE_MINIAPP);
         if (userRes == null || !userRes.isSuccess() || userRes.getData() == null) {
             throw new BusinessException("创建或获取小程序用户失败: " + (userRes != null ? userRes.getMessage() : "远程服务无响应"));
         }
 
         SysUserDto user = userRes.getData();
-        return loginSupport.completeLogin(user, "MINIAPP", clientIp, userAgent);
+        return loginSupport.completeLogin(user, USER_TYPE_MINIAPP, clientIp, userAgent);
     }
 
     /**
