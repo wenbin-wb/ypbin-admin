@@ -208,4 +208,26 @@ public interface ISystemClient {
      */
     @PostMapping("/track-ingest")
     R<Void> ingestTrackEvents(@RequestBody List<TrackEvent> events);
+
+    /**
+     * 按用户名查询用户，不存在则创建（各端侧登录通用，不绑定具体端侧）。
+     *
+     * <p>端侧标识由调用方通过 {@code userType} 传入（如小程序传 {@code MINIAPP}），
+     * 基础契约不写死任何端侧语义。返回只读视图 {@link SysUserDto}
+     * （与其余用户查询一致，不暴露持久化实体）。</p>
+     */
+    @PostMapping("/user-get-or-create")
+    R<SysUserDto> getOrCreateUserByUsername(@RequestParam("username") String username,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar,
+        @RequestParam(value = "userType", required = false) String userType);
+
+    /**
+     * 更新用户资料（昵称、头像、手机号）。
+     */
+    @PostMapping("/user-update-profile")
+    R<SysUserDto> updateUserProfile(@RequestParam("userId") Long userId,
+        @RequestParam(value = "nickname", required = false) String nickname,
+        @RequestParam(value = "avatar", required = false) String avatar,
+        @RequestParam(value = "phone", required = false) String phone);
 }

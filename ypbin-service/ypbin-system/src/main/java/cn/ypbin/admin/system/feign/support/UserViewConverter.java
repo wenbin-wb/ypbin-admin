@@ -55,6 +55,9 @@ public final class UserViewConverter {
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
         dto.setRealName(user.getRealName());
+        dto.setNickname(user.getNickname());
+        dto.setAvatar(user.getAvatar());
+        dto.setPhone(user.getPhone());
         dto.setTenantId(user.getTenantId());
         dto.setDeptId(user.getDeptId());
         dto.setStatus(user.getStatus());

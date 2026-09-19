@@ -42,6 +42,15 @@ public class SysUserDto implements Serializable {
     /** 真实姓名/显示名 */
     private String realName;
 
+    /** 昵称（小程序等端侧展示名） */
+    private String nickname;
+
+    /** 头像地址 */
+    private String avatar;
+
+    /** 手机号 */
+    private String phone;
+
     /** 租户 ID */
     private Long tenantId;
 

@@ -166,4 +166,15 @@ public class ISystemClientFallback implements ISystemClient {
     public R<Void> ingestTrackEvents(List<TrackEvent> events) {
         return unavailable();
     }
+
+    @Override
+    public R<SysUserDto> getOrCreateUserByUsername(String username, String nickname, String avatar,
+        String userType) {
+        return unavailable();
+    }
+
+    @Override
+    public R<SysUserDto> updateUserProfile(Long userId, String nickname, String avatar, String phone) {
+        return unavailable();
+    }
 }
