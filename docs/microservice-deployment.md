@@ -52,9 +52,17 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
   bash deploy/install.sh
 ```
 
-自定义参数（环境变量）：`YPBIN_ROOT`（部署根目录，默认 /opt/ypbin/main）、`BRANCH`（默认 main）、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
+自定义参数：
+- 命令行参数：`-b, --branch <分支名>`（指定代码分支）、`--root <目录>`（指定部署目录）、`-y, --yes`（免确认自动运行）；
+- 目录自动隔离：未指定 `--root` 时按分支名隔离目录（`feature/<name>` → `/opt/ypbin/feature-<name>`，主分支 → `/opt/ypbin/main`），多分支可共存、互不污染；
+- 环境变量覆盖：`YPBIN_ROOT`、`BRANCH`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
 
 **分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
+
+> ⚠️ **`system` 与 `auth` 必须同批发布**：两者之间存在内部 Feign 契约（`/internal/user-*`）。
+> 本脚本是 docker-compose 全量重建，**不存在滚动发布**，因此当前不会撞上版本错配；
+> 但若将来改用 k8s 滚动更新/分批升级，旧 `auth` 调新 `system`（或反之）会 **404** 并导致登录失败。
+> 届时必须保留旧路径双映射或明确升级次序。
 
 **网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
 
