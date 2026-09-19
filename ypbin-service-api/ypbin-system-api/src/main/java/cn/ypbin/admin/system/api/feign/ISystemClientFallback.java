@@ -169,7 +169,7 @@ public class ISystemClientFallback implements ISystemClient {
 
     @Override
     public R<SysUserDto> getOrCreateUserByUsername(String username, String nickname, String avatar,
-        String userType) {
+        String userType, String defaultRealName) {
         return unavailable();
     }
 

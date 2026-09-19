@@ -48,6 +48,9 @@ public class MiniappLoginService {
     /** 端侧标识：小程序（基础契约不写死，由本端侧传入）。 */
     private static final String USER_TYPE_MINIAPP = "MINIAPP";
 
+    /** 小程序用户首次登录且未带昵称时的默认展示名（端侧语义留在端侧）。 */
+    private static final String DEFAULT_NICKNAME_MINIAPP = "微信用户";
+
     private final ISystemClient systemClient;
     private final LoginSupport loginSupport;
     private final ObjectMapper objectMapper;
@@ -70,7 +73,7 @@ public class MiniappLoginService {
         String username = "wx_" + openid;
         R<SysUserDto> userRes =
             systemClient.getOrCreateUserByUsername(username, req.getNickname(), req.getAvatarUrl(),
-                USER_TYPE_MINIAPP);
+                USER_TYPE_MINIAPP, DEFAULT_NICKNAME_MINIAPP);
         if (userRes == null || !userRes.isSuccess() || userRes.getData() == null) {
             throw new BusinessException("创建或获取小程序用户失败: " + (userRes != null ? userRes.getMessage() : "远程服务无响应"));
         }
