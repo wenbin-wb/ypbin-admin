@@ -487,7 +487,8 @@ class SourceConventionTest {
             if (open < 0 || closeExclusive <= 0) {
                 continue;
             }
-            if (strippedSource.substring(open + 1, closeExclusive - 1).isBlank()) {
+            // 只有分号（`{ ; }`）同样是「什么都没做」——不能靠一个空语句绕过本规则
+            if (strippedSource.substring(open + 1, closeExclusive - 1).replace(";", "").isBlank()) {
                 lines.add(lineNumber(strippedSource, matcher.start()));
             }
         }
@@ -822,6 +823,9 @@ class SourceConventionTest {
         // 命中：只写了注释的 catch（剥离后为空——注释不算处理）
         assertThat(emptyCatchLines(stripCommentsAndLiterals(
             "try { a(); } catch (Exception e) {\n    // 忽略\n}"))).hasSize(1);
+        // 命中：只有分号的「伪处理」（`{ ; }`）——空语句不算处理
+        assertThat(emptyCatchLines(stripCommentsAndLiterals(
+            "try { a(); } catch (Exception e) { ; }"))).hasSize(1);
         // 放过：记了日志 / 显式抛出 / 有赋值
         assertThat(emptyCatchLines(stripCommentsAndLiterals(
             "try { a(); } catch (Exception e) { log.warn(\"x\", e); }"))).isEmpty();
