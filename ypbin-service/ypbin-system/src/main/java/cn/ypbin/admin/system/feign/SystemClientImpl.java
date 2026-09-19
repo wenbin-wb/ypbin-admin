@@ -350,18 +350,24 @@ public class SystemClientImpl implements ISystemClient {
     public R<SysUserDto> getOrCreateUserByUsername(@RequestParam("username") String username,
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
-        @RequestParam(value = "userType", required = false) String userType,
-        @RequestParam(value = "defaultRealName", required = false) String defaultRealName) {
+        @RequestParam("userType") String userType,
+        @RequestParam("defaultRealName") String defaultRealName) {
         SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
             .eq(SysUser::getUsername, username));
         if (user == null) {
+            // 端侧标识与展示名必须由调用方显式给出：**不做静默默认**。
+            // 理由（2026-09-18 复核教训）：默认值会静默决定落库语义，调用方漏传时表现为
+            // 「展示名变成了内部账号名」这类对外可见的回归，而构建与用例都不会发现。
+            if (!StringUtils.hasText(userType)) {
+                throw new BusinessException("userType 不能为空：新建用户的端侧标识必须由调用方显式给出");
+            }
+            if (!StringUtils.hasText(defaultRealName)) {
+                throw new BusinessException(
+                    "defaultRealName 不能为空：新建用户在未传昵称时的展示名必须由调用方显式给出");
+            }
             user = new SysUser();
             user.setUsername(username);
-            // 通用实现：不写死端侧语义。展示名优先级：昵称 > 调用方给的端侧默认名 > username。
-            // 注意：**只在新建时**用它；已存在用户不会被默认名改名（见下方 else 分支只处理非空昵称）。
-            String realName = StringUtils.hasText(nickname) ? nickname
-                : (StringUtils.hasText(defaultRealName) ? defaultRealName : username);
-            user.setRealName(realName);
+            user.setRealName(StringUtils.hasText(nickname) ? nickname : defaultRealName);
             user.setNickname(nickname);
             user.setAvatar(avatar);
             user.setUserType(userType);

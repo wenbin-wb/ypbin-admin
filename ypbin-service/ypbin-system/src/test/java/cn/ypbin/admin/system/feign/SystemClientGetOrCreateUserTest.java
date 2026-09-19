@@ -10,12 +10,14 @@
 package cn.ypbin.admin.system.feign;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.service.SysMenuService;
@@ -117,13 +119,45 @@ class SystemClientGetOrCreateUserTest {
     }
 
     @Test
-    @DisplayName("新建、无昵称且调用方未给默认名 → 回退 username（通用端点的兜底）")
-    void createWithoutNicknameAndDefaultShouldFallbackToUsername() {
-        givenNoExistingUser();
+    @DisplayName("新建但未给端侧标识 → 显式报错，不得静默落到持久层默认值")
+    void createWithoutUserTypeMustFailLoudly() {
+        // 只桩 getOne：校验在落库之前失败，桩 save 会触发 Mockito 的无用桩告警
+        when(userService.getOne(any())).thenReturn(null);
 
-        systemClient.getOrCreateUserByUsername("wx_openid_3", null, null, "TENANT", null);
+        assertThatThrownBy(() ->
+            systemClient.getOrCreateUserByUsername("wx_openid_3", null, null, "  ", "微信用户"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("userType");
+        assertThat(createdUser).as("校验失败时不得落库").isNull();
+    }
 
-        assertThat(createdUser.getRealName()).isEqualTo("wx_openid_3");
+    @Test
+    @DisplayName("新建但未给展示名 → 显式报错，不得静默把内部账号名当展示名")
+    void createWithoutDefaultRealNameMustFailLoudly() {
+        when(userService.getOne(any())).thenReturn(null);
+
+        assertThatThrownBy(() ->
+            systemClient.getOrCreateUserByUsername("wx_openid_4", null, null, "MINIAPP", null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("defaultRealName");
+        assertThat(createdUser).as("校验失败时不得落库").isNull();
+    }
+
+    @Test
+    @DisplayName("已存在用户时这两个参数不参与写入：即使为空也不报错、不改名")
+    void existingUserDoesNotNeedThoseParameters() {
+        SysUser existing = new SysUser();
+        existing.setId(11L);
+        existing.setUsername("wx_openid_6");
+        existing.setNickname("李四");
+        existing.setRealName("李四");
+        when(userService.getOne(any())).thenReturn(existing);
+
+        systemClient.getOrCreateUserByUsername("wx_openid_6", null, null, null, null);
+
+        assertThat(existing.getRealName()).isEqualTo("李四");
+        verify(userService, never()).updateById(any(SysUser.class));
+        verify(userService, never()).save(any(SysUser.class));
     }
 
     @Test
@@ -131,13 +165,13 @@ class SystemClientGetOrCreateUserTest {
     void existingUserMustNotBeRenamedByDefaultRealName() {
         SysUser existing = new SysUser();
         existing.setId(9L);
-        existing.setUsername("wx_openid_4");
+        existing.setUsername("wx_openid_7");
         existing.setNickname("张三");
         existing.setRealName("张三");
         when(userService.getOne(any())).thenReturn(existing);
 
         SysUserDto dto = systemClient
-            .getOrCreateUserByUsername("wx_openid_4", null, null, "MINIAPP", "微信用户")
+            .getOrCreateUserByUsername("wx_openid_7", null, null, "MINIAPP", "微信用户")
             .getData();
 
         assertThat(existing.getRealName()).isEqualTo("张三");
@@ -152,7 +186,7 @@ class SystemClientGetOrCreateUserTest {
     void existingUserShouldBeRenamedWhenNicknameProvided() {
         SysUser existing = new SysUser();
         existing.setId(10L);
-        existing.setUsername("wx_openid_5");
+        existing.setUsername("wx_openid_8");
         existing.setNickname("旧名");
         existing.setRealName("旧名");
         when(userService.getOne(any())).thenReturn(existing);
