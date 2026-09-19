@@ -350,14 +350,18 @@ public class SystemClientImpl implements ISystemClient {
     public R<SysUserDto> getOrCreateUserByUsername(@RequestParam("username") String username,
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
-        @RequestParam(value = "userType", required = false) String userType) {
+        @RequestParam(value = "userType", required = false) String userType,
+        @RequestParam(value = "defaultRealName", required = false) String defaultRealName) {
         SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
             .eq(SysUser::getUsername, username));
         if (user == null) {
             user = new SysUser();
             user.setUsername(username);
-            // 通用实现：不写死端侧语义（realName 兜底用 username，userType 由调用方传入）
-            user.setRealName(StringUtils.hasText(nickname) ? nickname : username);
+            // 通用实现：不写死端侧语义。展示名优先级：昵称 > 调用方给的端侧默认名 > username。
+            // 注意：**只在新建时**用它；已存在用户不会被默认名改名（见下方 else 分支只处理非空昵称）。
+            String realName = StringUtils.hasText(nickname) ? nickname
+                : (StringUtils.hasText(defaultRealName) ? defaultRealName : username);
+            user.setRealName(realName);
             user.setNickname(nickname);
             user.setAvatar(avatar);
             user.setUserType(userType);
