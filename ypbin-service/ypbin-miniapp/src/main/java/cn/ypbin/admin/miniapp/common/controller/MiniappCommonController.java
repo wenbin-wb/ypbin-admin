@@ -67,7 +67,7 @@ public class MiniappCommonController {
     public R<MiniappUserResp> updateMyProfile(@RequestBody UserProfileUpdateReq req) {
         Long userId = currentUserId();
         R<SysUserDto> updateRes =
-            systemClient.updateMiniappUser(userId, req.getNickname(), req.getAvatarUrl(), req.getPhone());
+            systemClient.updateUserProfile(userId, req.getNickname(), req.getAvatarUrl(), req.getPhone());
         if (updateRes == null || !updateRes.isSuccess() || updateRes.getData() == null) {
             throw new BusinessException("更新用户信息失败");
         }
