@@ -19,7 +19,7 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <!-- 与 ypbin-starter-architecture-tests 同版本（starter 侧由 ypbin-starter-dependencies 管理，
              本仓不复用 starter 的 dependencies pom，故在此显式钉住，避免两仓规则库行为分叉） -->
-        <archunit.version>1.5.0</archunit.version>
+        <archunit.version>1.5.1</archunit.version>
     </properties>
 
     <dependencies>
