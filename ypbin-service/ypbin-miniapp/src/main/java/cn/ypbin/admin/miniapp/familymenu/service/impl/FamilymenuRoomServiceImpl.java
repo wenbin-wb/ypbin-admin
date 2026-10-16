@@ -22,6 +22,7 @@ import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMyRoomResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuRoomDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuRoomService;
 import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
+import cn.ypbin.admin.miniapp.common.ws.WsTicketService;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -74,6 +75,7 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
     private final FamilymenuDishMapper dishMapper;
     private final ISystemClient systemClient;
     private final FamilymenuRoomAccessSupport accessSupport;
+    private final WsTicketService wsTicketService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -265,6 +267,13 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
         resp.setRoom(buildRoomDetail(room));
         resp.setMember(toMemberResp(member));
         return resp;
+    }
+
+    @Override
+    public String createWsTicket(Long roomId) {
+        // 换票同样是餐厅级访问：非成员不得订阅他人餐厅的实时变更
+        FamilymenuMember member = accessSupport.requireMember(roomId);
+        return wsTicketService.issue(member.getUserId(), roomId);
     }
 
     /**

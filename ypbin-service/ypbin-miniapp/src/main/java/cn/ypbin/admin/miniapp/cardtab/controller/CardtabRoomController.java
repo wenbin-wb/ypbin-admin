@@ -112,4 +112,16 @@ public class CardtabRoomController {
         @RequestParam(defaultValue = "10") int size) {
         return R.ok(roomService.getHistoryRooms(current, size));
     }
+
+    /**
+     * 换取房间实时通道的一次性连接凭证。
+     *
+     * <p>端侧 {@code uni.connectSocket} 无法自定义请求头（带不了 Bearer），且下游服务不能自验
+     * token，故先用本 HTTP 接口（走正常鉴权）换取 60 秒时效的一次性 ticket，再用
+     * {@code /cardtab/ws/room/{roomId}?ticket=xxx} 建连。ticket 与「用户 + 房间」绑定且用过即废。</p>
+     */
+    @PostMapping("/{roomId}/ws-ticket")
+    public R<Map<String, String>> createWsTicket(@PathVariable Long roomId) {
+        return R.ok(Map.of("ticket", roomService.createWsTicket(roomId)));
+    }
 }

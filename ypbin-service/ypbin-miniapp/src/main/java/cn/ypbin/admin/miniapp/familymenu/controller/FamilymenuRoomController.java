@@ -117,4 +117,15 @@ public class FamilymenuRoomController {
         @RequestParam(value = "roomId", required = false) Long roomId) {
         return R.ok(roomService.getMyRoom(roomId));
     }
+
+    /**
+     * 换取餐厅实时通道的一次性连接凭证。
+     *
+     * <p>与牌账清同源：端侧 WS 无法带 Bearer，故先经本 HTTP 接口（走正常鉴权）换取 60 秒时效的
+     * 一次性 ticket，再用 {@code /familymenu/ws/room/{roomId}?ticket=xxx} 建连。</p>
+     */
+    @PostMapping("/room/ws-ticket")
+    public R<Map<String, String>> createWsTicket(@RequestParam("roomId") Long roomId) {
+        return R.ok(Map.of("ticket", roomService.createWsTicket(roomId)));
+    }
 }

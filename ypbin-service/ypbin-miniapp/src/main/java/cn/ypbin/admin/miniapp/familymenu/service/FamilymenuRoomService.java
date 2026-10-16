@@ -69,5 +69,10 @@ public interface FamilymenuRoomService extends BaseService<FamilymenuRoom> {
      * 获取指定或当前默认餐厅信息（含我在该餐厅的成员记录）。
      */
     FamilymenuMyRoomResp getMyRoom(Long roomId);
+
+    /**
+     * 换取餐厅实时通道的一次性连接凭证（校验调用者为餐厅成员）。
+     */
+    String createWsTicket(Long roomId);
 }
 

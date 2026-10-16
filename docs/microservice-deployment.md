@@ -29,6 +29,40 @@
 - 小程序登录端点为 `/auth/miniapp/login`，需同时存在于网关白名单与 **auth 自身**
   的 `ypbin.security.excludes`（网关 `StripPrefix` 后 auth 收到的是 `/miniapp/login`）。
 
+## 小程序实时通道（WebSocket，部署必读）
+
+牌账清与家庭菜单都有「房间/餐厅数据变更后实时刷新」的需求，端侧连接：
+
+```
+wss://<域名>/api/miniapp/cardtab/ws/room/{roomId}?ticket=xxx      # 牌账清
+wss://<域名>/api/miniapp/familymenu/ws/room/{roomId}?ticket=xxx   # 家庭菜单
+```
+
+**鉴权方式**：小程序的 `uni.connectSocket` **不能自定义请求头**（带不了 `Authorization`），
+且本仓下游服务**不具备自验 token 的能力**（身份头模式下 token 取值恒为空），因此 WS 不复用
+Bearer 鉴权，改为：
+
+1. 端侧先用已登录的 HTTP 通道 `POST /miniapp/{cardtab/rooms/{id}|familymenu/room}/ws-ticket` 换票；
+2. 服务端签发**一次性、60 秒时效、与「用户 + 房间」绑定**的 ticket（存 Redis）；
+3. 建连时 `?ticket=xxx` 由服务端核销（`compareAndDelete`，用过即废，并发下仅一方成功）；
+4. 房间不匹配或票据失效一律拒绝握手。
+
+因此网关把 `/miniapp/cardtab/ws/**` 与 `/miniapp/familymenu/ws/**` 列入白名单
+（网关这一层不校验，鉴权由服务端的 ticket 核销承担）——这是一条**有意的例外**，
+不要误以为该路径无需鉴权。
+
+**部署前置（缺一即连接失败并降级）**：
+
+| 项 | 要求 |
+|---|---|
+| 网关 | `lb:ws://ypbin-miniapp` 的 WS 路由（已配置；不能用 `lb://`，否则 Upgrade 请求会被当普通请求转发） |
+| nginx | `proxy_http_version 1.1` + `Upgrade`/`Connection` 头透传（已配置，按 `$http_upgrade` map 条件升级，不影响普通 HTTP） |
+| 微信后台 | 把 `wss://<域名>` 配为 **socket 合法域名**（非代码可解，需人工在公众平台配置） |
+| 实例数 | **必须单实例部署**：广播基于进程内注册表，多实例需引入 Redis pub/sub，否则「A 实例的连接收不到 B 实例触发的事件」这一失效不会有任何报错 |
+
+**降级行为**：牌账清在 WS 失败时自动降级为 3 秒轮询；家庭菜单依赖 `onShow` 与下拉刷新
+（无轮询），实时性缺失时不会报错，仅表现为"要手动刷新"。
+
 ## 服务间调用约定
 
 - **auth/ai 不直连共享库**：用户/权限/社交绑定等数据一律经 `ISystemClient` Feign 调 `ypbin-system`

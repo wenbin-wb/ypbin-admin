@@ -18,6 +18,7 @@ import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuWishlistReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuWishlistResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuWishlistService;
 import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
+import cn.ypbin.admin.miniapp.common.ws.RoomSocketRegistry;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -47,6 +48,7 @@ public class FamilymenuWishlistServiceImpl
 
     private final FamilymenuMemberMapper memberMapper;
     private final FamilymenuRoomAccessSupport accessSupport;
+    private final RoomSocketRegistry roomSocketRegistry;
 
     @Override
     public List<FamilymenuWishlistResp> getWishList(Long roomId) {
@@ -97,6 +99,7 @@ public class FamilymenuWishlistServiceImpl
         wish.setRemark(req.getRemark());
         wish.setWishStatus(FamilymenuWishStatusEnum.PENDING.getCode());
         save(wish);
+        broadcastRefresh(req.getRoomId());
     }
 
     @Override
@@ -107,6 +110,7 @@ public class FamilymenuWishlistServiceImpl
         accessSupport.requireChef(wish.getRoomId());
         wish.setWishStatus(FamilymenuWishStatusEnum.ACCEPTED.getCode());
         updateById(wish);
+        broadcastRefresh(wish.getRoomId());
     }
 
     @Override
@@ -116,6 +120,17 @@ public class FamilymenuWishlistServiceImpl
         accessSupport.requireChef(wish.getRoomId());
         wish.setWishStatus(FamilymenuWishStatusEnum.REJECTED.getCode());
         updateById(wish);
+        broadcastRefresh(wish.getRoomId());
+    }
+
+    /**
+     * 广播餐厅变化信号（端侧据此重拉心愿单与今日菜单）。
+     */
+    private void broadcastRefresh(Long roomId) {
+        if (roomId == null) {
+            return;
+        }
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"refresh_order\"}");
     }
 
     /**

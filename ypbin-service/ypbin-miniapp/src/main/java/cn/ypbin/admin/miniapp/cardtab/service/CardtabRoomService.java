@@ -72,5 +72,10 @@ public interface CardtabRoomService extends BaseService<CardtabRoom> {
      * 分页查询历史房间。
      */
     PageResult<CardtabRoomDetailResp> getHistoryRooms(int current, int size);
+
+    /**
+     * 换取房间实时通道的一次性连接凭证（校验调用者为房间成员）。
+     */
+    String createWsTicket(Long roomId);
 }
 

@@ -24,6 +24,7 @@ import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabSettlementSnapshotMapper;
 import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabSettlementResp;
 import cn.ypbin.admin.miniapp.cardtab.service.CardtabSettlementService;
 import cn.ypbin.admin.miniapp.cardtab.support.CardtabRoomAccessSupport;
+import cn.ypbin.admin.miniapp.common.ws.RoomSocketRegistry;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -67,6 +68,7 @@ public class CardtabSettlementServiceImpl
     private final CardtabExpenseMapper expenseMapper;
     private final ObjectMapper objectMapper;
     private final CardtabRoomAccessSupport accessSupport;
+    private final RoomSocketRegistry roomSocketRegistry;
 
     @Override
     public CardtabSettlementResp getSettlement(Long roomId) {
@@ -133,6 +135,8 @@ public class CardtabSettlementServiceImpl
         event.setContent("房间已完成结算并锁定账目");
         event.setAmount(BigDecimal.ZERO);
         eventMapper.insert(event);
+        // 结算锁定房间账目：广播让房间内所有端立即刷新为「已结算」
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"ROOM_CHANGED\"}");
 
         return resp;
     }

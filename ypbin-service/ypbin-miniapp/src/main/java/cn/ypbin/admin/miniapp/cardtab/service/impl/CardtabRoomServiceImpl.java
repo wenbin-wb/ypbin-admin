@@ -30,6 +30,8 @@ import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabRoomDetailResp;
 import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabRoomMemberResp;
 import cn.ypbin.admin.miniapp.cardtab.service.CardtabRoomService;
 import cn.ypbin.admin.miniapp.cardtab.support.CardtabRoomAccessSupport;
+import cn.ypbin.admin.miniapp.common.ws.RoomSocketRegistry;
+import cn.ypbin.admin.miniapp.common.ws.WsTicketService;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -114,6 +116,8 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
     private final CardtabExpenseMapper expenseMapper;
     private final ISystemClient systemClient;
     private final CardtabRoomAccessSupport accessSupport;
+    private final WsTicketService wsTicketService;
+    private final RoomSocketRegistry roomSocketRegistry;
 
     @Override
     public CardtabHomeSummaryResp getHomeSummary() {
@@ -436,6 +440,13 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         return PageResult.of(list, memberPage.getTotal(), current, size);
     }
 
+    @Override
+    public String createWsTicket(Long roomId) {
+        // 换票同样是房间级访问：非成员不得订阅他人房间的实时变更
+        CardtabRoomMember member = accessSupport.requireMember(roomId);
+        return wsTicketService.issue(member.getUserId(), roomId);
+    }
+
     /**
      * 组装房间详情。
      *
@@ -552,6 +563,18 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         event.setFromMemberName(fromName);
         event.setToMemberName(toName);
         eventMapper.insert(event);
+        // 流水即「房间有变化」的信号：广播给房间内实时连接，端侧收到后自行重拉详情
+        broadcastRoomChanged(roomId);
+    }
+
+    /**
+     * 广播「房间已变化」信号（端侧收到后重拉详情，服务端不推送业务数据本身）。
+     *
+     * <p>只推信号而非全量数据：避免在广播里重复做一次可能失败的查询，也让端侧以统一路径取数
+     * （与轮询兜底走同一接口，行为一致）。</p>
+     */
+    private void broadcastRoomChanged(Long roomId) {
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"ROOM_CHANGED\"}");
     }
 
     private CardtabRoomDetailResp toSimpleRoomResp(CardtabRoom r, int expenseCount) {

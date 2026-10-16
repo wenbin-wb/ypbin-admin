@@ -22,6 +22,7 @@ import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
 import cn.ypbin.admin.miniapp.cardtab.model.req.CardtabExpenseReq;
 import cn.ypbin.admin.miniapp.cardtab.service.CardtabExpenseService;
 import cn.ypbin.admin.miniapp.cardtab.support.CardtabRoomAccessSupport;
+import cn.ypbin.admin.miniapp.common.ws.RoomSocketRegistry;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import java.math.BigDecimal;
@@ -49,6 +50,7 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
     private final CardtabRoomAccessSupport accessSupport;
+    private final RoomSocketRegistry roomSocketRegistry;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -101,6 +103,8 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         event.setFromMemberName(fromMember.getNickname());
         event.setToMemberName(toMember.getNickname());
         eventMapper.insert(event);
+        // 记账改动双方积分：广播「房间已变化」，房间内其他端立即重拉
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"ROOM_CHANGED\"}");
 
         Map<String, Object> res = new HashMap<>();
         res.put("id", expense.getId());
@@ -156,5 +160,7 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         event.setFromMemberName(fromMember.getNickname());
         event.setToMemberName(toMember.getNickname());
         eventMapper.insert(event);
+        // 撤销同样改动积分：广播给房间内其他端
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"ROOM_CHANGED\"}");
     }
 }

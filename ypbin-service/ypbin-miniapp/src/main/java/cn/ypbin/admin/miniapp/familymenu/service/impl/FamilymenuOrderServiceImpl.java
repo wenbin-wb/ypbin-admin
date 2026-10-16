@@ -24,6 +24,7 @@ import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuOrderDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuOrderResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuOrderService;
 import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
+import cn.ypbin.admin.miniapp.common.ws.RoomSocketRegistry;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -61,6 +62,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
     private final FamilymenuOrderDetailMapper detailMapper;
     private final FamilymenuMemberMapper memberMapper;
     private final FamilymenuRoomAccessSupport accessSupport;
+    private final RoomSocketRegistry roomSocketRegistry;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -150,6 +152,8 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             order.setCookingPhoto(req.getCookingPhoto().trim());
         }
         updateById(order);
+        // 订单状态/费用变更：广播让餐厅内所有端刷新进度
+        broadcastOrderChanged(order.getRoomId());
     }
 
     @Override
@@ -199,6 +203,21 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         detail.setQuantity(req.getQuantity() != null && req.getQuantity() > 0 ? req.getQuantity() : 1);
         detail.setRequesterId(userId);
         detailMapper.insert(detail);
+        // 新点菜明细：广播让主厨与其他家人看到
+        broadcastOrderChanged(order.getRoomId());
+    }
+
+    /**
+     * 广播「订单已变化」信号（端侧收到 {@code refresh_order} 后重拉）。
+     *
+     * <p>消息类型沿用端侧既有契约 {@code refresh_order}（见 familymenu-ui 的 WS 处理分支），
+     * 不另造类型名，避免端侧要多认一套。</p>
+     */
+    private void broadcastOrderChanged(Long roomId) {
+        if (roomId == null) {
+            return;
+        }
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"refresh_order\"}");
     }
 
     @Override

@@ -52,6 +52,20 @@ spring:
                 - Path=/miniapp/**
               filters:
                 - StripPrefix=1
+            # 小程序实时通道：WS 必须用 lb:ws:// 协议前缀（lb:// 只处理 HTTP，
+            # 会把 Upgrade 请求当普通请求转发导致握手失败）。StripPrefix 与 HTTP 路由一致。
+            - id: miniapp-ws-cardtab
+              uri: lb:ws://ypbin-miniapp
+              predicates:
+                - Path=/miniapp/cardtab/ws/**
+              filters:
+                - StripPrefix=1
+            - id: miniapp-ws-familymenu
+              uri: lb:ws://ypbin-miniapp
+              predicates:
+                - Path=/miniapp/familymenu/ws/**
+              filters:
+                - StripPrefix=1
 
 # 统一鉴权：校验 token 后清洗外部头、签发内部身份头
 ypbin:
@@ -83,3 +97,8 @@ ypbin:
         - /system/ypbin/sse/subscribe
         # 埋点采集端点：登录前后都要上报（匿名事件占多数），故放行；防护由限流 + 体积/事件数上限 + 事件码白名单承担
         - /system/tracking/ingest
+        # 小程序实时通道：WS 握手无法携带 Authorization（小程序 connectSocket 不支持自定义头），
+        # 故网关这一层放行，鉴权由服务端的「一次性 ticket 核销」承担
+        # （端侧先经 /miniapp/.../ws-ticket 拿票，握手时 ?ticket= 由 WsTicketHandshakeInterceptor 校验）。
+        - /miniapp/cardtab/ws/**
+        - /miniapp/familymenu/ws/**
