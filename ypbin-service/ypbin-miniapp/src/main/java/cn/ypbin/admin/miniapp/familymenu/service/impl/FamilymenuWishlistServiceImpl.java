@@ -11,14 +11,15 @@ package cn.ypbin.admin.miniapp.familymenu.service.impl;
 
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuMember;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuWishlist;
+import cn.ypbin.admin.miniapp.familymenu.enums.FamilymenuWishStatusEnum;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuMemberMapper;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuWishlistMapper;
 import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuWishlistReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuWishlistResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuWishlistService;
+import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
-import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.HashMap;
 import java.util.List;
@@ -32,21 +33,28 @@ import org.springframework.util.CollectionUtils;
 /**
  * 家庭菜单-心愿单服务实现。
  *
+ * <p><b>访问控制</b>：心愿单属餐厅内部数据。「查看/提交」要求是餐厅成员；
+ * 「接单/婉拒」是主厨的职责，故要求主厨身份——此前任意登录用户可替他人家庭处理心愿单（越权）。</p>
+ *
  * @author wenbin
  * @since 2026-09-08
  */
 @Service
 @RequiredArgsConstructor
-public class FamilymenuWishlistServiceImpl extends BaseServiceImpl<FamilymenuWishlistMapper, FamilymenuWishlist>
+public class FamilymenuWishlistServiceImpl
+    extends BaseServiceImpl<FamilymenuWishlistMapper, FamilymenuWishlist>
     implements FamilymenuWishlistService {
 
     private final FamilymenuMemberMapper memberMapper;
+    private final FamilymenuRoomAccessSupport accessSupport;
 
     @Override
     public List<FamilymenuWishlistResp> getWishList(Long roomId) {
         if (roomId == null) {
             return List.of();
         }
+        accessSupport.requireMember(roomId);
+
         List<FamilymenuWishlist> list = list(new LambdaQueryWrapper<FamilymenuWishlist>()
             .eq(FamilymenuWishlist::getRoomId, roomId)
             .orderByDesc(FamilymenuWishlist::getCreateTime));
@@ -59,9 +67,10 @@ public class FamilymenuWishlistServiceImpl extends BaseServiceImpl<FamilymenuWis
         List<Long> userIds = list.stream().map(FamilymenuWishlist::getUserId).distinct().toList();
         Map<Long, String> nameMap = new HashMap<>();
         if (!CollectionUtils.isEmpty(userIds)) {
-            List<FamilymenuMember> members = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
-                .eq(FamilymenuMember::getRoomId, roomId)
-                .in(FamilymenuMember::getUserId, userIds));
+            List<FamilymenuMember> members = memberMapper.selectList(
+                new LambdaQueryWrapper<FamilymenuMember>()
+                    .eq(FamilymenuMember::getRoomId, roomId)
+                    .in(FamilymenuMember::getUserId, userIds));
             for (FamilymenuMember m : members) {
                 nameMap.put(m.getUserId(), m.getNickname());
             }
@@ -78,41 +87,48 @@ public class FamilymenuWishlistServiceImpl extends BaseServiceImpl<FamilymenuWis
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submitWish(FamilymenuWishlistReq req) {
-        Long userId = currentUserId();
+        Long userId = accessSupport.currentUserId();
+        accessSupport.requireMember(req.getRoomId());
+
         FamilymenuWishlist wish = new FamilymenuWishlist();
         wish.setRoomId(req.getRoomId());
         wish.setUserId(userId);
         wish.setDishName(req.getDishName().trim());
         wish.setRemark(req.getRemark());
-        wish.setWishStatus("PENDING");
+        wish.setWishStatus(FamilymenuWishStatusEnum.PENDING.getCode());
         save(wish);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void acceptWish(Long id) {
-        FamilymenuWishlist wish = getById(id);
-        if (wish == null) {
-            throw new BusinessException("心愿不存在");
-        }
-        wish.setWishStatus("ACCEPTED");
+        FamilymenuWishlist wish = requireWish(id);
+        // 接单是主厨职责：按心愿所属餐厅校验主厨身份
+        accessSupport.requireChef(wish.getRoomId());
+        wish.setWishStatus(FamilymenuWishStatusEnum.ACCEPTED.getCode());
         updateById(wish);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void rejectWish(Long id) {
+        FamilymenuWishlist wish = requireWish(id);
+        accessSupport.requireChef(wish.getRoomId());
+        wish.setWishStatus(FamilymenuWishStatusEnum.REJECTED.getCode());
+        updateById(wish);
+    }
+
+    /**
+     * 取心愿并保证存在。
+     *
+     * @param id 心愿 ID
+     * @return 心愿实体
+     */
+    private FamilymenuWishlist requireWish(Long id) {
         FamilymenuWishlist wish = getById(id);
         if (wish == null) {
             throw new BusinessException("心愿不存在");
         }
-        wish.setWishStatus("REJECTED");
-        updateById(wish);
-    }
-
-    private Long currentUserId() {
-        return IdentityContext.getUserId()
-            .orElseThrow(() -> new BusinessException("当前用户未登录"));
+        return wish;
     }
 }
-

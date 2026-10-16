@@ -13,12 +13,14 @@ import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoom;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomMember;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabSettlementSnapshot;
+import cn.ypbin.admin.miniapp.cardtab.enums.CardtabEventTypeEnum;
+import cn.ypbin.admin.miniapp.cardtab.enums.CardtabRoomStatusEnum;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomEventMapper;
-import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabSettlementSnapshotMapper;
 import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabSettlementResp;
 import cn.ypbin.admin.miniapp.cardtab.service.CardtabSettlementService;
+import cn.ypbin.admin.miniapp.cardtab.support.CardtabRoomAccessSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -39,30 +41,37 @@ import org.springframework.util.CollectionUtils;
 /**
  * 牌账清-结算服务实现。
  *
+ * <p><b>访问控制</b>：读取账目与确认结算均属房间级操作，先经
+ * {@link CardtabRoomAccessSupport#requireMember} 校验调用者身份——此前任意登录用户都能结算他人
+ * 房间（把别人的牌局锁死并覆盖快照），是可被利用的越权点。</p>
+ *
+ * <p><b>结算算法</b>：排名按总分降序；转账用「大额优先」的贪心双指针化简，
+ * 保证转账笔数最少且金额守恒（已由 {@code CardtabSettlementServiceImplTest} 覆盖）。</p>
+ *
  * @author wenbin
  * @since 2026-09-08
  */
 @Service
 @RequiredArgsConstructor
-public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlementSnapshotMapper, CardtabSettlementSnapshot>
+public class CardtabSettlementServiceImpl
+    extends BaseServiceImpl<CardtabSettlementSnapshotMapper, CardtabSettlementSnapshot>
     implements CardtabSettlementService {
 
     private static final Logger log = LoggerFactory.getLogger(CardtabSettlementServiceImpl.class);
 
-    private final CardtabRoomMapper roomMapper;
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
     private final ObjectMapper objectMapper;
+    private final CardtabRoomAccessSupport accessSupport;
 
     @Override
     public CardtabSettlementResp getSettlement(Long roomId) {
-        CardtabRoom room = roomMapper.selectById(roomId);
-        if (room == null) {
-            throw new BusinessException("房间不存在");
-        }
+        // 账目含每个人的输赢金额，必须先确认调用者属于该房间
+        accessSupport.requireMember(roomId);
+        CardtabRoom room = accessSupport.requireRoom(roomId);
 
         // 若已结算且已有快照，直接反序列化快照
-        if ("SETTLED".equals(room.getRoomStatus())) {
+        if (CardtabRoomStatusEnum.SETTLED.is(room.getRoomStatus())) {
             CardtabSettlementSnapshot snapshot = getOne(new LambdaQueryWrapper<CardtabSettlementSnapshot>()
                 .eq(CardtabSettlementSnapshot::getRoomId, roomId)
                 .orderByDesc(CardtabSettlementSnapshot::getId), false);
@@ -85,18 +94,20 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CardtabSettlementResp saveSettlement(Long roomId) {
-        CardtabRoom room = roomMapper.selectById(roomId);
-        if (room == null) {
-            throw new BusinessException("房间不存在");
+        // 结算会锁定房间账目，只允许房内成员发起（不能由无关用户替别人结束牌局）
+        accessSupport.requireMember(roomId);
+        CardtabRoom room = accessSupport.requireRoom(roomId);
+        if (CardtabRoomStatusEnum.SETTLED.is(room.getRoomStatus())) {
+            throw new BusinessException("房间已结算，请勿重复提交");
         }
 
         CardtabSettlementResp resp = calculateSettlement(room);
-        resp.setStatus("SETTLED");
+        resp.setStatus(CardtabRoomStatusEnum.SETTLED.getCode());
 
         // 更新房间状态
-        room.setRoomStatus("SETTLED");
+        room.setRoomStatus(CardtabRoomStatusEnum.SETTLED.getCode());
         room.setSettledAt(LocalDateTime.now());
-        roomMapper.updateById(room);
+        accessSupport.updateRoom(room);
 
         // 存储快照
         try {
@@ -113,7 +124,7 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
         // 记录流水
         CardtabRoomEvent event = new CardtabRoomEvent();
         event.setRoomId(roomId);
-        event.setEventType("ROOM_SETTLED");
+        event.setEventType(CardtabEventTypeEnum.ROOM_SETTLED.getCode());
         event.setTitle("房间已结算");
         event.setContent("房间已完成结算并锁定账目");
         event.setAmount(BigDecimal.ZERO);
@@ -153,7 +164,7 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
         }
         resp.setRankings(rankings);
 
-        // 2. 转账计算（贪心匹配）
+        // 2. 转账计算（贪心匹配：大额优先配对，笔数最少）
         List<BalanceHolder> creditors = new ArrayList<>(); // 正分
         List<BalanceHolder> debtors = new ArrayList<>();   // 负分
 
@@ -191,8 +202,12 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
                 d.setAmount(d.getAmount().subtract(transferAmount));
             }
 
-            if (c.getAmount().compareTo(BigDecimal.ZERO) <= 0) cIdx++;
-            if (d.getAmount().compareTo(BigDecimal.ZERO) <= 0) dIdx++;
+            if (c.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                cIdx++;
+            }
+            if (d.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                dIdx++;
+            }
         }
         resp.setTransfers(transfers);
 
@@ -221,7 +236,7 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
         private final String nickname;
         private BigDecimal amount;
 
-        public BalanceHolder(Long memberId, String nickname, BigDecimal amount) {
+        BalanceHolder(Long memberId, String nickname, BigDecimal amount) {
             this.memberId = memberId;
             this.nickname = nickname;
             this.amount = amount;
@@ -244,4 +259,3 @@ public class CardtabSettlementServiceImpl extends BaseServiceImpl<CardtabSettlem
         }
     }
 }
-

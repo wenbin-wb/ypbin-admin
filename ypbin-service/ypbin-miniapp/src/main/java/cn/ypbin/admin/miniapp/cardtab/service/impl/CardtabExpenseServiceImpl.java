@@ -13,16 +13,17 @@ import cn.ypbin.admin.miniapp.cardtab.entity.CardtabExpense;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoom;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomMember;
+import cn.ypbin.admin.miniapp.cardtab.enums.CardtabEventTypeEnum;
+import cn.ypbin.admin.miniapp.cardtab.enums.CardtabExpenseStatusEnum;
+import cn.ypbin.admin.miniapp.cardtab.enums.CardtabRoomStatusEnum;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabExpenseMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomEventMapper;
-import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
 import cn.ypbin.admin.miniapp.cardtab.model.req.CardtabExpenseReq;
 import cn.ypbin.admin.miniapp.cardtab.service.CardtabExpenseService;
+import cn.ypbin.admin.miniapp.cardtab.support.CardtabRoomAccessSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
-import cn.ypbin.starter.security.identity.IdentityContext;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -34,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 牌账清-支出记录服务实现。
  *
+ * <p>记账与撤销都会改动成员积分，属房间级写操作：一律先经 {@link CardtabRoomAccessSupport}
+ * 校验调用者是该房间成员（撤销不额外限制发起人，房内任何成员均可纠错，但必须留流水）。</p>
+ *
  * @author wenbin
  * @since 2026-09-08
  */
@@ -42,27 +46,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMapper, CardtabExpense>
     implements CardtabExpenseService {
 
-    private final CardtabRoomMapper roomMapper;
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
+    private final CardtabRoomAccessSupport accessSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> createExpense(Long roomId, CardtabExpenseReq req) {
-        Long userId = currentUserId();
-        CardtabRoom room = roomMapper.selectById(roomId);
-        if (room == null || !"ONGOING".equals(room.getRoomStatus())) {
+        CardtabRoom room = accessSupport.requireRoom(roomId);
+        if (!CardtabRoomStatusEnum.ONGOING.is(room.getRoomStatus())) {
             throw new BusinessException("房间不存在或已结算，无法记账");
         }
 
-        // 查找当前用户在房间内的成员身份
-        CardtabRoomMember fromMember = memberMapper.selectOne(new LambdaQueryWrapper<CardtabRoomMember>()
-            .eq(CardtabRoomMember::getRoomId, roomId)
-            .eq(CardtabRoomMember::getUserId, userId));
-
-        if (fromMember == null || "LEFT".equals(fromMember.getMemberStatus())) {
-            throw new BusinessException("您未在此房间内，无法记账");
-        }
+        // 成员身份 + 未退出，由守卫统一校验（此前各方法各写一遍，容易漏）
+        CardtabRoomMember fromMember = accessSupport.requireMember(roomId);
 
         if (fromMember.getId().equals(req.getToMemberId())) {
             throw new BusinessException("不能给自己记支出");
@@ -82,7 +79,7 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         expense.setToMemberId(toMember.getId());
         expense.setAmount(amount);
         expense.setNote(req.getNote());
-        expense.setExpenseStatus("NORMAL");
+        expense.setExpenseStatus(CardtabExpenseStatusEnum.NORMAL.getCode());
         save(expense);
 
         // 2. 更新双方积分：fromMember 减分，toMember 加分，房间总和恒为 0
@@ -94,11 +91,12 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         // 3. 记录流水
         CardtabRoomEvent event = new CardtabRoomEvent();
         event.setRoomId(roomId);
-        event.setEventType("EXPENSE_CREATED");
+        event.setEventType(CardtabEventTypeEnum.EXPENSE_CREATED.getCode());
         event.setMemberId(fromMember.getId());
         event.setRefId(expense.getId());
         event.setTitle("记一笔支出");
-        event.setContent(fromMember.getNickname() + " 给 " + toMember.getNickname() + " 记了一笔 " + amount + (req.getNote() != null ? " (" + req.getNote() + ")" : ""));
+        event.setContent(fromMember.getNickname() + " 给 " + toMember.getNickname() + " 记了一笔 " + amount
+            + (req.getNote() != null ? " (" + req.getNote() + ")" : ""));
         event.setAmount(amount);
         event.setFromMemberName(fromMember.getNickname());
         event.setToMemberName(toMember.getNickname());
@@ -117,12 +115,14 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void revokeExpense(Long roomId, Long expenseId) {
-        Long userId = currentUserId();
+        // 撤销会反向调整双方积分，必须先确认调用者属于该房间
+        accessSupport.requireMember(roomId);
+
         CardtabExpense expense = getById(expenseId);
         if (expense == null || !expense.getRoomId().equals(roomId)) {
             throw new BusinessException("支出记录不存在");
         }
-        if ("REVOKED".equals(expense.getExpenseStatus())) {
+        if (CardtabExpenseStatusEnum.REVOKED.is(expense.getExpenseStatus())) {
             throw new BusinessException("该笔支出已撤销");
         }
 
@@ -133,7 +133,7 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         }
 
         // 状态变更为已撤销
-        expense.setExpenseStatus("REVOKED");
+        expense.setExpenseStatus(CardtabExpenseStatusEnum.REVOKED.getCode());
         expense.setRevokedAt(LocalDateTime.now());
         updateById(expense);
 
@@ -146,20 +146,15 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         // 记录流水
         CardtabRoomEvent event = new CardtabRoomEvent();
         event.setRoomId(roomId);
-        event.setEventType("EXPENSE_REVOKED");
+        event.setEventType(CardtabEventTypeEnum.EXPENSE_REVOKED.getCode());
         event.setMemberId(fromMember.getId());
         event.setRefId(expense.getId());
         event.setTitle("撤销支出");
-        event.setContent(fromMember.getNickname() + " 撤销了给 " + toMember.getNickname() + " 的支出 " + expense.getAmount());
+        event.setContent(fromMember.getNickname() + " 撤销了给 " + toMember.getNickname()
+            + " 的支出 " + expense.getAmount());
         event.setAmount(expense.getAmount());
         event.setFromMemberName(fromMember.getNickname());
         event.setToMemberName(toMember.getNickname());
         eventMapper.insert(event);
     }
-
-    private Long currentUserId() {
-        return IdentityContext.getUserId()
-            .orElseThrow(() -> new BusinessException("当前用户未登录"));
-    }
 }
-

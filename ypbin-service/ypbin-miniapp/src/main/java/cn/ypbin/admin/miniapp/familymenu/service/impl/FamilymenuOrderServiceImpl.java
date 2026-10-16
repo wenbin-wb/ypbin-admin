@@ -12,6 +12,8 @@ package cn.ypbin.admin.miniapp.familymenu.service.impl;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuMember;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuOrder;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuOrderDetail;
+import cn.ypbin.admin.miniapp.familymenu.enums.FamilymenuMealTimeEnum;
+import cn.ypbin.admin.miniapp.familymenu.enums.FamilymenuOrderStatusEnum;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuMemberMapper;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuOrderDetailMapper;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuOrderMapper;
@@ -21,11 +23,12 @@ import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuOrderSubmitReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuOrderDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuOrderResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuOrderService;
+import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
-import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +42,14 @@ import org.springframework.util.StringUtils;
 /**
  * 家庭菜单-就餐订单服务实现。
  *
+ * <p><b>访问控制</b>：{@code roomId}/{@code orderId} 由客户端提供，订单级读写一律先经
+ * {@link FamilymenuRoomAccessSupport} 校验调用者是该餐厅成员——此前任意登录用户可读他人
+ * 就餐历史、改他人订单状态与采购费用（典型 IDOR）。</p>
+ *
+ * <p><b>性能</b>：历史记录与明细的「点菜人昵称」走批量 IN 查询组装，禁止在循环内查库。
+ * 注意 {@code stream().map(...)} 里的 DB 调用逃得过架构门禁（它只识别 for/forEach），
+ * 因此这里刻意用「先批量查、再内存拼装」的写法而非逐条查询。</p>
+ *
  * @author wenbin
  * @since 2026-09-08
  */
@@ -49,12 +60,16 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
 
     private final FamilymenuOrderDetailMapper detailMapper;
     private final FamilymenuMemberMapper memberMapper;
+    private final FamilymenuRoomAccessSupport accessSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public FamilymenuOrderResp submitOrder(FamilymenuOrderSubmitReq req) {
+        accessSupport.requireMember(req.getRoomId());
+
         LocalDate date = req.getOrderDate() != null ? req.getOrderDate() : LocalDate.now();
-        String mealTime = StringUtils.hasText(req.getMealTime()) ? req.getMealTime() : "DINNER";
+        String mealTime = StringUtils.hasText(req.getMealTime())
+            ? req.getMealTime() : FamilymenuMealTimeEnum.DINNER.getCode();
 
         // 查询当天该餐厅是否已有开餐订单
         FamilymenuOrder order = getOne(new LambdaQueryWrapper<FamilymenuOrder>()
@@ -68,11 +83,11 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             order.setRoomId(req.getRoomId());
             order.setOrderDate(date);
             order.setMealTime(mealTime);
-            order.setOrderStatus("PICKING");
+            order.setOrderStatus(FamilymenuOrderStatusEnum.PICKING.getCode());
             save(order);
         }
 
-        return getOrderDetail(order.getId());
+        return getOrderDetailInternal(order);
     }
 
     @Override
@@ -80,6 +95,8 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         if (roomId == null) {
             return null;
         }
+        accessSupport.requireMember(roomId);
+
         LocalDate today = LocalDate.now();
         FamilymenuOrder order = getOne(new LambdaQueryWrapper<FamilymenuOrder>()
             .eq(FamilymenuOrder::getRoomId, roomId)
@@ -89,7 +106,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         if (order == null) {
             return null;
         }
-        return getOrderDetail(order.getId());
+        return getOrderDetailInternal(order);
     }
 
     @Override
@@ -98,10 +115,9 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
-        FamilymenuOrderResp resp = new FamilymenuOrderResp();
-        BeanUtils.copyProperties(order, resp);
-        resp.setDetails(getOrderDetails(order.getId()));
-        return resp;
+        // 必须用订单所属餐厅做归属校验：否则可按 orderId 遍历他人订单
+        accessSupport.requireMember(order.getRoomId());
+        return getOrderDetailInternal(order);
     }
 
     @Override
@@ -110,6 +126,12 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         FamilymenuOrder order = getById(req.getId());
         if (order == null) {
             throw new BusinessException("订单不存在");
+        }
+        // 改状态/费用（采购金额）属写操作，先校验调用者属于该餐厅
+        accessSupport.requireMember(order.getRoomId());
+
+        if (!FamilymenuOrderStatusEnum.isValid(req.getOrderStatus())) {
+            throw new BusinessException("非法的订单状态：" + req.getOrderStatus());
         }
         order.setOrderStatus(req.getOrderStatus());
         if (req.getCost() != null) {
@@ -135,6 +157,8 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         if (roomId == null) {
             return List.of();
         }
+        accessSupport.requireMember(roomId);
+
         List<FamilymenuOrder> orders = list(new LambdaQueryWrapper<FamilymenuOrder>()
             .eq(FamilymenuOrder::getRoomId, roomId)
             .orderByDesc(FamilymenuOrder::getOrderDate)
@@ -144,10 +168,15 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             return List.of();
         }
 
+        // 批量取全部明细与点菜人昵称：原实现在 stream().map 里逐单查两次库（N+1），
+        // 且该形态不被架构门禁识别，故必须在此手动批量化
+        List<Long> orderIds = orders.stream().map(FamilymenuOrder::getId).toList();
+        Map<Long, List<FamilymenuOrderDetailResp>> detailMap = loadDetailsByOrders(orderIds);
+
         return orders.stream().map(o -> {
             FamilymenuOrderResp resp = new FamilymenuOrderResp();
             BeanUtils.copyProperties(o, resp);
-            resp.setDetails(getOrderDetails(o.getId()));
+            resp.setDetails(detailMap.getOrDefault(o.getId(), List.of()));
             return resp;
         }).toList();
     }
@@ -155,11 +184,12 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addOrderDetail(FamilymenuOrderDetailReq req) {
-        Long userId = currentUserId();
+        Long userId = accessSupport.currentUserId();
         FamilymenuOrder order = getById(req.getOrderId());
         if (order == null) {
             throw new BusinessException("开餐订单不存在");
         }
+        accessSupport.requireMember(order.getRoomId());
 
         FamilymenuOrderDetail detail = new FamilymenuOrderDetail();
         detail.setOrderId(order.getId());
@@ -173,22 +203,74 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
 
     @Override
     public List<FamilymenuOrderDetailResp> getOrderDetails(Long orderId) {
-        List<FamilymenuOrderDetail> list = detailMapper.selectList(new LambdaQueryWrapper<FamilymenuOrderDetail>()
-            .eq(FamilymenuOrderDetail::getOrderId, orderId)
-            .orderByAsc(FamilymenuOrderDetail::getId));
+        FamilymenuOrder order = getById(orderId);
+        if (order == null) {
+            throw new BusinessException("订单不存在");
+        }
+        accessSupport.requireMember(order.getRoomId());
+        return loadDetails(orderId);
+    }
 
+    /**
+     * 组装订单详情（调用方已完成归属校验）。
+     */
+    private FamilymenuOrderResp getOrderDetailInternal(FamilymenuOrder order) {
+        FamilymenuOrderResp resp = new FamilymenuOrderResp();
+        BeanUtils.copyProperties(order, resp);
+        resp.setDetails(loadDetails(order.getId()));
+        return resp;
+    }
+
+    /**
+     * 取单个订单的明细（含点菜人昵称）。
+     */
+    private List<FamilymenuOrderDetailResp> loadDetails(Long orderId) {
+        List<FamilymenuOrderDetail> list = detailMapper.selectList(
+            new LambdaQueryWrapper<FamilymenuOrderDetail>()
+                .eq(FamilymenuOrderDetail::getOrderId, orderId)
+                .orderByAsc(FamilymenuOrderDetail::getId));
+        return toDetailRespList(list);
+    }
+
+    /**
+     * 批量取多个订单的明细（单次 IN 查询，避免逐单查库）。
+     */
+    private Map<Long, List<FamilymenuOrderDetailResp>> loadDetailsByOrders(List<Long> orderIds) {
+        if (CollectionUtils.isEmpty(orderIds)) {
+            return Map.of();
+        }
+        List<FamilymenuOrderDetail> all = detailMapper.selectList(
+            new LambdaQueryWrapper<FamilymenuOrderDetail>()
+                .in(FamilymenuOrderDetail::getOrderId, orderIds)
+                .orderByAsc(FamilymenuOrderDetail::getId));
+
+        Map<Long, List<FamilymenuOrderDetail>> grouped = new HashMap<>();
+        for (FamilymenuOrderDetail d : all) {
+            grouped.computeIfAbsent(d.getOrderId(), k -> new ArrayList<>()).add(d);
+        }
+
+        Map<Long, List<FamilymenuOrderDetailResp>> result = new HashMap<>();
+        grouped.forEach((orderId, details) -> result.put(orderId, toDetailRespList(details)));
+        return result;
+    }
+
+    /**
+     * 明细 → 出参（统一在此批量补点菜人昵称，杜绝逐条查库）。
+     */
+    private List<FamilymenuOrderDetailResp> toDetailRespList(List<FamilymenuOrderDetail> list) {
         if (CollectionUtils.isEmpty(list)) {
             return List.of();
         }
-
-        // 批量查询成员昵称映射（防止 N+1）
-        List<Long> requesterIds = list.stream().map(FamilymenuOrderDetail::getRequesterId).distinct().toList();
+        // 批量查询成员昵称映射（防 N+1）
+        List<Long> requesterIds = list.stream()
+            .map(FamilymenuOrderDetail::getRequesterId).distinct().toList();
         Map<Long, String> nameMap = new HashMap<>();
         if (!CollectionUtils.isEmpty(requesterIds)) {
-            List<FamilymenuMember> members = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
-                .in(FamilymenuMember::getUserId, requesterIds));
+            List<FamilymenuMember> members = memberMapper.selectList(
+                new LambdaQueryWrapper<FamilymenuMember>()
+                    .in(FamilymenuMember::getUserId, requesterIds));
             for (FamilymenuMember m : members) {
-                nameMap.put(m.getUserId(), m.getNickname());
+                nameMap.putIfAbsent(m.getUserId(), m.getNickname());
             }
         }
 
@@ -199,10 +281,4 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             return r;
         }).toList();
     }
-
-    private Long currentUserId() {
-        return IdentityContext.getUserId()
-            .orElseThrow(() -> new BusinessException("当前用户未登录"));
-    }
 }
-

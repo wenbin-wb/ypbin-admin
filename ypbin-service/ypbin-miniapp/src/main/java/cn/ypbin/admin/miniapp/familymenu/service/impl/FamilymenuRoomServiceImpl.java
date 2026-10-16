@@ -12,6 +12,7 @@ package cn.ypbin.admin.miniapp.familymenu.service.impl;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuDish;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuMember;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuRoom;
+import cn.ypbin.admin.miniapp.familymenu.enums.FamilymenuMemberRoleEnum;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuDishMapper;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuMemberMapper;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuRoomMapper;
@@ -19,16 +20,18 @@ import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuRoomCreateReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMemberResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuRoomDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuRoomService;
+import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
-import cn.ypbin.starter.security.identity.IdentityContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,6 +46,10 @@ import org.springframework.util.StringUtils;
 /**
  * 家庭菜单-家庭餐厅服务实现。
  *
+ * <p><b>访问控制</b>：{@code roomId}/{@code memberId} 均由客户端提供，餐厅级读写一律先经
+ * {@link FamilymenuRoomAccessSupport} 校验调用者与该餐厅的关系（成员/主厨/创建者），否则等于开放 IDOR。
+ * 唯一无需归属校验的是「按邀请码加入」——它的前置条件是持有邀请码，且只写入调用者自己的成员记录。</p>
+ *
  * @author wenbin
  * @since 2026-09-08
  */
@@ -53,16 +60,24 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
 
     private static final Logger log = LoggerFactory.getLogger(FamilymenuRoomServiceImpl.class);
 
+    /** 邀请码候选个数（一次性批量查重，避免循环内查库） */
+    private static final int INVITE_CODE_CANDIDATE_COUNT = 10;
+
+    /** 邀请码基数与跨度（6 位） */
+    private static final int INVITE_CODE_BASE = 100000;
+    private static final int INVITE_CODE_BOUND = 900000;
+
+    private static final Random RANDOM = new SecureRandom();
+
     private final FamilymenuMemberMapper memberMapper;
     private final FamilymenuDishMapper dishMapper;
     private final ISystemClient systemClient;
-
-    private static final Random RANDOM = new SecureRandom();
+    private final FamilymenuRoomAccessSupport accessSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public FamilymenuRoomDetailResp createRoom(FamilymenuRoomCreateReq req) {
-        Long userId = currentUserId();
+        Long userId = accessSupport.currentUserId();
         String inviteCode = generateInviteCode();
 
         FamilymenuRoom room = new FamilymenuRoom();
@@ -77,37 +92,23 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
         member.setRoomId(room.getId());
         member.setUserId(userId);
         member.setNickname(nick);
-        member.setRole("CHEF");
+        member.setRole(FamilymenuMemberRoleEnum.CHEF.getCode());
         memberMapper.insert(member);
 
-        return getRoomDetail(room.getId());
+        return buildRoomDetail(room);
     }
 
     @Override
     public FamilymenuRoomDetailResp getRoomDetail(Long roomId) {
-        FamilymenuRoom room = getById(roomId);
-        if (room == null) {
-            throw new BusinessException("餐厅不存在");
-        }
-        FamilymenuRoomDetailResp resp = new FamilymenuRoomDetailResp();
-        resp.setId(room.getId());
-        resp.setName(room.getName());
-        resp.setInviteCode(room.getInviteCode());
-        resp.setOwnerUserId(room.getOwnerUserId());
-
-        List<FamilymenuMemberResp> members = getMemberList(roomId);
-        resp.setMembers(members);
-
-        Long dishCount = dishMapper.selectCount(new LambdaQueryWrapper<FamilymenuDish>()
-            .eq(FamilymenuDish::getRoomId, roomId));
-        resp.setDishCount(dishCount != null ? dishCount.intValue() : 0);
-        return resp;
+        // 餐厅级读取必须校验成员身份，否则可遍历 roomId 看他人家庭数据（IDOR）
+        accessSupport.requireMember(roomId);
+        return buildRoomDetail(accessSupport.requireRoom(roomId));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public FamilymenuRoomDetailResp joinRoom(String inviteCode) {
-        Long userId = currentUserId();
+        Long userId = accessSupport.currentUserId();
         if (!StringUtils.hasText(inviteCode)) {
             throw new BusinessException("邀请码不能为空");
         }
@@ -130,34 +131,30 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
             member.setRoomId(room.getId());
             member.setUserId(userId);
             member.setNickname(nick);
-            member.setRole("DINER");
+            member.setRole(FamilymenuMemberRoleEnum.DINER.getCode());
             memberMapper.insert(member);
         }
 
-        return getRoomDetail(room.getId());
+        return buildRoomDetail(room);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void leaveRoom(Long roomId) {
-        Long userId = currentUserId();
-        FamilymenuRoom room = getById(roomId);
-        if (room != null && room.getOwnerUserId().equals(userId)) {
+        // 只需成员身份：非成员本就无记录可删，这里显式拒绝以保持语义一致
+        FamilymenuMember member = accessSupport.requireMember(roomId);
+        FamilymenuRoom room = accessSupport.requireRoom(roomId);
+        if (room.getOwnerUserId().equals(member.getUserId())) {
             throw new BusinessException("您是创建者，如需关闭请解散餐厅");
         }
-        memberMapper.delete(new LambdaQueryWrapper<FamilymenuMember>()
-            .eq(FamilymenuMember::getRoomId, roomId)
-            .eq(FamilymenuMember::getUserId, userId));
+        memberMapper.deleteById(member.getId());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disbandRoom(Long roomId) {
-        Long userId = currentUserId();
-        FamilymenuRoom room = getById(roomId);
-        if (room == null) {
-            throw new BusinessException("餐厅不存在");
-        }
+        Long userId = accessSupport.currentUserId();
+        FamilymenuRoom room = accessSupport.requireRoom(roomId);
         if (!room.getOwnerUserId().equals(userId)) {
             throw new BusinessException("只有创建者可以解散餐厅");
         }
@@ -168,6 +165,8 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
 
     @Override
     public List<FamilymenuMemberResp> getMemberList(Long roomId) {
+        // 成员名单属餐厅内部数据，先校验调用者是成员
+        accessSupport.requireMember(roomId);
         List<FamilymenuMember> list = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
             .eq(FamilymenuMember::getRoomId, roomId)
             .orderByAsc(FamilymenuMember::getId));
@@ -175,16 +174,7 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
         if (CollectionUtils.isEmpty(list)) {
             return List.of();
         }
-        return list.stream().map(m -> {
-            FamilymenuMemberResp r = new FamilymenuMemberResp();
-            r.setId(m.getId());
-            r.setRoomId(m.getRoomId());
-            r.setUserId(m.getUserId());
-            r.setNickname(m.getNickname());
-            r.setAvatarUrl(m.getAvatarUrl());
-            r.setRole(m.getRole());
-            return r;
-        }).toList();
+        return list.stream().map(this::toMemberResp).toList();
     }
 
     @Override
@@ -194,16 +184,22 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
         if (member == null) {
             throw new BusinessException("成员不存在");
         }
-        if (!"CHEF".equalsIgnoreCase(role) && !"DINER".equalsIgnoreCase(role)) {
+        // 改角色属主厨专属：先按目标成员所属餐厅校验调用者身份（此前任何人可改任意成员角色）
+        accessSupport.requireChef(member.getRoomId());
+
+        FamilymenuMemberRoleEnum targetRole;
+        try {
+            targetRole = FamilymenuMemberRoleEnum.of(role);
+        } catch (IllegalArgumentException e) {
             throw new BusinessException("角色必须为主厨或食客");
         }
-        member.setRole(role.toUpperCase());
+        member.setRole(targetRole.getCode());
         memberMapper.updateById(member);
     }
 
     @Override
     public List<FamilymenuRoomDetailResp> getMyRooms() {
-        Long userId = currentUserId();
+        Long userId = accessSupport.currentUserId();
         List<FamilymenuMember> members = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
             .eq(FamilymenuMember::getUserId, userId)
             .orderByDesc(FamilymenuMember::getCreateTime));
@@ -218,7 +214,16 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
             return List.of();
         }
 
-        return rooms.stream().map(r -> getRoomDetail(r.getId())).toList();
+        // 批量取各房间的成员与菜品数：原实现是 rooms.stream().map(getRoomDetail(...))，
+        // 每间房都会再打 2 次库（N+1），而架构门禁识别不了流式中间操作里的 DB 调用，只能在此手动批量化。
+        // 注意：出参仍保留 members（对外契约不变），只是改为一次 IN 查询后在内存分组。
+        Map<Long, List<FamilymenuMemberResp>> memberMap = loadMembersByRoom(roomIds);
+        Map<Long, Long> dishCountMap = countDishesByRoom(roomIds);
+        return rooms.stream()
+            .map(room -> toRoomDetailResp(room,
+                memberMap.getOrDefault(room.getId(), List.of()),
+                dishCountMap.getOrDefault(room.getId(), 0L)))
+            .toList();
     }
 
     @Override
@@ -228,21 +233,110 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
         }
         List<FamilymenuRoomDetailResp> myRooms = getMyRooms();
         if (CollectionUtils.isEmpty(myRooms)) {
+            // 该项目「无默认餐厅」是正常的空态，返回 null 由端侧渲染空页面（历史上游约定，保持不变）
             return null;
         }
-        return myRooms.get(0);
+        return myRooms.getFirst();
     }
 
-    private Long currentUserId() {
-        return IdentityContext.getUserId()
-            .orElseThrow(() -> new BusinessException("当前用户未登录"));
+    /**
+     * 组装餐厅详情（含成员列表与菜品数）。
+     *
+     * @param room 餐厅实体
+     * @return 餐厅详情
+     */
+    private FamilymenuRoomDetailResp buildRoomDetail(FamilymenuRoom room) {
+        FamilymenuRoomDetailResp resp = new FamilymenuRoomDetailResp();
+        resp.setId(room.getId());
+        resp.setName(room.getName());
+        resp.setInviteCode(room.getInviteCode());
+        resp.setOwnerUserId(room.getOwnerUserId());
+        resp.setMembers(getMemberListInternal(room.getId()));
+
+        Long dishCount = dishMapper.selectCount(new LambdaQueryWrapper<FamilymenuDish>()
+            .eq(FamilymenuDish::getRoomId, room.getId()));
+        resp.setDishCount(dishCount != null ? dishCount.intValue() : 0);
+        return resp;
+    }
+
+    /**
+     * 组装餐厅详情出参。
+     *
+     * @param room      餐厅实体
+     * @param members   成员列表
+     * @param dishCount 菜品数
+     * @return 餐厅详情
+     */
+    private FamilymenuRoomDetailResp toRoomDetailResp(FamilymenuRoom room,
+                                                      List<FamilymenuMemberResp> members,
+                                                      long dishCount) {
+        FamilymenuRoomDetailResp resp = new FamilymenuRoomDetailResp();
+        resp.setId(room.getId());
+        resp.setName(room.getName());
+        resp.setInviteCode(room.getInviteCode());
+        resp.setOwnerUserId(room.getOwnerUserId());
+        resp.setDishCount((int) dishCount);
+        resp.setMembers(members);
+        return resp;
+    }
+
+    /** 一次性取多个餐厅的成员并按餐厅分组（单次 IN 查询，杜绝逐房间查库） */
+    private Map<Long, List<FamilymenuMemberResp>> loadMembersByRoom(List<Long> roomIds) {
+        if (CollectionUtils.isEmpty(roomIds)) {
+            return Map.of();
+        }
+        List<FamilymenuMember> all = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
+            .in(FamilymenuMember::getRoomId, roomIds)
+            .orderByAsc(FamilymenuMember::getId));
+        Map<Long, List<FamilymenuMemberResp>> grouped = new HashMap<>();
+        for (FamilymenuMember m : all) {
+            grouped.computeIfAbsent(m.getRoomId(), k -> new ArrayList<>()).add(toMemberResp(m));
+        }
+        return grouped;
+    }
+
+    /** 一次性统计多个餐厅的菜品数（单次 IN 查询，杜绝逐房间查库） */
+    private Map<Long, Long> countDishesByRoom(List<Long> roomIds) {
+        if (CollectionUtils.isEmpty(roomIds)) {
+            return Map.of();
+        }
+        List<FamilymenuDish> dishes = dishMapper.selectList(new LambdaQueryWrapper<FamilymenuDish>()
+            .select(FamilymenuDish::getRoomId)
+            .in(FamilymenuDish::getRoomId, roomIds));
+        Map<Long, Long> counter = new HashMap<>();
+        for (FamilymenuDish dish : dishes) {
+            counter.merge(dish.getRoomId(), 1L, Long::sum);
+        }
+        return counter;
+    }
+
+    /** 内部成员列表（调用方已完成归属校验，此处不再重复校验） */
+    private List<FamilymenuMemberResp> getMemberListInternal(Long roomId) {
+        List<FamilymenuMember> list = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
+            .eq(FamilymenuMember::getRoomId, roomId)
+            .orderByAsc(FamilymenuMember::getId));
+        if (CollectionUtils.isEmpty(list)) {
+            return List.of();
+        }
+        return list.stream().map(this::toMemberResp).toList();
+    }
+
+    private FamilymenuMemberResp toMemberResp(FamilymenuMember m) {
+        FamilymenuMemberResp r = new FamilymenuMemberResp();
+        r.setId(m.getId());
+        r.setRoomId(m.getRoomId());
+        r.setUserId(m.getUserId());
+        r.setNickname(m.getNickname());
+        r.setAvatarUrl(m.getAvatarUrl());
+        r.setRole(m.getRole());
+        return r;
     }
 
     private String generateInviteCode() {
-        // 一次性生成 10 个候选邀请码，单次 IN 查询批量排除正在使用中的邀请码，杜绝循环查 DB
-        List<String> candidates = new ArrayList<>(10);
-        for (int i = 0; i < 10; i++) {
-            candidates.add(String.valueOf(100000 + RANDOM.nextInt(900000)));
+        // 一次性生成候选邀请码，单次 IN 查询批量排除正在使用中的邀请码，杜绝循环查 DB
+        List<String> candidates = new ArrayList<>(INVITE_CODE_CANDIDATE_COUNT);
+        for (int i = 0; i < INVITE_CODE_CANDIDATE_COUNT; i++) {
+            candidates.add(String.valueOf(INVITE_CODE_BASE + RANDOM.nextInt(INVITE_CODE_BOUND)));
         }
         Set<String> usedCodes = list(new LambdaQueryWrapper<FamilymenuRoom>()
             .select(FamilymenuRoom::getInviteCode)
@@ -255,7 +349,7 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
                 return c;
             }
         }
-        return String.valueOf(100000 + RANDOM.nextInt(900000));
+        return String.valueOf(INVITE_CODE_BASE + RANDOM.nextInt(INVITE_CODE_BOUND));
     }
 
     private String resolveUserName(Long userId) {
@@ -263,8 +357,12 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
             R<SysUserDto> r = systemClient.getUserById(userId);
             if (r != null && r.isSuccess() && r.getData() != null) {
                 String n = r.getData().getNickname();
-                if (StringUtils.hasText(n)) return n;
-                if (StringUtils.hasText(r.getData().getRealName())) return r.getData().getRealName();
+                if (StringUtils.hasText(n)) {
+                    return n;
+                }
+                if (StringUtils.hasText(r.getData().getRealName())) {
+                    return r.getData().getRealName();
+                }
             }
         } catch (Exception e) {
             // 展示名解析失败（system 不可达等）仍回退占位名，但必须留痕：静默吞掉会让
@@ -274,4 +372,3 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
         return "家庭成员" + (userId % 1000);
     }
 }
-

@@ -1,21 +1,33 @@
 # ypbin-admin 微服务版部署指南
 
-> 微服务版（main 分支）：网关 + 认证 + 系统 + AI + 任务 五服务架构，
+> 微服务版：网关 + 认证 + 系统 + AI + 小程序 服务架构，
 > 基于 Spring Cloud Alibaba（Nacos 注册/配置中心 + Sentinel 限流 + OpenFeign 服务调用）。
+> 定时任务由 XXL-JOB 调度中心承载（`ypbin-system` 作为执行器），不是独立业务服务。
 
 ## 架构
 
 | 服务 | 端口 | 说明 |
 |---|---|---|
 | `ypbin-gateway` | 18080 | Spring Cloud Gateway，统一鉴权（sa-token 无状态校验 + 签发内部身份头） |
-| `ypbin-auth` | 18081 | 认证服务：账号/手机验证码/第三方登录、验证码、sa-token 登录态 |
+| `ypbin-auth` | 18081 | 认证服务：账号/手机验证码/第三方/微信小程序登录、验证码、sa-token 登录态 |
 | `ypbin-system` | 18082 | 系统服务：用户/角色/菜单/部门/岗位/字典/文件/日志/任务/通知/租户等 |
 | `ypbin-ai` | 18083 | AI 服务：知识库/对话/模型/统计 |
-| `ypbin-job` | 18084 | 定时任务调度 |
+| `ypbin-miniapp` | 18084 | 小程序服务：牌账清（CardTab）与家庭菜单（FamilyMenu） |
 | `nacos` | 8848 | 注册中心 + 配置中心（共享配置 `ypbin-common.yaml`） |
 | `sentinel-dashboard` | 8858 | 限流控制台（可选） |
 | `mysql` | 3306 | 共享数据库（所有服务共用 `ypbin_admin` 库） |
 | `redis` | 6379 | 缓存（验证码/会话/多级缓存） |
+
+## 小程序登录（部署必读）
+
+`ypbin-auth` 的微信小程序登录依赖 **服务端配置** 的 `WECHAT_MINIAPP_APPID` / `WECHAT_MINIAPP_SECRET`
+（写入 `deploy/.env`，由 `install.sh` 替换进 Nacos 的 `ypbin-auth.yaml`）。
+
+- **未配置时小程序登录直接失败（fail-closed）**，不会退化成 Mock 身份；仅本地开发可在
+  Nacos `ypbin-auth.yaml` 显式设 `ypbin.wechat.miniapp.mock-enabled=true`。
+- 生产**必须**保持 `mock-enabled=false`：开启后任意 `code` 都能换出一个稳定账号。
+- 小程序登录端点为 `/auth/miniapp/login`，需同时存在于网关白名单与 **auth 自身**
+  的 `ypbin.security.excludes`（网关 `StripPrefix` 后 auth 收到的是 `/miniapp/login`）。
 
 ## 服务间调用约定
 
@@ -108,7 +120,7 @@ docker build -t ypbin/ypbin-gateway:local ypbin-gateway/
 docker build -t ypbin/ypbin-auth:local ypbin-auth/
 docker build -t ypbin/ypbin-system:local ypbin-service/ypbin-system/
 docker build -t ypbin/ypbin-ai:local ypbin-service/ypbin-ai/
-docker build -t ypbin/ypbin-job:local ypbin-service/ypbin-job/
+docker build -t ypbin/ypbin-miniapp:local ypbin-service/ypbin-miniapp/
 
 # 3. 编排启动
 docker compose -f deploy/docker-compose.yml up -d
@@ -130,7 +142,7 @@ curl -X POST http://localhost:18080/auth/login \
 curl http://localhost:18080/system/user/list \
   -H "Authorization: Bearer <token>"
 
-# Nacos 控制台确认 5 服务注册
+# Nacos 控制台确认 5 个服务已注册（gateway/auth/system/ai/miniapp）
 # http://localhost:8848/nacos → 服务管理 → 服务列表
 ```
 
@@ -180,7 +192,7 @@ spring.cloud.gateway.server.webflux.routes:
 
 | 维度 | 单体版（boot 分支） | 微服务版（main） |
 |---|---|---|
-| 架构 | 单应用（8080） | 网关 + 5 服务 |
+| 架构 | 单应用（8080） | 网关 + 5 服务（gateway/auth/system/ai/miniapp） |
 | 注册中心 | 无 | Nacos |
 | 服务调用 | 本地 Bean | OpenFeign + 身份头 |
 | 当前用户 | `UserContext`（sa-token 会话） | `IdentityContext`（身份头） |

@@ -1148,6 +1148,10 @@ env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
 env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
 env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
 env_key_backfill GATEWAY_SIGN_TOKEN 'rand_hex 32'
+# 小程序登录凭据不自动生成随机值：随机值换不出真实 openid，静默生成只会把"未配置"伪装成"已配置"。
+# 缺失即留空，服务侧 fail-closed 拒绝小程序登录，由运维按需填入真实 appid/secret。
+env_key_backfill WECHAT_MINIAPP_APPID 'printf ""'
+env_key_backfill WECHAT_MINIAPP_SECRET 'printf ""'
 if [ "$NO_DOCKER" = "1" ]; then
   env_key_backfill REDIS_PASSWORD 'printf ""'
 else
@@ -1288,13 +1292,18 @@ if [ -n "$NACOS_TOKEN" ]; then
             -e "s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
             -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
             -e "s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
+            -e "s|\${WECHAT_MINIAPP_APPID:}|${WECHAT_MINIAPP_APPID:-}|g" \
+            -e "s|\${WECHAT_MINIAPP_SECRET:}|${WECHAT_MINIAPP_SECRET:-}|g" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       else
         # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码；
         # INTERNAL_TOKEN 仍无条件替换（缺失/为空时 system 守卫 fail-closed，见 ypbin.internal.token 注释）
+        # 小程序凭据同理无条件替换：空值即"未配置"，服务侧 fail-closed 拒绝小程序登录（不静默 Mock）。
         sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
             -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
             -e "s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
+            -e "s|\${WECHAT_MINIAPP_APPID:}|${WECHAT_MINIAPP_APPID:-}|g" \
+            -e "s|\${WECHAT_MINIAPP_SECRET:}|${WECHAT_MINIAPP_SECRET:-}|g" \
             -e "/password: \${REDIS_PASSWORD}/d" \
             "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
       fi

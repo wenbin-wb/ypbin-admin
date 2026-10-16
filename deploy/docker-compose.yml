@@ -111,6 +111,10 @@ services:
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
+      # 小程序登录凭据：由 Nacos ypbin-auth.yaml 的 ${WECHAT_MINIAPP_APPID:}/${WECHAT_MINIAPP_SECRET:}
+      # 占位符从容器环境解析。未配置=空串，登录 fail-closed 直接失败（不退化为 Mock 身份）。
+      WECHAT_MINIAPP_APPID: ${WECHAT_MINIAPP_APPID:-}
+      WECHAT_MINIAPP_SECRET: ${WECHAT_MINIAPP_SECRET:-}
     ports:
       - "${INTERNAL_BIND_ADDR:-0.0.0.0}:18081:18081"
     depends_on:
@@ -173,10 +177,12 @@ services:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
     ports:
-      - "18084:18084"
+      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:18084:18084"
     depends_on:
-      - nacos
-      - mysql
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       ypbin-net:

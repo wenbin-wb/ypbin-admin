@@ -9,6 +9,10 @@ ypbin:
   security:
     excludes:
       - /login
+      # 小程序登录：网关白名单已放行 /auth/miniapp/login，但网关 StripPrefix 后
+      # auth 自身收到的是 /miniapp/login；本服务 Sa-Token 拦截器默认开启，
+      # 此处漏配会把「还没登录」的登录请求拦成 401（自我死锁）。两个白名单必须成对维护。
+      - /miniapp/login
       - /sms/send
       - /sms/login
       - /social/authorize/**
@@ -17,6 +21,17 @@ ypbin:
       - /captcha
       - /captcha/verify
       - /actuator/**
+
+# ---------- 微信小程序登录 ----------
+# appid/secret 是小程序登录换取 openid 的唯一凭证，必须由服务端配置提供：
+# 请求方传入的 appid 仅与服务端配置做一致性校验，不参与换取。二者由 install.sh 从 deploy/.env
+# 替换注入（仓库不提交真实值）。未配置时登录 fail-closed 直接失败，**不会**退化为 Mock 身份。
+# mock-enabled 仅供本地开发；生产必须保持 false，否则任意 code 都能换出稳定账号。
+  wechat:
+    miniapp:
+      appid: ${WECHAT_MINIAPP_APPID:}
+      secret: ${WECHAT_MINIAPP_SECRET:}
+      mock-enabled: false
 
 # ---------- 操作日志（ypbin-starter-log）----------
 # 登录日志的采集项：与 ypbin-system.yaml 口径一致，显式追加 BROWSER/OS，否则 sys_log 的

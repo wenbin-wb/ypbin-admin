@@ -30,23 +30,29 @@ import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabSettlementSnapshotMapper;
 import cn.ypbin.admin.miniapp.cardtab.model.resp.CardtabSettlementResp;
+import cn.ypbin.admin.miniapp.cardtab.support.CardtabRoomAccessSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.security.core.LoginUser;
+import cn.ypbin.starter.security.identity.IdentityContext;
 import java.math.BigDecimal;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 牌账清-结算计算测试（不依赖数据库与 Spring 上下文）。
+ * 牌账清-结算计算与访问控制测试（不依赖数据库与 Spring 上下文）。
  *
  * <p><b>为什么先测这里</b>：结算直接产出「谁该给谁多少钱」，算错就是钱错；而贪心转账化简
  * （creditor/debtor 双指针）与排名是最容易被后续改动碰坏的纯逻辑。该模块此前<b>零单测</b>。</p>
  *
- * <p>覆盖：排名、贪心转账最小化、零分成员不参与转账、无成员、房间不存在、快照命中/快照损坏回退。</p>
+ * <p>覆盖：排名、贪心转账最小化、零分成员不参与转账、无成员、快照命中/快照损坏回退，
+ * 以及「非成员不得读取账目、不得结算他人房间」这条越权防护——守卫使用<b>真实实现</b>而非 mock，
+ * 否则越权回归会静默失效。</p>
  *
  * @author wenbin
  * @since 2026-09-18
@@ -55,10 +61,14 @@ class CardtabSettlementServiceImplTest {
 
     private static final Long ROOM_ID = 100L;
 
+    /** 当前登录用户（合法成员）的成员记录主键 */
+    private static final long CURRENT_MEMBER_ID = 7L;
+
     private CardtabRoomMapper roomMapper;
     private CardtabRoomMemberMapper memberMapper;
     private CardtabSettlementSnapshotMapper snapshotMapper;
     private CardtabRoomEventMapper eventMapper;
+    private CardtabRoomAccessSupport accessSupport;
     private CardtabSettlementServiceImpl service;
 
     @BeforeEach
@@ -67,8 +77,37 @@ class CardtabSettlementServiceImplTest {
         memberMapper = mock(CardtabRoomMemberMapper.class);
         snapshotMapper = mock(CardtabSettlementSnapshotMapper.class);
         eventMapper = mock(CardtabRoomEventMapper.class);
-        service = new CardtabSettlementServiceImpl(roomMapper, memberMapper,
-            eventMapper, new ObjectMapper());
+        // 访问守卫用**真实实现** + mock 的 Mapper，保证「非成员被拒」测的是真实守卫逻辑
+        accessSupport = new CardtabRoomAccessSupport(roomMapper, memberMapper);
+        service = new CardtabSettlementServiceImpl(memberMapper,
+            eventMapper, new ObjectMapper(), accessSupport);
+        loginAs(1L);
+    }
+
+    @AfterEach
+    void tearDown() {
+        IdentityContext.clear();
+    }
+
+    /** 模拟已登录用户（身份头模式下 IdentityContext 即当前用户来源） */
+    private void loginAs(Long userId) {
+        IdentityContext.setLoginUser(new LoginUser(userId, "u" + userId));
+    }
+
+    /** 让当前登录用户成为该房间的在房成员（放行路径） */
+    private void givenCurrentUserIsMember() {
+        CardtabRoomMember self = new CardtabRoomMember();
+        self.setId(CURRENT_MEMBER_ID);
+        self.setRoomId(ROOM_ID);
+        self.setUserId(1L);
+        self.setNickname("我");
+        self.setMemberStatus("IN_ROOM");
+        when(memberMapper.selectOne(any())).thenReturn(self);
+    }
+
+    /** 让当前登录用户不是该房间成员（拒绝路径） */
+    private void givenCurrentUserIsNotMember() {
+        when(memberMapper.selectOne(any())).thenReturn(null);
     }
 
     private CardtabRoom room(String status) {
@@ -91,7 +130,8 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("结算排名按总分降序、名次连续，正分带 + 号写入分享文案")
     void rankingShouldBeOrderedByScoreDesc() {
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ACTIVE"));
+        givenCurrentUserIsMember();
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ONGOING"));
         when(memberMapper.selectList(any())).thenReturn(List.of(
             member(1, "阿明", "-40"), member(2, "小红", "100"), member(3, "老王", "-60")));
 
@@ -110,7 +150,8 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("贪心转账化简：大额债务人优先配对，笔数与金额都必须精确")
     void transfersShouldBeMinimalGreedyMatch() {
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ACTIVE"));
+        givenCurrentUserIsMember();
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ONGOING"));
         when(memberMapper.selectList(any())).thenReturn(List.of(
             member(1, "小红", "100"), member(2, "阿明", "-40"), member(3, "老王", "-60")));
 
@@ -137,7 +178,8 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("零分成员只参与排名，不产生任何转账")
     void zeroScoreMemberShouldNotAppearInTransfers() {
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ACTIVE"));
+        givenCurrentUserIsMember();
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ONGOING"));
         when(memberMapper.selectList(any())).thenReturn(List.of(
             member(1, "小红", "100"), member(2, "阿明", "-100"), member(3, "看客", "0")));
 
@@ -152,7 +194,8 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("房间无成员时返回空集合（不是 null）并给出提示文案")
     void emptyMembersShouldReturnEmptyCollections() {
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ACTIVE"));
+        givenCurrentUserIsMember();
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ONGOING"));
         when(memberMapper.selectList(any())).thenReturn(List.of());
 
         CardtabSettlementResp resp = service.getSettlement(ROOM_ID);
@@ -163,8 +206,58 @@ class CardtabSettlementServiceImplTest {
     }
 
     @Test
+    @DisplayName("未登录：直接拒绝，不泄露任何账目")
+    void anonymousShouldBeRejected() {
+        IdentityContext.clear();
+
+        assertThatThrownBy(() -> service.getSettlement(ROOM_ID))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("未登录");
+    }
+
+    @Test
+    @DisplayName("非成员读账目：拒绝，且报错不区分「房间不存在」以免被用来探测房间（越权防护）")
+    void nonMemberCannotReadSettlement() {
+        givenCurrentUserIsNotMember();
+        // 注意：房间是否存在**不**stub——守卫先查成员关系，故不存在与无权限的报错一致
+        assertThatThrownBy(() -> service.getSettlement(ROOM_ID))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("不是该房间成员");
+        // 关键反证：非成员绝不能让服务去读账目明细
+        verify(memberMapper, never()).selectList(any());
+    }
+
+    @Test
+    @DisplayName("非成员结算他人房间：拒绝（此前任何人可锁死别人牌局）")
+    void nonMemberCannotSettleOthersRoom() {
+        givenCurrentUserIsNotMember();
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ONGOING"));
+
+        assertThatThrownBy(() -> service.saveSettlement(ROOM_ID))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("不是该房间成员");
+        // 越权失败不得留下任何副作用（对 updateById 显式指定类型，规避 BaseMapper 的重载歧义）
+        verify(roomMapper, never()).updateById(any(CardtabRoom.class));
+        verify(snapshotMapper, never()).insert(any(CardtabSettlementSnapshot.class));
+        verify(eventMapper, never()).insert(any(CardtabRoomEvent.class));
+    }
+
+    @Test
+    @DisplayName("已结算房间再次结算：显式拒绝，不覆盖既有快照")
+    void settledRoomCannotBeSettledAgain() {
+        givenCurrentUserIsMember();
+        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("SETTLED"));
+
+        assertThatThrownBy(() -> service.saveSettlement(ROOM_ID))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("已结算");
+        verify(snapshotMapper, never()).insert(any(CardtabSettlementSnapshot.class));
+    }
+
+    @Test
     @DisplayName("房间不存在时显式抛业务异常，不返回空结算单")
     void missingRoomShouldThrow() {
+        givenCurrentUserIsMember();
         when(roomMapper.selectById(anyLong())).thenReturn(null);
 
         assertThatThrownBy(() -> service.getSettlement(ROOM_ID))
@@ -175,7 +268,8 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("结算落库：写出快照 JSON、更新房间状态并记一条流水（写路径此前完全没测）")
     void saveSettlementShouldPersistSnapshotAndEvent() {
-        CardtabRoom active = room("ACTIVE");
+        givenCurrentUserIsMember();
+        CardtabRoom active = room("ONGOING");
         when(roomMapper.selectById(ROOM_ID)).thenReturn(active);
         when(memberMapper.selectList(any())).thenReturn(List.of(
             member(1, "小红", "30"), member(2, "阿明", "-30")));
@@ -200,6 +294,7 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("已结算且快照可用时直接读快照，不再实时重算")
     void settledRoomWithValidSnapshotShouldUseSnapshot() {
+        givenCurrentUserIsMember();
         when(roomMapper.selectById(ROOM_ID)).thenReturn(room("SETTLED"));
         CardtabSettlementSnapshot snapshot = new CardtabSettlementSnapshot();
         snapshot.setId(9L);
@@ -220,6 +315,7 @@ class CardtabSettlementServiceImplTest {
     @Test
     @DisplayName("快照损坏时回退实时计算（行为不变），且不会把异常吞掉导致静默")
     void settledRoomWithBrokenSnapshotShouldFallbackToRealtime() {
+        givenCurrentUserIsMember();
         when(roomMapper.selectById(ROOM_ID)).thenReturn(room("SETTLED"));
         CardtabSettlementSnapshot snapshot = new CardtabSettlementSnapshot();
         snapshot.setId(9L);

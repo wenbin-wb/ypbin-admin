@@ -9,8 +9,10 @@
  */
 package cn.ypbin.admin.auth;
 
+import cn.ypbin.admin.auth.config.WechatMiniappProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -22,6 +24,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.auth", "cn.ypbin.admin.system.api"})
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
+@EnableConfigurationProperties(WechatMiniappProperties.class)
 @EnableScheduling
 public class AuthServiceApplication {
 

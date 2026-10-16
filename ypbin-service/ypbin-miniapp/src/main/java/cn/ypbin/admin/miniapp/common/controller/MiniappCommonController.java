@@ -98,19 +98,19 @@ public class MiniappCommonController {
     }
 
     /**
-     * 获取小程序码或占位二维码图片。
+     * 获取小程序码场景数据。
+     *
+     * <p><b>当前未接入微信 getwxacode 接口</b>：本接口只回显 scene/page，{@code qrcodeUrl} 恒为空。
+     * 此前实现同样返回空串但没有任何说明，调用方无法区分「生成失败」与「尚未实现」——这里改为
+     * 显式抛出，避免端侧把空图当成正常结果渲染（接入微信接口后再放开）。</p>
      */
     @GetMapping("/wx/qrcode")
     public R<Map<String, String>> getQrcode(
         @RequestParam("scene") String scene,
         @RequestParam(value = "page", required = false) String page,
         @RequestParam(value = "appId", required = false) String appId) {
-        // 返回小程序码场景数据与占位图
-        Map<String, String> res = new HashMap<>();
-        res.put("scene", scene);
-        res.put("page", page != null ? page : "");
-        res.put("qrcodeUrl", "");
-        return R.ok(res);
+        log.warn("小程序码生成未实现被调用；scene={}，page={}，appId={}", scene, page, appId);
+        throw new BusinessException("小程序码生成功能尚未接入");
     }
 
     private Long currentUserId() {
