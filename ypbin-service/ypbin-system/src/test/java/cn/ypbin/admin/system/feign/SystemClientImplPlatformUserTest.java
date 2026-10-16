@@ -19,6 +19,7 @@ import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.provider.DbLogProviders;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
+import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
@@ -49,6 +50,7 @@ class SystemClientImplPlatformUserTest {
         mock(SocialConfigReader.class),
         mock(SocialBindService.class),
         mock(SysMenuService.class),
+        mock(SysNoticeService.class),
         new DbLogProviders.DbLogDao(mock(SysLogMapper.class)),
         providerOfTrackRecorder());
 

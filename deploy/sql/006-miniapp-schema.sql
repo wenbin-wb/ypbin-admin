@@ -119,6 +119,44 @@ CREATE TABLE IF NOT EXISTS cardtab_settlement_snapshot
     KEY idx_room_id (room_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '牌账清-结算快照表';
 
+-- 玩法模板表（归属创建者本人，非房间级数据）
+CREATE TABLE IF NOT EXISTS cardtab_game_template
+(
+    id                  BIGINT      NOT NULL COMMENT '主键',
+    owner_user_id       BIGINT      NOT NULL COMMENT '归属用户 ID（模板仅本人可见可改）',
+    name                VARCHAR(64) NOT NULL COMMENT '模板名称',
+    game_type           VARCHAR(32) NOT NULL DEFAULT 'MAHJONG' COMMENT '玩法类型：MAHJONG/DOUDUIZHU/RUNFAST/CUSTOM',
+    unit                VARCHAR(16) NOT NULL DEFAULT '积分' COMMENT '计分单位',
+    bookkeeping_mode    VARCHAR(32) NULL COMMENT '记账模式：SELF_PAY_TO_MEMBER/MULTI_MEMBER_RECORD',
+    allow_passcode_join TINYINT     NOT NULL DEFAULT 1 COMMENT '是否允许口令加入：1 允许 0 禁止',
+    create_user         BIGINT      NULL COMMENT '创建人',
+    create_time         DATETIME    NULL COMMENT '创建时间',
+    update_user         BIGINT      NULL COMMENT '更新人',
+    update_time         DATETIME    NULL COMMENT '更新时间',
+    status              TINYINT     NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 禁用',
+    is_deleted          TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    PRIMARY KEY (id),
+    KEY idx_owner_user_id (owner_user_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '牌账清-玩法模板表';
+
+-- 意见反馈表
+CREATE TABLE IF NOT EXISTS cardtab_feedback
+(
+    id              BIGINT        NOT NULL COMMENT '主键',
+    user_id         BIGINT        NOT NULL COMMENT '提交用户 ID',
+    content         VARCHAR(1000) NOT NULL COMMENT '反馈内容',
+    contact         VARCHAR(64)   NULL COMMENT '联系方式（微信号等）',
+    feedback_status VARCHAR(16)   NOT NULL DEFAULT 'PENDING' COMMENT '处理状态：PENDING 待处理 PROCESSED 已处理',
+    create_user     BIGINT        NULL COMMENT '创建人',
+    create_time     DATETIME      NULL COMMENT '创建时间',
+    update_user     BIGINT        NULL COMMENT '更新人',
+    update_time     DATETIME      NULL COMMENT '更新时间',
+    status          TINYINT       NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 禁用',
+    is_deleted      TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    PRIMARY KEY (id),
+    KEY idx_user_id (user_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '牌账清-意见反馈表';
+
 
 -- -------------------------------------------------------------
 -- 2. 家庭菜单 (FamilyMenu) 模块

@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
@@ -238,4 +239,27 @@ public interface ISystemClient {
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone);
+
+    /**
+     * 查询对外可见（已发布且未过期）的公告列表。
+     *
+     * <p>端侧服务禁止直连 system 的表，故小程序侧展示公告一律经本端点读取；
+     * 「哪些公告对外可见」的口径收口在 system 的公告服务一处，不在调用方重写筛选条件。</p>
+     *
+     * <p>失败语义：system 不可达时走 {@link ISystemClientFallback} 返回失败 {@code R}，
+     * 调用方必须据 {@code R.success} 判定——公告属展示型降级数据，可回退为空列表，但须记日志暴露。</p>
+     *
+     * @return 有效公告列表（置顶优先、发布时间倒序）
+     */
+    @GetMapping("/notice-published-list")
+    R<List<NoticeResp>> listPublishedNotices();
+
+    /**
+     * 按 ID 查询单条对外可见公告（已发布且未过期）。
+     *
+     * @param id 公告 ID
+     * @return 公告；不可见（草稿/已撤回/已过期/不存在）时 data 为 null
+     */
+    @GetMapping("/notice-published-detail")
+    R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id);
 }

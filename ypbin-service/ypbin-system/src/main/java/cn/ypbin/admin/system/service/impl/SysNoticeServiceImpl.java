@@ -245,6 +245,37 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
     }
 
+    @Override
+    public List<NoticeResp> listPublishedNotices() {
+        return list(publishedWrapper()).stream().map(this::toResp).toList();
+    }
+
+    @Override
+    public NoticeResp getPublishedNotice(Long id) {
+        if (id == null) {
+            return null;
+        }
+        // 单条读取同样套用「已发布 + 在生效期内」口径：否则可凭 id 直接读到草稿/已撤回公告
+        SysNotice notice = getOne(publishedWrapper().eq(SysNotice::getId, id), false);
+        return notice == null ? null : toResp(notice);
+    }
+
+    /**
+     * 「对外可见公告」的统一筛选条件：已发布、未过期（失效时间为空视为长期有效）。
+     *
+     * <p>生效时间未到的不排除：定时发布由发布任务在到点后置为已发布，故「已发布」本身即代表可读。
+     * 置顶优先、发布时间倒序（publishTime 为空时回落 createTime，避免排序抖动）。</p>
+     */
+    private LambdaQueryWrapper<SysNotice> publishedWrapper() {
+        return new LambdaQueryWrapper<SysNotice>()
+            .eq(SysNotice::getPublishStatus, PUBLISHED)
+            .and(w -> w.isNull(SysNotice::getExpireTime)
+                .or().gt(SysNotice::getExpireTime, LocalDateTime.now()))
+            .orderByDesc(SysNotice::getIsTop)
+            .orderByDesc(SysNotice::getPublishTime)
+            .orderByDesc(SysNotice::getId);
+    }
+
     private boolean isDraft(NoticeSaveReq req) {
         return Integer.valueOf(DRAFT).equals(req.getPublishStatus());
     }

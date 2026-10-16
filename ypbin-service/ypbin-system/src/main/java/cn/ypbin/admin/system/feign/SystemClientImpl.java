@@ -19,9 +19,11 @@ import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
+import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
@@ -85,6 +87,7 @@ public class SystemClientImpl implements ISystemClient {
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
     private final SysMenuService menuService;
+    private final SysNoticeService noticeService;
     /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
     private final LogDao logDao;
 
@@ -420,5 +423,18 @@ public class SystemClientImpl implements ISystemClient {
             userService.updateById(user);
         }
         return R.ok(UserViewConverter.toDto(user));
+    }
+
+    @Override
+    @GetMapping("/notice-published-list")
+    public R<List<NoticeResp>> listPublishedNotices() {
+        // 可见性口径（已发布 + 未过期）收口在 SysNoticeService，本端点只做路由，不重写筛选条件
+        return R.ok(noticeService.listPublishedNotices());
+    }
+
+    @Override
+    @GetMapping("/notice-published-detail")
+    public R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id) {
+        return R.ok(noticeService.getPublishedNotice(id));
     }
 }
