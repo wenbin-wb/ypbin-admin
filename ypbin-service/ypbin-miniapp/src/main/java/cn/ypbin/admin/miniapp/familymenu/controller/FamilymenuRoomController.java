@@ -11,6 +11,7 @@ package cn.ypbin.admin.miniapp.familymenu.controller;
 
 import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuRoomCreateReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMemberResp;
+import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMyRoomResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuRoomDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuRoomService;
 import cn.ypbin.starter.core.model.R;
@@ -109,10 +110,11 @@ public class FamilymenuRoomController {
     }
 
     /**
-     * 获取当前选中餐厅。
+     * 获取当前选中餐厅（含我在该餐厅的成员记录）。
      */
     @GetMapping("/member/my-room")
-    public R<FamilymenuRoomDetailResp> getMyRoom(@RequestParam(value = "roomId", required = false) Long roomId) {
+    public R<FamilymenuMyRoomResp> getMyRoom(
+        @RequestParam(value = "roomId", required = false) Long roomId) {
         return R.ok(roomService.getMyRoom(roomId));
     }
 }

@@ -68,22 +68,22 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         accessSupport.requireMember(req.getRoomId());
 
         LocalDate date = req.getOrderDate() != null ? req.getOrderDate() : LocalDate.now();
-        String mealTime = StringUtils.hasText(req.getMealTime())
-            ? req.getMealTime() : FamilymenuMealTimeEnum.DINNER.getCode();
+        String orderType = StringUtils.hasText(req.getOrderType())
+            ? req.getOrderType() : FamilymenuMealTimeEnum.DINNER.getCode();
 
         // 查询当天该餐厅是否已有开餐订单
         FamilymenuOrder order = getOne(new LambdaQueryWrapper<FamilymenuOrder>()
             .eq(FamilymenuOrder::getRoomId, req.getRoomId())
             .eq(FamilymenuOrder::getOrderDate, date)
-            .eq(FamilymenuOrder::getMealTime, mealTime)
+            .eq(FamilymenuOrder::getOrderType, orderType)
             .orderByDesc(FamilymenuOrder::getId), false);
 
         if (order == null) {
             order = new FamilymenuOrder();
             order.setRoomId(req.getRoomId());
             order.setOrderDate(date);
-            order.setMealTime(mealTime);
-            order.setOrderStatus(FamilymenuOrderStatusEnum.PICKING.getCode());
+            order.setOrderType(orderType);
+            order.setOrderStatus(FamilymenuOrderStatusEnum.ORDERING.getCode());
             save(order);
         }
 

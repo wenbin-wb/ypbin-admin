@@ -18,6 +18,7 @@ import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuMemberMapper;
 import cn.ypbin.admin.miniapp.familymenu.mapper.FamilymenuRoomMapper;
 import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuRoomCreateReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMemberResp;
+import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMyRoomResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuRoomDetailResp;
 import cn.ypbin.admin.miniapp.familymenu.service.FamilymenuRoomService;
 import cn.ypbin.admin.miniapp.familymenu.support.FamilymenuRoomAccessSupport;
@@ -227,16 +228,43 @@ public class FamilymenuRoomServiceImpl extends BaseServiceImpl<FamilymenuRoomMap
     }
 
     @Override
-    public FamilymenuRoomDetailResp getMyRoom(Long roomId) {
+    public FamilymenuMyRoomResp getMyRoom(Long roomId) {
+        // 指定餐厅：走完整归属校验后返回「餐厅 + 我的成员记录」
         if (roomId != null) {
-            return getRoomDetail(roomId);
+            FamilymenuMember me = accessSupport.requireMember(roomId);
+            return buildMyRoom(accessSupport.requireRoom(roomId), me);
         }
-        List<FamilymenuRoomDetailResp> myRooms = getMyRooms();
-        if (CollectionUtils.isEmpty(myRooms)) {
-            // 该项目「无默认餐厅」是正常的空态，返回 null 由端侧渲染空页面（历史上游约定，保持不变）
-            return null;
+        // 未指定：取我加入的第一个餐厅（无餐厅是正常空态，room/member 均为 null）
+        Long userId = accessSupport.currentUserId();
+        List<FamilymenuMember> members = memberMapper.selectList(new LambdaQueryWrapper<FamilymenuMember>()
+            .eq(FamilymenuMember::getUserId, userId)
+            .orderByDesc(FamilymenuMember::getCreateTime));
+        FamilymenuMyRoomResp resp = new FamilymenuMyRoomResp();
+        if (CollectionUtils.isEmpty(members)) {
+            return resp;
         }
-        return myRooms.getFirst();
+        FamilymenuMember first = members.getFirst();
+        FamilymenuRoom room = getById(first.getRoomId());
+        if (room == null) {
+            // 成员记录指向的餐厅已被解散：属数据不一致，暴露出来而非静默返回空
+            log.warn("成员记录指向的餐厅不存在，memberId={}，roomId={}", first.getId(), first.getRoomId());
+            return resp;
+        }
+        return buildMyRoom(room, first);
+    }
+
+    /**
+     * 组装「我的餐厅」出参。
+     *
+     * @param room   餐厅
+     * @param member 我在该餐厅的成员记录
+     * @return 包装结果
+     */
+    private FamilymenuMyRoomResp buildMyRoom(FamilymenuRoom room, FamilymenuMember member) {
+        FamilymenuMyRoomResp resp = new FamilymenuMyRoomResp();
+        resp.setRoom(buildRoomDetail(room));
+        resp.setMember(toMemberResp(member));
+        return resp;
     }
 
     /**

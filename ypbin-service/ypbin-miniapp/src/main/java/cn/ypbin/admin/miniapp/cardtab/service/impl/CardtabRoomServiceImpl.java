@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.miniapp.cardtab.service.impl;
 
+import cn.ypbin.admin.miniapp.cardtab.entity.CardtabExpense;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoom;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomMember;
@@ -16,6 +17,7 @@ import cn.ypbin.admin.miniapp.cardtab.enums.CardtabEventTypeEnum;
 import cn.ypbin.admin.miniapp.cardtab.enums.CardtabMemberRoleEnum;
 import cn.ypbin.admin.miniapp.cardtab.enums.CardtabMemberStatusEnum;
 import cn.ypbin.admin.miniapp.cardtab.enums.CardtabRoomStatusEnum;
+import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabExpenseMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomEventMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
@@ -38,6 +40,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -101,10 +104,14 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
     private static final int LONG_CODE_BASE = 100000;
     private static final int LONG_CODE_BOUND = 900000;
 
+    /** 占位昵称取模基数（userId % 该值），仅用于远端昵称不可用时兜底展示 */
+    private static final int PLACEHOLDER_NICKNAME_MOD = 1000;
+
     private static final Random RANDOM = new SecureRandom();
 
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
+    private final CardtabExpenseMapper expenseMapper;
     private final ISystemClient systemClient;
     private final CardtabRoomAccessSupport accessSupport;
 
@@ -113,62 +120,104 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         Long userId = accessSupport.currentUserId();
         CardtabHomeSummaryResp summary = new CardtabHomeSummaryResp();
 
-        // 1. 查询当前用户参与的所有房间成员记录
+        // 1. 当前用户在各房间的成员记录（含历史房间，用于统计场次）
         List<CardtabRoomMember> myMembers = memberMapper.selectList(new LambdaQueryWrapper<CardtabRoomMember>()
             .eq(CardtabRoomMember::getUserId, userId)
-            .eq(CardtabRoomMember::getMemberStatus, CardtabMemberStatusEnum.IN_ROOM.getCode())
             .orderByDesc(CardtabRoomMember::getCreateTime));
 
-        if (!CollectionUtils.isEmpty(myMembers)) {
-            List<Long> roomIds = myMembers.stream().map(CardtabRoomMember::getRoomId).toList();
-            List<CardtabRoom> rooms = listByIds(roomIds);
-            Map<Long, CardtabRoom> roomMap = new HashMap<>();
-            for (CardtabRoom r : rooms) {
-                roomMap.put(r.getId(), r);
-            }
-
-            // 寻找首个进行中的房间（调用者必为成员，故可直接取全量详情）
-            for (CardtabRoomMember m : myMembers) {
-                CardtabRoom r = roomMap.get(m.getRoomId());
-                if (r != null && CardtabRoomStatusEnum.ONGOING.is(r.getRoomStatus())) {
-                    summary.setOngoingRoom(loadRoomDetail(r, true));
-                    break;
-                }
-            }
-
-            // 统计待结算房间数
-            long ongoingCount = rooms.stream()
-                .filter(r -> CardtabRoomStatusEnum.ONGOING.is(r.getRoomStatus()))
-                .count();
-            summary.setUnsettledCount((int) ongoingCount);
-        }
-
-        // 2. 最近参与的历史房间（最多 N 个）
-        Page<CardtabRoomMember> pageParam = new Page<>(1, HOME_RECENT_ROOM_LIMIT);
-        Page<CardtabRoomMember> histPage = memberMapper.selectPage(pageParam,
-            new LambdaQueryWrapper<CardtabRoomMember>()
-                .eq(CardtabRoomMember::getUserId, userId)
-                .orderByDesc(CardtabRoomMember::getCreateTime));
-
-        if (!CollectionUtils.isEmpty(histPage.getRecords())) {
-            List<Long> recentIds = histPage.getRecords().stream().map(CardtabRoomMember::getRoomId).toList();
-            List<CardtabRoom> recentRooms = listByIds(recentIds);
-            summary.setRecentRooms(recentRooms.stream().map(this::toSimpleRoomResp).toList());
-            summary.setMonthRoomCount((int) histPage.getTotal());
-        } else {
-            summary.setRecentRooms(List.of());
-        }
-
-        // 计算今日积分变动
-        BigDecimal todayTotal = BigDecimal.ZERO;
+        // 我的总积分：各房间成员记录上的累计积分之和
+        BigDecimal myScore = BigDecimal.ZERO;
         for (CardtabRoomMember m : myMembers) {
             if (m.getTotalScore() != null) {
-                todayTotal = todayTotal.add(m.getTotalScore());
+                myScore = myScore.add(m.getTotalScore());
             }
         }
-        summary.setTodayScoreChange(todayTotal);
+        summary.setMyScore(myScore);
+        summary.setRoomCount(myMembers.size());
+
+        // 2. 进行中的房间 + 待结算数
+        List<Long> myRoomIds = myMembers.stream().map(CardtabRoomMember::getRoomId).distinct().toList();
+        List<CardtabRoom> myRooms = CollectionUtils.isEmpty(myRoomIds)
+            ? List.of() : listByIds(myRoomIds);
+
+        List<CardtabRoom> ongoingRooms = myRooms.stream()
+            .filter(r -> CardtabRoomStatusEnum.ONGOING.is(r.getRoomStatus()))
+            .toList();
+        summary.setOngoingCount(ongoingRooms.size());
+
+        // 3. 最近房间（按成员记录顺序取前 N 个，保持与「最近参与」一致）
+        List<Long> recentIds = myMembers.stream()
+            .map(CardtabRoomMember::getRoomId)
+            .distinct()
+            .limit(HOME_RECENT_ROOM_LIMIT)
+            .toList();
+        List<CardtabRoom> recentRooms = CollectionUtils.isEmpty(recentIds)
+            ? List.of() : listByIds(recentIds);
+
+        // 4. 一次性统计相关房间的支出笔数，避免在下面逐房间查库（N+1）
+        List<Long> summaryRoomIds = new ArrayList<>(recentIds);
+        ongoingRooms.stream().map(CardtabRoom::getId).filter(id -> !summaryRoomIds.contains(id))
+            .forEach(summaryRoomIds::add);
+        Map<Long, Integer> expenseCountMap = countExpensesByRoom(summaryRoomIds);
+
+        // 进行中房间：取最近一个（myMembers 已按创建时间倒序）
+        for (CardtabRoomMember m : myMembers) {
+            Optional<CardtabRoom> hit = ongoingRooms.stream()
+                .filter(r -> r.getId().equals(m.getRoomId()))
+                .findFirst();
+            if (hit.isPresent()) {
+                summary.setCurrent(buildRoomDetail(hit.get(), true,
+                    expenseCountMap.getOrDefault(hit.get().getId(), 0)));
+                break;
+            }
+        }
+
+        summary.setRecentRooms(recentRooms.stream()
+            .map(r -> toSimpleRoomResp(r, expenseCountMap.getOrDefault(r.getId(), 0)))
+            .toList());
+
+        // 5. 今日记账笔数（我参与的房间里，今天新增且未撤销的支出）
+        summary.setTodayExpenseCount(countTodayExpenses(myRoomIds));
 
         return summary;
+    }
+
+    /**
+     * 统计「我参与的房间里今天新增的未撤销支出」笔数。
+     *
+     * @param roomIds 我参与的房间 ID
+     * @return 笔数
+     */
+    private int countTodayExpenses(List<Long> roomIds) {
+        if (CollectionUtils.isEmpty(roomIds)) {
+            return 0;
+        }
+        // 单次 IN + 时间范围查询，不做循环查询；逻辑删除由 BaseEntity 的 @TableLogic 自动过滤
+        return Math.toIntExact(expenseMapper.selectCount(new LambdaQueryWrapper<CardtabExpense>()
+            .in(CardtabExpense::getRoomId, roomIds)
+            .ge(CardtabExpense::getCreateTime, LocalDate.now().atStartOfDay())));
+    }
+
+    /**
+     * 批量统计各房间的未撤销支出笔数（单次 IN 查询）。
+     *
+     * @param roomIds 房间 ID 集合
+     * @return 房间 ID → 笔数
+     */
+    private Map<Long, Integer> countExpensesByRoom(List<Long> roomIds) {
+        if (CollectionUtils.isEmpty(roomIds)) {
+            return Map.of();
+        }
+        List<Map<String, Object>> rows = expenseMapper.countByRoomIds(roomIds);
+        Map<Long, Integer> counter = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object roomId = row.get("roomId");
+            Object count = row.get("expenseCount");
+            if (roomId != null && count != null) {
+                counter.put(((Number) roomId).longValue(), ((Number) count).intValue());
+            }
+        }
+        return counter;
     }
 
     @Override
@@ -206,15 +255,17 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         recordEvent(room.getId(), CardtabEventTypeEnum.ROOM_CREATED, member.getId(), null, "创建房间",
             myName + " 创建了房间", BigDecimal.ZERO, myName, null);
 
-        // 创建者刚成为成员，此处可直接组装全量详情（无需再查一次成员身份）
-        return loadRoomDetail(room, true);
+        // 新房间必然没有支出，笔数为 0
+        return buildRoomDetail(room, true, 0);
     }
 
     @Override
     public CardtabRoomDetailResp getRoomDetail(Long roomId) {
         // 房间级读取必须校验调用者是成员：否则任何登录用户都能遍历 roomId 看他人牌局（IDOR）
         accessSupport.requireMember(roomId);
-        return loadRoomDetail(accessSupport.requireRoom(roomId), true);
+        CardtabRoom room = accessSupport.requireRoom(roomId);
+        return buildRoomDetail(room, true, countExpensesByRoom(List.of(roomId))
+            .getOrDefault(roomId, 0));
     }
 
     @Override
@@ -238,7 +289,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
                 return member != null && !CardtabMemberStatusEnum.LEFT.is(member.getMemberStatus());
             })
             .orElse(false);
-        return loadRoomDetail(room, isMember);
+        return buildRoomDetail(room, isMember, 0);
     }
 
     @Override
@@ -377,7 +428,11 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
 
         List<Long> roomIds = memberPage.getRecords().stream().map(CardtabRoomMember::getRoomId).toList();
         List<CardtabRoom> rooms = listByIds(roomIds);
-        List<CardtabRoomDetailResp> list = rooms.stream().map(this::toSimpleRoomResp).toList();
+        // 批量取支出笔数，避免逐房间查库
+        Map<Long, Integer> expenseCountMap = countExpensesByRoom(roomIds);
+        List<CardtabRoomDetailResp> list = rooms.stream()
+            .map(r -> toSimpleRoomResp(r, expenseCountMap.getOrDefault(r.getId(), 0)))
+            .toList();
         return PageResult.of(list, memberPage.getTotal(), current, size);
     }
 
@@ -386,15 +441,30 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
      *
      * @param room            房间实体
      * @param includeSensitive 是否包含成员明细与近期流水（匿名预览时为 false）
+     * @param expenseCount    该房间的未撤销支出笔数
      * @return 房间详情
      */
-    private CardtabRoomDetailResp loadRoomDetail(CardtabRoom room, boolean includeSensitive) {
-        CardtabRoomDetailResp resp = toSimpleRoomResp(room);
+    private CardtabRoomDetailResp buildRoomDetail(CardtabRoom room, boolean includeSensitive,
+                                                  int expenseCount) {
+        CardtabRoomDetailResp resp = toSimpleRoomResp(room, expenseCount);
 
         List<CardtabRoomMember> members = memberMapper.selectList(new LambdaQueryWrapper<CardtabRoomMember>()
             .eq(CardtabRoomMember::getRoomId, room.getId())
             .orderByAsc(CardtabRoomMember::getId));
         resp.setMemberCount(members.size());
+
+        // 我在本房间的积分：仅登录用户可见（匿名预览时为 0）
+        Long currentUserId = accessSupport.currentUserIdOrEmpty().orElse(null);
+        if (currentUserId != null) {
+            members.stream()
+                .filter(m -> currentUserId.equals(m.getUserId()))
+                .findFirst()
+                .ifPresent(m -> resp.setMyScore(m.getTotalScore() != null
+                    ? m.getTotalScore() : BigDecimal.ZERO));
+        }
+        if (resp.getMyScore() == null) {
+            resp.setMyScore(BigDecimal.ZERO);
+        }
 
         if (!includeSensitive) {
             // 匿名/非成员的口令预览：人数可以给（便于「确认是这一桌」），但成员昵称/头像与
@@ -457,7 +527,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
             // 回退占位名，但必须留痕：静默吞掉会让「所有人都显示成占位名」没有任何线索
             log.warn("玩家显示名解析失败，回退占位名；userId={}", userId, e);
         }
-        return "玩家" + (userId % 1000);
+        return "玩家" + (userId % PLACEHOLDER_NICKNAME_MOD);
     }
 
     private String avatarText(String nickname) {
@@ -484,7 +554,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         eventMapper.insert(event);
     }
 
-    private CardtabRoomDetailResp toSimpleRoomResp(CardtabRoom r) {
+    private CardtabRoomDetailResp toSimpleRoomResp(CardtabRoom r, int expenseCount) {
         CardtabRoomDetailResp resp = new CardtabRoomDetailResp();
         resp.setId(r.getId());
         resp.setName(r.getName());
@@ -496,6 +566,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         resp.setRoomStatus(r.getRoomStatus());
         resp.setOwnerUserId(r.getOwnerUserId());
         resp.setCreateTime(r.getCreateTime());
+        resp.setExpenseCount(expenseCount);
         return resp;
     }
 
@@ -521,7 +592,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         resp.setAmount(e.getAmount());
         resp.setFromMemberName(e.getFromMemberName());
         resp.setToMemberName(e.getToMemberName());
-        resp.setCreatedAt(e.getCreateTime());
+        resp.setCreateTime(e.getCreateTime());
         return resp;
     }
 }

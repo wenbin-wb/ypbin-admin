@@ -98,19 +98,28 @@ public class MiniappCommonController {
     }
 
     /**
-     * 获取小程序码场景数据。
+     * 获取小程序码。
      *
-     * <p><b>当前未接入微信 getwxacode 接口</b>：本接口只回显 scene/page，{@code qrcodeUrl} 恒为空。
-     * 此前实现同样返回空串但没有任何说明，调用方无法区分「生成失败」与「尚未实现」——这里改为
-     * 显式抛出，避免端侧把空图当成正常结果渲染（接入微信接口后再放开）。</p>
+     * <p><b>当前未接入微信 getwxacode 接口</b>，故 {@code qrcodeUrl} 恒为空串。选用「返回空串」
+     * 而非抛异常，是因为端侧已按「空即未生成」渲染占位（生成中/生成失败提示），抛异常会让
+     * 二维码弹窗直接报错；空串是端侧已处理的既有形态（向后兼容）。</p>
+     *
+     * <p>TODO 接入微信 getwxacodeUnlimit 后返回真实图片地址；届时本方法需
+     * 复用 {@code WechatMiniappProperties} 的 appid/secret 并显式设置超时。</p>
      */
     @GetMapping("/wx/qrcode")
     public R<Map<String, String>> getQrcode(
         @RequestParam("scene") String scene,
         @RequestParam(value = "page", required = false) String page,
         @RequestParam(value = "appId", required = false) String appId) {
-        log.warn("小程序码生成未实现被调用；scene={}，page={}，appId={}", scene, page, appId);
-        throw new BusinessException("小程序码生成功能尚未接入");
+        // 留痕：调用方无法从空串区分「未实现」与「生成失败」，日志是唯一线索
+        log.warn("小程序码生成尚未接入微信接口，返回空地址；scene={}，page={}，appId={}",
+            scene, page, appId);
+        Map<String, String> res = new HashMap<>();
+        res.put("scene", scene);
+        res.put("page", page != null ? page : "");
+        res.put("qrcodeUrl", "");
+        return R.ok(res);
     }
 
     private Long currentUserId() {

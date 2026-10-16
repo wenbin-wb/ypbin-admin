@@ -11,6 +11,7 @@ package cn.ypbin.admin.miniapp.cardtab.model.resp;
 
 import tools.jackson.databind.annotation.JsonSerialize;
 import tools.jackson.databind.ser.std.ToStringSerializer;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Getter;
@@ -64,6 +65,12 @@ public class CardtabRoomDetailResp {
     /** 最近流水事件 */
     private List<CardtabEventResp> recentEvents;
 
-    /** 创建时间 */
+    /** 已记支出笔数（统计值，无对应落库列） */
+    private Integer expenseCount;
+
+    /** 我在本房间的积分（统计值，非成员时为 0） */
+    private BigDecimal myScore;
+
+    /** 创建时间（与 {@code create_time} 列同名） */
     private LocalDateTime createTime;
 }

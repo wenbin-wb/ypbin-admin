@@ -38,9 +38,9 @@ public class FamilymenuOrder extends BaseEntity {
     private LocalDate orderDate;
 
     /** 就餐时段：BREAKFAST 早餐 LUNCH 午餐 DINNER 晚餐 */
-    private String mealTime;
+    private String orderType;
 
-    /** 状态：PICKING 点餐中 WAITING 等待做饭 COOKING 烹饪中 DONE 已开饭 */
+    /** 状态：ORDERING 点单中 SHOPPING 买菜中 COOKING 烹饪中 DONE 已上桌 */
     private String orderStatus;
 
     /** 采购费用 */

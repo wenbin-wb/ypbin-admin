@@ -12,7 +12,7 @@ package cn.ypbin.admin.miniapp.familymenu.enums;
 /**
  * 家庭菜单-就餐时段。
  *
- * <p>与建表脚本 {@code familymenu_order.meal_time} 注释取值一一对应。</p>
+ * <p>与建表脚本 {@code familymenu_order.order_type} 注释取值一一对应。</p>
  *
  * @author wenbin
  * @since 2026-10-15

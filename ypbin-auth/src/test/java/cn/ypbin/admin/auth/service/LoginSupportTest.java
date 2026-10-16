@@ -91,6 +91,69 @@ class LoginSupportTest {
     }
 
     /**
+     * 登录响应必须回带端侧渲染所需的身份字段。
+     *
+     * <p><b>为什么单独立一条</b>：小程序端登录后直接从响应里取 {@code accessToken/userId/nickname/avatarUrl}
+     * 写入本地缓存，并据此判断「是否已登录」。曾因响应只有 {@code accessToken} 一个字段，
+     * 端侧读到的是 {@code undefined}（令牌变 undefined、缓存用户为空壳），导致登录后所有请求
+     * {@code Bearer undefined} 全部 401 且反复重登——而单测此前只断言令牌，这个回归完全测不到。</p>
+     */
+    @Test
+    void completeLoginShouldReturnIdentityFieldsForClient() {
+        ISystemClient systemClient = mock(ISystemClient.class);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+
+        SysUserDto user = buildUser();
+        user.setNickname("爱丽丝的小号");
+        user.setAvatar("https://cdn.example.com/a.png");
+
+        try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
+            MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
+            MockedStatic<SysCache> sysCache = mockStatic(SysCache.class);
+            MockedStatic<UserContext> userContext = mockStatic(UserContext.class)) {
+
+            loginHelper.when(() -> LoginHelper.login(any(), any(), any())).thenAnswer(inv -> null);
+            loginHelper.when(LoginHelper::getTokenValue).thenReturn("mock-token");
+            sysCache.when(() -> SysCache.getUserRoleCodes(42L)).thenReturn(List.of());
+            stpUtil.when(() -> StpUtil.getSession()).thenReturn(mock(SaSession.class));
+            stpUtil.when(() -> StpUtil.getTokenSession()).thenReturn(mock(SaSession.class));
+
+            LoginResp resp = support.completeLogin(user, "MINIAPP", "10.0.0.8", CHROME_UA);
+
+            assertThat(resp.getAccessToken()).isEqualTo("mock-token");
+            assertThat(resp.getUserId()).isEqualTo(42L);
+            assertThat(resp.getNickname()).isEqualTo("爱丽丝的小号");
+            assertThat(resp.getAvatarUrl()).isEqualTo("https://cdn.example.com/a.png");
+        }
+    }
+
+    /** 昵称为空时回落真实姓名，避免端侧展示空白 */
+    @Test
+    void completeLoginShouldFallbackNicknameToRealName() {
+        ISystemClient systemClient = mock(ISystemClient.class);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+
+        SysUserDto user = buildUser();
+        user.setNickname(null);
+
+        try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
+            MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
+            MockedStatic<SysCache> sysCache = mockStatic(SysCache.class);
+            MockedStatic<UserContext> userContext = mockStatic(UserContext.class)) {
+
+            loginHelper.when(() -> LoginHelper.login(any(), any(), any())).thenAnswer(inv -> null);
+            loginHelper.when(LoginHelper::getTokenValue).thenReturn("mock-token");
+            sysCache.when(() -> SysCache.getUserRoleCodes(42L)).thenReturn(List.of());
+            stpUtil.when(() -> StpUtil.getSession()).thenReturn(mock(SaSession.class));
+            stpUtil.when(() -> StpUtil.getTokenSession()).thenReturn(mock(SaSession.class));
+
+            LoginResp resp = support.completeLogin(user, "ACCOUNT", "10.0.0.8", CHROME_UA);
+
+            assertThat(resp.getNickname()).isEqualTo("爱丽丝");
+        }
+    }
+
+    /**
      * 在线用户列表的 IP/浏览器/操作系统只来自登录时写入 Token-Session 的终端信息，
      * 必须验证确实写入且 User-Agent 被解析成展示文案。
      */

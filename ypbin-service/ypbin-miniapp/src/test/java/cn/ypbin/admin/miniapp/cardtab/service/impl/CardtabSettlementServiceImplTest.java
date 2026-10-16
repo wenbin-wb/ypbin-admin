@@ -25,6 +25,7 @@ import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoom;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomMember;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabSettlementSnapshot;
+import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabExpenseMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomEventMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
@@ -68,6 +69,7 @@ class CardtabSettlementServiceImplTest {
     private CardtabRoomMemberMapper memberMapper;
     private CardtabSettlementSnapshotMapper snapshotMapper;
     private CardtabRoomEventMapper eventMapper;
+    private CardtabExpenseMapper expenseMapper;
     private CardtabRoomAccessSupport accessSupport;
     private CardtabSettlementServiceImpl service;
 
@@ -77,10 +79,11 @@ class CardtabSettlementServiceImplTest {
         memberMapper = mock(CardtabRoomMemberMapper.class);
         snapshotMapper = mock(CardtabSettlementSnapshotMapper.class);
         eventMapper = mock(CardtabRoomEventMapper.class);
+        expenseMapper = mock(CardtabExpenseMapper.class);
         // 访问守卫用**真实实现** + mock 的 Mapper，保证「非成员被拒」测的是真实守卫逻辑
         accessSupport = new CardtabRoomAccessSupport(roomMapper, memberMapper);
         service = new CardtabSettlementServiceImpl(memberMapper,
-            eventMapper, new ObjectMapper(), accessSupport);
+            eventMapper, expenseMapper, new ObjectMapper(), accessSupport);
         loginAs(1L);
     }
 

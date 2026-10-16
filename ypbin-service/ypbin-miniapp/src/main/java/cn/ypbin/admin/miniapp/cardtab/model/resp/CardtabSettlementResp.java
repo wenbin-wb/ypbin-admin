@@ -30,8 +30,14 @@ public class CardtabSettlementResp {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long roomId;
 
+    /** 房间名称（结算页标题用；随结算一并返回，端口侧无需再单独查房间） */
+    private String roomName;
+
     /** 房间状态 */
     private String status;
+
+    /** 本房间已记支出笔数 */
+    private Integer expenseCount;
 
     /** 最终排名 */
     private List<RankingItem> rankings;

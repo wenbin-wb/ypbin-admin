@@ -31,6 +31,11 @@ public class FamilymenuOrderSubmitReq {
     /** 就餐日期（默认今天） */
     private LocalDate orderDate;
 
-    /** 就餐时段：BREAKFAST 早餐 LUNCH 午餐 DINNER 晚餐 */
-    private String mealTime = "DINNER";
+    /**
+     * 就餐时段：BREAKFAST 早餐 LUNCH 午餐 DINNER 晚餐。
+     *
+     * <p>字段名与小程序的既有契约一致（端侧提交 {@code orderType}）。此前后端用 {@code mealTime}
+     * 接收，端侧传的字段被静默忽略、一律落库为默认值 DINNER——午餐单会被记成晚餐单。</p>
+     */
+    private String orderType = "DINNER";
 }

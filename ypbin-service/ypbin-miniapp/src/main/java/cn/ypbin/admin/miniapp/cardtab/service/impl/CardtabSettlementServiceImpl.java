@@ -9,12 +9,15 @@
  */
 package cn.ypbin.admin.miniapp.cardtab.service.impl;
 
+import cn.ypbin.admin.miniapp.cardtab.entity.CardtabExpense;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoom;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabRoomMember;
 import cn.ypbin.admin.miniapp.cardtab.entity.CardtabSettlementSnapshot;
 import cn.ypbin.admin.miniapp.cardtab.enums.CardtabEventTypeEnum;
+import cn.ypbin.admin.miniapp.cardtab.enums.CardtabExpenseStatusEnum;
 import cn.ypbin.admin.miniapp.cardtab.enums.CardtabRoomStatusEnum;
+import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabExpenseMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomEventMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
 import cn.ypbin.admin.miniapp.cardtab.mapper.CardtabSettlementSnapshotMapper;
@@ -61,6 +64,7 @@ public class CardtabSettlementServiceImpl
 
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
+    private final CardtabExpenseMapper expenseMapper;
     private final ObjectMapper objectMapper;
     private final CardtabRoomAccessSupport accessSupport;
 
@@ -139,7 +143,12 @@ public class CardtabSettlementServiceImpl
 
         CardtabSettlementResp resp = new CardtabSettlementResp();
         resp.setRoomId(room.getId());
+        resp.setRoomName(room.getName());
         resp.setStatus(room.getRoomStatus());
+        resp.setExpenseCount(Math.toIntExact(expenseMapper.selectCount(
+            new LambdaQueryWrapper<CardtabExpense>()
+                .eq(CardtabExpense::getRoomId, room.getId())
+                .eq(CardtabExpense::getExpenseStatus, CardtabExpenseStatusEnum.NORMAL.getCode()))));
 
         if (CollectionUtils.isEmpty(members)) {
             resp.setRankings(List.of());

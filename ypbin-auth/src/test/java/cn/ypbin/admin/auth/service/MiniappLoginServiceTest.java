@@ -83,7 +83,16 @@ class MiniappLoginServiceTest {
         when(systemClient.getOrCreateUserByUsername(anyString(), any(), any(), anyString(), anyString()))
             .thenReturn(R.ok(dto));
         when(loginSupport.completeLogin(any(), anyString(), any(), any()))
-            .thenReturn(new LoginResp("token-xyz"));
+            .thenReturn(loginResp("token-xyz"));
+    }
+
+    /** 构造登录响应（令牌 + 端侧所需身份字段） */
+    private LoginResp loginResp(String token) {
+        LoginResp resp = new LoginResp();
+        resp.setAccessToken(token);
+        resp.setUserId(99L);
+        resp.setNickname("微信用户");
+        return resp;
     }
 
     @Test
@@ -132,6 +141,9 @@ class MiniappLoginServiceTest {
         LoginResp resp = stub.login(req("good-code"), "127.0.0.1", "UA");
 
         assertThat(resp.getAccessToken()).isEqualTo("token-xyz");
+        // 端侧契约：登录响应必须带 openid（由换取结果回填），且**不得**回填为 mock_ 前缀
+        assertThat(resp.getOpenid()).isEqualTo("openid-abc");
+        assertThat(resp.getOpenid()).doesNotStartWith("mock_");
         // username 必须由真实 openid 派生，不得是 mock_
         verify(systemClient).getOrCreateUserByUsername(
             eq("wx_openid-abc"), any(), any(), eq("MINIAPP"), anyString());

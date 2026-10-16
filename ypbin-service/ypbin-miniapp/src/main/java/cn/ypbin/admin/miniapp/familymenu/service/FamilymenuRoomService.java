@@ -12,6 +12,7 @@ package cn.ypbin.admin.miniapp.familymenu.service;
 import cn.ypbin.admin.miniapp.familymenu.entity.FamilymenuRoom;
 import cn.ypbin.admin.miniapp.familymenu.model.req.FamilymenuRoomCreateReq;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMemberResp;
+import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuMyRoomResp;
 import cn.ypbin.admin.miniapp.familymenu.model.resp.FamilymenuRoomDetailResp;
 import cn.ypbin.starter.crud.service.BaseService;
 import java.util.List;
@@ -65,8 +66,8 @@ public interface FamilymenuRoomService extends BaseService<FamilymenuRoom> {
     List<FamilymenuRoomDetailResp> getMyRooms();
 
     /**
-     * 获取指定或当前默认餐厅信息。
+     * 获取指定或当前默认餐厅信息（含我在该餐厅的成员记录）。
      */
-    FamilymenuRoomDetailResp getMyRoom(Long roomId);
+    FamilymenuMyRoomResp getMyRoom(Long roomId);
 }
 

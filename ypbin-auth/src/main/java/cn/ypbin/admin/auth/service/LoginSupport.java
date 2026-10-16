@@ -28,6 +28,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * 登录收尾统一处理（微服务版）。
@@ -90,7 +91,13 @@ public class LoginSupport {
         updateLastLoginTime(user.getId());
         // 先取令牌再上报：埋点真出问题时（如取令牌本身失败）不会先产出一条「登录成功」事件，
         // 事件与业务结果保持同源；上报侧自身已保证不抛（见 LoginEventTracker）
-        LoginResp resp = new LoginResp(LoginHelper.getTokenValue());
+        LoginResp resp = new LoginResp();
+        resp.setAccessToken(LoginHelper.getTokenValue());
+        // 回带端侧渲染所需的最小身份信息：避免端侧登录后再发一次「取当前用户」，
+        // 也就不存在「已登录但无身份」的空窗态（该空窗会让端侧缓存判空误判为未登录而重复登录）
+        resp.setUserId(user.getId());
+        resp.setNickname(StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getRealName());
+        resp.setAvatarUrl(user.getAvatar());
         loginEventTracker.recordLogin(user, authType, ip, userAgent);
         return resp;
     }

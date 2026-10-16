@@ -38,10 +38,10 @@ public class FamilymenuOrderResp {
     /** 就餐日期 */
     private LocalDate orderDate;
 
-    /** 就餐时段 */
-    private String mealTime;
+    /** 就餐时段（与 {@code order_type} 列同名） */
+    private String orderType;
 
-    /** 状态：PICKING/WAITING/COOKING/DONE */
+    /** 状态：ORDERING/SHOPPING/COOKING/DONE */
     private String orderStatus;
 
     /** 采购费用 */

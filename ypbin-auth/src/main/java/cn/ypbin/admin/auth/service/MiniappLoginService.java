@@ -95,7 +95,10 @@ public class MiniappLoginService {
         }
 
         SysUserDto user = userRes.getData();
-        return loginSupport.completeLogin(user, USER_TYPE_MINIAPP, clientIp, userAgent);
+        LoginResp resp = loginSupport.completeLogin(user, USER_TYPE_MINIAPP, clientIp, userAgent);
+        // OpenID 仅小程序登录可知（落库时以 wx_ 前缀存为 username，此处剥前缀还原为契约字段）
+        resp.setOpenid(openid);
+        return resp;
     }
 
     /**

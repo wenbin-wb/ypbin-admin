@@ -48,6 +48,6 @@ public class CardtabEventResp {
     /** 收款人昵称 */
     private String toMemberName;
 
-    /** 发生时间 */
-    private LocalDateTime createdAt;
+    /** 发生时间（与 {@code cardtab_room_event.create_time} 列同名） */
+    private LocalDateTime createTime;
 }
