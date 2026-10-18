@@ -18,14 +18,15 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import cn.ypbin.admin.common.log.RemoteLogDao;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.log.aspect.LogAspect;
 import cn.ypbin.starter.log.enums.Include;
 import cn.ypbin.starter.log.event.LogEvent;
+import cn.ypbin.starter.log.dao.RemoteLogDao;
 import cn.ypbin.starter.log.event.LogEventListener;
+import cn.ypbin.starter.log.spi.RemoteLogIngestClient;
 import cn.ypbin.starter.log.support.LogCollector;
 import java.lang.reflect.Method;
 import java.util.Optional;
@@ -41,8 +42,10 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 登录日志上报失败不影响登录主流程（auth 侧）。
  *
- * <p>auth 没有数据源，其 {@code @Log} 采集到的记录经 {@link RemoteLogDao} 上报 system 落 {@code sys_log}。
- * 本测试刻意走<b>完整切面链路</b>（{@code LogAspect} → 事件 → {@code LogEventListener} → {@code RemoteLogDao}），
+ * <p>auth 没有数据源，其 {@code @Log} 采集到的记录经 starter 的 {@link RemoteLogDao}（由宿主的
+ * {@code RemoteLogIngestClient} 适配 Bean 提供传输）上报 system 落 {@code sys_log}。
+ * 本测试刻意走<b>完整切面链路</b>（{@code LogAspect} → 事件 → {@code LogEventListener} → starter 的
+ * {@code RemoteLogDao}），
  * 并让 system 返回失败 {@code R}（不可达/凭证不匹配/落库失败都是这个形状），断言两件事：</p>
  * <ol>
  *   <li>被 {@code @Log} 包裹的登录方法<b>照常返回业务结果</b>（日志失败不得反噬登录）；</li>
@@ -52,7 +55,7 @@ import tools.jackson.databind.ObjectMapper;
  * <p>说明：这里事件发布是同步的（单测无 Spring 容器、{@code @Async} 不生效），
  * 也就是<b>比生产更坏</b>的情况——生产上监听器在异步线程执行；最坏情况都不影响业务，生产更不会。</p>
  *
- * <p>另注：堆栈断言挂在 {@code RemoteLogDao} 自己的 logger 上。"完整堆栈"由上报侧自己保证，
+ * <p>另注：堆栈断言挂在 starter {@code RemoteLogDao} 自己的 logger 上。"完整堆栈"由上报侧自己保证，
  * 而不是依赖 starter 的 {@code LogEventListener}——该监听器的日志级别与是否携带 Throwable
  * 属 starter 内部实现、会随版本变化，不能作为本仓铁律的保证。</p>
  *
@@ -83,7 +86,8 @@ class AuthLogIngestTest {
         ISystemClient systemClient = mock(ISystemClient.class);
         when(systemClient.ingestLog(any()))
             .thenReturn(R.fail("系统服务暂不可用，请稍后重试"));
-        LogEventListener listener = new LogEventListener(new RemoteLogDao(systemClient));
+        RemoteLogIngestClient ingestClient = systemClient::ingestLog;
+        LogEventListener listener = new LogEventListener(new RemoteLogDao(ingestClient));
 
         LogCollector collector = new LogCollector(Optional::empty, Optional::empty, ip -> null,
             new ObjectMapper());
@@ -100,7 +104,7 @@ class AuthLogIngestTest {
             assertThat(event.getLevel()).isEqualTo(Level.ERROR);
             assertThat(event.getThrowableProxy()).isNotNull();
             assertThat(event.getThrowableProxy().getMessage())
-                .contains("上报 system 服务失败");
+                .contains("操作日志远端上报失败");
         });
     }
 

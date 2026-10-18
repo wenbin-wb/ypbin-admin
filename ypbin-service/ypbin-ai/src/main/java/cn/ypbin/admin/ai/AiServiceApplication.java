@@ -9,10 +9,12 @@
  */
 package cn.ypbin.admin.ai;
 
+import cn.ypbin.admin.common.ingest.RemoteIngestClientConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.context.annotation.Import;
 
 /**
  * Ai 服务启动器（微服务版）。
@@ -23,6 +25,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
 @MapperScan("cn.ypbin.admin.ai.mapper")
 @SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.ai", "cn.ypbin.admin.system.api"})
+@Import(RemoteIngestClientConfiguration.class)
 public class AiServiceApplication {
 
     public static void main(String[] args) {
