@@ -1,3 +1,2 @@
-cn.ypbin.admin.common.provider.MicroserviceTenantAutoConfiguration
 cn.ypbin.admin.common.log.RemoteLogAutoConfiguration
 cn.ypbin.admin.common.tracking.RemoteTrackAutoConfiguration

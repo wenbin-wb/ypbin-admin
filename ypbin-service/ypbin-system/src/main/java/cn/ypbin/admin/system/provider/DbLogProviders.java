@@ -120,7 +120,7 @@ public final class DbLogProviders {
 
     /**
      * 操作人数据源：微服务版当前用户来自网关签发的身份头（{@code IdentityContext}），
-     * 与 {@code MicroserviceTenantProvider} 的取法一致，不读 sa-token 会话。
+     * 与 starter 的 {@code IdentityTenantProvider} 取法一致，不读 sa-token 会话。
      */
     @Component
     public static class IdentityLogUserProvider implements LogUserProvider {
