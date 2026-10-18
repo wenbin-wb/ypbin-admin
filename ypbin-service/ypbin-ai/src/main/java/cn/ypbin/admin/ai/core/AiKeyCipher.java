@@ -9,9 +9,9 @@
  */
 package cn.ypbin.admin.ai.core;
 
+import cn.ypbin.admin.ai.config.AiModelConfigProperties;
 import cn.ypbin.starter.tools.crypto.AesUtils;
 import java.nio.charset.StandardCharsets;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,16 +29,26 @@ public class AiKeyCipher {
 
     private final byte[] key;
 
-    public AiKeyCipher(@Value("${ypbin.ai.model-config.secret-key:}") String secretKey) {
+    /**
+     * 从强类型配置构造（starter #103：替换原先散落的字段注入注解）。
+     *
+     * <p>密钥来自 {@link AiModelConfigProperties#getSecretKey()}，键名唯一来源是该类的
+     * {@code PREFIX} 常量；本构造器只做「缺失/长度」校验，<b>绝不把密钥值写进异常消息或日志</b>。</p>
+     *
+     * @param properties AI 模型配置（真实凭据，不得记录）
+     */
+    public AiKeyCipher(AiModelConfigProperties properties) {
+        String secretKey = properties.getSecretKey();
         if (secretKey == null || secretKey.isBlank()) {
             throw new IllegalStateException(
-                "未配置 ypbin.ai.model-config.secret-key（环境变量 AI_MODEL_SECRET_KEY），"
+                "未配置 " + AiModelConfigProperties.PREFIX + ".secret-key（环境变量 AI_MODEL_SECRET_KEY），"
                     + "AI 模型 API Key 加密密钥缺失，拒绝启动");
         }
         byte[] raw = secretKey.getBytes(StandardCharsets.UTF_8);
         if (raw.length != 16 && raw.length != 24 && raw.length != 32) {
             throw new IllegalStateException(
-                "ypbin.ai.model-config.secret-key 长度必须为 16/24/32 字节，当前为 " + raw.length + " 字节");
+                AiModelConfigProperties.PREFIX + ".secret-key 长度必须为 16/24/32 字节，当前为 "
+                    + raw.length + " 字节");
         }
         this.key = raw;
     }

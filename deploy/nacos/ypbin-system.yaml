@@ -7,10 +7,12 @@
 ypbin:
   tenant:
     enabled: true
-    # fail-closed：无租户上下文时拒绝执行（而非放行跨租户查询）。
+    # 不写 fail-on-missing-tenant：starter 4.1.0 的 DownstreamDefaultsEnvironmentPostProcessor
+    # 会以**最低优先级属性源**为下游服务注入 fail-on-missing-tenant=true（租户模块自身默认值也是 true），
+    # 与这里显式写一遍效果相同；去掉重复项后「下游形态」的语义只在 starter 一处维护。
+    # 语义不变（fail-closed）：无租户上下文时拒绝执行（而非放行跨租户查询）。
     # 登录、匿名分享、定时任务等本无租户上下文的路径已用 @TenantIgnore / TenantContext.executeIgnore 显式放行，
     # 若上线后出现「缺少租户上下文」报错，说明该路径漏了显式忽略声明，应补声明而非关闭本开关。
-    fail-on-missing-tenant: true
     # 不做租户隔离的全局表（与单体版对齐）
     ignore-tables:
       - sys_menu
@@ -83,10 +85,14 @@ ypbin:
     enabled: false
 
 # ---------- 安全（开放接口与内部 Feign 端点免登录拦截）----------
+  # system 为下游业务服务，登录态由网关校验并注入身份头：
+  # 声明 starter 4.1.0 的**下游 opt-in 开关**，由 DownstreamDefaultsEnvironmentPostProcessor 注入
+  # ypbin.security.interceptor=false（关闭本地 Sa-Token 全局拦截，避免 system 直读 Redis 会话导致 token 无效）。
+  # 这是显式 opt-in：starter 不会默认为任何宿主关掉安全拦截（auth 有真实用户会话，
+  # 默认关闭会让它的端点静默失去登录校验）；注解鉴权（annotation-check）不受本开关影响。
+  downstream:
+    security-interceptor-disabled: true
   security:
-    # system 为下游业务服务，登录态由网关校验并注入身份头；
-    # 关闭本地 Sa-Token 全局拦截，避免 system 直读 Redis 会话导致 token 无效。
-    interceptor: false
     excludes:
       - /open/license/**
       - /open-api/**
