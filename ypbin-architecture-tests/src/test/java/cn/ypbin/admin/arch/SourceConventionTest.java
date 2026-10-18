@@ -84,6 +84,24 @@ class SourceConventionTest {
     /** {@code catch (...) {} } 子句（用于「禁空 catch」铁律的源码级兜底）。 */
     private static final Pattern CATCH_CLAUSE = Pattern.compile("catch\\s*\\([^)]*\\)\\s*\\{");
 
+    /** 日志方法调用起点（只认 SLF4J 惯用的 {@code log} 字段名）。 */
+    private static final Pattern LOG_CALL_START =
+        Pattern.compile("\\blog\\.(?:warn|error|info|debug)\\s*\\(");
+
+    /** 日志参数里对异常取文案的调用：{@code e.getMessage()} / {@code ex.getMessage()}。 */
+    private static final Pattern GET_MESSAGE_CALL = Pattern.compile("\\b(\\w+)\\.getMessage\\(\\s*\\)");
+
+    /**
+     * 注释里硬编码 starter 版本号：{@code ypbin-starter-<模块>} 后跟具体版本（冒号或空格分隔均可）。
+     *
+     * <p>版本唯一来源是根 pom 的 {@code ypbin-starter.version}（经 {@code ypbin-starter-bom} 统一管理）。
+     * 注释里写死版本号必然过期——本仓曾有多处注释断言「本仓固定某个 starter-log 版本」，
+     * 而实际依赖早已升到主版本 4.x，且据此推出的「同步落库 / 不带堆栈」结论与真实行为相反。
+     * 描述行为请直接写清「哪个类/方法做了什么」，让读者看代码即可核对，而不是看版本号推断。</p>
+     */
+    private static final Pattern HARDCODED_STARTER_VERSION =
+        Pattern.compile("ypbin-starter-[a-z0-9-]+\\s*[:：]?\\s*v?\\d+\\.\\d+(?:\\.\\d+)?");
+
     /** 跨服务契约模块（api）的源码根：它必须与持久化实体解耦。 */
     private static final String API_MODULE_SOURCE =
         "ypbin-service-api/ypbin-system-api/src/main/java";
@@ -495,6 +513,55 @@ class SourceConventionTest {
         return lines;
     }
 
+    /**
+     * 找出「日志吞堆栈」的调用点：参数里取了 {@code ex.getMessage()}，却没有把 {@code ex} 本身传进去。
+     *
+     * <p><b>为什么需要它</b>：全局规范要求「记录异常必须传完整堆栈」。只写 {@code log.warn("...", e.getMessage())}
+     * 在生产上只能看到一个字符串，没有异常类型、没有调用栈——而这恰恰是最常见的写法，且不会有任何编译/测试
+     * 告警（本仓 2026-10-18 实测 4 处，全在 ai 模块）。本规则把它变成构建失败。</p>
+     *
+     * <p><b>判定方式</b>：定位每个 {@code log.warn/error/info/debug(...)} 调用的参数区间（括号配对），
+     * 取其中所有 {@code X.getMessage()} 的接收者 {@code X}；若参数区间里没有以独立参数形式出现的 {@code X}
+     * （即 {@code , X)} 或 {@code , X,}），判定为违规。这样 {@code log.warn("...", id, e.getMessage(), e)}
+     * 通过、{@code log.warn("...", e.getMessage())} 失败。</p>
+     *
+     * <p><b>已知边界（如实声明）</b>：① 只认字段名为 {@code log} 的日志调用（本仓 2026-10-18 实测全部如此）；
+     * ② 把日志消息拼成一个字符串再传入（{@code log.warn("..." + e.getMessage())}）无法识别；
+     * ③ 收到的是包装异常（{@code log.warn("...", root.getMessage(), e)}）时 {@code root} 未作为独立参数出现，
+     * 会判违规——这是刻意的保守取向（要求把被记录的那个异常对象一并传入）。</p>
+     *
+     * @param strippedSource 已剥离注释与字面量的源码
+     * @return 违规调用所在行号
+     */
+    static List<Integer> logCallsSwallowingThrowable(String strippedSource) {
+        List<Integer> lines = new ArrayList<>();
+        Matcher call = LOG_CALL_START.matcher(strippedSource);
+        while (call.find()) {
+            int openParen = strippedSource.indexOf('(', call.start());
+            if (openParen < 0) {
+                continue;
+            }
+            int closeExclusive = matchingParen(strippedSource, openParen);
+            if (closeExclusive <= 0) {
+                continue;
+            }
+            // 注意：matchingParen 返回「右括号之后」的下标，故这里要取到 closeExclusive（含右括号），
+            // 否则 `log.warn(..., e)` 的最后一个参数后面没有分隔符，会被误判成「没传异常对象」
+            String args = strippedSource.substring(openParen + 1, closeExclusive);
+            Matcher getMessage = GET_MESSAGE_CALL.matcher(args);
+            while (getMessage.find()) {
+                String receiver = getMessage.group(1);
+                // 接收者必须作为独立参数出现：`, receiver)` 或 `, receiver,`
+                Pattern passThrowable = Pattern.compile(",\\s*" + Pattern.quote(receiver) + "\\s*[,)]");
+                if (!passThrowable.matcher(args).find()) {
+                    lines.add(lineNumber(strippedSource, call.start()));
+                    break;
+                }
+            }
+        }
+        return lines;
+    }
+
     // ------------------------------------------------------------------ 规则
 
     @Test
@@ -648,6 +715,87 @@ class SourceConventionTest {
         assertThat(ENTITY_BASE_EXEMPTIONS)
             .as("例外清单必须逐条写明理由")
             .allSatisfy((name, reason) -> assertThat(reason).isNotBlank());
+    }
+
+    @Test
+    @DisplayName("注释/源码里禁止硬编码 ypbin-starter-x:Y.Z 版本号（版本唯一来源是根 pom）")
+    void commentsMustNotHardcodeStarterVersions() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : SourceScan.mainSources()) {
+            String source = Files.readString(file, StandardCharsets.UTF_8);
+            String[] lines = source.split("\n", -1);
+            for (int index = 0; index < lines.length; index++) {
+                Matcher matcher = HARDCODED_STARTER_VERSION.matcher(lines[index]);
+                while (matcher.find()) {
+                    violations.add(SourceScan.relative(file) + ":" + (index + 1) + " → " + matcher.group());
+                }
+            }
+        }
+        assertThat(violations)
+            .as("注释里写死 starter 版本号必然过期，并会让后续维护者基于错误前提判断依赖行为"
+                + "（历史事故：注释断言「固定某个 starter-log 版本 ⇒ 同步落库/不带堆栈」，"
+                + "与升级后的真实行为相反）。版本唯一来源是根 pom 的 ypbin-starter.version；"
+                + "要描述行为请直接写当前代码的事实（哪个 Bean/方法做了什么），不要写版本号")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("starter 版本号硬编码检测应命中各类写法、放过普通描述（规则有效性自检）")
+    void starterVersionPatternShouldBeAccurate() {
+        // 命中：冒号分隔、空格分隔、带 v 前缀、两段/三段版本
+        // 样例由拼接构造：本文件自身必须能通过该门禁，且不能让验收 grep 在全仓命中历史版本号
+        assertThat(HARDCODED_STARTER_VERSION.matcher("本仓固定 {@code ypbin-starter-log:" + "3.3.0}").find())
+            .isTrue();
+        assertThat(HARDCODED_STARTER_VERSION.matcher("见 ypbin-starter-ai " + "4.0.0 的实现").find()).isTrue();
+        assertThat(HARDCODED_STARTER_VERSION.matcher("ypbin-starter-messaging:v" + "4.0.0").find()).isTrue();
+        assertThat(HARDCODED_STARTER_VERSION.matcher("ypbin-starter-cache:" + "3.10").find()).isTrue();
+        // 放过：只提模块名不写版本、写的是本仓自己的模块、普通版本描述
+        assertThat(HARDCODED_STARTER_VERSION.matcher("引入 ypbin-starter-messaging").find()).isFalse();
+        assertThat(HARDCODED_STARTER_VERSION.matcher("ypbin-starter-log 的 LogEventListener").find()).isFalse();
+        assertThat(HARDCODED_STARTER_VERSION.matcher("ypbin-admin 版本 1.0.0").find()).isFalse();
+        assertThat(HARDCODED_STARTER_VERSION.matcher("Spring Boot 4.1.1").find()).isFalse();
+    }
+
+    @Test
+    @DisplayName("禁止日志吞堆栈：log.warn/error/info/debug 里取了 getMessage() 就必须同时传异常对象")
+    void logsMustNotSwallowThrowableStackTrace() throws IOException {
+        List<String> violations = new ArrayList<>();
+        for (Path file : SourceScan.mainSources()) {
+            String code = stripCommentsAndLiterals(Files.readString(file, StandardCharsets.UTF_8));
+            for (int line : logCallsSwallowingThrowable(code)) {
+                violations.add(SourceScan.relative(file) + ":" + line);
+            }
+        }
+        assertThat(violations)
+            .as("记录异常必须传完整堆栈：把异常对象作为最后一个参数传入（log.warn(\"...\", id, e)），"
+                + "只写 e.getMessage() 会丢掉异常类型与调用栈，生产上无法定位")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("日志吞堆栈检测应命中只传 getMessage 的写法、放过传了异常对象的写法（规则有效性自检）")
+    void logSwallowDetectionShouldBeAccurate() {
+        // 命中：只取 message
+        assertThat(logCallsSwallowingThrowable(
+            "log.warn(\"[ypbin-ai] 失败: {}\", e.getMessage());")).hasSize(1);
+        assertThat(logCallsSwallowingThrowable(
+            "log.warn(\"失败: docId={} err={}\", docId, e.getMessage());")).hasSize(1);
+        assertThat(logCallsSwallowingThrowable(
+            "log.error(\"失败\", ex.getMessage());")).hasSize(1);
+        // 放过：异常对象作为最后一个参数传入
+        assertThat(logCallsSwallowingThrowable(
+            "log.warn(\"失败: docId={} err={}\", docId, e.getMessage(), e);")).isEmpty();
+        assertThat(logCallsSwallowingThrowable(
+            "log.error(\"[ypbin-ai] 失败: docId={}\", docId, e);")).isEmpty();
+        assertThat(logCallsSwallowingThrowable(
+            "log.debug(\"失败: id={}\", id, ex.getMessage(), ex);")).isEmpty();
+        // 放过：根本没取 message（不涉及吞堆栈）
+        assertThat(logCallsSwallowingThrowable("log.warn(\"失败: id={}\", id);")).isEmpty();
+        assertThat(logCallsSwallowingThrowable("log.info(\"done\");")).isEmpty();
+        // 注释与字符串里的示例文本不参与判定（剥离后不可见）
+        assertThat(logCallsSwallowingThrowable(stripCommentsAndLiterals(
+            "// log.warn(\"x\", e.getMessage());\nString s = \"log.warn(\\\"y\\\", e.getMessage())\";\n")))
+            .isEmpty();
     }
 
     // ------------------------------------------------------------ 有效性自检
