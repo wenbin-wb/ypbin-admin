@@ -156,7 +156,7 @@ public class AiKnowledgeSearchComponent {
             queryLogMapper.insert(logEntry);
         } catch (Exception e) {
             log.warn("[ypbin-ai] 记录检索日志失败: kbId={} query={} err={}",
-                knowledgeBaseId, LogSanitizer.sanitize(query), LogSanitizer.sanitize(e.getMessage()));
+                knowledgeBaseId, LogSanitizer.sanitize(query), LogSanitizer.sanitize(e.getMessage()), e);
         }
     }
 
@@ -169,7 +169,7 @@ public class AiKnowledgeSearchComponent {
         try {
             return supplier.get();
         } catch (IllegalStateException e) {
-            log.warn("[ypbin-ai] 检索执行失败: {}", e.getMessage());
+            log.warn("[ypbin-ai] 检索执行失败: {}", e.getMessage(), e);
             throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加向量化模型");
         }
     }

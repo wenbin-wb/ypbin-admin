@@ -105,7 +105,7 @@ public class AiWidgetServiceImpl implements AiWidgetService {
         } catch (IllegalStateException e) {
             // 模型未配置/密钥缺失等环境问题：记录日志并向调用方暴露明确的业务错误（非静默降级）
             // 不记录 token：它是访问该挂件的凭据，落日志等于泄露；改用知识库 ID 关联排查
-            log.warn("[ypbin-ai] 挂件问答失败: kbId={} err={}", kb.getId(), e.getMessage());
+            log.warn("[ypbin-ai] 挂件问答失败: kbId={} err={}", kb.getId(), e.getMessage(), e);
             throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加对话模型");
         }
     }

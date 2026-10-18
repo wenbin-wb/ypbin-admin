@@ -146,7 +146,7 @@ public class AiDocumentVectorizer {
             insertChunksInBatches(rows);
             log.debug("[ypbin-ai] 分块落库完成: docId={}, chunks={}", docId, chunks.size());
         } catch (Exception e) {
-            log.warn("[ypbin-ai] 分块落库失败（不影响向量化）: docId={} err={}", docId, e.getMessage());
+            log.warn("[ypbin-ai] 分块落库失败（不影响向量化）: docId={} err={}", docId, e.getMessage(), e);
         }
     }
 

@@ -12,6 +12,7 @@ package cn.ypbin.admin.auth.service;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.auth.dto.LoginReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
+import cn.ypbin.admin.auth.support.LoginConfigKeys;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
@@ -51,8 +52,6 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     /** 登录行为验证码开关参数键 */
-    private static final String KEY_LOGIN_CAPTCHA_ENABLED = "LOGIN_CAPTCHA_ENABLED";
-
     private final ISystemClient permissionFeignClient;
     private final LoginSupport loginSupport;
     private final AuthConfigReader configReader;
@@ -70,7 +69,7 @@ public class AuthService {
      */
     public LoginResp login(LoginReq req, String ip, String userAgent) {
         // 开关开启时强制行为验证码（一次性消费，校验失败即拒绝），防脚本爆破
-        if (configReader.getBoolean(KEY_LOGIN_CAPTCHA_ENABLED, false)) {
+        if (configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false)) {
             requireCaptchaPassed(req);
         }
         // 账号维度错误尝试锁定（与手机验证码入口一致：账号 + IP 维度）
