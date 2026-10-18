@@ -6,6 +6,29 @@
 
 ## [未发布]
 
+### 变更（2026-10-18）· 跟随 ypbin-starter 4.0.0 下沉（issue #82/#83）
+
+- **内部调用凭证改为 starter 官方守卫 + 官方 Feign 携带**：删除 `ypbin-system` 的
+  `InternalTokenGuardInterceptor`/`InternalTokenGuardWebConfig`、`ypbin-system-api` 的
+  `InternalTokenFeignConfiguration`/`InternalTokenConstants` 与 `ypbin-common` 的 `InternalProperties`。
+  入站由 `ypbin.security.internal-token.guard-enabled=true` 装配（ENVELOPE 语义 `/internal/**`，与既有行为一致）；
+  出站由 `ypbin.cloud.feign.internal-token` 的全局拦截器为每个 Feign 请求携带 `X-Internal-Token`。
+  **配置键迁移**：`ypbin.internal.token` → `ypbin.security.internal-token.token`（旧键不再被读取）。
+- **租户来源改为 starter 的 `IdentityTenantProvider`**：删除 `ypbin-common` 的
+  `MicroserviceTenantProvider`/`MicroserviceTenantAutoConfiguration`，并从 `AutoConfiguration.imports`
+  移除其登记（`RemoteLog`/`RemoteTrack` 两条保留）。
+- **架构自检阈值同步下调**（`CodingRulesTest`）：导入类总数 392 → 387、`..provider..` 15 → 13，
+  理由写在常量 javadoc 里（**是业务类删除导致的合法下降**，导入范围与模块清单未变）。
+
+### 修复
+
+- **`deploy/nacos/ypbin-common.yaml` 补 `ypbin.security.identity.trusted-source-token`（issue #78，P0）**：
+  starter 3.6.0 起 `identity.enabled=true` 时该键缺失会**启动即失败**（`IllegalStateException`，fail-closed），
+  而 `ypbin-auth` 只加载 `common` + `auth` 两份配置、后者不覆盖该键 ⇒ 按本仓模板部署的 auth 起不来。
+  现补 `${GATEWAY_SIGN_TOKEN}`（与网关 `ypbin.gateway.auth.trusted-source-token` 同串；`install.sh`
+  已把该占位符纳入 Nacos 导入替换清单，无需改脚本）。
+
+
 ### 修复
 
 - **部署凭据卫生**（`deploy/`，反馈 UP-8/UP-9）：
