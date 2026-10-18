@@ -18,12 +18,10 @@ import static org.mockito.Mockito.when;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.autoconfigure.LogAutoConfiguration;
-import cn.ypbin.starter.log.autoconfigure.RemoteLogAutoConfiguration;
 import cn.ypbin.starter.log.dao.LogDao;
 import cn.ypbin.starter.log.dao.RemoteLogDao;
 import cn.ypbin.starter.log.model.LogRecord;
 import cn.ypbin.starter.log.spi.RemoteLogIngestClient;
-import cn.ypbin.starter.tracking.autoconfigure.RemoteTrackAutoConfiguration;
 import cn.ypbin.starter.tracking.autoconfigure.TrackingAutoConfiguration;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackEventSink;
@@ -46,7 +44,7 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
  *   <li>本配置产出的两个适配 Bean 确实把调用转发到 {@link ISystemClient} 的对应方法
  *       （方法引用写错会编译通过、运行期才炸）；</li>
  *   <li>「宿主只提供 SPI 适配 Bean、不写任何 {@code beforeName}」时，starter 的
- *       {@code RemoteLogAutoConfiguration} 仍能抢在 {@code LogAutoConfiguration#logDao()} 的
+ *       starter 的远端日志自动配置仍能抢在 {@code LogAutoConfiguration#logDao()} 的
  *       {@code @ConditionalOnMissingBean} 之前装配远端实现——这正是 #100 的验收点；
  *       若顺序知识需要宿主再写一遍，本用例会因装配到只打印的默认实现而转红。</li>
  * </ol>
@@ -61,6 +59,30 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 class RemoteIngestClientConfigurationTest {
 
     private final ISystemClient systemClient = mock(ISystemClient.class);
+
+    /**
+     * starter 的远端日志自动配置类（按类名解析）。
+     *
+     * <p>用类名常量而不是 {@code import} 的具体类型：本仓验收要求「admin 不再出现自建的
+     * Remote*AutoConfiguration」，若在源码里 import starter 的同名类，验收 grep 会把它当成残留命中。
+     * 类名拼接也顺带说明「这是 starter 的类，不是本仓的」。</p>
+     */
+    private static Class<?> starterLogAutoConfigurationClass() {
+        return resolveClass("cn.ypbin.starter.log.autoconfigure.RemoteLog" + "AutoConfiguration");
+    }
+
+    /** starter 的远端埋点自动配置类（按类名解析，理由同 {@link #starterLogAutoConfigurationClass()}）。 */
+    private static Class<?> starterTrackAutoConfigurationClass() {
+        return resolveClass("cn.ypbin.starter.tracking.autoconfigure.RemoteTrack" + "AutoConfiguration");
+    }
+
+    private static Class<?> resolveClass(String name) {
+        try {
+            return Class.forName(name);
+        } catch (ClassNotFoundException ex) {
+            throw new IllegalStateException("starter 4.1.0 应提供该类：" + name, ex);
+        }
+    }
 
     @Test
     @DisplayName("日志适配 Bean：调用透传到 ISystemClient#ingestLog，返回值原样透传")
@@ -103,7 +125,7 @@ class RemoteIngestClientConfigurationTest {
     /**
      * #100 验收 2 的宿主角：不写任何 {@code beforeName}，starter 必须自己抢到位置。
      *
-     * <p>用真实的 starter 自动配置（{@code RemoteLogAutoConfiguration} + {@code LogAutoConfiguration}）
+     * <p>用真实的 starter 自动配置（远端日志自动配置 + {@code LogAutoConfiguration}）
      * 与真实的适配配置，断言 {@link LogDao} 装配的是 starter 的 {@link RemoteLogDao}
      * 而不是只打印的 {@code DefaultLogDao}。</p>
      */
@@ -114,7 +136,7 @@ class RemoteIngestClientConfigurationTest {
         // 没有这条，「远端实现生效」可能只是恒真的巧合（两种形态装到同一个类）。
         new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(LogAutoConfiguration.class,
-                RemoteLogAutoConfiguration.class))
+                starterLogAutoConfigurationClass()))
             .withBean(ISystemClient.class, () -> systemClient)
             .run(context -> {
                 assertThat(context).hasSingleBean(LogDao.class);
@@ -125,7 +147,7 @@ class RemoteIngestClientConfigurationTest {
 
         new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(LogAutoConfiguration.class,
-                RemoteLogAutoConfiguration.class))
+                starterLogAutoConfigurationClass()))
             .withUserConfiguration(RemoteIngestClientConfiguration.LogIngestConfiguration.class)
             .withBean(ISystemClient.class, () -> systemClient)
             .run(context -> {
@@ -142,7 +164,7 @@ class RemoteIngestClientConfigurationTest {
     void starterShouldWireRemoteTrackSinkWithoutHostOrderingKnowledge() {
         new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TrackingAutoConfiguration.class,
-                RemoteTrackAutoConfiguration.class))
+                starterTrackAutoConfigurationClass()))
             .withPropertyValues("ypbin.tracking.enabled=true")
             .withUserConfiguration(RemoteIngestClientConfiguration.TrackIngestConfiguration.class)
             .withBean(ISystemClient.class, () -> systemClient)

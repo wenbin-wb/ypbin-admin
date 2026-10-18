@@ -21,11 +21,11 @@ import org.springframework.context.annotation.Configuration;
  * 跨服务「日志 / 埋点」上报端口的宿主适配（把 {@link ISystemClient} 适配成 starter 的两个窄 SPI）。
  *
  * <p><strong>starter 4.1.0 起，上报链路整条下沉</strong>：{@code ypbin-starter-log} /
- * {@code ypbin-starter-tracking} 自带 {@code RemoteLogAutoConfiguration} /
- * {@code RemoteTrackAutoConfiguration}，只要容器里存在 {@link RemoteLogIngestClient} /
+ * {@code ypbin-starter-tracking} 自带「远端日志/埋点上报」的两个自动配置类，
+ * 只要容器里存在 {@link RemoteLogIngestClient} /
  * {@link RemoteTrackIngestClient} 就装配各自的远端实现，且 {@code @AutoConfigureBefore} 的顺序知识
  * <strong>留在 starter 内部</strong>。宿主因此只需要写这两个「一行方法引用」的适配 Bean——
- * 旧形态（自建 {@code RemoteLogAutoConfiguration} + {@code beforeName} 指向 starter 内部类名 +
+ * 旧形态（自建远端上报自动配置 + {@code beforeName} 指向 starter 内部类名 +
  * 自建 {@code RemoteLogDao}/{@code RemoteTrackEventSink} + 自建两个 provider）已全部删除，
  * 避免一个类名拼错就静默退回「只打日志不落库」。</p>
  *

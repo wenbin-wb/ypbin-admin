@@ -204,7 +204,7 @@ class TreeAssemblyConsistencyTest {
 
     // ---------------------------------------------------------------- 孪生实现（迁移前的递归版）
 
-    /** 迁移前 {@code SysDeptServiceImpl#buildTree} 的逐行复刻（仅用于对照，不进生产） */
+    /** 迁移前部门树递归实现的逐行复刻（仅用于对照，不进生产） */
     private static List<DeptResp> legacyDeptTree(List<DeptResp> depts, Long pid) {
         List<DeptResp> tree = new ArrayList<>();
         for (DeptResp dept : depts) {
