@@ -26,6 +26,7 @@ import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.admin.system.mapper.SysLogMapper;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,6 +42,14 @@ import org.springframework.beans.factory.ObjectProvider;
  * @since 2026-10-18
  */
 class SystemClientImplConfigMaskTest {
+
+    /** 掩码前缀（与 ConfigValueMasker 的形态一致） */
+    private static final String MASK_PREFIX = "****";
+
+    /** 验收者实测「internal 明文」的 6 个缺口键 */
+    private static final List<String> GAP_KEYS = List.of(
+        "ALIYUN_SECRET_KEY", "MY_SECRET_KEY", "DB_PASSWD", "SERVICE_PWD",
+        "THIRD_PARTY_CREDENTIAL", "SOCIAL_ALIPAY_PUBLIC_KEY");
 
     private final SysConfigMapper configMapper = mock(SysConfigMapper.class);
 
@@ -84,6 +93,33 @@ class SystemClientImplConfigMaskTest {
         R<ConfigValue> response = controller.getConfigByKey("DINGTALK_APP_API_KEY");
 
         assertThat(response.getData().getConfigValue()).isEqualTo("****0001");
+    }
+
+    @Test
+    @DisplayName("缺口键：验收者实测为「internal 明文」的 6 个键必须打成 ****末4位")
+    void previouslyGapKeysShouldBeMasked() {
+        for (String configKey : GAP_KEYS) {
+            when(configMapper.selectOne(any(), any(Boolean.class)))
+                .thenReturn(config(configKey, "secretValue" + configKey.length()));
+
+            R<ConfigValue> response = controller.getConfigByKey(configKey);
+
+            assertThat(response.getData().getConfigValue())
+                .as("缺口键 %s 经 internal 必须打码（旧判据下是明文）", configKey)
+                .startsWith(MASK_PREFIX)
+                .isNotEqualTo("secretValue" + configKey.length());
+        }
+    }
+
+    @Test
+    @DisplayName("标识符键 SMS_ACCESS_KEY_ID：保持明文（单独不能通过认证，打码妨碍运维确认）")
+    void accessKeyIdShouldStayPlain() {
+        when(configMapper.selectOne(any(), any(Boolean.class)))
+            .thenReturn(config("SMS_ACCESS_KEY_ID", "LTAI5tAccessKeyId"));
+
+        R<ConfigValue> response = controller.getConfigByKey("SMS_ACCESS_KEY_ID");
+
+        assertThat(response.getData().getConfigValue()).isEqualTo("LTAI5tAccessKeyId");
     }
 
     @Test

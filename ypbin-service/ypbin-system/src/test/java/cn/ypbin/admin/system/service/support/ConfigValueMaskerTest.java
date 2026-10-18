@@ -11,6 +11,7 @@ package cn.ypbin.admin.system.service.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,9 +27,15 @@ import org.junit.jupiter.api.Test;
  */
 class ConfigValueMaskerTest {
 
+    /** 验收者实测「两侧都明文」的 6 个键：判据缺口的核心回归样例 */
+    private static final List<String> GAP_KEYS = List.of(
+        "ALIYUN_SECRET_KEY", "MY_SECRET_KEY", "DB_PASSWD", "SERVICE_PWD",
+        "THIRD_PARTY_CREDENTIAL", "SOCIAL_ALIPAY_PUBLIC_KEY");
+
     @Test
-    @DisplayName("判据：6 个敏感后缀全部命中（忽略大小写），非敏感键不命中")
+    @DisplayName("判据：凭据类后缀全部命中（含历史缺口 6 键），标识符类键不命中")
     void sensitiveSuffixesShouldBeMatchedCaseInsensitively() {
+        // 凭据类后缀逐一命中
         assertThat(ConfigValueMasker.isSensitive("SMS_ACCESS_KEY_SECRET")).isTrue();
         assertThat(ConfigValueMasker.isSensitive("MAIL_PASSWORD")).isTrue();
         assertThat(ConfigValueMasker.isSensitive("GITHUB_ACCESS_TOKEN")).isTrue();
@@ -36,12 +43,37 @@ class ConfigValueMaskerTest {
         assertThat(ConfigValueMasker.isSensitive("SIGN_PRIVATE_KEY")).isTrue();
         assertThat(ConfigValueMasker.isSensitive("PROVIDER_API_KEY")).isTrue();
         assertThat(ConfigValueMasker.isSensitive("sms_access_key_secret")).isTrue();
-        // 非敏感：登录开关、模板 ID、账号名（不是密钥）
+        // 历史缺口（验收者探针实测为 false 的 6 个键）：_KEY / _PASSWD / _CREDENTIAL 覆盖
+        assertThat(GAP_KEYS).allSatisfy(key -> assertThat(ConfigValueMasker.isSensitive(key))
+            .as("历史缺口：%s 必须判为敏感（否则列表页与 internal 都会明文回显）", key)
+            .isTrue());
+        // 标识符类：单独不能通过认证，保持明文（打码会让运维无法确认「配的是哪一把」）
+        assertThat(ConfigValueMasker.isSensitive("SMS_ACCESS_KEY_ID")).isFalse();
+        assertThat(ConfigValueMasker.isSensitive("SOCIAL_GITHUB_CLIENT_ID")).isFalse();
+        assertThat(ConfigValueMasker.isSensitive("MAIL_USERNAME")).isFalse();
         assertThat(ConfigValueMasker.isSensitive("LOGIN_CAPTCHA_ENABLED")).isFalse();
         assertThat(ConfigValueMasker.isSensitive("SMS_TEMPLATE_ID")).isFalse();
-        assertThat(ConfigValueMasker.isSensitive("MAIL_USERNAME")).isFalse();
         assertThat(ConfigValueMasker.isSensitive("SITE_NAME")).isFalse();
+        assertThat(ConfigValueMasker.isSensitive("MAIL_FROM")).isFalse();
         assertThat(ConfigValueMasker.isSensitive(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("种子数据误伤核对：只有凭据类键被打码，标识符/阈值类键保持明文")
+    void seedDataKeysShouldOnlyMaskCredentials() {
+        // 会被打码（部署种子里的全部凭据类键）
+        assertThat(List.of("MAIL_PASSWORD", "SMS_ACCESS_KEY_SECRET", "SOCIAL_GITHUB_CLIENT_SECRET",
+            "SOCIAL_ALIPAY_CLIENT_SECRET", "SOCIAL_ALIPAY_PUBLIC_KEY"))
+            .allSatisfy(key -> assertThat(ConfigValueMasker.isSensitive(key)).isTrue());
+        // 必须保持明文（误伤会让运维看不到配置、也影响 auth 读取开关）
+        assertThat(List.of("SMS_ACCESS_KEY_ID", "MAIL_USERNAME", "MAIL_FROM", "MAIL_FROM_NAME",
+            "MAIL_HOST", "MAIL_PORT", "MAIL_SSL_ENABLED", "SITE_NAME", "SMS_SIGNATURE",
+            "SMS_SUPPLIER", "SMS_TEMPLATE_ID", "SOCIAL_GITHUB_CLIENT_ID", "SOCIAL_GITHUB_REDIRECT_URI",
+            "LOGIN_CAPTCHA_ENABLED", "LOGIN_SMS_ENABLED", "PASSWORD_MIN_LENGTH",
+            "PASSWORD_REQUIRE_DIGIT", "PASSWORD_ERROR_LOCK_COUNT"))
+            .allSatisfy(key -> assertThat(ConfigValueMasker.isSensitive(key))
+                .as("种子键 %s 不应被打码（非凭据类）", key)
+                .isFalse());
     }
 
     @Test
@@ -57,9 +89,8 @@ class ConfigValueMaskerTest {
     }
 
     @Test
-    @DisplayName("判据与形态同源：凡命中判据的键，mask 结果必然不是原文")
+    @DisplayName("判据与形态同源：凡命中判据的键，mask 结果必然是 ****末4位（不是原文）")
     void everySensitiveKeyShouldActuallyBeMasked() {
-        // 覆盖库里全部内置敏感键 + 一个「只命中后缀、不属旧精确键清单」的键（正是历史泄露面）
         assertThat(ConfigValueMasker.mask("SMS_ACCESS_KEY_SECRET", "LTAI5tSecretValue"))
             .isNotEqualTo("LTAI5tSecretValue");
         assertThat(ConfigValueMasker.mask("MAIL_PASSWORD", "smtpAuthCode"))
@@ -70,6 +101,21 @@ class ConfigValueMaskerTest {
         // 这个键在列表页原本会**原样明文返回**，在 internal 却是打码的
         assertThat(ConfigValueMasker.mask("DINGTALK_APP_API_KEY", "dingTalkSecret"))
             .isNotEqualTo("dingTalkSecret");
+        // 历史缺口 6 键：同一份值经 mask 必须是 ****末4位
+        assertThat(ConfigValueMasker.mask("ALIYUN_SECRET_KEY", "aliyunSecret0001"))
+            .isEqualTo("****0001");
+        assertThat(ConfigValueMasker.mask("MY_SECRET_KEY", "mySecretKey9999"))
+            .isEqualTo("****9999");
+        assertThat(ConfigValueMasker.mask("DB_PASSWD", "dbPasswdValue7777"))
+            .isEqualTo("****7777");
+        assertThat(ConfigValueMasker.mask("SERVICE_PWD", "svcPwdValue6666"))
+            .isEqualTo("****6666");
+        assertThat(ConfigValueMasker.mask("THIRD_PARTY_CREDENTIAL", "thirdParty5555"))
+            .isEqualTo("****5555");
+        assertThat(ConfigValueMasker.mask("SOCIAL_ALIPAY_PUBLIC_KEY", "alipayPublicKey3333"))
+            .isEqualTo("****3333");
+        // 标识符保持明文（不打码才有运维价值）
+        assertThat(ConfigValueMasker.mask("SMS_ACCESS_KEY_ID", "LTAI5tAccessKeyId")).isEqualTo("LTAI5tAccessKeyId");
     }
 
     @Test
@@ -79,10 +125,15 @@ class ConfigValueMaskerTest {
             .isTrue();
         assertThat(ConfigValueMasker.isMaskedValue("****1234")).isTrue();
         assertThat(ConfigValueMasker.isMaskedValue("****")).isTrue();
-        // 真实密钥（不含 4 个星号开头）不得被误判为「未修改」
+        // 前导/尾随空格不得绕过「未修改」识别（否则掩码会被当真实值写库）
+        assertThat(ConfigValueMasker.isMaskedValue(" ****0001")).isTrue();
+        assertThat(ConfigValueMasker.isMaskedValue("****0001 ")).isTrue();
+        assertThat(ConfigValueMasker.isMaskedValue("\t****0001\n")).isTrue();
+        // 真实密钥（不以 4 个星号开头）不得被误判为「未修改」
         assertThat(ConfigValueMasker.isMaskedValue("LTAI5tSecretValue")).isFalse();
         assertThat(ConfigValueMasker.isMaskedValue("***triple")).isFalse();
         assertThat(ConfigValueMasker.isMaskedValue(null)).isFalse();
         assertThat(ConfigValueMasker.isMaskedValue("")).isFalse();
+        assertThat(ConfigValueMasker.isMaskedValue("   ")).isFalse();
     }
 }

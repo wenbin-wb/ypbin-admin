@@ -59,6 +59,14 @@ class SysConfigServiceImplMaskTest {
 
     private static final String RAW_SECRET = "dingTalkRealSecret0001";
 
+    /** 掩码前缀（与 ConfigValueMasker 的形态一致） */
+    private static final String MASK_PREFIX = "****";
+
+    /** 验收者实测「列表页与 internal 都明文」的 6 个缺口键 */
+    private static final List<String> GAP_KEYS = List.of(
+        "ALIYUN_SECRET_KEY", "MY_SECRET_KEY", "DB_PASSWD", "SERVICE_PWD",
+        "THIRD_PARTY_CREDENTIAL", "SOCIAL_ALIPAY_PUBLIC_KEY");
+
     private static final String MASKED_SECRET = "****0001";
 
     private SysConfigMapper configMapper;
@@ -107,6 +115,40 @@ class SysConfigServiceImplMaskTest {
         assertThat(items).filteredOn(item -> "SITE_NAME".equals(item.getConfigKey()))
             .singleElement()
             .satisfies(item -> assertThat(item.getConfigValue()).isEqualTo("ypbin-admin"));
+    }
+
+    @Test
+    @DisplayName("列表页：验收者实测为「明文」的 6 个缺口键必须打成 ****末4位")
+    void listPageShouldMaskPreviouslyGapKeys() {
+        List<SysConfig> rows = List.of(
+            config("ALIYUN_SECRET_KEY", "aliyunSecret0001"),
+            config("MY_SECRET_KEY", "mySecretKey9999"),
+            config("DB_PASSWD", "dbPasswdValue7777"),
+            config("SERVICE_PWD", "svcPwdValue6666"),
+            config("THIRD_PARTY_CREDENTIAL", "thirdParty5555"),
+            config("SOCIAL_ALIPAY_PUBLIC_KEY", "alipayPublicKey3333"),
+            // 标识符类键：必须保持明文，否则运维无法确认「配的是哪一把」
+            config("SMS_ACCESS_KEY_ID", "LTAI5tAccessKeyId"));
+        when(configMapper.selectList(any())).thenReturn(rows);
+
+        List<ConfigResp> items = configService.listByGroup("sms");
+
+        assertThat(items).filteredOn(item -> GAP_KEYS.contains(item.getConfigKey()))
+            .as("缺口键必须全部打码（旧判据下它们两侧都明文回显）")
+            .hasSize(GAP_KEYS.size())
+            .allSatisfy(item -> assertThat(item.getConfigValue())
+                .as("缺口键 %s 的列表页返回值必须是 **** 开头的掩码", item.getConfigKey())
+                .startsWith(MASK_PREFIX));
+        assertThat(items).filteredOn(item -> "ALIYUN_SECRET_KEY".equals(item.getConfigKey()))
+            .singleElement()
+            .satisfies(item -> assertThat(item.getConfigValue()).isEqualTo("****0001"));
+        assertThat(items).filteredOn(item -> "DB_PASSWD".equals(item.getConfigKey()))
+            .singleElement()
+            .satisfies(item -> assertThat(item.getConfigValue()).isEqualTo("****7777"));
+        // 标识符保持明文
+        assertThat(items).filteredOn(item -> "SMS_ACCESS_KEY_ID".equals(item.getConfigKey()))
+            .singleElement()
+            .satisfies(item -> assertThat(item.getConfigValue()).isEqualTo("LTAI5tAccessKeyId"));
     }
 
     @Test
@@ -164,6 +206,69 @@ class SysConfigServiceImplMaskTest {
         assertThatThrownBy(() -> configService.createConfig(req))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("脱敏后的占位值");
+    }
+
+    @Test
+    @DisplayName("写路径守卫：非敏感键提交 **** 开头的真实值 ⇒ 正常写入（不得静默判为「未修改」）")
+    void updateGroupShouldWriteMaskLookalikeValueForNonSensitiveKey() {
+        SysConfig stored = config("CUSTOM_DISPLAY_TEXT", "old-value");
+        stored.setConfigGroup("site");
+        when(configMapper.selectList(any())).thenReturn(List.of(stored));
+        when(configMapper.updateById(any(SysConfig.class))).thenReturn(1);
+
+        // 非敏感键的真实值完全可能以 4 个星号开头；若不加「键敏感」守卫就会被静默丢弃
+        ConfigUpdateBatchReq req = new ConfigUpdateBatchReq();
+        req.setConfigs(Map.of("CUSTOM_DISPLAY_TEXT", "****brand-new-name"));
+
+        try (MockedStatic<SysCache> ignored = mockStatic(SysCache.class)) {
+            configService.updateGroup("site", req);
+        }
+
+        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
+        verify(configMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getConfigValue())
+            .as("非敏感键的掩码形真实值必须写库；否则用户改了值却不生效且无报错")
+            .isEqualTo("****brand-new-name");
+    }
+
+    @Test
+    @DisplayName("写路径守卫：敏感键提交带前导空格的掩码 ⇒ 仍识别为「未修改」（防空格绕过）")
+    void updateGroupShouldStillRecognizePaddedMaskedValueForSensitiveKey() {
+        SysConfig stored = config(SENSITIVE_KEY, RAW_SECRET);
+        stored.setConfigGroup("sms");
+        when(configMapper.selectList(any())).thenReturn(List.of(stored));
+        when(configMapper.updateById(any(SysConfig.class))).thenReturn(1);
+
+        ConfigUpdateBatchReq req = new ConfigUpdateBatchReq();
+        req.setConfigs(Map.of(SENSITIVE_KEY, "  " + MASKED_SECRET + "  "));
+
+        try (MockedStatic<SysCache> ignored = mockStatic(SysCache.class)) {
+            configService.updateGroup("sms", req);
+        }
+
+        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
+        verify(configMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getConfigValue())
+            .as("前导/尾随空格不得绕过「未修改」识别，否则掩码会被当真实值写库")
+            .isEqualTo(RAW_SECRET);
+    }
+
+    @Test
+    @DisplayName("写路径：新增非敏感键时值以 **** 开头 ⇒ 正常创建（不是所有键都拒绝掩码形值）")
+    void createConfigShouldAllowMaskLookalikeValueForNonSensitiveKey() {
+        ConfigSaveReq req = new ConfigSaveReq();
+        req.setConfigGroup("site");
+        req.setName("展示文案");
+        req.setConfigKey("CUSTOM_DISPLAY_TEXT");
+        req.setConfigValue("****brand-new-name");
+        when(configMapper.exists(any())).thenReturn(false);
+        when(configMapper.insert(any(SysConfig.class))).thenReturn(1);
+
+        configService.createConfig(req);
+
+        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
+        verify(configMapper).insert(captor.capture());
+        assertThat(captor.getValue().getConfigValue()).isEqualTo("****brand-new-name");
     }
 
     private static SysConfig config(String configKey, String configValue) {
