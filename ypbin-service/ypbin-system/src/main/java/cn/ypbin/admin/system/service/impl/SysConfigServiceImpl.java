@@ -113,7 +113,10 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     public void createConfig(ConfigSaveReq req) {
         rejectSocialConfig(req.getConfigGroup(), req.getConfigKey());
         checkKeyUnique(req.getConfigKey(), null);
-        if (ConfigValueMasker.isMaskedValue(req.getConfigValue())) {
+        // 新增时提交的是**脱敏占位值** ⇒ 无原值可保留，只能显式拒绝（不能把 ****abcd 当真实密钥存库）。
+        // 同样必须先判「键敏感」：非敏感键的真实值可以合法地以 4 个星号开头，不能误拒。
+        if (ConfigValueMasker.isSensitive(req.getConfigKey())
+            && ConfigValueMasker.isMaskedValue(req.getConfigValue())) {
             throw new BusinessException(MASKED_VALUE_REJECT_MESSAGE);
         }
         SysConfig config = new SysConfig();
@@ -147,7 +150,8 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         config.setId(id);
         // 列表页回显的是脱敏值；管理员改其它字段时原样提交回来 ⇒ 视为「未修改」，保留库内真实值，
         // 避免把 ****末4位 当成真实密钥写库（那会让密钥静默损坏且不报错）
-        config.setConfigValue(resolveSubmittedValue(req.getConfigValue(), existing.getConfigValue()));
+        config.setConfigValue(resolveSubmittedValue(req.getConfigKey(), req.getConfigValue(),
+            existing.getConfigValue()));
         if (!updateById(config)) {
             throw new BusinessException("参数更新失败");
         }
@@ -198,8 +202,8 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("包含未知参数或跨分组参数");
         }
         for (SysConfig config : configs) {
-            config.setConfigValue(resolveSubmittedValue(req.getConfigs().get(config.getConfigKey()),
-                config.getConfigValue()));
+            config.setConfigValue(resolveSubmittedValue(config.getConfigKey(),
+                req.getConfigs().get(config.getConfigKey()), config.getConfigValue()));
             if (!updateById(config)) {
                 throw new BusinessException("参数更新失败：" + config.getConfigKey());
             }
@@ -221,17 +225,27 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     }
 
     /**
-     * 解析提交值：若为脱敏占位值（{@code ****末4位}）则保留库内原值，视为「未修改」。
+     * 解析提交值：<b>目标键敏感</b>且提交的是脱敏占位值（{@code ****末4位}）时，保留库内原值（视为「未修改」）。
      *
      * <p><strong>为什么需要</strong>：列表页与分组表单回显的是脱敏值（见 {@link #toResp}），管理员只改
      * 其它字段时会把掩码原样提交回来。若直接写库，真实密钥会被 {@code ****abcd} 覆盖——既不报错、也无法
      * 从响应看出，是最难排查的一类静默损坏。故此处显式跳过，并保留原值。</p>
      *
+     * <p><strong>为什么必须先判「键敏感」</strong>：掩码识别只看值的形状（4 个星号开头）。非敏感键的真实
+     * 值完全可能以此开头（例如自定义项 {@code ****brand-new-name}），若不判键就会把它当成「未修改」，
+     * 用户的真实修改被<b>静默丢弃</b>、无任何报错。因此本方法先问
+     * {@link ConfigValueMasker#isSensitive(String)}：非敏感键<b>原样写库</b>。</p>
+     *
+     * @param configKey      目标配置键（用于判定该键是否敏感）
      * @param submittedValue 请求提交的值
      * @param existingValue  库内当前真实值
      * @return 应当写库的值
      */
-    private static String resolveSubmittedValue(String submittedValue, String existingValue) {
+    private static String resolveSubmittedValue(String configKey, String submittedValue,
+            String existingValue) {
+        if (!ConfigValueMasker.isSensitive(configKey)) {
+            return submittedValue;
+        }
         return ConfigValueMasker.isMaskedValue(submittedValue) ? existingValue : submittedValue;
     }
 
