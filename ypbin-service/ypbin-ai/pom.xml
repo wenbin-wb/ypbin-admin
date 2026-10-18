@@ -121,6 +121,15 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- 配置元数据生成器（编译期注解处理器，optional ⇒ 不进运行期类路径）：
+             让 @ConfigurationProperties(AiModelConfigProperties) 生成
+             META-INF/spring-configuration-metadata.json，使 ypbin.ai.model-config.* 在 IDE/配置中心
+             有补全与文档、并能在配置写错键时被发现（starter #103 的「强类型化」收益之一）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
