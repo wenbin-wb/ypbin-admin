@@ -102,7 +102,9 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-tracking</artifactId>
         </dependency>
-        <!-- 短信（SmsUtils 发验证码） -->
+        <!-- 短信（SmsUtils 发验证码）。仅为 SmsUtils，不启用 SSE：
+             ypbin.sse.enabled 保持默认 false（见 deploy/nacos/ypbin-auth.yaml 的 SSE 段注释），
+             因此本依赖不会装配 SseEmitterManager / Redis 扇出订阅线程 / SSE 端点。 -->
         <dependency>
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-messaging</artifactId>

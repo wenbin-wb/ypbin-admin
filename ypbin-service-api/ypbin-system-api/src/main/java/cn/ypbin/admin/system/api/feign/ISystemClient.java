@@ -109,6 +109,16 @@ public interface ISystemClient {
 
     /**
      * 按参数键读取系统参数（auth 读取登录开关/短信配置用）。
+     *
+     * <p><strong>脱敏契约（跨服务可见行为）</strong>：键名命中敏感后缀（{@code _SECRET} /
+     * {@code _PASSWORD} / {@code _TOKEN} / {@code _ACCESS_KEY} / {@code _PRIVATE_KEY} /
+     * {@code _API_KEY}，忽略大小写）时，返回值<strong>不是原文</strong>，而是
+     * {@code ****} + 末 4 位（长度 ≤ 4 时整体为 {@code ****}）；与 system 管理面列表页同一判据、
+     * 同一形态。需要 Key 原文的调用方（如短信/邮件发送）必须走系统服务内部通道，不得经本接口获取。
+     * 判据与形态的完整说明与选择理由见 system 模块的 {@code ConfigValueMasker}。</p>
+     *
+     * @param configKey 参数键
+     * @return 参数取值（敏感键为脱敏形态）
      */
     @GetMapping("/config-by-key")
     R<ConfigValue> getConfigByKey(@RequestParam("configKey") String configKey);

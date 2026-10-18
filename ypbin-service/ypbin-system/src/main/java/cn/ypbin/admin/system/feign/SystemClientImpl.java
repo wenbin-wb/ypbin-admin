@@ -24,6 +24,7 @@ import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.support.ConfigValueMasker;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -39,7 +40,6 @@ import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
 import java.util.List;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -71,13 +71,6 @@ public class SystemClientImpl implements ISystemClient {
 
     /** 密码校验限频窗口时长 */
     private static final Duration VERIFY_PASSWORD_WINDOW = Duration.ofMinutes(1);
-
-    /** 整键命中即脱敏的系统参数（与列表页掩码口径一致，防密钥经 internal 出网） */
-    private static final List<String> SENSITIVE_CONFIG_SUFFIXES = List.of(
-        "_SECRET", "_PASSWORD", "_TOKEN", "_ACCESS_KEY", "_PRIVATE_KEY", "_API_KEY");
-
-    /** 打码符 */
-    private static final String MASK_PREFIX = "****";
 
     private final SysPermissionService permissionService;
     private final SysUserService userService;
@@ -189,9 +182,10 @@ public class SystemClientImpl implements ISystemClient {
             .eq(SysConfig::getConfigKey, configKey), false);
         String rawValue = config == null ? "" : config.getConfigValue();
         // 密钥/口令类参数禁止经 internal 出网（纵深防御：即使凭证被泄露，密钥也不得明文返回）。
+        // 判据与形态统一由 ConfigValueMasker 提供，与列表页完全一致（详见该类注释的选择理由）。
         // 已核验 auth 经本接口仅读取非敏感键（LOGIN_*/SMS_CODE_*/SMS_TEMPLATE_ID），不受影响；
         // 短信/邮件等密钥由 system 本地缓存直读，不走本接口。
-        value.setConfigValue(maskIfSensitive(configKey, rawValue));
+        value.setConfigValue(ConfigValueMasker.mask(configKey, rawValue));
         return R.ok(value);
     }
 
@@ -220,26 +214,6 @@ public class SystemClientImpl implements ISystemClient {
             throw new BusinessException(GlobalErrorCode.TOO_MANY_REQUESTS,
                 "密码校验过于频繁，请稍后重试");
         }
-    }
-
-    /**
-     * 系统参数键命中敏感后缀时对值脱敏（仅保留末 4 位，其余打码）。
-     *
-     * @param configKey 参数键
-     * @param rawValue  原始值
-     * @return 脱敏后的值（非敏感键原样返回）
-     */
-    private static String maskIfSensitive(String configKey, String rawValue) {
-        if (configKey == null || rawValue == null || rawValue.isBlank()) {
-            return rawValue;
-        }
-        String upperKey = configKey.toUpperCase(Locale.ROOT);
-        boolean sensitive = SENSITIVE_CONFIG_SUFFIXES.stream().anyMatch(upperKey::endsWith);
-        if (!sensitive) {
-            return rawValue;
-        }
-        return rawValue.length() <= 4 ? MASK_PREFIX
-            : MASK_PREFIX + rawValue.substring(rawValue.length() - 4);
     }
 
     @Override
