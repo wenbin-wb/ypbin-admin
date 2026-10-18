@@ -40,7 +40,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>钉住三件事：① 上报的就是采集模型本身（不做二次字段映射）；② system 侧返回失败 {@code R}
  * 时必须<b>上抛</b>而不是静默 return（失败无痕迹＝最坏的一种降级）；③ 失败由本类<b>带完整堆栈</b>
- * 记录——不能依赖 starter 的监听器（本仓固定的 {@code ypbin-starter-log:3.3.0} 只打 message），
+ * 记录——本类自己记堆栈并上抛，不把该职责外包给 starter 的 {@code LogEventListener}
+ * （监听器的日志级别/是否带 Throwable 属 starter 内部实现、会随版本变化，不能作为本仓铁律的保证），
  * 且异常到达监听器后被捕获，不逃逸到业务线程。</p>
  *
  * @author wenbin
@@ -132,7 +133,8 @@ class RemoteLogDaoTest {
 
     /**
      * 失败必须由本类记 ERROR <b>且带 Throwable</b>（{@code ILoggingEvent.throwableProxy} 非空即
-     * "打了完整堆栈"）——本仓固定的 starter 3.3.0 监听器只打 message，靠它满足不了"完整堆栈"这条铁律。
+     * "打了完整堆栈"）。本用例直接断言本类 logger 上的日志事件，因而不依赖 starter 监听器的实现细节
+     * （其日志级别与是否携带 Throwable 会随版本变化）。
      * 同时异常被监听器捕获，不会反噬业务线程。
      */
     @Test

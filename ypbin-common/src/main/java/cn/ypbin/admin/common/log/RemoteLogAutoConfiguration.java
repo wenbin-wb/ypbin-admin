@@ -22,9 +22,10 @@ import org.springframework.context.annotation.Bean;
 /**
  * 日志"跨服务上报"自动装配。
  *
- * <p><b>解决的问题：</b>starter 的 {@code LogAutoConfiguration.logDao()} 在宿主没提供 {@link LogDao} 时
- * 会安静地装配只打印不落库的 {@code DefaultLogDao}——auth/ai 都没有本地的落库实现，于是它们的
- * {@code @Log} 全部只进应用日志、{@code sys_log} 恒为空。本配置为这类服务补上"上报给 system"的实现。</p>
+ * <p><b>解决的问题：</b>starter 的 {@code LogAutoConfiguration#logDao()} 在宿主没提供 {@link LogDao} 时
+ * 会装配只打印不落库的 {@code DefaultLogDao}（启动期仅打一行 INFO，运行期无任何报错）——auth/ai 都没有
+ * 本地的落库实现，于是它们的 {@code @Log} 全部只进应用日志、{@code sys_log} 恒为空。本配置为这类服务
+ * 补上"上报给 system"的实现。</p>
  *
  * <p><b>装配优先级：</b>{@code beforeName} 指向 starter 的 {@code LogAutoConfiguration}，
  * 使 {@link #remoteLogDao} 先于它的 {@code @ConditionalOnMissingBean} 判定完成注册；同时本方法自身也带

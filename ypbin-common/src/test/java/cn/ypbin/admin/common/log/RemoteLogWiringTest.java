@@ -29,9 +29,10 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 跨服务日志上报的装配测试。
  *
- * <p>这是本任务的核心静默失效点：starter 的 {@code LogAutoConfiguration.logDao()} 带
- * {@code @ConditionalOnMissingBean}，谁都没提供实现时它会安静地装上"只打印不落库"的
- * {@code DefaultLogDao}——接口照常跑、{@code sys_log} 恒为空。本测试钉住两条：
+ * <p>这是本任务的核心静默失效点：starter 的 {@code LogAutoConfiguration#logDao()} 带
+ * {@code @ConditionalOnMissingBean}，谁都没提供实现时它会装上"只打印不落库"的
+ * {@code DefaultLogDao}（启动期仅一行 INFO，运行期无报错）——接口照常跑、{@code sys_log} 恒为空。
+ * 本测试钉住两条：
  * ① 无本地实现时 {@code RemoteLogDao} 必须<b>排在 starter 默认实现之前</b>被装配
  * （靠 {@code @AutoConfiguration(beforeName = ...})）</p>
  * ② 宿主自带实现（system 的 {@code DbLogProviders.DbLogDao}）时上报实现必须退让，

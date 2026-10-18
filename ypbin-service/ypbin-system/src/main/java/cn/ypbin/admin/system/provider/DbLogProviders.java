@@ -26,21 +26,22 @@ import org.springframework.stereotype.Component;
  *
  * <p>starter 的 log 模块把扩展点定义得很清楚，落库需要宿主提供的是 <strong>{@link LogDao}</strong> 而
  * <strong>不是</strong> {@code LogCollector}：{@code LogCollector} 是 starter 自带的具体采集器 Bean
- * （starter 3.3.0 {@code LogAutoConfiguration.java:89-96} 创建，负责从 Servlet 请求采集元信息），
- * 宿主可覆盖的持久化端口是 {@code LogAutoConfiguration.java:61-65} 的 {@code LogDao}——其默认实现
- * {@code DefaultLogDao} 只把日志打印到 {@code ypbin.access-log} 应用日志，<strong>不写库，也不报错</strong>，
+ * （{@code LogAutoConfiguration#logCollector} 创建，负责从 Servlet 请求采集元信息），
+ * 宿主可覆盖的持久化端口是 {@code LogAutoConfiguration#logDao()} 的 {@link LogDao}——其默认实现
+ * {@code DefaultLogDao} 只把日志打印到 {@code ypbin.access-log} 应用日志，<strong>不写库，也不报错</strong>
+ * （仅在启动时打一行 INFO 提示，见 {@code LogAutoConfiguration#logDao()}），
  * 这正是此前 {@code sys_log} 恒为空的原因。同理操作人来自 {@code LogUserProvider}
- * （{@code LogAutoConfiguration.java:67-71} 默认返回空），本类一并接上。</p>
+ * （{@code LogAutoConfiguration#logUserProvider} 默认返回空），本类一并接上。</p>
  *
- * <p><strong>落库时机：</strong>{@code LogAspect.around} 在方法返回后的 {@code finally} 中采集并
- * {@code publishEvent(new LogEvent(record))}（starter 3.3.0 {@code LogAspect.java:87-98}），
- * {@code LogEventListener.onLogEvent} 再调 {@code LogDao.add}（{@code LogEventListener.java:43-51}）。
- * 注意该监听器虽标了 {@code @Async}，但 <strong>本仓未引入 {@code ypbin-starter-async}，
- * {@code @EnableAsync} 不生效</strong>（依赖树已核实：{@code mvn -pl ypbin-service/ypbin-system
- * dependency:tree} 无 {@code ypbin-starter-async}），因此当前实际上在请求线程内同步落库。</p>
+ * <p><strong>落库时机：</strong>{@code LogAspect#around} 在方法返回后的 {@code finally} 中采集并
+ * {@code publishEvent(new LogEvent(record))}，{@code LogEventListener#onLogEvent} 再调 {@code LogDao#add}。
+ * 该监听器标了 {@code @Async}，本仓已引入 {@code ypbin-starter-async}（默认
+ * {@code ypbin.async.enable-annotation=true} ⇒ {@code @EnableAsync} 生效）⇒ 落库在<strong>异步线程</strong>执行。
+ * {@code LogRecord} 的采集已在业务线程完成，故本类<strong>不得</strong>依赖任何请求线程 ThreadLocal
+ * （租户/登录态）。</p>
  *
  * <p><strong>租户上下文：</strong>{@code sys_log} 已登记在 {@code ypbin.tenant.ignore-tables}
- * （{@code deploy/nacos/ypbin-system.yaml:24}），租户拦截器不为其追加任何条件，故落库不需要租户上下文，
+ * （{@code deploy/nacos/ypbin-system.yaml}），租户拦截器不为其追加任何条件，故落库不需要租户上下文，
  * 也就不会因 {@code fail-on-missing-tenant: true} 被拒。{@code SysLog} 因此不继承 {@code BaseEntity}
  * （见其类注释），本类也无需做租户透传。</p>
  *
@@ -51,12 +52,13 @@ import org.springframework.stereotype.Component;
  * provider，starter 默认实现恒返回空，这三列即为空；③ {@code location} 依赖
  * {@code IpLocationResolver}，本仓未接入离线 IP 库，故留空而非臆造。</p>
  *
+ * <p><strong>失败日志的职责边界：</strong>{@code LogEventListener} 落库失败时记 WARN 并传完整堆栈
+ * （{@code log.warn(..., e.getMessage(), e)}）；但「完整堆栈」的最终保障在本类与上报侧
+ * （{@code RemoteLogDao}）自己手里——本类不吞异常，{@code RemoteLogDao} 显式记 ERROR + 堆栈后上抛，
+ * <b>不依赖监听器所在 starter 版本的日志级别</b>（该行为曾随版本变化，以代码为准而不是以版本号为准）。</p>
+ *
  * @author wenbin
  * @since 2026-09-16
- * <p><strong>与依赖版本相关的事实（务必知道）</strong>：本仓固定 {@code ypbin-starter-log:3.3.0}，
- * 该版本的 {@code LogEventListener} 在落库失败时<strong>只打印 message、不带堆栈</strong>
- * （starter 侧补堆栈的改动晚于 v3.3.0，需等发版才生效）。因此本类与上报侧
- * （{@code RemoteLogDao}）<strong>自己</strong>负责抛错/记完整堆栈，不能依赖监听器。</p>
  */
 public final class DbLogProviders {
 

@@ -27,11 +27,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p><strong>为什么失败要显式记堆栈并上抛：</strong>system 不可达时 {@code ISystemClientFallback}
  * 返回失败 {@code R}（{@code code=500}），若此处静默 return，就是"登录日志没落库且无任何痕迹"的静默降级。
- * 这里<b>不依赖</b> starter 的 {@code LogEventListener} 来记堆栈——本仓固定的 starter 版本
- * {@code ypbin-starter-log:3.3.0} 的监听器只打 {@code log.warn("... persist failed: {}", e.getMessage())}，
- * <b>不带 Throwable</b>（starter 侧补堆栈的提交 {@code 0dc6ef1} 在 v3.3.0 之后，见
- * {@code v3.3.0} 的 {@code LogEventListener} 源码），因此"完整堆栈"必须在本类落实。
- * 记完再上抛，监听器仍会捕获（异常不逃逸到业务线程，登录活动照常返回）。</p>
+ * 本类<b>自己记完整堆栈并上抛</b>，不把「完整堆栈」的责任外包给 starter 的 {@code LogEventListener}：
+ * 该监听器的日志级别与是否携带 Throwable 属 starter 内部实现、会随版本变化，而本类的记日志行为由本仓
+ * 代码直接决定，可被本模块的测试锁定。记完再上抛，监听器仍会捕获（异常不逃逸到业务线程，登录活动照常返回）。</p>
  *
  * <p><strong>调用线程：</strong>本方法由 {@code LogEventListener.onLogEvent} 调用，该方法带 {@code @Async}，
  * 故实际执行在异步线程；{@code LogRecord} 的采集（{@code LogCollector.collect}）已发生在业务线程，
