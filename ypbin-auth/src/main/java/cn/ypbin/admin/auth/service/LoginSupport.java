@@ -38,8 +38,8 @@ import org.springframework.stereotype.Component;
  *
  * <p><strong>为什么必须写终端信息：</strong>在线用户接口的 IP/归属地/浏览器/操作系统四个字段
  * <strong>只</strong>来自 {@link OnlineUserHelper#record} 写入 Token-Session 的记录
- * （starter 3.3.0 {@code DefaultOnlineUserService.java:163-170} 经 {@code OnlineUserHelper.getByToken}
- * 读取）；此前本仓无任何一处调用 {@code record}，因此这四个字段恒为空。写入方在 auth、
+ * （starter 的 {@code DefaultOnlineUserService} 经 {@code OnlineUserHelper.getByToken} 读取）；
+ * 此前本仓无任何一处调用 {@code record}，因此这四个字段恒为空。写入方在 auth、
  * 读取方在 ypbin-system，两者共用 {@code sa-token-redis-template} 会话存储（见 {@code ypbin-common}
  * 的依赖注释），跨服务可读。</p>
  *

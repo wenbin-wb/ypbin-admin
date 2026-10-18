@@ -28,9 +28,9 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 操作日志装配测试：锁定"业务方提供 {@link LogDao} 时 starter 的 {@link DefaultLogDao} 必须退让"。
  *
- * <p>这正是本任务的静默失效机制——{@code LogAutoConfiguration.logDao()} 带
- * {@code @ConditionalOnMissingBean}（starter 3.3.0 {@code LogAutoConfiguration.java:61-65}），
- * 没人提供实现时安静地装配"只打印不落库"的默认实现。若本仓的 {@code DbLogDao} 因装配顺序或
+ * <p>这正是本任务的静默失效机制——{@code LogAutoConfiguration#logDao()} 带
+ * {@code @ConditionalOnMissingBean}，没人提供实现时装配"只打印不落库"的默认实现
+ * （启动期只有一行 INFO 提示，运行时没有任何异常）。若本仓的 {@code DbLogDao} 因装配顺序或
  * 包扫描范围没生效，接口仍能跑通、只是 {@code sys_log} 恒为空，纯靠人工很难发现，故用装配测试钉住。</p>
  *
  * @author wenbin

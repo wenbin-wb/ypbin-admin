@@ -14,8 +14,11 @@ ypbin:
     feign:
       trusted-source-token: ${GATEWAY_SIGN_TOKEN}
       require-trusted-source: true
-  data-permission:
-    enabled: true
+  # 数据权限：此处刻意不配任何数据权限开关（曾经配过 enabled: true，但完全无效、属死键）。
+  # ai 既无 datapermission 扩展依赖、也无 @DataPermission 使用点，对应自动配置因
+  # @ConditionalOnClass/@ConditionalOnBean 双重不满足而静默不装配；且 ai_* 表没有 dept_id 列，
+  # 即使补齐依赖也无数据范围可过滤。将来要用必须同时满足：加 pom 依赖 + 加 @DataPermission 使用点
+  # + 表上确有部门列，三件事缺一不可，届时再在本文件加回开关。
   # ai 为下游业务服务，登录态由网关校验并注入身份头；
   # 关闭本地 Sa-Token 全局拦截，避免 ai 直读 Redis 会话导致 token 无效。
   security:

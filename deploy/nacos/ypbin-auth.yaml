@@ -38,9 +38,13 @@ ypbin:
       - BROWSER
       - OS
 
-# ---------- SSE 推送 ----------
-  sse:
-    enabled: true
+# ---------- SSE（ypbin-starter-messaging）----------
+# 刻意不配 ypbin.sse：auth 没有任何 SSE 消费方（无 PushService / SseEmitterManager / SseTicketStore 引用）。
+# 该开关一旦为 true，starter 会为这个用不到的能力装配整套 SSE——SseEmitterManager、Redis 跨实例扇出
+# 订阅线程，并暴露 /ypbin/sse/subscribe 与 /ypbin/sse/ticket 两个 HTTP 端点
+# （SseAutoConfiguration 的两个 @Bean 在 register-endpoint 默认 true 且容器存在 SseUserIdResolver 时注册；
+# auth 引入 starter-security 后该条件实际满足）。保持默认 false 即不装配。
+# 注意：auth 依赖 ypbin-starter-messaging 的真实原因只是 SmsUtils（见 pom 注释），与 SSE 无关。
 
 # ---------- 埋点（ypbin-starter-tracking）----------
 # 登录/登出事件（auth.user.login / auth.user.logout）由本服务产出——三个登录入口都在 auth，

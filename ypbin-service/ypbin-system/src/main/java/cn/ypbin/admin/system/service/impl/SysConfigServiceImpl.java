@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.model.req.ConfigSaveReq;
 import cn.ypbin.admin.system.model.req.ConfigUpdateBatchReq;
 import cn.ypbin.admin.system.model.resp.ConfigResp;
 import cn.ypbin.admin.system.service.SysConfigService;
+import cn.ypbin.admin.system.service.support.ConfigValueMasker;
 import cn.ypbin.admin.system.social.ConfigChangedEvent;
 import cn.ypbin.starter.cache.annotation.CacheEvict;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -48,10 +49,9 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     /** 布尔真值集合 */
     private static final Set<String> TRUE_VALUES = Set.of("true", "1", "on", "yes");
 
-    /** 不允许通过查询接口返回的敏感参数 */
-    private static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of(
-        "SMS_ACCESS_KEY_SECRET",
-        "MAIL_PASSWORD");
+    /** 新增参数时提交脱敏占位值的拒绝文案（新增没有「原值」可保留，只能显式拒绝） */
+    private static final String MASKED_VALUE_REJECT_MESSAGE =
+        "参数值不能是脱敏后的占位值（**** 开头），请输入真实值";
 
     /** configKey -> configValue 本地不可变快照 */
     private volatile Map<String, String> cache = Map.of();
@@ -113,6 +113,9 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     public void createConfig(ConfigSaveReq req) {
         rejectSocialConfig(req.getConfigGroup(), req.getConfigKey());
         checkKeyUnique(req.getConfigKey(), null);
+        if (ConfigValueMasker.isMaskedValue(req.getConfigValue())) {
+            throw new BusinessException(MASKED_VALUE_REJECT_MESSAGE);
+        }
         SysConfig config = new SysConfig();
         BeanUtils.copyProperties(req, config);
         config.setBuiltIn(0);
@@ -142,6 +145,9 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         SysConfig config = new SysConfig();
         BeanUtils.copyProperties(req, config);
         config.setId(id);
+        // 列表页回显的是脱敏值；管理员改其它字段时原样提交回来 ⇒ 视为「未修改」，保留库内真实值，
+        // 避免把 ****末4位 当成真实密钥写库（那会让密钥静默损坏且不报错）
+        config.setConfigValue(resolveSubmittedValue(req.getConfigValue(), existing.getConfigValue()));
         if (!updateById(config)) {
             throw new BusinessException("参数更新失败");
         }
@@ -192,7 +198,8 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("包含未知参数或跨分组参数");
         }
         for (SysConfig config : configs) {
-            config.setConfigValue(req.getConfigs().get(config.getConfigKey()));
+            config.setConfigValue(resolveSubmittedValue(req.getConfigs().get(config.getConfigKey()),
+                config.getConfigValue()));
             if (!updateById(config)) {
                 throw new BusinessException("参数更新失败：" + config.getConfigKey());
             }
@@ -211,6 +218,21 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             }
         }
         cache = Map.copyOf(fresh);
+    }
+
+    /**
+     * 解析提交值：若为脱敏占位值（{@code ****末4位}）则保留库内原值，视为「未修改」。
+     *
+     * <p><strong>为什么需要</strong>：列表页与分组表单回显的是脱敏值（见 {@link #toResp}），管理员只改
+     * 其它字段时会把掩码原样提交回来。若直接写库，真实密钥会被 {@code ****abcd} 覆盖——既不报错、也无法
+     * 从响应看出，是最难排查的一类静默损坏。故此处显式跳过，并保留原值。</p>
+     *
+     * @param submittedValue 请求提交的值
+     * @param existingValue  库内当前真实值
+     * @return 应当写库的值
+     */
+    private static String resolveSubmittedValue(String submittedValue, String existingValue) {
+        return ConfigValueMasker.isMaskedValue(submittedValue) ? existingValue : submittedValue;
     }
 
     private void checkKeyUnique(String configKey, Long excludeId) {
@@ -250,15 +272,22 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         rejectSocialConfig(config.getConfigGroup(), config.getConfigKey());
     }
 
+    /**
+     * 实体 → 列表页响应：敏感参数值按 {@link ConfigValueMasker} 统一脱敏。
+     *
+     * <p><strong>口径已与内部端点（{@code SystemClientImpl#getConfigByKey}）统一</strong>：
+     * 同一份 {@code sys_config} 经列表页与经 internal 端点读到的是同一个形态（{@code ****末4位}），
+     * 判据也同为「后缀集合」。此前列表页用 2 个精确键 + 置空 {@code ""}，而 internal 用 6 个后缀 + 掩码，
+     * 两者判据不同 ⇒ <b>存在「internal 打码、列表页返回明文」的泄露面</b>（凡命中后缀但不属那 2 个精确键
+     * 的配置项，管理面会把密钥原文回显）。现统一到 {@link ConfigValueMasker} 一处，该泄露面消除。</p>
+     *
+     * @param config 系统参数实体
+     * @return 脱敏后的响应
+     */
     private ConfigResp toResp(SysConfig config) {
         ConfigResp resp = new ConfigResp();
         BeanUtils.copyProperties(config, resp);
-        String configKey = config.getConfigKey();
-        if (configKey != null
-            && (SENSITIVE_CONFIG_KEYS.contains(configKey)
-            || configKey.startsWith("SOCIAL_") && configKey.endsWith("_CLIENT_SECRET"))) {
-            resp.setConfigValue("");
-        }
+        resp.setConfigValue(ConfigValueMasker.mask(config.getConfigKey(), config.getConfigValue()));
         return resp;
     }
 }

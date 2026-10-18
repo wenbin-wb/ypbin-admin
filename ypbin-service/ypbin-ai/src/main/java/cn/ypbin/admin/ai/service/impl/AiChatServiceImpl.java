@@ -22,6 +22,7 @@ import cn.ypbin.admin.ai.model.resp.AiChatMessageResp;
 import cn.ypbin.admin.ai.model.resp.AiChatSessionResp;
 import cn.ypbin.admin.ai.service.AiChatSessionService;
 import cn.ypbin.admin.ai.support.AiChatSseSupport;
+import cn.ypbin.starter.messaging.sse.SseStreamBridge;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
@@ -450,15 +451,38 @@ public class AiChatServiceImpl implements AiChatSessionService {
         return resp;
     }
 
+    /**
+     * 构造「只带错误帧」的 SSE 响应：交给 starter 的流式桥接（通用传输能力，不在业务侧重复实现）。
+     *
+     * <p>starter 版本带参数校验（{@code Objects.requireNonNull}）与可定制选项，语义与本仓原副本一致
+     * （立即发 {@code event:error} 帧后 complete），故切换到 starter 不改变前端行为。</p>
+     *
+     * @param message 错误文案（原样发出）
+     * @return 已完成的 SSE 响应
+     */
     private static SseEmitter errorEmitter(String message) {
-        return AiChatSseSupport.errorEmitter(message);
+        return SseStreamBridge.errorEmitter(message);
     }
 
+    /**
+     * 释放流式订阅（幂等）。
+     *
+     * <p>保留在业务侧的原因见 {@link AiChatSseSupport} 类注释（starter 用 {@code Disposable.Swap}，
+     * 与本仓 {@code AtomicReference<Disposable>} 类型不同）。</p>
+     *
+     * @param ref 订阅引用
+     */
     private static void disposeQuietly(AtomicReference<Disposable> ref) {
         AiChatSseSupport.disposeQuietly(ref);
     }
 
+    /**
+     * 取异常链最深层原因的消息文本（交给 starter，避免与基座重复实现并随其漂移）。
+     *
+     * @param e 异常
+     * @return 根因文案（非空）
+     */
     private static String rootMessage(Throwable e) {
-        return AiChatSseSupport.rootMessage(e);
+        return SseStreamBridge.rootMessage(e);
     }
 }

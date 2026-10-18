@@ -52,10 +52,9 @@ import tools.jackson.databind.ObjectMapper;
  * <p>说明：这里事件发布是同步的（单测无 Spring 容器、{@code @Async} 不生效），
  * 也就是<b>比生产更坏</b>的情况——生产上监听器在异步线程执行；最坏情况都不影响业务，生产更不会。</p>
  *
- * <p>另注：堆栈断言挂在 {@code RemoteLogDao} 自己的 logger 上。本仓固定的
- * {@code ypbin-starter-log:3.3.0} 的 {@code LogEventListener} 只打 {@code e.getMessage()}、
- * <b>不带 Throwable</b>（补堆栈的 starter 提交 {@code 0dc6ef1} 晚于 v3.3.0），
- * 所以"完整堆栈"必须由上报侧自己保证。</p>
+ * <p>另注：堆栈断言挂在 {@code RemoteLogDao} 自己的 logger 上。"完整堆栈"由上报侧自己保证，
+ * 而不是依赖 starter 的 {@code LogEventListener}——该监听器的日志级别与是否携带 Throwable
+ * 属 starter 内部实现、会随版本变化，不能作为本仓铁律的保证。</p>
  *
  * @author wenbin
  * @since 2026-09-16
