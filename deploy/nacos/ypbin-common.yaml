@@ -87,3 +87,5 @@ ypbin:
   cloud:
     feign:
       internal-token: ${INTERNAL_TOKEN}
+      # ⚠️ trusted-source-token 与 require-trusted-source 按服务配置（见 ypbin-auth.yaml /
+      # ypbin-system.yaml / ypbin-ai.yaml），不在此处兜底，避免给所有加载 common 的应用强制套上严格模式。

@@ -18,6 +18,12 @@ ypbin:
       - /captcha/verify
       - /actuator/**
 
+# ---------- Feign 身份来源校验（与 system/ai 同口径）----------
+  cloud:
+    feign:
+      trusted-source-token: ${GATEWAY_SIGN_TOKEN}
+      require-trusted-source: true
+
 # ---------- 操作日志（ypbin-starter-log）----------
 # 登录日志的采集项：与 ypbin-system.yaml 口径一致，显式追加 BROWSER/OS，否则 sys_log 的
 # browser/os 两列恒为空（starter 默认只采 REQUEST_PARAM/IP/CLIENT）。
