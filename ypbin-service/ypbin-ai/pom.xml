@@ -75,6 +75,13 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-log</artifactId>
         </dependency>
+        <!-- SSE 流式桥接（SseStreamBridge：Flux → SseEmitter 的错误帧/订阅释放/上下文传播）。
+             仅该类需要本依赖，不会启用 SSE 订阅端点与 Redis 扇出（那需要 ypbin.sse.enabled=true，
+             ai 的 Nacos 配置里刻意没有该键，走默认 false）。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-messaging</artifactId>
+        </dependency>
         <!-- 异步执行（@EnableAsync 自动装配 + 统一线程池）：本服务的 @Log 经 /internal/log-ingest 上报 system，
              且 AiDocumentVectorizer.vectorizeAsync 早已标了 @Async（此前无本依赖被静默忽略、实为同步向量化） -->
         <dependency>
