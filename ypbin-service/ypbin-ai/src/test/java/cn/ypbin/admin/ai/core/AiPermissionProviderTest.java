@@ -145,7 +145,8 @@ class AiPermissionProviderTest {
      * 模拟缓存未命中：直接执行 loader，从而让 SysCache 内部的 Feign 调用真实发生。
      */
     private void stubCacheMiss(MockedStatic<CacheUtils> cacheUtils, String expectedKey) {
-        cacheUtils.when(() -> CacheUtils.getOrLoad(eq(expectedKey), any(), any(), isNull()))
-            .thenAnswer(invocation -> invocation.getArgument(2, Supplier.class).get());
+        // starter 4.2.0：SysCache 的列表载荷改走「无 Class 参数」重载（supplier 是第 1 个参数）
+        cacheUtils.when(() -> CacheUtils.getOrLoad(eq(expectedKey), any(), isNull()))
+            .thenAnswer(invocation -> invocation.getArgument(1, Supplier.class).get());
     }
 }
