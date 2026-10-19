@@ -120,16 +120,17 @@ class SysCacheListPayloadTest {
         }
     }
 
-    /** 让 {@code CacheUtils.getOrLoad} 按传入的 loader 回源，并断言 type 占位确实是 {@code List.class} */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    /**
+     * 让 {@code CacheUtils.getOrLoad} 回源并返回给定载荷。
+     *
+     * <p><b>2026-10-19 更新</b>：starter 4.2.0 给 {@code getOrLoad} 补了「无 Class 参数」重载，
+     * 列表缓存不再需要 {@code (Class<List<T>>) (Class<?>) List.class} 双强转。因此这里改为
+     * 桩<b>三参</b>重载（key + supplier + ttl），并断言载荷原样返回（元素不丢、顺序不变）——
+     * 这才是业务真正关心的契约；此前那条「type 必须是 List.class」的断言随双强转一起被移除了。</p>
+     */
     private static void stubListPayload(MockedStatic<CacheUtils> cacheUtils, String key,
             List<?> payload) {
-        cacheUtils.when(() -> CacheUtils.getOrLoad(eq(key), any(Class.class), any(), isNull()))
-            .thenAnswer(invocation -> {
-                Class<?> type = invocation.getArgument(1, Class.class);
-                assertThat(type).as("列表载荷的类型占位必须是 List.class（运行期无元素类型信息）")
-                    .isEqualTo(List.class);
-                return payload;
-            });
+        cacheUtils.when(() -> CacheUtils.getOrLoad(eq(key), any(), isNull()))
+            .thenAnswer(invocation -> payload);
     }
 }

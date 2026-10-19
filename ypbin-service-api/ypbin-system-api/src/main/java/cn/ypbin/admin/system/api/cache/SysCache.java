@@ -34,19 +34,18 @@ import org.jspecify.annotations.Nullable;
  * （{@code SysUserDto}），故「不落敏感字段」由类型结构保证，而非靠回填前手工置空；
  * 密码校验走 {@code ISystemClient.verifyPassword} 直查库比对，改密即时生效。</p>
  *
- * <p><strong>关于 {@code (Class<List<T>>) (Class<?>) List.class} 的 unchecked 强转（治标，根因在 starter）</strong>：
- * 本类有 4 处「缓存载荷是列表」的读取（角色码、权限码、第三方配置列表、绑定列表），都必须写成这个双强转。
- * 根因是 starter 的 {@code CacheService#getOrLoad(String key, Class<T> type, Supplier<T> loader, Duration ttl)}
- * <b>只接受 {@code Class<T>}</b>——{@code List<String>} 的运行时类型信息已被擦除，除 {@code List.class}
- * 外无法表达「反序列化成元素类型为 String 的列表」；而 {@code RedisCacheService} 的实际反序列化依赖
- * 容器里 {@code RedisTemplate} 的值序列化器按 JSON 反序列化，{@code type} 参数根本不参与反序列化
- * （见其 {@code getOrLoad} 实现里的 {@code (T) cached} 强转），因此这里的 {@code Class} 只是「编译期形状」。
- * 治本方案是 starter 补 {@code getOrLoad(String key, TypeReference<T> type, Supplier<T> loader)}
- * 重载——已登记为 starter 侧需求（本 issue 只做 admin 侧收敛，不改 starter）。</p>
+ * <p><strong>关于「缓存列表载荷」的类型表达（2026-10-19 已治本）</strong>：
+ * 本类 4 处「缓存载荷是列表」的读取（角色码、权限码、第三方配置列表、绑定列表）此前必须写成
+ * {@code (Class<List<T>>) (Class<?>) List.class} 双强转——根因是 starter 的
+ * {@code CacheService#getOrLoad} 只接受 {@code Class<T>}，而 {@code List<String>} 的运行时类型信息已擦除。
+ * 但该 {@code type} 参数在实现里<b>只做 {@code (T)} 强转、从不参与反序列化</b>（真正的类型还原由
+ * {@code RedisTemplate} 的值序列化器按 JSON 内的类型信息完成）。</p>
  *
- * <p>因此这 4 处统一抽成 {@link #uncheckedListType()} 并在<b>方法级</b> {@code @SuppressWarnings("unchecked")}
- * 收敛，而不是在每个调用点重复散落强转：这样 {@code mvn compile} 不再产生 4 条 unchecked 告警，
- * 且告警压制范围被限制到「一处、一行」，不会顺带掩盖新出现的问题。</p>
+ * <p>starter 4.2.0 已补「<b>无需 Class 参数</b>」的重载
+ * {@code getOrLoad(String key, Supplier<T> loader, Duration ttl)}，本类改用之后
+ * <b>4 处双重强转与 {@code @SuppressWarnings("unchecked")} 全部移除</b>。
+ * 此前那个「抽成 {@code uncheckedListType()} 收敛到一处」只是治标；现在根因已消除，
+ * 后来人<b>不应</b>再引入双重强转（{@code SysCacheTest} 有源码级护栏钉住）。</p>
  *
  * @author wenbin
  * @since 2026-09-01
@@ -98,11 +97,6 @@ public final class SysCache {
      * @param <T> 列表元素类型（编译期占位，运行期无信息）
      * @return {@code List.class} 的类型化视图
      */
-    @SuppressWarnings("unchecked")
-    private static <T> Class<List<T>> uncheckedListType() {
-        return (Class<List<T>>) (Class<?>) List.class;
-    }
-
     /**
      * 按用户名取用户（登录用），永久缓存。缓存载荷为不含密码的只读视图。
      */
@@ -133,7 +127,6 @@ public final class SysCache {
     public static List<String> getUserRoleCodes(Long userId) {
         return CacheUtils.getOrLoad(
             ROLE_USER_KEY + userId,
-            uncheckedListType(),
             () -> FeignResponses.dataOrThrow(feignClient().listRoleCodes(userId),
                 "系统服务暂不可用，请稍后重试"),
             null);
@@ -145,7 +138,6 @@ public final class SysCache {
     public static List<String> getUserPermissions(Long userId) {
         return CacheUtils.getOrLoad(
             PERM_USER_KEY + userId,
-            uncheckedListType(),
             () -> FeignResponses.dataOrThrow(feignClient().listPermissions(userId),
                 "系统服务暂不可用，请稍后重试"),
             null);
@@ -265,7 +257,6 @@ public final class SysCache {
     public static List<SocialAuthConfig> listSocialAuthConfigs() {
         return CacheUtils.getOrLoad(
             SOCIAL_CONFIGS_KEY,
-            uncheckedListType(),
             () -> FeignResponses.dataOrThrow(feignClient().listSocialAuthConfigs(),
                 "系统服务暂不可用，请稍后重试"),
             null);
@@ -323,7 +314,6 @@ public final class SysCache {
     public static List<SysUserSocialDto> listSocialBindings(Long userId) {
         return CacheUtils.getOrLoad(
             SOCIAL_BINDINGS_USER_KEY + userId,
-            uncheckedListType(),
             () -> FeignResponses.dataOrThrow(feignClient().listSocialBindings(userId),
                 "系统服务暂不可用，请稍后重试"),
             null);
