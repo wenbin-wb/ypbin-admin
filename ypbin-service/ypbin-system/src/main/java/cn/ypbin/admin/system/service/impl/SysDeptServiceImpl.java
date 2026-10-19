@@ -49,8 +49,19 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
         // 且 `SysDept` 的字段名是 `pid`、实现不了 starter 的 TreeNode 接口（要求 getParentId()）。
         // 函数式重载允许宿主保留自己的字段名——本仓因此不必为「适配接口」再加一个方法。
         List<DeptResp> tree = depts.stream().map(this::toResp).toList();
-        return TreeUtils.build(tree, DeptResp::getId, DeptResp::getPid, DeptResp::setChildren,
-            AdminConstants.ROOT_PARENT_ID);
+        List<DeptResp> roots = TreeUtils.build(tree, DeptResp::getId, DeptResp::getPid,
+            DeptResp::setChildren, AdminConstants.ROOT_PARENT_ID);
+        // 与迁移前逐条对齐：原递归只在**有子节点**时 setChildren，叶子节点的 children 保持 null。
+        // TreeUtils 一律写回（可能为空的）列表 ⇒ 叶子会多出 "children":[]；而 DeptResp 带
+        // @JsonInclude(NON_NULL)——它只过滤 null、**不过滤空集合** ⇒ 部门接口对外响应形态被改变
+        // （实测：迁移后 [{"id":2,...,"children":[]}] vs 迁移前 [{"id":2,...}]）。
+        // 菜单侧 SysMenuServiceImpl 已做同样归一，部门侧此前漏了（由 iot 仓反向发现）。
+        tree.forEach(node -> {
+            if (node.getChildren() != null && node.getChildren().isEmpty()) {
+                node.setChildren(null);
+            }
+        });
+        return roots;
     }
 
     @Override
