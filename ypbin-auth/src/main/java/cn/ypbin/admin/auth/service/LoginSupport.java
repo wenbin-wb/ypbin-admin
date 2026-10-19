@@ -11,7 +11,7 @@ package cn.ypbin.admin.auth.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.http.useragent.UserAgent;
-import cn.hutool.http.useragent.UserAgentUtil;
+import cn.ypbin.starter.core.util.UserAgentFormatter;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.api.cache.SysCache;
@@ -108,29 +108,24 @@ public class LoginSupport {
         UserAgent ua = parseUserAgent(userAgent);
         try {
             OnlineUserHelper.record(ip,
-                ua == null || ua.getBrowser() == null ? null : formatBrowser(ua),
+                UserAgentFormatter.formatBrowser(ua),
                 ua == null || ua.getOs() == null ? null : ua.getOs().getName());
         } catch (RuntimeException e) {
             log.error("登录后记录终端信息失败，在线用户的 IP/浏览器/操作系统将为空，ip={}", ip, e);
         }
     }
 
+    /**
+     * 解析 User-Agent；口径统一由 starter 的 {@link UserAgentFormatter} 提供。
+     *
+     * @param userAgent 原始 UA
+     * @return 解析结果；入参为空时 {@code null}
+     */
     @Nullable
     private UserAgent parseUserAgent(@Nullable String userAgent) {
-        return userAgent == null || userAgent.isBlank() ? null : UserAgentUtil.parse(userAgent);
+        return UserAgentFormatter.parse(userAgent);
     }
 
-    /**
-     * 浏览器「名称 + 版本」格式化，与 starter 操作日志的写法保持一致（版本缺失只留名称）。
-     */
-    private String formatBrowser(UserAgent ua) {
-        String name = ua.getBrowser().getName();
-        String version = ua.getVersion();
-        if (version == null || version.isBlank() || "Unknown".equalsIgnoreCase(version)) {
-            return name;
-        }
-        return name + " " + version;
-    }
 
     /**
      * 回写最后登录时间（经 Feign 调 system-svc）。回写失败不影响登录成功，记录日志暴露问题。
