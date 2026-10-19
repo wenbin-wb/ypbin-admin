@@ -20,9 +20,9 @@ import cn.ypbin.admin.system.model.req.DeptSaveReq;
 import cn.ypbin.admin.system.model.resp.DeptResp;
 import cn.ypbin.admin.system.service.SysDeptService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.core.tree.TreeUtils;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -45,7 +45,12 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
     @Override
     public List<DeptResp> tree() {
         List<SysDept> depts = list(new LambdaQueryWrapper<SysDept>().orderByAsc(SysDept::getSort));
-        return buildTree(depts, AdminConstants.ROOT_PARENT_ID);
+        // 用 starter 的 O(n) 函数式建树（starter #106）：原先手写递归在每层都全量扫描入参列表（O(n²)），
+        // 且 `SysDept` 的字段名是 `pid`、实现不了 starter 的 TreeNode 接口（要求 getParentId()）。
+        // 函数式重载允许宿主保留自己的字段名——本仓因此不必为「适配接口」再加一个方法。
+        List<DeptResp> tree = depts.stream().map(this::toResp).toList();
+        return TreeUtils.build(tree, DeptResp::getId, DeptResp::getPid, DeptResp::setChildren,
+            AdminConstants.ROOT_PARENT_ID);
     }
 
     @Override
@@ -95,21 +100,6 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
         if (!removeById(id)) {
             throw new BusinessException("删除部门失败");
         }
-    }
-
-    private List<DeptResp> buildTree(List<SysDept> depts, Long pid) {
-        List<DeptResp> tree = new ArrayList<>();
-        for (SysDept dept : depts) {
-            if (pid.equals(dept.getPid())) {
-                DeptResp node = toResp(dept);
-                List<DeptResp> children = buildTree(depts, dept.getId());
-                if (!children.isEmpty()) {
-                    node.setChildren(children);
-                }
-                tree.add(node);
-            }
-        }
-        return tree;
     }
 
     private DeptResp toResp(SysDept dept) {
