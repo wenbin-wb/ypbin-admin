@@ -113,6 +113,10 @@ ypbin:
   xxl-job:
     enabled: true
     admin-addresses: http://xxl-job-admin:8080
-    access-token: ""
+    # ⚠️ 不能留空：starter 的 XxlJobAutoConfiguration 在 enabled=true 且 access-token 为空时
+    # **fail-fast 抛 IllegalStateException**（xxl-job 3.5.0 起 AccessToken 为执行器维度且不可为空）。
+    # 取值必须与调度中心 admin 中同名 appname（ypbin-system）的 access_token 一致；
+    # install.sh 从 deploy/.env 的 XXL_JOB_ACCESS_TOKEN 渲染，未设置则部署期直接失败（不让它拖到启动期）。
+    access-token: "${XXL_JOB_ACCESS_TOKEN:?xxl-job 3.5.0 起执行器 AccessToken 必填，且须与 admin 中同名 AppName 一致}"
     appname: ypbin-system
     port: 9999

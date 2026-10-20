@@ -1113,6 +1113,8 @@ INTERNAL_TOKEN=$INTERNAL_TOKEN
 GATEWAY_SIGN_TOKEN=$GATEWAY_SIGN_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
 XXL_JOB_ADMIN_PASSWORD=$XXL_JOB_ADMIN_PASSWORD
+# 留空：模板要求时 install.sh 会 fail-fast（值须与 xxl-job-admin 里 ypbin-system 执行器一致）
+XXL_JOB_ACCESS_TOKEN=
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
 ADMIN_UI_PORT=$ADMIN_UI_PORT
@@ -1290,6 +1292,12 @@ if [ -n "$NACOS_TOKEN" ]; then
     NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
   fi
   NACOS_CFG_COUNT="$(ls "$NACOS_DIR"/*.yaml 2>/dev/null | wc -l)"
+  # XXL_JOB_ACCESS_TOKEN：xxl-job 3.5.0 起执行器 AccessToken 必填且须与 admin 一致，无法自动生成
+  # （生成了 admin 也不认），故只做「模板用了就必须由运维提供」的前置校验（fail-fast，
+  # 不让 system 拖到启动期才报 access-token 未配置）。
+  if grep -q '\${XXL_JOB_ACCESS_TOKEN}' "$NACOS_DIR"/*.yaml 2>/dev/null; then
+    [ -n "${XXL_JOB_ACCESS_TOKEN:-}" ] || die "Nacos 模板里有 \${XXL_JOB_ACCESS_TOKEN} 占位符但 deploy/.env 未设置：请填成 xxl-job-admin 里「ypbin-system」执行器的 AccessToken（生成：openssl rand -hex 16，再同步填进 admin），或把模板里 ypbin.xxl-job.enabled 改为 false"
+  fi
   info "导入 Nacos 配置中心（目录 $NACOS_DIR，$NACOS_CFG_COUNT 份配置）"
   declare -a NACOS_TMP_FILES=()
   trap 'rm -f "${NACOS_TMP_FILES[@]:-}" 2>/dev/null || true' EXIT
@@ -1312,6 +1320,7 @@ if [ -n "$NACOS_TOKEN" ]; then
           -e "/^[[:space:]]*#/! s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
           -e "/^[[:space:]]*#/! s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
           -e "/^[[:space:]]*#/! s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
+          -e "/^[[:space:]]*#/! s/\${XXL_JOB_ACCESS_TOKEN}/${XXL_JOB_ACCESS_TOKEN:-}/g" \
           "$cfg_file" > "$TMP_CFG"
     else
       # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除非注释的 password 行，等价不配置密码；
@@ -1319,6 +1328,7 @@ if [ -n "$NACOS_TOKEN" ]; then
       sed -e "/^[[:space:]]*#/! s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
           -e "/^[[:space:]]*#/! s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
           -e "/^[[:space:]]*#/! s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
+          -e "/^[[:space:]]*#/! s/\${XXL_JOB_ACCESS_TOKEN}/${XXL_JOB_ACCESS_TOKEN:-}/g" \
           -e "/^[[:space:]]*#/! /password: \${REDIS_PASSWORD}/d" \
           "$cfg_file" > "$TMP_CFG"
     fi
