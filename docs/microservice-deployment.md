@@ -174,6 +174,26 @@ ypbin:
 
 判据一句话：**identity 只给「不自己签发会话」的下游服务；自己签发会话的那一个必须关。**
 
+### Nacos 导入是整份覆盖：改配置前先看 live-only 键
+
+`deploy/install.sh` 导入 `deploy/nacos/*.yaml` 到 Nacos 是**整份 POST（覆盖）**。
+任何「只在线上存在、没进模板」的键都会被这次覆盖**静默删除**——历史上已因此丢过
+`ypbin.security.identity.enabled`，直接导致平台无法登录（见上文「身份头账号体系」一节）。
+
+现在导入前会自动检查（与 `ypbin-iot` 同源机制）：
+
+```
+GET 线上当前 Data ID → 与渲染后的待导入内容逐叶子键比对 → 差异逐条告警
+NACOS_IMPORT_STRICT=1 时：发现白名单外差异即中止导入
+```
+
+- 工具：`tools/nacos-live-only-diff.py`（纯标准库，无 PyYAML 依赖；CI 会跑其自测）
+- 白名单：`deploy/nacos-live-only-allowlist.txt`（每行一个键路径 + **必须写理由**）
+- 判据：部署日志应出现 `[ok] 无 live-only 键` 或明确的 `::warning::`；
+  若出现「跳过 live-only 检查」，说明 python3 缺失或线上内容取不到——**属降级，需人工核对**
+
+> 优先做法永远是「把键补进模板」；白名单只用于确实无法进模板的配置。
+
 ### 网关路由
 
 ```yaml

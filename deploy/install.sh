@@ -1299,6 +1299,22 @@ if [ -n "$NACOS_TOKEN" ]; then
     [ -n "${XXL_JOB_ACCESS_TOKEN:-}" ] || die "Nacos 模板里有 \${XXL_JOB_ACCESS_TOKEN} 占位符但 deploy/.env 未设置：请填成 xxl-job-admin 里「ypbin-system」执行器的 AccessToken（生成：openssl rand -hex 16，再同步填进 admin），或把模板里 ypbin.xxl-job.enabled 改为 false"
   fi
   info "导入 Nacos 配置中心（目录 $NACOS_DIR，$NACOS_CFG_COUNT 份配置）"
+  # ---- live-only 键检查（与 iot 同源机制）------------------------------------
+  # Nacos 导入是**整份覆盖**：线上有、模板无的键会被静默删除。历史上已因此丢过
+  # auth 的 identity.enabled（→ 平台无法登录、CI 不红、启动无告警）。
+  # 每次 POST 之前先 GET 线上内容，与渲染后内容逐叶子键比对：默认告警；
+  # NACOS_IMPORT_STRICT=1 时直接失败。缺 python3 / 取不到线上内容时**显式告警跳过**（禁静默）。
+  NACOS_LIVE_ONLY_DIFF="$ROOT/tools/nacos-live-only-diff.py"
+  NACOS_LIVE_ONLY_ALLOWLIST="$NACOS_DIR/../nacos-live-only-allowlist.txt"
+  if ! command -v python3 >/dev/null 2>&1; then
+    warn "未找到 python3 ⇒ 跳过「live-only 键」检查（导入是整份覆盖，线上独有键会被删除；请人工核对）"
+    NACOS_LIVE_ONLY_CHECK=0
+  elif [ ! -f "$NACOS_LIVE_ONLY_DIFF" ]; then
+    warn "缺少 $NACOS_LIVE_ONLY_DIFF ⇒ 跳过「live-only 键」检查"
+    NACOS_LIVE_ONLY_CHECK=0
+  else
+    NACOS_LIVE_ONLY_CHECK=1
+  fi
   declare -a NACOS_TMP_FILES=()
   trap 'rm -f "${NACOS_TMP_FILES[@]:-}" 2>/dev/null || true' EXIT
   for cfg_file in "$NACOS_DIR"/*.yaml; do
@@ -1331,6 +1347,31 @@ if [ -n "$NACOS_TOKEN" ]; then
           -e "/^[[:space:]]*#/! s/\${XXL_JOB_ACCESS_TOKEN\(:[^}]*\)\?}/${XXL_JOB_ACCESS_TOKEN:-}/g" \
           -e "/^[[:space:]]*#/! /password: \${REDIS_PASSWORD}/d" \
           "$cfg_file" > "$TMP_CFG"
+    fi
+    # live-only 键检查：GET 线上当前内容 → 与渲染后内容比对（见上方说明）
+    if [ "${NACOS_LIVE_ONLY_CHECK:-0}" = "1" ]; then
+      LIVE_RAW="$(mktemp)"
+      LIVE_CFG="$(mktemp)"
+      NACOS_TMP_FILES+=("$LIVE_RAW" "$LIVE_CFG")
+      if curl -fsS --connect-timeout 5 --max-time 60 -G "$NACOS_CONSOLE_URL/v3/console/cs/config" \
+        -H "accessToken: $NACOS_TOKEN" \
+        --data-urlencode "dataId=$cfg.yaml" \
+        --data-urlencode "groupName=DEFAULT_GROUP" \
+        --data-urlencode "namespaceId=" \
+        -o "$LIVE_RAW" 2>/dev/null \
+        && python3 "$NACOS_LIVE_ONLY_DIFF" --unwrap "$LIVE_RAW" > "$LIVE_CFG" 2>/dev/null \
+        && [ -s "$LIVE_CFG" ]; then
+        STRICT_FLAG=""
+        [ "${NACOS_IMPORT_STRICT:-0}" = "1" ] && STRICT_FLAG="--strict"
+        # shellcheck disable=SC2086  # STRICT_FLAG 需按空格拆分
+        if ! python3 "$NACOS_LIVE_ONLY_DIFF" --live "$LIVE_CFG" --template "$TMP_CFG" \
+            --allowlist "$NACOS_LIVE_ONLY_ALLOWLIST" $STRICT_FLAG; then
+          die "$cfg.yaml 存在白名单外的 live-only 键（NACOS_IMPORT_STRICT=1）——本次导入会删除线上配置，已中止。详见上方 ::error:: 行"
+        fi
+      else
+        warn "$cfg.yaml 未取到线上内容（首次导入 / 接口不可用 / 内容为空）⇒ 跳过 live-only 检查"
+      fi
+      rm -f "$LIVE_RAW" "$LIVE_CFG"
     fi
     if curl -fsS --connect-timeout 5 --max-time 60 -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
       -H "accessToken: $NACOS_TOKEN" \

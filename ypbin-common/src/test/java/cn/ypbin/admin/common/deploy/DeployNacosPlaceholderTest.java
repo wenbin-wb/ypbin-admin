@@ -179,6 +179,24 @@ class DeployNacosPlaceholderTest {
     }
 
     @Test
+    @DisplayName("★ install.sh 必须接上「live-only 键」检查，且白名单文件存在")
+    void installScriptMustWireLiveOnlyKeyCheck() throws IOException {
+        String installSh = readIfExists("deploy/install.sh");
+        assertThat(installSh)
+            .as("install.sh 必须在导入前调用 live-only 检查工具（否则整份覆盖会静默删除线上独有键——"
+                + "已有事故：auth 的 identity.enabled 被删导致平台无法登录）")
+            .contains("nacos-live-only-diff.py")
+            .contains("--allowlist");
+        assertThat(installSh)
+            .as("必须支持 NACOS_IMPORT_STRICT=1 中止导入（默认仅告警，避免阻断日常部署）")
+            .contains("NACOS_IMPORT_STRICT");
+        assertThat(readIfExists("deploy/nacos-live-only-allowlist.txt"))
+            .as("白名单文件必须存在（空也要有，内含用法与理由要求）")
+            .isNotEmpty()
+            .contains("live-only");
+    }
+
+    @Test
     @DisplayName("★ 网关 RedirectTo 的状态码必须是 3xx（SCG 只接受 3xx，写 404 会让 gateway 起不来）")
     void gatewayRedirectToMustUse3xx() throws IOException {
         Path gateway = REPO_ROOT.resolve("deploy/nacos/ypbin-gateway.yaml");
