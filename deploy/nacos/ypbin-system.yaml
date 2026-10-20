@@ -117,6 +117,9 @@ ypbin:
     # **fail-fast 抛 IllegalStateException**（xxl-job 3.5.0 起 AccessToken 为执行器维度且不可为空）。
     # 取值必须与调度中心 admin 中同名 appname（ypbin-system）的 access_token 一致；
     # install.sh 从 deploy/.env 的 XXL_JOB_ACCESS_TOKEN 渲染，未设置则部署期直接失败（不让它拖到启动期）。
-    access-token: "${XXL_JOB_ACCESS_TOKEN:?xxl-job 3.5.0 起执行器 AccessToken 必填，且须与 admin 中同名 AppName 一致}"
+    # 写法必须是**裸占位符**（不带 `:默认值` 后缀）：install.sh 的 grep/sed 精确匹配
+    # `${XXL_JOB_ACCESS_TOKEN}`，带后缀会「既不替换、也不触发前置校验」⇒ Nacos 留字面占位符、
+    # system 启动期绑定失败（2026-10-20 第二轮 dev 部署实测踩到，iot 侧同源）。
+    access-token: "${XXL_JOB_ACCESS_TOKEN}"
     appname: ypbin-system
     port: 9999

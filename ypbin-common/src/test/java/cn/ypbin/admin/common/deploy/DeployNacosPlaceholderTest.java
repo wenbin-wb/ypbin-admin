@@ -109,6 +109,46 @@ class DeployNacosPlaceholderTest {
     }
 
     @Test
+    @DisplayName("★ install.sh 渲染的占位符，模板写法必须能被它真正替换掉（不能「有 sed 文本却匹配不上」）")
+    void renderedPlaceholdersMustMatchInstallShPattern() throws IOException {
+        final String bs = "\\";
+        String installSh = readIfExists("deploy/install.sh");
+
+        Map<String, String> mismatched = new LinkedHashMap<>();
+        try (Stream<Path> files = Files.list(REPO_ROOT.resolve("deploy/nacos"))) {
+            for (Path yaml : files.filter(p -> p.toString().endsWith(".yaml")).toList()) {
+                for (String line : Files.readAllLines(yaml, StandardCharsets.UTF_8)) {
+                    if (line.strip().startsWith("#")) {
+                        continue;
+                    }
+                    Matcher ph = PLACEHOLDER.matcher(line);
+                    while (ph.find()) {
+                        String name = ph.group(1);
+                        String exactSed = "s/" + bs + "${" + name + "}";
+                        String tolerantSed = "s/" + bs + "${" + name + bs + "(";
+                        boolean rendered = installSh.contains(exactSed) || installSh.contains(tolerantSed);
+                        if (!rendered) {
+                            continue;
+                        }
+                        boolean hasSuffix = !ph.group(0).equals("${" + name + "}");
+                        boolean tolerant = installSh.contains(tolerantSed);
+                        if (hasSuffix && !tolerant) {
+                            mismatched.put(yaml.getFileName() + " " + ph.group(0),
+                                "install.sh 的 sed 是精确匹配（只认裸占位符）");
+                        }
+                    }
+                }
+            }
+        }
+
+        assertThat(mismatched)
+            .as("这些占位符带 `:默认值` 后缀，但 install.sh 的 sed 只匹配裸 ${NAME} ⇒ 既不替换、"
+                + "也不触发前置校验，Nacos 会拿到字面占位符，服务启动期绑定失败"
+                + "（2026-10-20 第二轮 dev 部署实测踩到）。二选一：模板改裸占位符，或让 sed 容忍后缀")
+            .isEmpty();
+    }
+
+    @Test
     @DisplayName("★ 网关 RedirectTo 的状态码必须是 3xx（SCG 只接受 3xx，写 404 会让 gateway 起不来）")
     void gatewayRedirectToMustUse3xx() throws IOException {
         Path gateway = REPO_ROOT.resolve("deploy/nacos/ypbin-gateway.yaml");
