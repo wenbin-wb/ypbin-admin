@@ -24,6 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.yaml.snakeyaml.Yaml;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -149,6 +150,35 @@ class DeployNacosPlaceholderTest {
     }
 
     @Test
+    @DisplayName("★ auth 必须显式关闭身份头账号体系（identity.enabled=false），下游服务不得关闭")
+    void authMustExplicitlyDisableIdentityAccountSystem() throws IOException {
+        Map<String, Object> auth = loadYaml("ypbin-auth.yaml");
+        Object authEnabled = dig(auth, "ypbin", "security", "identity", "enabled");
+
+        assertThat(authEnabled)
+            .as("deploy/nacos/ypbin-auth.yaml 必须**显式**声明 ypbin.security.identity.enabled=false。"
+                + "auth 是「自己签发会话」的一方：identity 模式下 starter 把 IdentityStpLogic 注册为 "
+                + "StpUtil 账号体系，其 token 取自网关签发的身份头，而 /auth/login 本身没有身份头 ⇒ "
+                + "建会话抛 NotLoginException ⇒ **正确口令登录也返回 401**"
+                + "（2026-10-20 DEV 实测；该键曾只存在于 live 配置、模板整份覆盖后丢失）")
+            .isEqualTo(Boolean.FALSE);
+
+        // 反方向：下游服务（位于可信网关之后、不自己签发会话）必须保留 identity；
+        // 允许「不写」（继承 common 的 true），但**写了就必须是 true**。
+        for (String service : List.of("ypbin-system.yaml", "ypbin-ai.yaml", "ypbin-iot.yaml")) {
+            Path file = REPO_ROOT.resolve("deploy/nacos").resolve(service);
+            if (!Files.exists(file)) {
+                continue;
+            }
+            Object enabled = dig(loadYaml(service), "ypbin", "security", "identity", "enabled");
+            assertThat(enabled)
+                .as("%s 是「不自己签发会话」的下游服务，若显式声明 identity.enabled 必须是 true"
+                    + "（否则经网关的合法请求会失去身份头解析）", service)
+                .isNotEqualTo(Boolean.FALSE);
+        }
+    }
+
+    @Test
     @DisplayName("★ 网关 RedirectTo 的状态码必须是 3xx（SCG 只接受 3xx，写 404 会让 gateway 起不来）")
     void gatewayRedirectToMustUse3xx() throws IOException {
         Path gateway = REPO_ROOT.resolve("deploy/nacos/ypbin-gateway.yaml");
@@ -212,6 +242,37 @@ class DeployNacosPlaceholderTest {
             provided.add(envDef.group(1));
         }
         return provided;
+    }
+
+    /**
+     * 读取并解析一份 Nacos 模板。
+     *
+     * @param fileName 文件名（如 {@code ypbin-auth.yaml}）
+     * @return 解析后的根 Map
+     * @throws IOException 读失败
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> loadYaml(String fileName) throws IOException {
+        return new Yaml().load(Files.readString(REPO_ROOT.resolve("deploy/nacos").resolve(fileName),
+            StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 按层级路径取 YAML 键（任一层缺失返回 {@code null}，便于断言「必须显式声明」）。
+     *
+     * @param root 根 Map
+     * @param keys 逐层键名
+     * @return 叶子值；路径不存在时 {@code null}
+     */
+    private static Object dig(Map<String, Object> root, String... keys) {
+        Object current = root;
+        for (String key : keys) {
+            if (!(current instanceof Map<?, ?> map)) {
+                return null;
+            }
+            current = map.get(key);
+        }
+        return current;
     }
 
     /**

@@ -146,6 +146,34 @@ curl http://localhost:18080/system/user/list \
 - `spring.cloud.nacos.server-addr`：Nacos 地址（`${NACOS_ADDR:localhost:8848}`）
 - `ypbin.*`：业务开关（auth 的 sa-token/security excludes、system 的 tenant/data-permission 等）
 
+### 身份头账号体系（`ypbin.security.identity`）：auth 是唯一例外
+
+`ypbin-common.yaml` 打开了身份头解析（`ypbin.security.identity.enabled: true`）——它把
+starter 的 `IdentityStpLogic` 注册为 `StpUtil` 的账号体系，**token 值取自网关注入的身份头**。
+这对「位于可信网关之后、不自己签发会话」的下游服务（system/ai/iot）是正确形态。
+
+**但 `ypbin-auth` 必须显式关掉**：
+
+```yaml
+# deploy/nacos/ypbin-auth.yaml
+ypbin:
+  security:
+    identity:
+      enabled: false     # 必须显式写；不写就会继承 common 的 true
+```
+
+原因：auth 是「校验口令 → 发 token → 建会话」的一方，口令通过后走
+`LoginHelper.login` + `StpUtil.getSession().set(...)`；而 `/auth/login` 请求**本身没有身份头**
+⇒ 建会话阶段抛 `NotLoginException` ⇒ **正确口令登录也返回 `401 登录状态无效，请重新登录`**
+（错误口令反而返回 `409`，故障形态很迷惑）。
+
+> 该键 2026-09-25 起曾只存在于线上 live 配置、未入仓内模板；一次「按模板整份重导 Nacos」就把它抹掉了，
+> 导致平台无法登录（2026-10-20 DEV 实测）。现已在模板里显式声明，并由
+> `DeployNacosPlaceholderTest#authMustExplicitlyDisableIdentityAccountSystem` 钉住——
+> 删掉该声明 `mvn test` 即变红。
+
+判据一句话：**identity 只给「不自己签发会话」的下游服务；自己签发会话的那一个必须关。**
+
 ### 网关路由
 
 ```yaml
@@ -171,7 +199,10 @@ spring.cloud.gateway.server.webflux.routes:
 ## 常见问题
 
 1. **服务起不来，报 Nacos 连接失败** → 确认 `NACOS_ADDR` 可达；本地开发可先起 Nacos 容器
-2. **登录返回 401** → 网关白名单未包含该路径，或 token 过期；检查 gateway yml `whitelist`
+2. **登录返回 401** → 分两种，先看**错误口令**是否返回 `409`：
+   - 错误口令也 401 ⇒ 网关白名单未包含该路径；检查 gateway yml `whitelist`；
+   - **错误口令返回 409、正确口令 401 `登录状态无效`** ⇒ auth 的 `ypbin.security.identity.enabled`
+     被继承成了 `true`（见上文「身份头账号体系」一节），auth 日志会出现 `SaTokenExceptionHandler [未认证] type=-1`。
 3. **auth 报"系统服务暂不可用"** → `ypbin-system` 未注册到 Nacos；检查 system 服务日志
 4. **接口 403** → 当前用户非平台用户（`@PlatformAccess` 限制）或权限码不足
 5. **改配置不生效** → 共享配置在 Nacos 修改后，服务需 `refresh`（`spring.config.import` 支持自动刷新）或重启
