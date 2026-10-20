@@ -13,6 +13,17 @@ ypbin:
     # /menu/all、/check、/social/* 等端点未逐个标 @SaCheckLogin，全靠这个全局拦截器兜底。
     # 依赖默认值意味着 starter 再改默认值就会**静默改变 auth 的安全边界**。
     # 判据：安全边界的开关一律显式，不用默认值。
+    # ---------- 身份头账号体系：auth 必须关闭（2026-10-20 dev 实测）----------
+    # auth 是「登录发 token / 建会话」的一方：口令校验通过后 LoginSupport 走 LoginHelper.login +
+    # StpUtil.getSession().set(...)。若继承 ypbin-common.yaml 的 identity.enabled=true，starter 会把
+    # IdentityStpLogic 注册为 StpUtil 的账号体系——它的 token 值来自**网关签发的身份头**，而
+    # /auth/login 请求本身没有身份头 ⇒ 建会话阶段抛 NotLoginException ⇒ 正确口令登录返回
+    # 401「登录状态无效，请重新登录」（前台表现为登录失败）。
+    # 该键 2026-09-25 起只存在于线上 live 配置、未入模板；2026-10-20 首轮按模板整份覆盖后丢失，
+    # 导致平台无法登录。本轮显式写进模板，避免再次被覆盖。
+    # 判据：identity 只给「位于可信网关之后、不自己签发会话」的下游服务（system/ai/iot）。
+    identity:
+      enabled: false
     interceptor: true
     excludes:
       - /login
