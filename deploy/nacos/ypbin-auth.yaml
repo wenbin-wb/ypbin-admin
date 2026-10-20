@@ -7,6 +7,13 @@
 # 注意：网关 StripPrefix 已剥掉短名段，此处为服务实际收到的路径（纯资源路径）
 ypbin:
   security:
+    # 显式声明登录拦截开启（starter 默认值也是 true，此处**刻意写出**）。
+    # 理由：starter 的默认值方向已经变过一次（4.1.0 把「下游默认注入 false」
+    # 改为「不注入，只注入 fail-closed 的租户项」）；auth 是登录发牌方，/user/info、/codes、
+    # /menu/all、/check、/social/* 等端点未逐个标 @SaCheckLogin，全靠这个全局拦截器兜底。
+    # 依赖默认值意味着 starter 再改默认值就会**静默改变 auth 的安全边界**。
+    # 判据：安全边界的开关一律显式，不用默认值。
+    interceptor: true
     excludes:
       - /login
       - /sms/send
