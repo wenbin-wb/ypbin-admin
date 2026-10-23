@@ -56,7 +56,11 @@ VALUES (1, 1), (6, 1), (2, 2), (3, 2), (4, 3), (5, 3);
 -- 内置字典
 INSERT INTO sys_dict (id, name, code, remark, create_user, create_time, status, is_deleted)
 VALUES (1, '系统状态', 'sys_status', '通用启用/禁用状态', 1, NOW(), 1, 0),
-       (2, '性别', 'sys_gender', '用户性别', 1, NOW(), 1, 0);
+       (2, '性别', 'sys_gender', '用户性别', 1, NOW(), 1, 0),
+       -- 空间类型：内置常见类型，「新增类型」直接往本字典加项即可，不改代码
+       (3, '空间类型', 'space_type', '楼栋/楼层/房间/办公室/仓库/宿舍等', 1, NOW(), 1, 0),
+       -- 空间关联对象类型：决定 sys_space_relation.target_id 指向哪张业务表
+       (4, '空间关联对象类型', 'space_target_type', '部门/人员/设备/资产等可挂到空间上的业务对象', 1, NOW(), 1, 0);
 
 INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
 VALUES (11, 1, '正常', '1', 'success', 1, 1, NOW(), 1, 0),
@@ -64,6 +68,30 @@ VALUES (11, 1, '正常', '1', 'success', 1, 1, NOW(), 1, 0),
        (21, 2, '未知', '0', 'default', 1, 1, NOW(), 1, 0),
        (22, 2, '男', '1', 'processing', 2, 1, NOW(), 1, 0),
        (23, 2, '女', '2', 'warning', 3, 1, NOW(), 1, 0);
+
+-- 空间类型字典项（dict_id=3）
+-- 分两组：① 层级结构型（园区/楼栋/楼层），承载空间树骨架；② 功能房间型（办公室/仓库/宿舍…），挂在骨架末端。
+-- 不把「办公室/仓库」做成独立表：它们与房间的差别只是「用途标签」，做成类型项就能无限扩展（车间/实验室/食堂…）。
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+VALUES (31, 3, '园区', 'park', 'processing', 1, 1, NOW(), 1, 0),
+       (32, 3, '楼栋', 'building', 'processing', 2, 1, NOW(), 1, 0),
+       (33, 3, '楼层', 'floor', 'processing', 3, 1, NOW(), 1, 0),
+       (34, 3, '办公室', 'office', 'success', 4, 1, NOW(), 1, 0),
+       (35, 3, '仓库', 'warehouse', 'warning', 5, 1, NOW(), 1, 0),
+       (36, 3, '宿舍', 'dormitory', 'default', 6, 1, NOW(), 1, 0),
+       (37, 3, '会议室', 'meeting_room', 'default', 7, 1, NOW(), 1, 0),
+       (38, 3, '车间', 'workshop', 'default', 8, 1, NOW(), 1, 0),
+       (39, 3, '机房', 'server_room', 'error', 9, 1, NOW(), 1, 0),
+       (310, 3, '其他', 'other', 'default', 99, 1, NOW(), 1, 0);
+
+-- 空间关联对象类型字典项（dict_id=4）：决定 relation.target_id 指向哪张表
+-- 新增业务域（如 asset/vehicle）时只加字典项 + 业务侧自行校验目标存在性，空间这边零代码
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+VALUES (41, 4, '部门', 'dept', 'processing', 1, 1, NOW(), 1, 0),
+       (42, 4, '人员', 'user', 'processing', 2, 1, NOW(), 1, 0),
+       (43, 4, '设备', 'device', 'success', 3, 1, NOW(), 1, 0),
+       (44, 4, '资产', 'asset', 'default', 4, 1, NOW(), 1, 0),
+       (45, 4, '其他', 'other', 'default', 99, 1, NOW(), 1, 0);
 
 -- 默认 Web 管理后台客户端
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
@@ -212,6 +240,23 @@ INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort
 VALUES (24001, 240, 'SystemDeptAdd', 'button', 0, 'system:dept:add', 'common.create', 1, NOW(), 1, 0),
        (24002, 240, 'SystemDeptEdit', 'button', 0, 'system:dept:edit', 'common.edit', 2, NOW(), 1, 0),
        (24003, 240, 'SystemDeptDelete', 'button', 0, 'system:dept:delete', 'common.delete', 3, NOW(), 1, 0);
+
+-- 空间管理（2026-10-23 新增，挂组织管理 3001 下）
+-- 为什么挂在组织管理而不是单独顶级目录：空间是组织/资产的定位维度，与用户/部门/岗位同属基础主数据；
+-- 单开顶级目录会让它看起来像某个业务域的功能（IoT 的错觉正是要消除的）。
+-- 权限码四个：system:space:list | add | edit | delete
+-- 另有两个「关联」权限：把部门/人员/设备挂到空间上，属独立写操作，单独授权
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (2410, 3001, 'SystemSpace', 'menu', 0, '/system/space', '/system/space/list', 'system:space:list', 'system.space.title', 'carbon:location', 5, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (241001, 2410, 'SystemSpaceAdd', 'button', 0, 'system:space:add', 'common.create', 1, NOW(), 1, 0),
+       (241002, 2410, 'SystemSpaceEdit', 'button', 0, 'system:space:edit', 'common.edit', 2, NOW(), 1, 0),
+       (241003, 2410, 'SystemSpaceDelete', 'button', 0, 'system:space:delete', 'common.delete', 3, NOW(), 1, 0),
+       (241004, 2410, 'SystemSpaceBind', 'button', 0, 'system:space:bind', 'system.space.bind', 4, NOW(), 1, 0);
+-- 显式授权：platform_only=0 的菜单不会被 002 尾部的批量授权覆盖（那条只授 platform_only=1 给角色 1），
+-- 而 sys_template_menu 的批量授权按 platform_only=0 推导，本段之后执行 ⇒ 这里只需补角色侧。
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 1, id FROM sys_menu WHERE is_deleted = 0 AND id IN (2410, 241001, 241002, 241003, 241004);
 
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
 VALUES (2500, 3001, 'SystemPost', 'menu', 0, '/system/post', '/system/post/list', 'system:post:list', 'system.post.title', 'carbon:id-management', 10, NOW(), 1, 0);

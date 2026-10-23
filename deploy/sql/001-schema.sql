@@ -629,3 +629,97 @@ CREATE TABLE sys_track_session
     PRIMARY KEY (session_id),
     KEY idx_track_session_start (start_time)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '埋点会话（漏斗分析用）';
+
+
+-- ============================================================
+-- 空间管理（2026-10-23 新增）
+--
+-- 为什么放在基础模块而不是 IoT：空间是**组织与资产的通用定位维度**，不是 IoT 专有。
+-- 部门/公司/人员/未来的资产都要挂到空间上；IoT 设备只是**引用方**之一（iot_device.space_id）。
+-- 放在基础模块 ⇒ 依赖方向保持单向（iot → system-api），不会出现 system 反向依赖 IoT 契约。
+--
+-- 三层结构：
+--   sys_space           空间主数据（树形：园区 → 楼栋 → 楼层 → 房间/办公室/仓库…）
+--   sys_space_relation  空间与**任意业务对象**的关联（多态：dept/user/device/...），本表是关联的唯一入口
+--   sys_dict('space_type') 空间类型，走既有字典体系，新增类型零代码
+--
+-- 与 iot_twin_scene 的边界（**硬约束**）：iot_twin_scene 是 3D 展示场景，不是空间主数据。
+-- 后续改造方向：iot_twin_scene 新增 space_id 指向 sys_space，场景只保留模型/锚点/视角。
+-- 本次只做空间主数据，不动 IoT（按「先基础、后业务」的分期）。
+-- ============================================================
+
+CREATE TABLE sys_space
+(
+    id              BIGINT       NOT NULL COMMENT '主键',
+    tenant_id       BIGINT       NULL COMMENT '租户 ID',
+    pid             BIGINT       NOT NULL DEFAULT 0 COMMENT '父空间 ID，顶级为 0',
+    name            VARCHAR(128) NOT NULL COMMENT '空间名称',
+    code            VARCHAR(64)  NULL COMMENT '空间编码（租户内唯一，供业务侧按编码引用；为空则不参与唯一约束）',
+    space_type      VARCHAR(32)  NOT NULL COMMENT '空间类型（sys_dict: space_type，如 park/building/floor/office/warehouse/dormitory）',
+    level           INT          NOT NULL DEFAULT 1 COMMENT '层级深度（根为 1，由服务端维护，不取信入参）',
+    sort            INT          NULL DEFAULT 0 COMMENT '同级排序',
+    -- 位置/结构属性（生成建筑与空间台账的基础信息，全部可空：不同空间类型只填相关项）
+    address         VARCHAR(255) NULL COMMENT '详细地址（园区/楼栋常用）',
+    longitude       DECIMAL(11, 7) NULL COMMENT '经度（WGS84；园区/楼栋常用）',
+    latitude        DECIMAL(10, 7) NULL COMMENT '纬度（WGS84；园区/楼栋常用）',
+    floor_no        VARCHAR(16)  NULL COMMENT '所在楼层号（如 1、-1、1F；楼栋下的楼层/房间常用）',
+    room_no         VARCHAR(32)  NULL COMMENT '房间号（如 101；办公室/仓库/宿舍常用）',
+    area            DECIMAL(12, 2) NULL COMMENT '面积（平方米）',
+    capacity        INT          NULL COMMENT '容纳人数/容量（办公室、宿舍、会议室常用）',
+    -- 责任与状态
+    manager         VARCHAR(64)  NULL COMMENT '空间负责人',
+    phone           VARCHAR(20)  NULL COMMENT '联系电话',
+    status          TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
+    remark          VARCHAR(500) NULL COMMENT '备注',
+    -- 扩展位：不预判未来字段，结构化不了的附加属性走 JSON（后端只校验合法性与大小）
+    ext_json        TEXT         NULL COMMENT '扩展属性 JSON（业务自定义字段，如空调数量/消防分区/资产编号前缀等）',
+    create_user     BIGINT       NULL COMMENT '创建人',
+    create_time     DATETIME     NULL COMMENT '创建时间',
+    update_user     BIGINT       NULL COMMENT '更新人',
+    update_time     DATETIME     NULL COMMENT '更新时间',
+    is_deleted      TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    -- 编码唯一性的生成列（见 uk_space_tenant_code）：
+    -- 未删除 ⇒ 取 code 原值；已删除 ⇒ 取 NULL（MySQL 唯一键对 NULL 不去重）。
+    -- 这样「删掉的空间不再占用编码」——否则逻辑删除后 code 仍占着唯一键，
+    -- 用户看到一个已删空间却永远无法复用它的编码（实测 1062）。
+    code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_space_tenant_code (tenant_id, code_alive),
+    -- 按父查子是树形页的必经路径（每层展开一次），没有它会全表扫
+    KEY idx_space_tenant_pid (tenant_id, pid),
+    KEY idx_space_tenant_type (tenant_id, space_type)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '空间（楼栋/楼层/房间/办公室/仓库等）';
+
+CREATE TABLE sys_space_relation
+(
+    id           BIGINT      NOT NULL COMMENT '主键',
+    tenant_id    BIGINT      NULL COMMENT '租户 ID',
+    space_id     BIGINT      NOT NULL COMMENT '空间 ID（sys_space.id）',
+    target_type  VARCHAR(32) NOT NULL COMMENT '关联对象类型（sys_dict: space_target_type，如 dept/user/device/asset）',
+    target_id    BIGINT      NOT NULL COMMENT '关联对象 ID（含义由 target_type 决定）',
+    is_primary   TINYINT     NOT NULL DEFAULT 0 COMMENT '是否主空间：1 是（一个对象最多一个主空间）0 否',
+    -- 主空间唯一性的数据库兜底（见下方 uk_space_relation_primary）：
+    -- 只有「is_primary=1 且未删」的行取 1，其余取 NULL —— MySQL 唯一键对 NULL 不去重，
+    -- 于是「同一对象最多一个主空间」被表达成唯一约束。没有它，并发下两个事务各自把
+    -- 不同空间设为主空间会都成功（关系行不同、不互相阻塞），产生两个主空间。
+    primary_marker TINYINT   AS (IF(is_primary = 1, 1, NULL)) STORED COMMENT '主空间唯一性生成列（仅供唯一键，不读）',
+    remark       VARCHAR(255) NULL COMMENT '备注（如「市场部主要办公点」「备用仓」）',
+    create_user  BIGINT      NULL COMMENT '创建人',
+    create_time  DATETIME    NULL COMMENT '创建时间',
+    update_user  BIGINT      NULL COMMENT '更新人',
+    update_time  DATETIME    NULL COMMENT '更新时间',
+    status       TINYINT     NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
+    -- 注意：本表是**纯关联表**，删除走**物理删**（见 SysSpaceRelationServiceImpl）。
+    -- 保留 is_deleted 列只是为了与 BaseEntity 对齐（实体继承 TenantBaseEntity）；
+    -- 逻辑删会让唯一键 uk_space_relation 挡住「解绑后重新绑定」——关联行没有保留价值，
+    -- 物理删才是正确语义（同仓 sys_user_post / sys_role_menu 等纯关联表同样不保留历史）。
+    is_deleted   TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除标记（本表始终为 0：删除走物理删，见列注释）',
+    PRIMARY KEY (id),
+    -- 同一对象的同一空间只允许一条关联（重复提交幂等）
+    UNIQUE KEY uk_space_relation (tenant_id, space_id, target_type, target_id),
+    -- 主空间唯一：同一 (租户, 对象类型, 对象) 最多一个 is_primary=1
+    UNIQUE KEY uk_space_relation_primary (tenant_id, target_type, target_id, primary_marker),
+    -- 反查：「这个部门/设备在哪些空间」（业务侧最常用的方向）
+    KEY idx_space_relation_target (tenant_id, target_type, target_id),
+    KEY idx_space_relation_space (tenant_id, space_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '空间与业务对象的关联（多态）';
