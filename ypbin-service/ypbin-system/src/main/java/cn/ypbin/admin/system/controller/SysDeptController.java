@@ -51,9 +51,9 @@ public class SysDeptController {
     @Log(value = "新增部门", module = "部门管理")
     @PostMapping
     @SaCheckPermission("system:dept:add")
-    public R<Void> create(@Valid @RequestBody DeptSaveReq req) {
-        deptService.createDept(req);
-        return R.ok();
+    public R<Long> create(@Valid @RequestBody DeptSaveReq req) {
+        // 返回新部门 ID：前端新建后要立即绑定「所在空间」，没有 ID 就只能静默丢弃用户的选择
+        return R.ok(deptService.createDept(req));
     }
 
     @Idempotent

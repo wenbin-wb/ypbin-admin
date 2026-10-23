@@ -19,6 +19,7 @@ import cn.ypbin.admin.system.mapper.SysUserMapper;
 import cn.ypbin.admin.system.model.req.DeptSaveReq;
 import cn.ypbin.admin.system.model.resp.DeptResp;
 import cn.ypbin.admin.system.service.SysDeptService;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.tree.TreeUtils;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
@@ -39,8 +40,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> implements SysDeptService {
 
+    /** 空间关联的对象类型码（字典 space_target_type 的项值，dept）。 */
+    private static final String SPACE_TARGET_DEPT = "dept";
+
     private final SysUserMapper userMapper;
     private final SysRoleDeptMapper roleDeptMapper;
+    private final SysSpaceRelationService spaceRelationService;
 
     @Override
     public List<DeptResp> tree() {
@@ -66,13 +71,15 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createDept(DeptSaveReq req) {
+    public Long createDept(DeptSaveReq req) {
         SysDept dept = new SysDept();
         BeanUtils.copyProperties(req, dept);
         if (dept.getPid() == null) {
             dept.setPid(AdminConstants.ROOT_PARENT_ID);
         }
         save(dept);
+        // 返回新 ID：前端据此绑定「所在空间」，否则新建时选的空间会被静默丢弃
+        return dept.getId();
     }
 
     @Override
@@ -108,9 +115,13 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
         // 清理角色-部门数据权限引用
         roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>()
             .eq(SysRoleDept::getDeptId, id));
+        // 清理「部门 ↔ 空间」关联：多态关联没有数据库外键，不清理就会留下指向已删部门的幽灵行，
+        // 表现为空间详情里的关联数虚高、且该空间因「仍挂着对象」永远删不掉。
+        // 必须在删部门**之后**清（先清则删部门失败时关联已丢），故放在 removeById 之后。
         if (!removeById(id)) {
             throw new BusinessException("删除部门失败");
         }
+        spaceRelationService.removeByTarget(SPACE_TARGET_DEPT, id);
     }
 
     private DeptResp toResp(SysDept dept) {

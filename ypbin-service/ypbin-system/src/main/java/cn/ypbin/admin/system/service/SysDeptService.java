@@ -33,9 +33,14 @@ public interface SysDeptService extends BaseService<SysDept> {
     /**
      * 新增部门。
      *
+     * <p><b>返回新部门 ID</b>（而非 void）：前端新建部门时要顺带绑定「所在空间」，
+     * 没有 ID 就无法绑定——表现为「用户选了空间、保存后静默丢失」。
+     * 返回 ID 也让调用方（含内部端点）能立即引用新记录。</p>
+     *
      * @param req 请求
+     * @return 新部门 ID
      */
-    void createDept(DeptSaveReq req);
+    Long createDept(DeptSaveReq req);
 
     /**
      * 编辑部门。

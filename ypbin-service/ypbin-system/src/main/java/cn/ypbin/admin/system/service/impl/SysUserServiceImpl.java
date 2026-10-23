@@ -31,6 +31,7 @@ import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.DataScopeResolver;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.cache.annotation.CacheEvict;
@@ -71,6 +72,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> implements SysUserService {
+
+    /** 空间关联的对象类型码（字典 space_target_type 的项值，user）。 */
+    private static final String SPACE_TARGET_USER = "user";
+
+    private final SysSpaceRelationService spaceRelationService;
 
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
@@ -305,6 +311,10 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         SysCache.evictUserByPhone(existing.getPhone());
         SysCache.evictUserAuth(id);
         onlineUserService.kickoutByUserId(id);
+        // 清理「人员 ↔ 空间」关联：多态关联无数据库外键，不清理会留下指向已删用户的幽灵行
+        // （空间关联数虚高 + 该空间永远删不掉）。放在最后：前面的清理/缓存失效即使某步失败
+        // 也不该让关联先丢，导致重试时状态不一致。
+        spaceRelationService.removeByTarget(SPACE_TARGET_USER, id);
     }
 
     @Override
