@@ -321,7 +321,8 @@ class TreeAssemblyConsistencyTest {
     void productionDeptTreeMustNormalizeLeafChildren() {
         SysDeptServiceImpl service = org.mockito.Mockito.spy(new SysDeptServiceImpl(
             org.mockito.Mockito.mock(cn.ypbin.admin.system.mapper.SysUserMapper.class),
-            org.mockito.Mockito.mock(cn.ypbin.admin.system.mapper.SysRoleDeptMapper.class)));
+            org.mockito.Mockito.mock(cn.ypbin.admin.system.mapper.SysRoleDeptMapper.class),
+            org.mockito.Mockito.mock(cn.ypbin.admin.system.service.SysSpaceRelationService.class)));
         // 桩掉 MyBatis-Plus 的 list(...)：返回「总部 → 研发部 → 后端组」+ 一个无子节点的根
         List<cn.ypbin.admin.system.entity.SysDept> rows = new ArrayList<>();
         rows.add(sysDept(1L, 0L, "总部"));

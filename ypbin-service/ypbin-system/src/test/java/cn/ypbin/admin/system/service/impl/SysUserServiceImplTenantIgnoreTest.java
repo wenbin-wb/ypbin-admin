@@ -22,6 +22,7 @@ import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.provider.AdminDataScopeHandler;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.online.OnlineUserService;
@@ -68,6 +69,7 @@ class SysUserServiceImplTenantIgnoreTest {
     @BeforeEach
     void setUp() {
         userService = spy(new SysUserServiceImpl(
+            mock(SysSpaceRelationService.class),
             mock(SysUserRoleMapper.class),
             mock(SysUserPostMapper.class),
             mock(SysUserSocialMapper.class),
