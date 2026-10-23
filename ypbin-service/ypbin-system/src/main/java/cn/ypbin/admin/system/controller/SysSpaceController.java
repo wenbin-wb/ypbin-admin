@@ -1,0 +1,235 @@
+/*
+ * Copyright (c) 2026-present ypbin-admin authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package cn.ypbin.admin.system.controller;
+
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.model.query.SpaceQuery;
+import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
+import cn.ypbin.admin.system.model.req.SpaceBindReq;
+import cn.ypbin.admin.system.model.req.SpaceSaveReq;
+import cn.ypbin.admin.system.model.req.SpaceSyncReq;
+import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
+import cn.ypbin.admin.system.model.resp.SpaceResp;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
+import cn.ypbin.admin.system.service.SysSpaceService;
+import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.crud.model.PageResult;
+import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.idempotent.Idempotent;
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 空间管理接口。
+ *
+ * <p>两段路径，语义分开：
+ * <ul>
+ *   <li>{@code /space/**} —— 空间主数据（树/列表/增删改）</li>
+ *   <li>{@code /space/{id}/relations} 与 {@code /space/relations/**} —— 空间与业务对象的关联</li>
+ * </ul>
+ * 关联做成独立路径而不是塞进空间的 save/update：绑定/解绑是<b>高频、独立授权</b>的动作
+ * （业务侧调、运维也调），混进主数据保存会让「改个备注」也要求绑定权限。</p>
+ *
+ * @author wenbin
+ * @since 2026-10-23
+ */
+@RestController
+@RequestMapping("/space")
+@RequiredArgsConstructor
+public class SysSpaceController {
+
+    private final SysSpaceService spaceService;
+
+    private final SysSpaceRelationService relationService;
+
+    /**
+     * 空间树（全量）。
+     *
+     * @return 空间树
+     */
+    @GetMapping("/tree")
+    @SaCheckPermission("system:space:list")
+    public R<List<SpaceResp>> tree() {
+        return R.ok(spaceService.tree());
+    }
+
+    /**
+     * 空间平铺分页列表。
+     *
+     * @param query 查询条件
+     * @return 分页结果
+     */
+    @GetMapping("/list")
+    @SaCheckPermission("system:space:list")
+    public R<PageResult<SpaceResp>> list(SpaceQuery query) {
+        return R.ok(spaceService.pageSpaces(query));
+    }
+
+    /**
+     * 空间详情。
+     *
+     * @param id 空间 ID
+     * @return 空间详情
+     */
+    @GetMapping("/{id}")
+    @SaCheckPermission("system:space:list")
+    public R<SpaceResp> detail(@PathVariable Long id) {
+        return R.ok(spaceService.getSpace(id));
+    }
+
+    /**
+     * 空间完整路径（如「总部园区 / A 栋 / 1F / 101 室」）。
+     *
+     * @param id 空间 ID
+     * @return 路径
+     */
+    @GetMapping("/{id}/path")
+    @SaCheckPermission("system:space:list")
+    public R<String> path(@PathVariable Long id) {
+        return R.ok(spaceService.buildSpacePath(id));
+    }
+
+    /**
+     * 新增空间。
+     *
+     * @param req 请求
+     * @return 新空间 ID
+     */
+    @Idempotent
+    @Log(value = "新增空间", module = "空间管理")
+    @PostMapping
+    @SaCheckPermission("system:space:add")
+    public R<Long> create(@Valid @RequestBody SpaceSaveReq req) {
+        return R.ok(spaceService.createSpace(req));
+    }
+
+    /**
+     * 编辑空间。
+     *
+     * @param id  空间 ID
+     * @param req 请求
+     * @return 空响应
+     */
+    @Idempotent
+    @Log(value = "修改空间", module = "空间管理")
+    @PutMapping("/{id}")
+    @SaCheckPermission("system:space:edit")
+    public R<Void> update(@PathVariable Long id, @Valid @RequestBody SpaceSaveReq req) {
+        spaceService.updateSpace(id, req);
+        return R.ok();
+    }
+
+    /**
+     * 删除空间。
+     *
+     * @param id 空间 ID
+     * @return 空响应
+     */
+    @Idempotent
+    @Log(value = "删除空间", module = "空间管理")
+    @DeleteMapping("/{id}")
+    @SaCheckPermission("system:space:delete")
+    public R<Void> delete(@PathVariable Long id) {
+        spaceService.deleteSpace(id);
+        return R.ok();
+    }
+
+    /**
+     * 把一批业务对象绑定到指定空间。
+     *
+     * @param id  空间 ID
+     * @param req 绑定请求
+     * @return 实际绑定条数
+     */
+    @Idempotent
+    @Log(value = "绑定空间关联", module = "空间管理")
+    @PostMapping("/{id}/relations")
+    @SaCheckPermission("system:space:bind")
+    public R<Integer> bind(@PathVariable Long id, @Valid @RequestBody SpaceBindReq req) {
+        return R.ok(relationService.bind(id, req));
+    }
+
+    /**
+     * 把一批业务对象从指定空间解绑。
+     *
+     * @param id         空间 ID
+     * @param targetType 关联对象类型
+     * @param targetIds  关联对象 ID 列表
+     * @return 实际删除条数
+     */
+    @Idempotent
+    @Log(value = "解绑空间关联", module = "空间管理")
+    @DeleteMapping("/{id}/relations")
+    @SaCheckPermission("system:space:bind")
+    public R<Integer> unbind(@PathVariable Long id,
+        @RequestParam String targetType,
+        @RequestParam List<Long> targetIds) {
+        return R.ok(relationService.unbind(id, targetType, targetIds));
+    }
+
+    /**
+     * 按业务对象**整体同步**其空间集合（一个事务内完成增删）。
+     *
+     * <p>表单保存的自然语义：「这个部门现在就在这几个空间」。调用方不需要自己算差集、
+     * 发 N 次请求——那既慢又无事务（中途失败会留下半改状态）。</p>
+     *
+     * @param req 同步请求
+     * @return 实际变更条数
+     */
+    @Idempotent
+    @Log(value = "同步空间关联", module = "空间管理")
+    @PostMapping("/relations/sync")
+    @SaCheckPermission("system:space:bind")
+    public R<Integer> syncRelations(@Valid @RequestBody SpaceSyncReq req) {
+        return R.ok(relationService.syncTargetSpaces(req));
+    }
+
+    /**
+     * 按空间反查其关联的业务对象（运维视角：这个空间挂了哪些对象）。
+     *
+     * @param id         空间 ID
+     * @param targetType 关联对象类型（可选，null=不限）
+     * @return 关联列表
+     */
+    @GetMapping("/{id}/relations")
+    @SaCheckPermission("system:space:list")
+    public R<List<SpaceRelationResp>> relationsBySpace(@PathVariable Long id,
+        @RequestParam(required = false) String targetType) {
+        return R.ok(relationService.listBySpace(id, targetType));
+    }
+
+    /**
+     * 按业务对象反查其所在空间。
+     *
+     * @param query 反查条件
+     * @return 关联列表
+     */
+    @GetMapping("/relations/by-target")
+    @SaCheckPermission("system:space:list")
+    public R<List<SpaceRelationResp>> relationsByTarget(SpaceRelationQuery query) {
+        return R.ok(relationService.listByTarget(query));
+    }
+}
