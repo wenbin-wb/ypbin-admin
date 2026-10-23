@@ -13,16 +13,25 @@ import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.feign.support.SpaceViewConverter;
 import cn.ypbin.admin.system.feign.support.UserViewConverter;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysSpaceDto;
+import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
+import cn.ypbin.admin.system.model.req.SpaceBindReq;
 import cn.ypbin.admin.system.model.resp.RouteResp;
+import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
+import cn.ypbin.admin.system.model.resp.SpaceResp;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysPermissionService;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
+import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.service.support.ConfigValueMasker;
 import cn.ypbin.admin.system.social.SocialConfigReader;
@@ -39,6 +48,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -78,6 +88,10 @@ public class SystemClientImpl implements ISystemClient {
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
     private final SysMenuService menuService;
+
+    private final SysSpaceService spaceService;
+
+    private final SysSpaceRelationService spaceRelationService;
     /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
     private final LogDao logDao;
 
@@ -394,5 +408,91 @@ public class SystemClientImpl implements ISystemClient {
             userService.updateById(user);
         }
         return R.ok(UserViewConverter.toDto(user));
+    }
+
+    // ---------- 空间：跨服务只读/写入通道 ----------
+    //
+    // 这几个端点的职责边界：**只做投影与参数装配**，业务校验全部由 spaceService /
+    // spaceRelationService 承担（空间存在性、租户隔离、类型合法性、主空间唯一、防成环）。
+    // 内部端点重复一遍校验会形成第二套口径——两处漂移后「管理页能建、内部调用能越界」。
+
+    @Override
+    public R<SysSpaceDto> getSpaceById(Long spaceId) {
+        if (spaceId == null) {
+            return R.fail("空间 ID 不能为空");
+        }
+        SpaceResp space;
+        try {
+            space = spaceService.getSpace(spaceId);
+        } catch (BusinessException e) {
+            // 空间不存在按失败返回（调用方要能区分「查询失败」与「确实没有空间」）
+            return R.fail(e.getMessage());
+        }
+        return R.ok(SpaceViewConverter.toDto(space));
+    }
+
+    @Override
+    public R<List<SysSpaceDto>> listSpaces() {
+        return R.ok(spaceService.tree().stream()
+            .flatMap(node -> flatten(node).stream())
+            .map(SpaceViewConverter::toDto)
+            .toList());
+    }
+
+    @Override
+    public R<List<SysSpaceRelationDto>> listSpaceRelationsByTarget(String targetType,
+        Long targetId) {
+        SpaceRelationQuery query = new SpaceRelationQuery();
+        query.setTargetType(targetType);
+        query.setTargetId(targetId);
+        try {
+            List<SpaceRelationResp> relations = spaceRelationService.listByTarget(query);
+            return R.ok(relations.stream().map(SpaceViewConverter::toDto).toList());
+        } catch (BusinessException e) {
+            return R.fail(e.getMessage());
+        }
+    }
+
+    @Override
+    public R<Integer> bindSpaceRelations(Long spaceId, String targetType, List<Long> targetIds,
+        Integer isPrimary, Boolean clearOthers, String remark) {
+        SpaceBindReq req = new SpaceBindReq();
+        req.setTargetType(targetType);
+        req.setTargetIds(targetIds);
+        req.setIsPrimary(isPrimary);
+        req.setClearOthers(clearOthers);
+        req.setRemark(remark);
+        try {
+            return R.ok(spaceRelationService.bind(spaceId, req));
+        } catch (BusinessException e) {
+            return R.fail(e.getMessage());
+        }
+    }
+
+    @Override
+    public R<Integer> unbindSpaceRelations(Long spaceId, String targetType,
+        List<Long> targetIds) {
+        try {
+            return R.ok(spaceRelationService.unbind(spaceId, targetType, targetIds));
+        } catch (BusinessException e) {
+            return R.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 把空间树拍平成列表（父在前、子在后）。
+     *
+     * @param node 树节点
+     * @return 该节点及其全部后代的响应列表
+     */
+    private List<SpaceResp> flatten(SpaceResp node) {
+        List<SpaceResp> result = new ArrayList<>();
+        result.add(node);
+        if (node.getChildren() != null) {
+            for (SpaceResp child : node.getChildren()) {
+                result.addAll(flatten(child));
+            }
+        }
+        return result;
     }
 }

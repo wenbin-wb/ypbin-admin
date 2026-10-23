@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
+import cn.ypbin.admin.system.model.dto.SysSpaceDto;
+import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
@@ -175,6 +177,40 @@ public class ISystemClientFallback implements ISystemClient {
 
     @Override
     public R<SysUserDto> updateUserProfile(Long userId, String nickname, String avatar, String phone) {
+        return unavailable();
+    }
+
+    // ---------- 空间：一律返回失败 R，不静默降级 ----------
+    //
+    // 这里刻意不给任何「空空间/空列表」的兜底：空间查询失败若返回空列表，
+    // 调用方（如 IoT 设备详情）会显示成「这台设备没有位置」——把「system 不可用」
+    // 伪装成「业务事实」，运维永远查不出来。故一律走 unavailable()，由调用方上抛或显式提示。
+
+    @Override
+    public R<SysSpaceDto> getSpaceById(Long spaceId) {
+        return unavailable();
+    }
+
+    @Override
+    public R<List<SysSpaceDto>> listSpaces() {
+        return unavailable();
+    }
+
+    @Override
+    public R<List<SysSpaceRelationDto>> listSpaceRelationsByTarget(String targetType,
+        Long targetId) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Integer> bindSpaceRelations(Long spaceId, String targetType, List<Long> targetIds,
+        Integer isPrimary, Boolean clearOthers, String remark) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Integer> unbindSpaceRelations(Long spaceId, String targetType,
+        List<Long> targetIds) {
         return unavailable();
     }
 }

@@ -11,6 +11,8 @@ package cn.ypbin.admin.system.api.feign;
 
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysSpaceDto;
+import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -246,4 +248,87 @@ public interface ISystemClient {
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone);
+
+    // ---------- 空间（基础主数据的跨服务只读/写入通道） ----------
+
+    /**
+     * 按 ID 查询单个空间（含完整路径与类型中文名）。
+     *
+     * <p><b>为什么业务服务必须走这里而不是直连 {@code sys_space}</b>：空间是基础模块的主数据，
+     * 跨服务禁止访问对方表（本仓既有约定，见 {@code docs/microservice-deployment.md}）。
+     * IoT 设备详情要显示「设备在 A栋 1F 101室」时，调本端点即可，不需要理解空间表结构。</p>
+     *
+     * <p>失败语义：空间不存在时返回<b>失败</b> {@code R}（不是成功 + null）——
+     * 调用方据此区分「查询失败」与「确实没有空间」，不得静默降级成「无位置」。</p>
+     *
+     * @param spaceId 空间 ID
+     * @return 空间摘要
+     */
+    @GetMapping("/space-by-id")
+    R<SysSpaceDto> getSpaceById(@RequestParam("spaceId") Long spaceId);
+
+    /**
+     * 查询全部空间（树形拍平，含完整路径），供业务服务做本地下拉/筛选。
+     *
+     * <p><b>返回全量而非分页</b>：空间是典型的小集合（一个租户几十到几百个），
+     * 业务侧要按空间筛选设备时需要完整列表做下拉；分页会让调用方必须自己循环拉取。</p>
+     *
+     * <p>调用方应<b>缓存</b>结果（空间变更频率低），不要每次页面请求都调。</p>
+     *
+     * @return 空间摘要列表（按父子顺序）
+     */
+    @GetMapping("/space-list")
+    R<List<SysSpaceDto>> listSpaces();
+
+    /**
+     * 按业务对象反查其所在空间。
+     *
+     * @param targetType 关联对象类型（dept/user/device/asset…）
+     * @param targetId   关联对象 ID
+     * @return 关联列表（含空间完整路径）
+     */
+    @GetMapping("/space-relations-by-target")
+    R<List<SysSpaceRelationDto>> listSpaceRelationsByTarget(
+        @RequestParam("targetType") String targetType,
+        @RequestParam("targetId") Long targetId);
+
+    /**
+     * 把一批业务对象绑定到指定空间（幂等：已存在的关联会被更新而不是重复插入）。
+     *
+     * <p><b>写入为什么也走本端点</b>：{@code sys_space_relation} 属基础模块的表，
+     * 业务服务直写它等于绕过租户插件与唯一键校验。走本端点由 system 统一做
+     * 「空间存在性 + 租户隔离 + 主空间唯一 + 类型合法性」四项校验。</p>
+     *
+     * @param spaceId     空间 ID
+     * @param targetType  关联对象类型
+     * @param targetIds   关联对象 ID 列表（逗号分隔由 Feign 序列化为多个参数，
+     *                    故用 List 由 Spring 默认转换成 {@code targetIds=1&targetIds=2}）
+     * @param isPrimary   是否主空间：1 是 0 否（null 视为 0）
+     * @param clearOthers 是否先清空这些对象在其他空间的同类关联（设备挪位置=true）
+     * @param remark      关联备注（可空）
+     * @return 实际生效的关联条数
+     */
+    @PostMapping("/space-bind")
+    R<Integer> bindSpaceRelations(@RequestParam("spaceId") Long spaceId,
+        @RequestParam("targetType") String targetType,
+        @RequestParam("targetIds") List<Long> targetIds,
+        @RequestParam(value = "isPrimary", required = false) Integer isPrimary,
+        @RequestParam(value = "clearOthers", required = false) Boolean clearOthers,
+        @RequestParam(value = "remark", required = false) String remark);
+
+    /**
+     * 把一批业务对象从指定空间解绑。
+     *
+     * <p>业务侧删除对象（如删除设备）时<b>必须</b>调本端点清理关联：多态关联没有数据库外键，
+     * 不清理会留下指向已删对象的幽灵行——表现为空间关联数虚高、且该空间永远删不掉。</p>
+     *
+     * @param spaceId    空间 ID
+     * @param targetType 关联对象类型
+     * @param targetIds  关联对象 ID 列表
+     * @return 实际删除条数
+     */
+    @PostMapping("/space-unbind")
+    R<Integer> unbindSpaceRelations(@RequestParam("spaceId") Long spaceId,
+        @RequestParam("targetType") String targetType,
+        @RequestParam("targetIds") List<Long> targetIds);
 }
