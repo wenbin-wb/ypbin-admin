@@ -24,6 +24,7 @@ import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
 import cn.ypbin.admin.system.model.req.SpaceBindReq;
+import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
@@ -49,6 +50,7 @@ import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -438,6 +440,26 @@ public class SystemClientImpl implements ISystemClient {
             .flatMap(node -> flatten(node).stream())
             .map(SpaceViewConverter::toDto)
             .toList());
+    }
+
+    @Override
+    public R<Integer> syncSpaceRelations(SpaceSyncReq req) {
+        if (req == null || req.getTargetId() == null) {
+            return R.fail("同步请求缺少业务对象 ID");
+        }
+        return R.ok(spaceRelationService.syncTargetSpaces(req));
+    }
+
+    @Override
+    public R<Map<Long, List<SysSpaceRelationDto>>> listSpaceRelationsByTargets(String targetType,
+        List<Long> targetIds) {
+        // 复用 service 的批量分组结果，再逐条转 DTO（转换只做字段投影，不再查库）
+        Map<Long, List<SpaceRelationResp>> grouped =
+            spaceRelationService.listByTargets(targetType, targetIds);
+        Map<Long, List<SysSpaceRelationDto>> result = new LinkedHashMap<>();
+        grouped.forEach((targetId, list) -> result.put(targetId,
+            list.stream().map(SpaceViewConverter::toDto).toList()));
+        return R.ok(result);
     }
 
     @Override

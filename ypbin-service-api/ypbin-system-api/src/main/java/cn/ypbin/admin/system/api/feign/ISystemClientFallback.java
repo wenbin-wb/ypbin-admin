@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
@@ -194,6 +195,17 @@ public class ISystemClientFallback implements ISystemClient {
 
     @Override
     public R<List<SysSpaceDto>> listSpaces() {
+        return unavailable();
+    }
+
+    @Override
+    public R<Integer> syncSpaceRelations(SpaceSyncReq req) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Map<Long, List<SysSpaceRelationDto>>> listSpaceRelationsByTargets(String targetType,
+        List<Long> targetIds) {
         return unavailable();
     }
 
