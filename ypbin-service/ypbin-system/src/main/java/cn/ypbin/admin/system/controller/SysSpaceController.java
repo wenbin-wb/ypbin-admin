@@ -31,6 +31,7 @@ import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -219,6 +220,23 @@ public class SysSpaceController {
     public R<List<SpaceRelationResp>> relationsBySpace(@PathVariable Long id,
         @RequestParam(required = false) String targetType) {
         return R.ok(relationService.listBySpace(id, targetType));
+    }
+
+    /**
+     * 批量反查：一次查多个业务对象各自的空间（列表页「所在空间」列用）。
+     *
+     * <p>列表页有 N 条记录时，逐条调单对象反查就是 N 次 HTTP（N+1）；本端点一次返回。</p>
+     *
+     * @param targetType 关联对象类型
+     * @param targetIds  关联对象 ID 列表
+     * @return 对象 ID → 空间关联列表（无关联的对象不出现在结果里）
+     */
+    @GetMapping("/relations/by-targets")
+    @SaCheckPermission("system:space:list")
+    public R<Map<Long, List<SpaceRelationResp>>> relationsByTargets(
+        @RequestParam String targetType,
+        @RequestParam List<Long> targetIds) {
+        return R.ok(relationService.listByTargets(targetType, targetIds));
     }
 
     /**

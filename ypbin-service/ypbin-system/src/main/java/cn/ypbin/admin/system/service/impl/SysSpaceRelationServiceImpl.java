@@ -365,6 +365,79 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
     }
 
     @Override
+    public Map<Long, List<SpaceRelationResp>> listByTargets(String targetType,
+        List<Long> targetIds) {
+        if (!StringUtils.hasText(targetType)) {
+            throw new BusinessException("关联对象类型不能为空");
+        }
+        String normalizedType = normalizeTargetType(targetType);
+        List<Long> ids = distinctIds(targetIds);
+        if (ids.isEmpty()) {
+            // 空集合直接返回空 Map：查库无意义，且空 IN () 是 SQL 语法错
+            return Map.of();
+        }
+        // 查询次数恒为 2：① 一次 IN 取全部关联；② 一次批量取空间信息（fillSpacePaths 内部）。
+        // 不逐对象调 listByTarget —— 那是 N+1。
+        List<SysSpaceRelation> relations = list(new LambdaQueryWrapper<SysSpaceRelation>()
+            .eq(SysSpaceRelation::getTargetType, normalizedType)
+            .in(SysSpaceRelation::getTargetId, ids)
+            .orderByDesc(SysSpaceRelation::getIsPrimary)
+            .orderByAsc(SysSpaceRelation::getId));
+        if (relations.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> spaceIds = relations.stream().map(SysSpaceRelation::getSpaceId).distinct().toList();
+        List<SysSpace> spaces = spaceMapper.selectByIds(spaceIds);
+        Map<Long, SysSpace> spaceById = new HashMap<>(spaces.size());
+        for (SysSpace space : spaces) {
+            spaceById.put(space.getId(), space);
+        }
+        // 按对象分组（LinkedHashMap 保持稳定顺序，便于前端渲染）
+        Map<Long, List<SpaceRelationResp>> grouped = new LinkedHashMap<>();
+        List<SpaceRelationResp> all = new ArrayList<>(relations.size());
+        for (SysSpaceRelation relation : relations) {
+            SpaceRelationResp resp = toRelationResp(relation,
+                spaceById.get(relation.getSpaceId()));
+            grouped.computeIfAbsent(relation.getTargetId(), key -> new ArrayList<>()).add(resp);
+            all.add(resp);
+        }
+        // 路径一次性批量填充（内部取全量空间在内存拼，不逐条 CTE）
+        fillSpacePaths(all);
+        return grouped;
+    }
+
+    /**
+     * 关联实体 → 响应（含空间侧字段）。
+     *
+     * <p>抽出来是因为 {@code listByTarget} / {@code listBySpace} / {@code listByTargets}
+     * 三处都要做同一件事；复制三份会在加字段时漏改其中一处。</p>
+     *
+     * <p>空间类型的展示文本由 {@code SpaceRelationResp.spaceType} 上的 {@code @DictText} 在序列化时
+     * 输出 {@code spaceTypeText}，<b>不在这里手工翻译</b>（否则与 starter 形成两份实现）。</p>
+     *
+     * @param relation 关联实体
+     * @param space    空间实体（可为 null：空间被删但关联残留）
+     * @return 关联响应
+     */
+    private SpaceRelationResp toRelationResp(SysSpaceRelation relation, SysSpace space) {
+        SpaceRelationResp resp = new SpaceRelationResp();
+        resp.setId(relation.getId());
+        resp.setSpaceId(relation.getSpaceId());
+        resp.setTargetType(relation.getTargetType());
+        resp.setTargetId(relation.getTargetId());
+        resp.setIsPrimary(relation.getIsPrimary());
+        resp.setRemark(relation.getRemark());
+        resp.setStatus(relation.getStatus());
+        resp.setCreateTime(relation.getCreateTime());
+        if (space != null) {
+            resp.setSpaceName(space.getName());
+            resp.setSpaceCode(space.getCode());
+            resp.setSpaceType(space.getSpaceType());
+        }
+        return resp;
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public int removeByTarget(String targetType, Long targetId) {
         if (!StringUtils.hasText(targetType) || targetId == null) {
