@@ -98,4 +98,16 @@ public interface SysSpaceService extends BaseService<SysSpace> {
      * @return 路径；空间不存在时返回空串
      */
     String buildSpacePath(Long id);
+
+    /**
+     * 取指定空间及其全部后代的 ID（供业务侧「按空间筛选」用）。
+     *
+     * <p><b>为什么业务侧需要它而不是自己按 pid 递归</b>：设备挂在最末级房间，
+     * 用户选「A栋」筛选时期望含其下所有设备。业务服务（如 IoT）不持有空间表，
+     * 也不该自己递归查 system 的表——故由 system 一次算好返回。</p>
+     *
+     * @param spaceId 根空间 ID
+     * @return 该空间及全部后代 ID（含自身；不存在时为空列表）
+     */
+    List<Long> listSubtreeIds(Long spaceId);
 }

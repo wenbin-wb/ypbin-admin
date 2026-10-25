@@ -293,6 +293,18 @@ public interface ISystemClient {
         @RequestParam("targetId") Long targetId);
 
     /**
+     * 取指定空间及其全部后代 ID（供业务侧「按空间筛选」实现含子树语义）。
+     *
+     * <p>业务侧（如 IoT）需要「选 A栋 时看到其下所有设备」，而设备挂在最末级房间；
+     * 业务服务没有空间表，也不该自己递归查 system 的表——故由 system 一次算好。</p>
+     *
+     * @param spaceId 根空间 ID
+     * @return 该空间及全部后代 ID（含自身；不存在时为空列表）
+     */
+    @GetMapping("/space-subtree-ids")
+    R<List<Long>> listSpaceSubtreeIds(@RequestParam("spaceId") Long spaceId);
+
+    /**
      * 把一批业务对象绑定到指定空间（幂等：已存在的关联会被更新而不是重复插入）。
      *
      * <p><b>写入为什么也走本端点</b>：{@code sys_space_relation} 属基础模块的表，

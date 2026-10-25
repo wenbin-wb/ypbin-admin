@@ -226,6 +226,16 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         return String.join(PATH_SEPARATOR, names);
     }
 
+    @Override
+    public List<Long> listSubtreeIds(Long spaceId) {
+        if (spaceId == null) {
+            return List.of();
+        }
+        List<Long> ids = baseMapper.selectSubtreeIds(spaceId, currentTenantId(),
+            SpaceConstants.MAX_SPACE_DEPTH + SpaceConstants.PARENT_CHAIN_MARGIN);
+        return ids == null ? List.of() : ids;
+    }
+
     // ---------- 校验 ----------
 
     /**

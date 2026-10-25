@@ -454,6 +454,14 @@ public class SystemClientImpl implements ISystemClient {
     }
 
     @Override
+    public R<List<Long>> listSpaceSubtreeIds(Long spaceId) {
+        if (spaceId == null) {
+            return R.fail("空间 ID 不能为空");
+        }
+        return R.ok(spaceService.listSubtreeIds(spaceId));
+    }
+
+    @Override
     public R<Integer> bindSpaceRelations(Long spaceId, String targetType, List<Long> targetIds,
         Integer isPrimary, Boolean clearOthers, String remark) {
         SpaceBindReq req = new SpaceBindReq();

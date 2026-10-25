@@ -204,4 +204,39 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
         """)
     List<SpaceTreeNodeResp> selectChildrenWithHasChildren(@Param("parentId") Long parentId,
         @Param("keyword") String keyword);
+
+    /**
+     * 取指定空间**及其全部后代**的 ID（用于「按空间筛选」的含子树语义）。
+     *
+     * <p><b>为什么必须有</b>：设备挂在「A栋 1F 101室」，用户在设备列表选「A栋」筛选时，
+     * 期望看到 A栋 下所有设备（含 1F、101室里的）。只按 {@code space_id = A栋} 匹配会漏掉
+     * 全部实际挂在房间里的设备——而业务上设备几乎总是挂在最末级房间。</p>
+     *
+     * <p><b>为什么用一条 CTE 而不是 Java 递归</b>：Java 里逐层查子节点是循环内 DB 调用
+     * （架构门禁判红），且查询次数随深度增长。CTE 一次算完。</p>
+     *
+     * <p>与其他 CTE 语句同一处置：跳过租户插件 + SQL 显式写 {@code tenant_id}
+     * （插件认不出 CTE 名，会生成引用不存在列的 SQL）。</p>
+     *
+     * @param rootId   根空间 ID
+     * @param tenantId 当前租户 ID
+     * @param maxDepth CTE 递归深度上限（含余量）
+     * @return 该空间及全部后代的 ID（含自身；根不存在时为空列表）
+     */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("""
+        WITH RECURSIVE subtree AS (
+            SELECT id, 0 AS relDepth
+            FROM sys_space
+            WHERE id = #{rootId} AND tenant_id = #{tenantId} AND is_deleted = 0
+            UNION ALL
+            SELECT s.id, t.relDepth + 1
+            FROM sys_space s
+            INNER JOIN subtree t ON s.pid = t.id
+            WHERE s.tenant_id = #{tenantId} AND s.is_deleted = 0 AND t.relDepth < #{maxDepth}
+        )
+        SELECT id FROM subtree ORDER BY relDepth ASC, id ASC
+        """)
+    List<Long> selectSubtreeIds(@Param("rootId") Long rootId, @Param("tenantId") Long tenantId,
+        @Param("maxDepth") int maxDepth);
 }

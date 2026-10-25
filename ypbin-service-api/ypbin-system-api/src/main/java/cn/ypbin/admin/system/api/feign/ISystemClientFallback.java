@@ -203,6 +203,11 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
+    public R<List<Long>> listSpaceSubtreeIds(Long spaceId) {
+        return unavailable();
+    }
+
+    @Override
     public R<Integer> bindSpaceRelations(Long spaceId, String targetType, List<Long> targetIds,
         Integer isPrimary, Boolean clearOthers, String remark) {
         return unavailable();

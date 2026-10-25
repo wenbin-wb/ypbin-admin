@@ -455,6 +455,38 @@ class SysSpaceServiceImplTest {
         assertThat(service.lazyTree(1L, null)).isEmpty();
     }
 
+
+    // ---------- 子树 ID（业务侧「按空间筛选」的支撑） ----------
+
+    @Test
+    @DisplayName("★ 子树 ID：透传当前租户与深度上限，不用调用方给的值")
+    void shouldPassTenantAndDepthWhenListingSubtreeIds() {
+        when(spaceMapper.selectSubtreeIds(eq(10L), eq(TENANT_ID),
+            eq(SpaceConstants.MAX_SPACE_DEPTH + SpaceConstants.PARENT_CHAIN_MARGIN)))
+            .thenReturn(List.of(10L, 11L, 12L));
+
+        List<Long> ids = withTenant(() -> service.listSubtreeIds(10L));
+
+        assertThat(ids).containsExactly(10L, 11L, 12L);
+        // 关键：租户来自登录上下文，深度来自常量——调用方无法越权指定
+        verify(spaceMapper).selectSubtreeIds(eq(10L), eq(TENANT_ID),
+            eq(SpaceConstants.MAX_SPACE_DEPTH + SpaceConstants.PARENT_CHAIN_MARGIN));
+    }
+
+    @Test
+    @DisplayName("子树 ID：spaceId 为 null 时返回空列表，不查库")
+    void shouldNotQueryWhenSubtreeRootNull() {
+        assertThat(service.listSubtreeIds(null)).isEmpty();
+        verify(spaceMapper, never()).selectSubtreeIds(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("子树 ID：Mapper 返回 null 时返回空列表（不把 null 透给业务侧）")
+    void shouldReturnEmptyWhenSubtreeMapperReturnsNull() {
+        when(spaceMapper.selectSubtreeIds(any(), any(), anyInt())).thenReturn(null);
+        assertThat(withTenant(() -> service.listSubtreeIds(1L))).isEmpty();
+    }
+
     // ---------- 辅助 ----------
 
     private SpaceSaveReq req(Long pid) {
