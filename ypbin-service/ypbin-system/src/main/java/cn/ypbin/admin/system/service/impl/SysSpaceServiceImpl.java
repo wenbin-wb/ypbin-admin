@@ -25,6 +25,7 @@ import cn.ypbin.admin.system.mapper.SysSpaceRelationMapper;
 import cn.ypbin.admin.system.model.query.SpaceQuery;
 import cn.ypbin.admin.system.model.req.SpaceSaveReq;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
+import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.tree.TreeUtils;
@@ -92,7 +93,8 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             .orderByAsc(SysSpace::getPid)
             .orderByAsc(SysSpace::getSort)
             .orderByAsc(SysSpace::getId));
-        List<SpaceResp> tree = toRespList(spaces);
+        // 把同一次查询结果同时用于「拼路径」：避免对同一张大表查两遍
+        List<SpaceResp> tree = toRespList(spaces, spaces);
         List<SpaceResp> roots = TreeUtils.build(tree, SpaceResp::getId, SpaceResp::getPid,
             SpaceResp::setChildren, SpaceConstants.ROOT_PARENT_ID);
         // 与部门树同口径：TreeUtils 一律写回（可能为空的）列表 ⇒ 叶子会多出 "children":[]；
@@ -104,6 +106,16 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             }
         });
         return roots;
+    }
+
+    @Override
+    public List<SpaceTreeNodeResp> lazyTree(Long parentId, String keyword) {
+        long pid = normParentId(parentId);
+        // 关键词搜索时忽略 parentId（跨层级找），由 SQL 的 choose 分支处理；
+        // 空关键词才按层查。这里只做归一，不做业务判断。
+        String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        List<SpaceTreeNodeResp> nodes = baseMapper.selectChildrenWithHasChildren(pid, kw);
+        return nodes == null ? List.of() : nodes;
     }
 
     @Override
@@ -425,14 +437,28 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     }
 
     private List<SpaceResp> toRespList(List<SysSpace> spaces) {
+        return toRespList(spaces, null);
+    }
+
+    /**
+     * 实体列表 → 响应列表。
+     *
+     * @param spaces     要转换的实体（调用方已查好）
+     * @param pathSource 拼路径用的全量节点快照；<b>传 {@code null} 时本方法会自己查一次</b>。
+     *                   树形/列表页传进来可省掉一次**全表重复查询**（见 {@code tree()}）。
+     * @return 响应列表
+     */
+    private List<SpaceResp> toRespList(List<SysSpace> spaces, List<SysSpace> pathSource) {
         if (spaces.isEmpty()) {
             return List.of();
         }
         List<Long> ids = spaces.stream().map(SysSpace::getId).toList();
         Map<Long, long[]> counters = loadCounters(ids);
-        // 路径在内存里拼（一次取全量节点），不逐条查 CTE：树页面每行都要显示路径，
+        // 路径在内存里拼（一次取节点快照），不逐条查 CTE：树页面每行都要显示路径，
         // 逐条上溯就是 N 次递归查询。
-        Map<Long, String> paths = buildPathMap();
+        // 调用方已有全量快照时复用（tree() 就是这种情况：它已经查了全量，
+        // 若这里再查一次就是同一张大表查两遍——数据量小时看不出来，量大时白付一份开销）。
+        Map<Long, String> paths = buildPathMap(pathSource);
         List<SpaceResp> result = new ArrayList<>(spaces.size());
         for (SysSpace space : spaces) {
             SpaceResp resp = new SpaceResp();
@@ -455,9 +481,10 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
      *
      * @return 空间 ID → 完整路径
      */
-    private Map<Long, String> buildPathMap() {
-        List<SysSpace> all = list(new LambdaQueryWrapper<SysSpace>()
-            .select(SysSpace::getId, SysSpace::getPid, SysSpace::getName));
+    private Map<Long, String> buildPathMap(List<SysSpace> provided) {
+        List<SysSpace> all = provided != null ? provided
+            : list(new LambdaQueryWrapper<SysSpace>()
+                .select(SysSpace::getId, SysSpace::getPid, SysSpace::getName));
         Map<Long, SysSpace> byId = new HashMap<>(all.size());
         for (SysSpace space : all) {
             byId.put(space.getId(), space);

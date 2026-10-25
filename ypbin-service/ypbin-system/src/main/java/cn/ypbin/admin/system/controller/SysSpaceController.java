@@ -23,6 +23,7 @@ import cn.ypbin.admin.system.model.req.SpaceSaveReq;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
+import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.starter.core.model.R;
@@ -75,6 +76,24 @@ public class SysSpaceController {
     @SaCheckPermission("system:space:list")
     public R<List<SpaceResp>> tree() {
         return R.ok(spaceService.tree());
+    }
+
+    /**
+     * 懒加载树：只查一层（或按关键词跨层搜索）。
+     *
+     * <p>与 {@code /space/tree}（全量树）的分工：全量树适合空间数量小的租户，
+     * 一次渲染完整层级；万级空间用本端点按需展开，避免 MB 级响应与前端递归渲染卡顿。</p>
+     *
+     * @param parentId 父空间 ID（不传=查根层）
+     * @param keyword  关键词（非空时跨层级搜索，忽略 parentId）
+     * @return 该层节点（含 hasChildren）
+     */
+    @GetMapping("/tree/lazy")
+    @SaCheckPermission("system:space:list")
+    public R<List<SpaceTreeNodeResp>> lazyTree(
+        @RequestParam(required = false) Long parentId,
+        @RequestParam(required = false) String keyword) {
+        return R.ok(spaceService.lazyTree(parentId, keyword));
     }
 
     /**

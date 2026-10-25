@@ -16,6 +16,7 @@
 package cn.ypbin.admin.system.mapper;
 
 import cn.ypbin.admin.system.entity.SysSpace;
+import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import java.util.List;
@@ -168,4 +169,39 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
         """)
     Integer selectSubtreeMaxRelDepth(@Param("rootId") Long rootId, @Param("tenantId") Long tenantId,
         @Param("maxDepth") int maxDepth);
+
+    /**
+     * 懒加载树：查某一层的子节点（{@code pid} 相同），并**一次分组**算出各自有无子节点。
+     *
+     * <p><b>为什么要一次 SQL 带上 hasChildren</b>：若先查子节点、再对每个子节点查「有没有下级」，
+     * 就是 N+1（一层 50 个节点 = 51 次查询）。这里用 {@code EXISTS} 子查询在同一个语句里算完。</p>
+     *
+     * <p>租户条件由插件自动追加（本语句无 CTE，插件能正确识别表名）。</p>
+     *
+     * @param parentId 父空间 ID（{@code 0} 表示查根节点）
+     * @param keyword  名称/编码模糊匹配（可空；非空时**跨层级搜索**，不受 parentId 限制）
+     * @return 该层节点（含 {@code hasChildren}）
+     */
+    @Select("""
+        <script>
+        SELECT s.id, s.pid, s.name, s.code,
+               s.space_type AS spaceType, s.sort, s.status,
+               (SELECT COUNT(*) FROM sys_space c WHERE c.pid = s.id AND c.is_deleted = 0) > 0
+                   AS hasChildren
+        FROM sys_space s
+        WHERE s.is_deleted = 0
+        <choose>
+            <when test="keyword != null and keyword != ''">
+                AND (s.name LIKE CONCAT('%', #{keyword}, '%')
+                     OR s.code LIKE CONCAT('%', #{keyword}, '%'))
+            </when>
+            <otherwise>
+                AND s.pid = #{parentId}
+            </otherwise>
+        </choose>
+        ORDER BY s.sort ASC, s.id ASC
+        </script>
+        """)
+    List<SpaceTreeNodeResp> selectChildrenWithHasChildren(@Param("parentId") Long parentId,
+        @Param("keyword") String keyword);
 }

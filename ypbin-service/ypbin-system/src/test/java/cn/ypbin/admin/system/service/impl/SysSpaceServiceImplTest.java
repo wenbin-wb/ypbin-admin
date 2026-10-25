@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -34,6 +35,7 @@ import cn.ypbin.admin.system.mapper.SysDictItemMapper;
 import cn.ypbin.admin.system.mapper.SysSpaceMapper;
 import cn.ypbin.admin.system.mapper.SysSpaceRelationMapper;
 import cn.ypbin.admin.system.model.req.SpaceSaveReq;
+import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.identity.IdentityContext;
@@ -391,6 +393,66 @@ class SysSpaceServiceImplTest {
         assertThatThrownBy(() -> withTenantVoid(() -> service.deleteSpace(SELF_ID)))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("仍挂着");
+    }
+
+
+    // ---------- 懒加载树 ----------
+
+    @Test
+    @DisplayName("★ 懒加载：只查指定父节点下的子节点（不全量拉树）")
+    void shouldQueryOnlyOneLevelInLazyTree() {
+        SpaceTreeNodeResp node = new SpaceTreeNodeResp();
+        node.setId(10L);
+        node.setPid(1L);
+        node.setName("A栋");
+        node.setHasChildren(true);
+        when(spaceMapper.selectChildrenWithHasChildren(eq(1L), isNull())).thenReturn(List.of(node));
+
+        List<SpaceTreeNodeResp> result = service.lazyTree(1L, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getHasChildren()).isTrue();
+        // 关键：调用的是按层查询，不是全量 list(...)
+        verify(spaceMapper).selectChildrenWithHasChildren(eq(1L), isNull());
+        verify(spaceMapper, never()).selectList(any());
+    }
+
+    @Test
+    @DisplayName("懒加载：parentId 为 null 时按根层（0）查")
+    void shouldTreatNullParentAsRootInLazyTree() {
+        when(spaceMapper.selectChildrenWithHasChildren(eq(SpaceConstants.ROOT_PARENT_ID), isNull()))
+            .thenReturn(List.of());
+
+        assertThat(service.lazyTree(null, null)).isEmpty();
+        verify(spaceMapper).selectChildrenWithHasChildren(eq(SpaceConstants.ROOT_PARENT_ID), isNull());
+    }
+
+    @Test
+    @DisplayName("懒加载：关键词搜索传 trim 后的值（跨层级搜索）")
+    void shouldTrimKeywordInLazyTree() {
+        when(spaceMapper.selectChildrenWithHasChildren(anyLong(), eq("A栋"))).thenReturn(List.of());
+
+        service.lazyTree(1L, "  A栋  ");
+
+        verify(spaceMapper).selectChildrenWithHasChildren(anyLong(), eq("A栋"));
+    }
+
+    @Test
+    @DisplayName("懒加载：空白关键词按「无关键词」处理（不当作搜索词去查 LIKE '%%'）")
+    void shouldTreatBlankKeywordAsNullInLazyTree() {
+        when(spaceMapper.selectChildrenWithHasChildren(eq(1L), isNull())).thenReturn(List.of());
+
+        service.lazyTree(1L, "   ");
+
+        verify(spaceMapper).selectChildrenWithHasChildren(eq(1L), isNull());
+    }
+
+    @Test
+    @DisplayName("懒加载：Mapper 返回 null 时返回空列表（不把 null 透给前端）")
+    void shouldReturnEmptyListWhenMapperReturnsNull() {
+        when(spaceMapper.selectChildrenWithHasChildren(anyLong(), any())).thenReturn(null);
+
+        assertThat(service.lazyTree(1L, null)).isEmpty();
     }
 
     // ---------- 辅助 ----------
