@@ -46,7 +46,7 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createPost(PostSaveReq req) {
+    public Long createPost(PostSaveReq req) {
         checkNameUnique(req.getName(), null);
         checkCodeUnique(req.getCode(), null);
         SysPost post = new SysPost();
@@ -55,6 +55,8 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
         if (!save(post)) {
             throw new BusinessException("岗位创建失败");
         }
+        // 返回新 ID：前端据此绑定「工作地点（空间）」，否则新建时选的会被静默丢弃
+        return post.getId();
     }
 
     @Override

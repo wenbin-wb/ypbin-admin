@@ -51,9 +51,9 @@ public class SysPostController {
     @Log(value = "新增岗位", module = "岗位管理")
     @PostMapping
     @SaCheckPermission("system:post:add")
-    public R<Void> create(@Valid @RequestBody PostSaveReq req) {
-        postService.createPost(req);
-        return R.ok();
+    public R<Long> create(@Valid @RequestBody PostSaveReq req) {
+        // 返回新岗位 ID：前端新建后要立即绑定「工作地点（空间）」
+        return R.ok(postService.createPost(req));
     }
 
     @Idempotent

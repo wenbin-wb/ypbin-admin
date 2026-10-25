@@ -25,7 +25,16 @@ public interface SysPostService extends BaseService<SysPost> {
 
     List<PostResp> listPosts();
 
-    void createPost(PostSaveReq req);
+    /**
+     * 新增岗位。
+     *
+     * <p><b>返回新岗位 ID</b>：前端新建时要顺带绑定「工作地点（空间）」，
+     * 没有 ID 就只能静默丢弃用户的选择（与部门侧同一处理，见 {@code SysDeptService#createDept}）。</p>
+     *
+     * @param req 请求
+     * @return 新岗位 ID
+     */
+    Long createPost(PostSaveReq req);
 
     void updatePost(Long id, PostSaveReq req);
 
