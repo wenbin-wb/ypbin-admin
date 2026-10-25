@@ -100,6 +100,26 @@ public interface SysSpaceRelationService extends BaseService<SysSpaceRelation> {
     Map<Long, List<SpaceRelationResp>> listByTargets(String targetType, List<Long> targetIds);
 
     /**
+     * 按空间（含其全部后代）取挂在其上的业务对象 ID（供业务侧「空间视角看设备」用）。
+     *
+     * <p><b>为什么要含子树</b>：设备通常挂在末级房间（A栋/1F/101室）。用户在空间页点「A栋」
+     * 期望看到其下所有设备；只查 `space_id = A栋` 会得到空列表。</p>
+     *
+     * @param spaceId    根空间 ID
+     * @param targetType 关联对象类型（可空：不限定类型）
+     * @return 业务对象 ID 列表（去重）
+     */
+    List<Long> listTargetIdsBySpaceTree(Long spaceId, String targetType);
+
+    /**
+     * 按空间（含后代）统计各类型业务对象的数量（供空间列表「设备数」列用）。
+     *
+     * @param spaceIds 根空间 ID 列表（空集合返回空 Map，不查库）
+     * @return 空间 ID → (对象类型 → 数量)
+     */
+    Map<Long, Map<String, Long>> countBySpaceTrees(List<Long> spaceIds);
+
+    /**
      * 删除某业务对象的<b>全部</b>空间关联（业务侧删除对象时调用）。
      *
      * <p><b>为什么必须有这个方法</b>：多态关联没有数据库外键，目标对象被删时不会级联。

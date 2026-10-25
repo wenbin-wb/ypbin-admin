@@ -21,6 +21,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
@@ -204,6 +205,16 @@ public class ISystemClientFallback implements ISystemClient {
 
     @Override
     public R<List<Long>> listSpaceSubtreeIds(Long spaceId) {
+        return unavailable();
+    }
+
+    @Override
+    public R<List<Long>> listSpaceTargetIdsBySpace(Long spaceId, String targetType) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Map<Long, Map<String, Long>>> countSpaceRelationsBySpaceTrees(List<Long> spaceIds) {
         return unavailable();
     }
 

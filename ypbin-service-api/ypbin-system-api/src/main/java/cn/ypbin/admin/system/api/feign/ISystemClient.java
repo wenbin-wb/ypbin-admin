@@ -20,6 +20,7 @@ import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import java.util.List;
+import java.util.Map;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -303,6 +304,30 @@ public interface ISystemClient {
      */
     @GetMapping("/space-subtree-ids")
     R<List<Long>> listSpaceSubtreeIds(@RequestParam("spaceId") Long spaceId);
+
+    /**
+     * 按空间（**含全部后代**）取挂在其上的业务对象 ID。
+     *
+     * <p>供业务侧「空间视角看设备」用：设备挂在末级房间，用户在空间页点「A栋」
+     * 要看到其下所有设备，故必须含子树。</p>
+     *
+     * @param spaceId    根空间 ID
+     * @param targetType 关联对象类型（可空：不限定类型）
+     * @return 业务对象 ID 列表（去重）
+     */
+    @GetMapping("/space-target-ids-by-space")
+    R<List<Long>> listSpaceTargetIdsBySpace(@RequestParam("spaceId") Long spaceId,
+        @RequestParam(value = "targetType", required = false) String targetType);
+
+    /**
+     * 按空间（含后代）统计各类型业务对象数量（供空间列表「设备数」列）。
+     *
+     * @param spaceIds 根空间 ID 列表
+     * @return 空间 ID → (对象类型 → 数量)
+     */
+    @PostMapping("/space-relation-counts")
+    R<Map<Long, Map<String, Long>>> countSpaceRelationsBySpaceTrees(
+        @RequestBody List<Long> spaceIds);
 
     /**
      * 把一批业务对象绑定到指定空间（幂等：已存在的关联会被更新而不是重复插入）。

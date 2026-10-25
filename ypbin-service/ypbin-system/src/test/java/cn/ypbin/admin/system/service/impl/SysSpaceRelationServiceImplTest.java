@@ -18,6 +18,8 @@ package cn.ypbin.admin.system.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -31,6 +33,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.constant.SpaceConstants;
+import cn.ypbin.starter.security.core.LoginUser;
+import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.admin.system.entity.SysDictItem;
 import cn.ypbin.admin.system.entity.SysSpace;
 import cn.ypbin.admin.system.entity.SysSpaceRelation;
@@ -47,6 +51,7 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.executor.BatchResult;
 import org.junit.jupiter.api.BeforeAll;
@@ -72,6 +77,8 @@ import org.springframework.test.util.ReflectionTestUtils;
  */
 class SysSpaceRelationServiceImplTest {
 
+    private static final Long TENANT_ID = 1L;
+
     private static final Long SPACE_ID = 10L;
 
     private static final Long OTHER_SPACE_ID = 20L;
@@ -91,6 +98,28 @@ class SysSpaceRelationServiceImplTest {
             SysSpaceRelation.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, "space-relation"),
             SysSpace.class);
+    }
+
+    /**
+     * 在「已登录 + 固定租户」上下文里执行。
+     *
+     * <p>子树查询与 count 走的是 {@code UserContext.getTenantId()}（读网关身份头），
+     * 没有上下文会抛「无法确定当前租户」——这正是生产里无身份头时的 fail-closed 行为，
+     * 故测试必须显式提供上下文，不能把租户做成可空参数来「绕过」。</p>
+     *
+     * @param action 待执行动作
+     * @return 动作返回值
+     */
+    private <T> T withTenant(Supplier<T> action) {
+        LoginUser loginUser = new LoginUser();
+        loginUser.setId(1L);
+        loginUser.setTenantId(TENANT_ID);
+        IdentityContext.setLoginUser(loginUser);
+        try {
+            return action.get();
+        } finally {
+            IdentityContext.clear();
+        }
     }
 
     @BeforeEach
@@ -447,6 +476,67 @@ class SysSpaceRelationServiceImplTest {
         assertThatThrownBy(() -> service.listByTargets("spaceship", List.of(1L)))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("关联对象类型不合法");
+    }
+
+
+    // ---------- 空间视角 / 数量统计（IoT 设备资产管理依赖） ----------
+
+    @Test
+    @DisplayName("★ 按空间取对象 ID：含子树（设备挂末级房间，选 A栋 要能看到）")
+    void shouldIncludeSubtreeWhenListingTargetIdsBySpace() {
+        when(dictItemMapper.selectByDictCode("space_target_type")).thenReturn(List.of(dictItem("device")));
+        when(spaceMapper.selectSubtreeIds(eq(2L), any(), anyInt()))
+            .thenReturn(List.of(2L, 3L, 4L)); // A栋 + 1F + 101室
+        when(relationMapper.selectList(any())).thenReturn(
+            List.of(relation(1L, 2L, 100L), relation(2L, 3L, 100L), relation(3L, 4L, 200L)));
+
+        List<Long> ids = withTenant(() -> service.listTargetIdsBySpaceTree(2L, "device"));
+
+        // 100 同时挂在 A栋 与 1F（多对多允许），去重后只出现 1 次
+        assertThat(ids).containsExactlyInAnyOrder(100L, 200L);
+        verify(spaceMapper).selectSubtreeIds(eq(2L), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("按空间取对象 ID：空间不存在/子集为空时返回空列表，不查关联表")
+    void shouldNotQueryRelationsWhenSubtreeEmpty() {
+        when(dictItemMapper.selectByDictCode("space_target_type")).thenReturn(List.of(dictItem("device")));
+        when(spaceMapper.selectSubtreeIds(eq(99L), any(), anyInt())).thenReturn(List.of());
+
+        assertThat(withTenant(() -> service.listTargetIdsBySpaceTree(99L, "device"))).isEmpty();
+        verify(relationMapper, never()).selectList(any());
+    }
+
+    @Test
+    @DisplayName("★ 数量统计：同一设备挂多层空间时只算 1 台（去重）")
+    void shouldDedupWhenCountingBySpaceTree() {
+        when(spaceMapper.selectSubtreeIds(eq(2L), any(), anyInt())).thenReturn(List.of(2L, 3L));
+        when(relationMapper.selectList(any())).thenReturn(
+            List.of(relation(1L, 2L, 100L), relation(2L, 3L, 100L), relation(3L, 3L, 200L)));
+
+        Map<Long, Map<String, Long>> counts = withTenant(() -> service.countBySpaceTrees(List.of(2L)));
+
+        // 关联 3 条，但只有 2 台不同设备
+        assertThat(counts.get(2L)).containsEntry("dept", 2L);
+    }
+
+    @Test
+    @DisplayName("数量统计：空集合返回空 Map，不查库")
+    void shouldNotQueryWhenCountSpaceIdsEmpty() {
+        assertThat(service.countBySpaceTrees(List.of())).isEmpty();
+        verify(relationMapper, never()).selectList(any());
+    }
+
+    @Test
+    @DisplayName("数量统计：超过批量上限时拒绝（防一次请求打爆数据库）")
+    void shouldRejectTooManySpaceIdsWhenCounting() {
+        List<Long> tooMany = new ArrayList<>();
+        for (long i = 0; i < SpaceConstants.MAX_BATCH_TARGETS + 1L; i++) {
+            tooMany.add(i + 1);
+        }
+        assertThatThrownBy(() -> service.countBySpaceTrees(tooMany))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("超过上限");
     }
 
     // ---------- 辅助 ----------
