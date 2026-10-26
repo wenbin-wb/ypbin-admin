@@ -80,6 +80,40 @@ public final class SpaceConstants {
     /** 关联备注长度上限 */
     public static final int MAX_RELATION_REMARK_LENGTH = 255;
 
+    // ---------- CSV 导入 / 导出 ----------
+
+    /**
+     * 导入时「父空间编码」列的列名。
+     *
+     * <p><b>为什么用编码而不是父空间 ID</b>：用户手上的 Excel/CSV 是**离线准备**的，
+     * 里面不可能有本系统的自增 ID。编码是用户自己起的、可读且租户内唯一，
+     * 是唯一能在离线表格里稳定表达「这一行挂在哪个上级下面」的字段。</p>
+     *
+     * <p>根节点的父编码留空。</p>
+     */
+    public static final String IMPORT_COLUMN_PARENT_CODE = "parentCode";
+
+    /** 导入单次最大行数（与 {@code CsvLimits} 默认 1 万行一致，按空间场景收窄以控制事务时长）。 */
+    public static final int MAX_IMPORT_ROWS = 5000;
+
+    /** 导入错误明细最多返回前 N 条（避免一次返回上万条把响应撑爆，前端也渲染不动）。 */
+    public static final int MAX_IMPORT_ERRORS = 100;
+
+    /**
+     * 导入模式：仅新增（已存在的编码报错）。
+     *
+     * <p>默认模式。<b>刻意不做「存在就更新」</b>：用户手里的表格往往只是一部分空间，
+     * 静默覆盖会把表格里没写的字段清空（本表多数字段是 {@code updateStrategy=ALWAYS}）。</p>
+     */
+    public static final String IMPORT_MODE_INSERT = "insert";
+
+    /**
+     * 导入模式：存在则更新（按编码匹配）。
+     *
+     * <p>需调用方<b>显式指定</b>——它是有覆盖语义的危险操作。</p>
+     */
+    public static final String IMPORT_MODE_UPSERT = "upsert";
+
     /** 扩展属性 JSON 字节上限（16 KB）：防「把整份配置塞进扩展字段」 */
     public static final int MAX_EXT_JSON_BYTES = 16 * 1024;
 

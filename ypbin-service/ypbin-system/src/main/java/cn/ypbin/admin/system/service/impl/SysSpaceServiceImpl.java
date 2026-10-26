@@ -24,7 +24,13 @@ import cn.ypbin.admin.system.mapper.SysSpaceMapper;
 import cn.ypbin.admin.system.mapper.SysSpaceRelationMapper;
 import cn.ypbin.admin.system.model.query.SpaceQuery;
 import cn.ypbin.admin.system.model.req.SpaceSaveReq;
+import cn.ypbin.starter.tools.csv.CsvDocument;
+import cn.ypbin.starter.tools.csv.CsvLimits;
+import cn.ypbin.starter.tools.csv.CsvRow;
+import cn.ypbin.starter.data.core.EntityStatus;
+import cn.ypbin.starter.tools.csv.CsvUtils;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
+import cn.ypbin.admin.system.model.resp.SpaceImportResultResp;
 import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -34,10 +40,16 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.Locale;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -234,6 +246,368 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         List<Long> ids = baseMapper.selectSubtreeIds(spaceId, currentTenantId(),
             SpaceConstants.MAX_SPACE_DEPTH + SpaceConstants.PARENT_CHAIN_MARGIN);
         return ids == null ? List.of() : ids;
+    }
+
+    // ---------- CSV 导入 / 导出 ----------
+
+    /** 导出列顺序（表头即列名，导入按同一套名字认列）。 */
+    private static final List<String> SPACE_CSV_HEADERS = List.of(
+        "code", "parentCode", "name", "spaceType", "sort", "status",
+        "address", "longitude", "latitude", "floorNo", "roomNo",
+        "area", "capacity", "manager", "phone", "remark");
+
+    @Override
+    public String exportCsv() {
+        List<SysSpace> all = list(new LambdaQueryWrapper<SysSpace>()
+            .orderByAsc(SysSpace::getPid)
+            .orderByAsc(SysSpace::getSort)
+            .orderByAsc(SysSpace::getId));
+        Map<Long, String> codeById = new HashMap<>(all.size());
+        for (SysSpace space : all) {
+            codeById.put(space.getId(), space.getCode());
+        }
+        List<List<String>> rows = new ArrayList<>(all.size());
+        for (SysSpace space : all) {
+            long pid = space.getPid() == null ? SpaceConstants.ROOT_PARENT_ID : space.getPid();
+            // 根节点的 parentCode 留空（而不是写 "0"）：用户看表格时「空 = 顶层」最直观
+            String parentCode = pid == SpaceConstants.ROOT_PARENT_ID ? ""
+                : codeById.getOrDefault(pid, "");
+            rows.add(Arrays.asList(
+                space.getCode(),
+                parentCode,
+                space.getName(),
+                space.getSpaceType(),
+                space.getSort() == null ? "" : String.valueOf(space.getSort()),
+                space.getStatus() == null ? "" : String.valueOf(space.getStatus()),
+                space.getAddress(),
+                space.getLongitude() == null ? "" : space.getLongitude().toPlainString(),
+                space.getLatitude() == null ? "" : space.getLatitude().toPlainString(),
+                space.getFloorNo(),
+                space.getRoomNo(),
+                space.getArea() == null ? "" : space.getArea().toPlainString(),
+                space.getCapacity() == null ? "" : String.valueOf(space.getCapacity()),
+                space.getManager(),
+                space.getPhone(),
+                space.getRemark()));
+        }
+        // CsvUtils 统一做 RFC 4180 转义与公式注入中和（`=cmd` 这类单元格会被加前缀）
+        return CsvUtils.UTF8_BOM + CsvUtils.toCsv(SPACE_CSV_HEADERS, rows);
+    }
+
+    @Override
+    public String importTemplateCsv() {
+        List<List<String>> rows = List.of(Arrays.asList(
+            "HQ", "", "总部园区", "park", "1", "1",
+            "", "", "", "", "", "", "", "", "", "示例行，可删除"));
+        return CsvUtils.UTF8_BOM + CsvUtils.toCsv(SPACE_CSV_HEADERS, rows);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SpaceImportResultResp importCsv(String content, String mode) {
+        SpaceImportResultResp result = new SpaceImportResultResp();
+        if (!StringUtils.hasText(content)) {
+            throw new BusinessException("导入内容为空");
+        }
+        String effectiveMode = StringUtils.hasText(mode)
+            ? mode.trim().toLowerCase(Locale.ROOT) : SpaceConstants.IMPORT_MODE_INSERT;
+        if (!SpaceConstants.IMPORT_MODE_INSERT.equals(effectiveMode)
+            && !SpaceConstants.IMPORT_MODE_UPSERT.equals(effectiveMode)) {
+            throw new BusinessException("不支持的导入模式：" + mode
+                + "（允许 " + SpaceConstants.IMPORT_MODE_INSERT + " / "
+                + SpaceConstants.IMPORT_MODE_UPSERT + "）");
+        }
+
+        CsvDocument doc = CsvUtils.parseText(content,
+            new CsvLimits(CsvLimits.DEFAULT_MAX_BYTES, SpaceConstants.MAX_IMPORT_ROWS + 1,
+                CsvLimits.DEFAULT_MAX_COLUMNS));
+        List<CsvRow> allRows = doc.rows();
+        if (allRows.isEmpty()) {
+            throw new BusinessException("CSV 内容为空（至少需要一行表头）");
+        }
+        // 表头是第一条记录（CsvDocument 不单独暴露 header）
+        List<String> header = allRows.getFirst().cells();
+        Map<String, Integer> colIndex = new HashMap<>();
+        for (int i = 0; i < header.size(); i++) {
+            // 去掉 BOM 与首尾空白：Excel 另存的 CSV 表头常带 BOM 与空格
+            String raw = header.get(i);
+            String name = raw == null ? "" : raw.replace("\uFEFF", "").trim();
+            if (!name.isEmpty()) {
+                colIndex.put(name, i);
+            }
+        }
+        // 必需列缺失属「整张表不可用」，直接说明缺哪列——继续逐行报错只会刷屏
+        for (String required : List.of("code", "name", "spaceType")) {
+            if (!colIndex.containsKey(required)) {
+                throw new BusinessException("CSV 缺少必需列：" + required);
+            }
+        }
+
+        // ---- 第一遍：解析全部行 + 格式校验，建立索引 ----
+        List<ImportRow> parsed = new ArrayList<>();
+        Map<String, ImportRow> byCode = new LinkedHashMap<>();
+        Map<String, Long> existingIdByCode = loadExistingIdByCode();
+        // 跳过表头（第 0 条）；每条 CsvRow 自带物理行号，直接用于报错定位
+        for (int i = 1; i < allRows.size(); i++) {
+            CsvRow csvRow = allRows.get(i);
+            int lineNo = csvRow.lineNumber();
+            List<String> cells = csvRow.cells();
+            String code = cell(cells, colIndex, "code");
+            try {
+                ImportRow row = parseImportRow(cells, colIndex, lineNo);
+                if (byCode.containsKey(row.code)) {
+                    throw new BusinessException(
+                        "编码重复（表格内已出现于第 " + byCode.get(row.code).lineNo + " 行）");
+                }
+                // insert 模式下编码已存在 = 错误；upsert 模式下是更新目标
+                if (SpaceConstants.IMPORT_MODE_INSERT.equals(effectiveMode)
+                    && existingIdByCode.containsKey(row.code)) {
+                    throw new BusinessException(
+                        "编码已存在（如需覆盖请改用 upsert 模式）");
+                }
+                byCode.put(row.code, row);
+                parsed.add(row);
+            } catch (BusinessException e) {
+                result.addError(lineNo, code, e.getMessage(), SpaceConstants.MAX_IMPORT_ERRORS);
+            }
+        }
+
+        // ---- 第二遍：按父子依赖逐层插入 ----
+        // 每轮处理「父已就绪」的行；一轮没有任何进展说明存在环或父编码不存在，
+        // 剩下的行全部报错并写明原因（否则会静默丢失）。
+        Map<String, Long> idByCode = new HashMap<>(existingIdByCode);
+        Set<ImportRow> pending = new LinkedHashSet<>(parsed);
+        while (!pending.isEmpty()) {
+            List<ImportRow> ready = new ArrayList<>();
+            for (ImportRow row : pending) {
+                if (!StringUtils.hasText(row.parentCode)) {
+                    ready.add(row);         // 根节点
+                } else if (idByCode.containsKey(row.parentCode)) {
+                    ready.add(row);         // 父已就绪
+                }
+            }
+            if (ready.isEmpty()) {
+                // 剩余行的父编码全部找不到 ⇒ 环或父缺失。逐行给出可行动的原因。
+                for (ImportRow row : pending) {
+                    String reason = byCode.containsKey(row.parentCode)
+                        ? "父子关系成环（parentCode=" + row.parentCode + " 间接指向自己）"
+                        : "父空间编码不存在：parentCode=" + row.parentCode;
+                    result.addError(row.lineNo, row.code, reason,
+                        SpaceConstants.MAX_IMPORT_ERRORS);
+                }
+                break;
+            }
+            for (ImportRow row : ready) {
+                try {
+                    if (idByCode.containsKey(row.code)) {
+                        applyUpsert(row, idByCode.get(row.code));
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        Long newId = createSpace(row.toSaveReq(idByCode.get(row.parentCode)));
+                        idByCode.put(row.code, newId);
+                        result.setInserted(result.getInserted() + 1);
+                    }
+                    pending.remove(row);
+                } catch (BusinessException e) {
+                    result.addError(row.lineNo, row.code, e.getMessage(),
+                        SpaceConstants.MAX_IMPORT_ERRORS);
+                    pending.remove(row);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * upsert 模式：按编码更新已存在的空间。
+     *
+     * <p>只更新表格里**声明了列**的字段？——不。当前实现按整行更新（与 `updateSpace` 一致），
+     * 因为 CSV 一行就是一份完整的空间定义；若只更新部分列，用户会误以为「表格里的空值
+     * 表示保持不变」，而实际上空值会清空字段。这个语义必须在模板说明里讲清。</p>
+     *
+     * @param row 导入行
+     * @param id  已存在的空间 ID
+     */
+    private void applyUpsert(ImportRow row, Long id) {
+        updateSpace(id, row.toSaveReq(findParentIdForUpsert(row)));
+    }
+
+    /**
+     * upsert 时解析父空间 ID（父编码 → ID）。
+     *
+     * @param row 导入行
+     * @return 父空间 ID（根节点为 ROOT_PARENT_ID）
+     */
+    private Long findParentIdForUpsert(ImportRow row) {
+        if (!StringUtils.hasText(row.parentCode)) {
+            return SpaceConstants.ROOT_PARENT_ID;
+        }
+        SysSpace parent = getOne(new LambdaQueryWrapper<SysSpace>()
+            .eq(SysSpace::getCode, row.parentCode)
+            .last("LIMIT 1"));
+        return parent == null ? SpaceConstants.ROOT_PARENT_ID : parent.getId();
+    }
+
+    /**
+     * 载入「已存在编码 → ID」（一次查询，不逐行查）。
+     *
+     * @return 编码 → 空间 ID
+     */
+    private Map<String, Long> loadExistingIdByCode() {
+        List<SysSpace> all = list(new LambdaQueryWrapper<SysSpace>()
+            .select(SysSpace::getId, SysSpace::getCode));
+        Map<String, Long> map = new HashMap<>(all.size());
+        for (SysSpace space : all) {
+            if (space.getCode() != null) {
+                map.put(space.getCode(), space.getId());
+            }
+        }
+        return map;
+    }
+
+    /**
+     * 解析并校验一行导入数据。
+     *
+     * @param cells    该行单元格
+     * @param colIndex 列名 → 列下标
+     * @param lineNo   物理行号（用于报错定位）
+     * @return 导入行
+     * @throws BusinessException 该行格式或取值不合法
+     */
+    private ImportRow parseImportRow(List<String> cells, Map<String, Integer> colIndex, int lineNo) {
+        ImportRow row = new ImportRow();
+        row.lineNo = lineNo;
+        row.code = requireCell(cells, colIndex, "code", SpaceConstants.MAX_CODE_LENGTH);
+        row.name = requireCell(cells, colIndex, "name", SpaceConstants.MAX_NAME_LENGTH);
+        row.spaceType = requireCell(cells, colIndex, "spaceType",
+            SpaceConstants.MAX_SPACE_TYPE_LENGTH);
+        // 类型必须是字典已登记的项值（与 createSpace 同一判据，不另立一套）
+        requireSpaceType(row.spaceType);
+        row.parentCode = cell(cells, colIndex, "parentCode");
+        if (StringUtils.hasText(row.parentCode) && row.parentCode.equals(row.code)) {
+            throw new BusinessException("parentCode 不能等于自身 code");
+        }
+        row.sort = parseIntCell(cells, colIndex, "sort");
+        row.status = parseIntCell(cells, colIndex, "status");
+        row.address = limitCell(cells, colIndex, "address", SpaceConstants.MAX_ADDRESS_LENGTH);
+        row.floorNo = limitCell(cells, colIndex, "floorNo", SpaceConstants.MAX_FLOOR_NO_LENGTH);
+        row.roomNo = limitCell(cells, colIndex, "roomNo", SpaceConstants.MAX_ROOM_NO_LENGTH);
+        row.manager = limitCell(cells, colIndex, "manager", SpaceConstants.MAX_MANAGER_LENGTH);
+        row.phone = limitCell(cells, colIndex, "phone", SpaceConstants.MAX_PHONE_LENGTH);
+        row.remark = limitCell(cells, colIndex, "remark", SpaceConstants.MAX_REMARK_LENGTH);
+        row.longitude = parseDecimalCell(cells, colIndex, "longitude");
+        row.latitude = parseDecimalCell(cells, colIndex, "latitude");
+        row.area = parseDecimalCell(cells, colIndex, "area");
+        row.capacity = parseIntCell(cells, colIndex, "capacity");
+        return row;
+    }
+
+    private String cell(List<String> cells, Map<String, Integer> colIndex, String name) {
+        Integer idx = colIndex.get(name);
+        if (idx == null || idx >= cells.size()) {
+            return null;
+        }
+        String value = cells.get(idx);
+        return value == null ? null : value.trim();
+    }
+
+    private String requireCell(List<String> cells, Map<String, Integer> colIndex, String name,
+        int maxLength) {
+        String value = cell(cells, colIndex, name);
+        if (!StringUtils.hasText(value)) {
+            throw new BusinessException("缺少必填列值：" + name);
+        }
+        if (value.length() > maxLength) {
+            throw new BusinessException(name + " 超过最大长度 " + maxLength);
+        }
+        return value;
+    }
+
+    private String limitCell(List<String> cells, Map<String, Integer> colIndex, String name,
+        int maxLength) {
+        String value = cell(cells, colIndex, name);
+        if (value != null && value.length() > maxLength) {
+            throw new BusinessException(name + " 超过最大长度 " + maxLength);
+        }
+        return StringUtils.hasText(value) ? value : null;
+    }
+
+    private Integer parseIntCell(List<String> cells, Map<String, Integer> colIndex, String name) {
+        String value = cell(cells, colIndex, name);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException e) {
+            throw new BusinessException(name + " 不是合法整数：" + value);
+        }
+    }
+
+    private BigDecimal parseDecimalCell(List<String> cells, Map<String, Integer> colIndex,
+        String name) {
+        String value = cell(cells, colIndex, name);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(value);
+        } catch (NumberFormatException e) {
+            throw new BusinessException(name + " 不是合法数字：" + value);
+        }
+    }
+
+    /**
+     * 导入时的一行（解析后的中间形态）。
+     *
+     * <p>用可变字段而非 record：解析阶段逐列赋值，且 {@code lineNo} 在构造后才可用。</p>
+     */
+    private static final class ImportRow {
+        private int lineNo;
+        private String code;
+        private String parentCode;
+        private String name;
+        private String spaceType;
+        private Integer sort;
+        private Integer status;
+        private String address;
+        private BigDecimal longitude;
+        private BigDecimal latitude;
+        private String floorNo;
+        private String roomNo;
+        private BigDecimal area;
+        private Integer capacity;
+        private String manager;
+        private String phone;
+        private String remark;
+
+        /**
+         * 转成创建/更新请求。
+         *
+         * @param parentId 父空间 ID（根节点传 ROOT_PARENT_ID）
+         * @return 保存请求
+         */
+        private SpaceSaveReq toSaveReq(Long parentId) {
+            SpaceSaveReq req = new SpaceSaveReq();
+            req.setPid(parentId == null ? SpaceConstants.ROOT_PARENT_ID : parentId);
+            req.setName(name);
+            req.setCode(code);
+            req.setSpaceType(spaceType);
+            req.setSort(sort == null ? 0 : sort);
+            // 用 getCode() 而非裸写 1：本仓禁止裸状态值（见 EntityStatus 类注释）
+            req.setStatus(status == null ? EntityStatus.ENABLED.getCode() : status);
+            req.setAddress(address);
+            req.setLongitude(longitude);
+            req.setLatitude(latitude);
+            req.setFloorNo(floorNo);
+            req.setRoomNo(roomNo);
+            req.setArea(area);
+            req.setCapacity(capacity);
+            req.setManager(manager);
+            req.setPhone(phone);
+            req.setRemark(remark);
+            return req;
+        }
     }
 
     // ---------- 校验 ----------

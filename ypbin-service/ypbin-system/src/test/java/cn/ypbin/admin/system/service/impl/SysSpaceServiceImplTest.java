@@ -35,6 +35,8 @@ import cn.ypbin.admin.system.mapper.SysDictItemMapper;
 import cn.ypbin.admin.system.mapper.SysSpaceMapper;
 import cn.ypbin.admin.system.mapper.SysSpaceRelationMapper;
 import cn.ypbin.admin.system.model.req.SpaceSaveReq;
+import cn.ypbin.admin.system.model.resp.SpaceImportResultResp;
+import cn.ypbin.starter.tools.csv.CsvUtils;
 import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginUser;
@@ -487,6 +489,173 @@ class SysSpaceServiceImplTest {
         assertThat(withTenant(() -> service.listSubtreeIds(1L))).isEmpty();
     }
 
+
+    // ---------- CSV 导出 / 模板 ----------
+
+    @Test
+    @DisplayName("★ 导出：父空间写 parentCode（编码）而不是 ID，根节点留空")
+    void shouldExportParentCodeInsteadOfId() {
+        SysSpace root = space(1L, "HQ", "总部园区");
+        root.setPid(SpaceConstants.ROOT_PARENT_ID);
+        SysSpace child = space(2L, "HQ-A", "A栋");
+        child.setPid(1L);
+        when(spaceMapper.selectList(any())).thenReturn(List.of(root, child));
+
+        String csv = withTenant(() -> service.exportCsv());
+
+        // 根节点 parentCode 为空；子节点指向父编码
+        assertThat(csv).contains("HQ,,总部园区");
+        assertThat(csv).contains("HQ-A,HQ,A栋");
+        // 不应把内部 ID 写进 parentCode 列
+        assertThat(csv).doesNotContain("HQ-A,1,A栋");
+    }
+
+    @Test
+    @DisplayName("导出含 UTF-8 BOM（Excel 直接打开不乱码）")
+    void shouldPrefixBomOnExport() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        String csv = withTenant(() -> service.exportCsv());
+        assertThat(csv).startsWith(CsvUtils.UTF8_BOM);
+    }
+
+    @Test
+    @DisplayName("模板：含表头与示例行，表头与导出列一致（可直接改完再导入）")
+    void shouldProvideTemplateWithSameHeaders() {
+        String template = withTenant(() -> service.importTemplateCsv());
+        assertThat(template).startsWith(CsvUtils.UTF8_BOM);
+        // 必需列都在
+        assertThat(template).contains("code").contains("parentCode")
+            .contains("name").contains("spaceType");
+    }
+
+    // ---------- CSV 导入 ----------
+
+    @Test
+    @DisplayName("★ 导入：缺必需列时整表拒绝并指明缺哪列（不逐行刷屏）")
+    void shouldRejectWhenRequiredColumnMissing() {
+        String csv = "code,name\nA,栋A\n";
+        assertThatThrownBy(() -> withTenant(() -> service.importCsv(csv, null)))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("spaceType");
+    }
+
+    @Test
+    @DisplayName("导入：空内容拒绝")
+    void shouldRejectEmptyImport() {
+        assertThatThrownBy(() -> withTenant(() -> service.importCsv("", null)))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("为空");
+    }
+
+    @Test
+    @DisplayName("导入：非法模式拒绝（防拼错静默按 insert 处理）")
+    void shouldRejectUnknownImportMode() {
+        String csv = "code,parentCode,name,spaceType\nA,,栋A,park\n";
+        assertThatThrownBy(() -> withTenant(() -> service.importCsv(csv, "upsertt")))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("不支持的导入模式");
+    }
+
+    @Test
+    @DisplayName("★ 导入：父编码不存在时逐行报错（不静默挂成顶级）")
+    void shouldReportMissingParentCode() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        String csv = "code,parentCode,name,spaceType\nA,NOT-EXIST,栋A,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getInserted()).isZero();
+        assertThat(result.getFailed()).isEqualTo(1);
+        assertThat(result.getErrors()).hasSize(1);
+        assertThat(result.getErrors().getFirst().getMessage()).contains("父空间编码不存在");
+        // 行号是 CSV 物理行号：表头第 1 行，数据第 2 行
+        assertThat(result.getErrors().getFirst().getLineNo()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("★ 导入：父子关系成环时报错（不是无限循环）")
+    void shouldDetectCycle() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        String csv = "code,parentCode,name,spaceType\nA,B,栋A,park\nB,A,栋B,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getInserted()).isZero();
+        assertThat(result.getFailed()).isEqualTo(2);
+        assertThat(result.getErrors()).allSatisfy(err ->
+            assertThat(err.getMessage()).contains("成环"));
+    }
+
+    @Test
+    @DisplayName("★ 导入：表格内编码重复时报错并指出首次出现的行号")
+    void shouldRejectDuplicateCodeInFile() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        when(spaceMapper.insert(any(SysSpace.class))).thenReturn(1);
+        String csv = "code,parentCode,name,spaceType\nA,,栋A,park\nA,,栋A2,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getFailed()).isEqualTo(1);
+        assertThat(result.getErrors().getFirst().getMessage())
+            .contains("编码重复").contains("第 2 行");
+    }
+
+    @Test
+    @DisplayName("导入：非法数字列逐行报错（不整体失败）")
+    void shouldReportInvalidNumberPerRow() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        String csv = "code,parentCode,name,spaceType,sort\nA,,栋A,park,abc\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getFailed()).isEqualTo(1);
+        assertThat(result.getErrors().getFirst().getMessage()).contains("不是合法整数");
+    }
+
+    @Test
+    @DisplayName("导入：parentCode 等于自身 code 时拒绝")
+    void shouldRejectSelfParent() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        String csv = "code,parentCode,name,spaceType\nA,A,栋A,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getFailed()).isEqualTo(1);
+        assertThat(result.getErrors().getFirst().getMessage()).contains("不能等于自身");
+    }
+
+    @Test
+    @DisplayName("导入：insert 模式下编码已存在时报错并提示改用 upsert")
+    void shouldRejectExistingCodeInInsertMode() {
+        when(spaceMapper.insert(any(SysSpace.class))).thenReturn(1);
+        SysSpace existing = space(9L, "A", "已有栋A");
+        when(spaceMapper.selectList(any())).thenReturn(List.of(existing));
+        String csv = "code,parentCode,name,spaceType\nA,,栋A,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getFailed()).isEqualTo(1);
+        assertThat(result.getErrors().getFirst().getMessage())
+            .contains("编码已存在").contains("upsert");
+    }
+
+    @Test
+    @DisplayName("导入：错误明细超过上限时截断并置 errorTruncated（不静默丢弃）")
+    void shouldTruncateErrorDetails() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        StringBuilder sb = new StringBuilder("code,parentCode,name,spaceType\n");
+        for (int i = 0; i < SpaceConstants.MAX_IMPORT_ERRORS + 5; i++) {
+            sb.append("C").append(i).append(",MISSING,栋").append(i).append(",park\n");
+        }
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(sb.toString(), null));
+
+        assertThat(result.getFailed()).isEqualTo(SpaceConstants.MAX_IMPORT_ERRORS + 5);
+        // 明细被截断，但 failed 是全量计数
+        assertThat(result.getErrors()).hasSize(SpaceConstants.MAX_IMPORT_ERRORS);
+        assertThat(result.isErrorTruncated()).isTrue();
+    }
+
     // ---------- 辅助 ----------
 
     private SpaceSaveReq req(Long pid) {
@@ -539,6 +708,25 @@ class SysSpaceServiceImplTest {
         space.setId(id);
         space.setPid(pid);
         space.setName("节点" + id);
+        space.setLevel(1);
+        space.setStatus(1);
+        return space;
+    }
+
+    /**
+     * 构造带编码的空间（导出用例需要 code，而 parentCode 由 code 映射得出）。
+     *
+     * @param id   空间 ID
+     * @param code 空间编码
+     * @param name 名称
+     * @return 实体
+     */
+    private static SysSpace space(Long id, String code, String name) {
+        SysSpace space = new SysSpace();
+        space.setId(id);
+        space.setCode(code);
+        space.setName(name);
+        space.setSpaceType("park");
         space.setLevel(1);
         space.setStatus(1);
         return space;

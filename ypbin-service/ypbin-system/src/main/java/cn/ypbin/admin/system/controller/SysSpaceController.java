@@ -15,6 +15,14 @@
  */
 package cn.ypbin.admin.system.controller;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.model.query.SpaceQuery;
 import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
@@ -23,10 +31,13 @@ import cn.ypbin.admin.system.model.req.SpaceSaveReq;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
+import cn.ypbin.admin.system.model.resp.SpaceImportResultResp;
 import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.tools.csv.CsvUtils;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
@@ -43,6 +54,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 空间管理接口。
@@ -239,6 +251,82 @@ public class SysSpaceController {
     public R<List<SpaceRelationResp>> relationsBySpace(@PathVariable Long id,
         @RequestParam(required = false) String targetType) {
         return R.ok(relationService.listBySpace(id, targetType));
+    }
+
+    /**
+     * 导出全部空间为 CSV（含父空间编码，可直接再导入）。
+     *
+     * <p>导出「父空间编码」而不是父 ID：导出的表格要能被人看懂、被人编辑后再导回来，
+     * ID 是系统内部值，用户无法在离线表格里推算。</p>
+     *
+     * @return CSV 文件
+     */
+    @GetMapping("/export")
+    @SaCheckPermission("system:space:list")
+    public ResponseEntity<byte[]> export() {
+        return csvResponse("space-" + LocalDate.now() + ".csv", spaceService.exportCsv());
+    }
+
+    /**
+     * 下载导入模板（表头 + 一行示例）。
+     *
+     * @return CSV 模板
+     */
+    @GetMapping("/import-template")
+    @SaCheckPermission("system:space:list")
+    public ResponseEntity<byte[]> importTemplate() {
+        return csvResponse("space-import-template.csv", spaceService.importTemplateCsv());
+    }
+
+    /**
+     * 从 CSV 导入空间。
+     *
+     * <p><b>逐行报错、不整体回滚</b>：一行出错不影响其它行——用户导入的是几百行，
+     * 因一行格式错就全废，等于让他改一处再试一次、反复循环。</p>
+     *
+     * <p><b>mode 默认 insert</b>（已存在编码报错）；`upsert` 会按编码覆盖已有空间，
+     * 属危险操作，必须调用方显式指定。</p>
+     *
+     * @param file CSV 文件
+     * @param mode insert / upsert
+     * @return 导入结果（含逐行错误明细）
+     */
+    @PostMapping("/import")
+    @SaCheckPermission("system:space:add")
+    @Idempotent
+    @Log("导入空间")
+    public R<SpaceImportResultResp> importCsv(@RequestParam("file") MultipartFile file,
+        @RequestParam(value = "mode", required = false) String mode) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("导入文件为空");
+        }
+        String content;
+        try {
+            content = new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            // 读上传流失败是真故障（不是用户输入问题），必须抛出而不是当成「格式错」
+            throw new BusinessException("读取导入文件失败：" + e.getMessage());
+        }
+        return R.ok(spaceService.importCsv(content, mode));
+    }
+
+    /**
+     * 生成 CSV 响应（统一 MIME、编码与文件名转义）。
+     *
+     * @param fileName 文件名
+     * @param content  CSV 文本
+     * @return HTTP 响应
+     */
+    private static ResponseEntity<byte[]> csvResponse(String fileName, String content) {
+        byte[] body = content.getBytes(StandardCharsets.UTF_8);
+        // 文件名含中文/空格时按 RFC 5987 编码，否则部分浏览器会丢扩展名
+        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8)
+            .replace("+", "%20");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(CsvUtils.CSV_CONTENT_TYPE));
+        headers.set(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);
+        return new ResponseEntity<>(body, headers, HttpStatus.OK);
     }
 
     /**

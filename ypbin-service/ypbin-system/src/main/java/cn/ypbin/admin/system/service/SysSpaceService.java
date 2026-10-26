@@ -18,6 +18,7 @@ package cn.ypbin.admin.system.service;
 import cn.ypbin.admin.system.entity.SysSpace;
 import cn.ypbin.admin.system.model.query.SpaceQuery;
 import cn.ypbin.admin.system.model.req.SpaceSaveReq;
+import cn.ypbin.admin.system.model.resp.SpaceImportResultResp;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
 import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -110,4 +111,40 @@ public interface SysSpaceService extends BaseService<SysSpace> {
      * @return 该空间及全部后代 ID（含自身；不存在时为空列表）
      */
     List<Long> listSubtreeIds(Long spaceId);
+
+    /**
+     * 导出全部空间为 CSV（含父空间编码，可直接用于再次导入）。
+     *
+     * <p><b>为什么导出里写「父空间编码」而不是父 ID</b>：导出的表格要能被人看懂、被人
+     * 编辑后再导回来。ID 是系统内部值，用户无法在离线表格里推算。</p>
+     *
+     * @return CSV 文本（UTF-8，含 BOM 便于 Excel 正确识别）
+     */
+    String exportCsv();
+
+    /**
+     * 从 CSV 导入空间。
+     *
+     * <p><b>两遍扫描</b>：先解析全部行并做格式校验、建立「编码 → 待插入行」索引；
+     * 再按父子依赖顺序逐层插入（子节点的父节点必须先存在）。
+     * 单遍扫描无法处理「子行排在父行之前」的合法表格。</p>
+     *
+     * <p><b>逐行报错、不整体回滚</b>：一行出错不影响其它行——用户导入的是几百行，
+     * 因一行格式错就全废，等于让他改一处再试一次、反复循环。</p>
+     *
+     * @param content CSV 文本（可带 BOM）
+     * @param mode    {@code insert}（默认，已存在编码报错）或 {@code upsert}（存在则更新）
+     * @return 导入结果（含逐行错误明细）
+     */
+    SpaceImportResultResp importCsv(String content, String mode);
+
+    /**
+     * 生成导入模板 CSV（含表头与一行示例）。
+     *
+     * <p>模板让用户不必猜列名与格式——列名拼错会被当「未知列」忽略，
+     * 用户会以为填了却没生效。</p>
+     *
+     * @return CSV 文本
+     */
+    String importTemplateCsv();
 }
