@@ -29,11 +29,14 @@ import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -114,7 +117,8 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
                 relation.setTargetId(targetId);
                 relation.setIsPrimary(isPrimary);
                 relation.setRemark(req.getRemark());
-                relation.setStatus(1);
+                // 用枚举码而非裸写 1：本仓禁止裸状态值（见 EntityStatus 类注释）
+                relation.setStatus(EntityStatus.ENABLED.getCode());
                 toInsert.add(relation);
                 continue;
             }
@@ -178,22 +182,7 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
         }
         List<SpaceRelationResp> result = new ArrayList<>(relations.size());
         for (SysSpaceRelation relation : relations) {
-            SysSpace space = spaceById.get(relation.getSpaceId());
-            SpaceRelationResp resp = new SpaceRelationResp();
-            resp.setId(relation.getId());
-            resp.setSpaceId(relation.getSpaceId());
-            resp.setTargetType(relation.getTargetType());
-            resp.setTargetId(relation.getTargetId());
-            resp.setIsPrimary(relation.getIsPrimary());
-            resp.setRemark(relation.getRemark());
-            resp.setStatus(relation.getStatus());
-            resp.setCreateTime(relation.getCreateTime());
-            if (space != null) {
-                resp.setSpaceName(space.getName());
-                resp.setSpaceCode(space.getCode());
-                resp.setSpaceType(space.getSpaceType());
-                }
-            result.add(resp);
+            result.add(toRelationResp(relation, spaceById.get(relation.getSpaceId())));
         }
         // 完整路径要沿父链逐条上溯：改为一次性批量取全量空间后在内存拼（避免 N 次 CTE）
         fillSpacePaths(result);
@@ -250,7 +239,8 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
                 relation.setTargetType(targetType);
                 relation.setTargetId(targetId);
                 relation.setIsPrimary(SpaceConstants.PRIMARY_NO);
-                relation.setStatus(1);
+                // 用枚举码而非裸写 1：本仓禁止裸状态值（见 EntityStatus 类注释）
+                relation.setStatus(EntityStatus.ENABLED.getCode());
                 toInsert.add(relation);
             }
         }
@@ -345,21 +335,7 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
         SysSpace space = spaceMapper.selectById(spaceId);
         List<SpaceRelationResp> result = new ArrayList<>(relations.size());
         for (SysSpaceRelation relation : relations) {
-            SpaceRelationResp resp = new SpaceRelationResp();
-            resp.setId(relation.getId());
-            resp.setSpaceId(relation.getSpaceId());
-            resp.setTargetType(relation.getTargetType());
-            resp.setTargetId(relation.getTargetId());
-            resp.setIsPrimary(relation.getIsPrimary());
-            resp.setRemark(relation.getRemark());
-            resp.setStatus(relation.getStatus());
-            resp.setCreateTime(relation.getCreateTime());
-            if (space != null) {
-                resp.setSpaceName(space.getName());
-                resp.setSpaceCode(space.getCode());
-                resp.setSpaceType(space.getSpaceType());
-                }
-            result.add(resp);
+            result.add(toRelationResp(relation, space));
         }
         fillSpacePaths(result);
         return result;
@@ -455,6 +431,19 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
         return ids == null ? List.of() : ids;
     }
 
+    /**
+     * 关联实体 → 响应（含空间侧字段）。
+     *
+     * <p>抽出来是因为 {@code listByTarget} / {@code listBySpace} / {@code listByTargets}
+     * 三处都要做同一件事；复制三份会在加字段时漏改其中一处（此前已经发生过）。</p>
+     *
+     * <p>空间类型的展示文本由 {@code SpaceRelationResp.spaceType} 上的 {@code @DictText}
+     * 在序列化时输出 {@code spaceTypeText}，<b>不在这里手工翻译</b>（否则与 starter 形成两份实现）。</p>
+     *
+     * @param relation 关联实体
+     * @param space    空间实体（可为 null：空间被删但关联残留）
+     * @return 关联响应
+     */
     private SpaceRelationResp toRelationResp(SysSpaceRelation relation, SysSpace space) {
         SpaceRelationResp resp = new SpaceRelationResp();
         resp.setId(relation.getId());
@@ -505,35 +494,105 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
             // 空集合直接返回：空 IN () 是 SQL 语法错，且查库无意义
             return Map.of();
         }
-        // 每个根空间的子树各算一次 CTE。空间数量是「一页表格的行数」（几十），
-        // 不是业务数据量级 —— 但为与 listByTargets 保持同一量级，仍限制上限并说明。
         if (roots.size() > SpaceConstants.MAX_BATCH_TARGETS) {
             throw new BusinessException(
                 "批量统计的空间数超过上限：" + roots.size() + " > " + SpaceConstants.MAX_BATCH_TARGETS);
         }
-        Map<Long, Map<String, Long>> result = new LinkedHashMap<>();
+        // **查询次数恒为 2**（与 listByTargets 同量级）：
+        // ① 一次取全量空间 (id, pid) 在内存算子树；② 一次 IN 查全部子树上的关联。
+        // 不逐个 root 跑递归 CTE —— 那是一页 50 行就 100 次 SQL 的 2N（门禁的
+        // DB_OR_RPC_RECEIVER 只认 *Mapper/*Client 接收者，识别不到 IService 隐式调用）。
+        Map<Long, List<Long>> childrenByPid = loadChildrenIndex();
+        Map<Long, List<Long>> subtreeByRoot = new LinkedHashMap<>();
+        Set<Long> allSpaceIds = new LinkedHashSet<>();
         for (Long rootId : roots) {
-            List<Long> subtree = subtreeIds(rootId);
-            if (subtree.isEmpty()) {
-                result.put(rootId, Map.of());
+            List<Long> subtree = collectSubtree(rootId, childrenByPid);
+            subtreeByRoot.put(rootId, subtree);
+            allSpaceIds.addAll(subtree);
+        }
+        if (allSpaceIds.isEmpty()) {
+            Map<Long, Map<String, Long>> empty = new LinkedHashMap<>();
+            roots.forEach(rootId -> empty.put(rootId, Map.of()));
+            return empty;
+        }
+        List<SysSpaceRelation> relations = list(new LambdaQueryWrapper<SysSpaceRelation>()
+            .select(SysSpaceRelation::getSpaceId, SysSpaceRelation::getTargetType,
+                SysSpaceRelation::getTargetId)
+            .in(SysSpaceRelation::getSpaceId, allSpaceIds));
+        // 空间 ID → 它属于哪些 root（一个空间可能同时是多个 root 的后代）
+        Map<Long, Set<Long>> rootsOfSpace = new HashMap<>();
+        subtreeByRoot.forEach((rootId, subtree) -> subtree.forEach(
+            spaceId -> rootsOfSpace.computeIfAbsent(spaceId, key -> new LinkedHashSet<>()).add(rootId)));
+        // (root, type) → 去重后的 targetId 集合
+        Map<Long, Map<String, Set<Long>>> agg = new LinkedHashMap<>();
+        for (SysSpaceRelation relation : relations) {
+            Set<Long> owners = rootsOfSpace.get(relation.getSpaceId());
+            if (owners == null) {
                 continue;
             }
-            List<SysSpaceRelation> relations = list(new LambdaQueryWrapper<SysSpaceRelation>()
-                .select(SysSpaceRelation::getTargetType, SysSpaceRelation::getTargetId)
-                .in(SysSpaceRelation::getSpaceId, subtree));
-            if (relations.isEmpty()) {
-                result.put(rootId, Map.of());
-                continue;
-            }
-            // 按类型分组去重计数：同一设备同时挂房间与楼层时只算 1 台
-            Map<String, Set<Long>> byType = new LinkedHashMap<>();
-            for (SysSpaceRelation relation : relations) {
-                byType.computeIfAbsent(relation.getTargetType(), key -> new LinkedHashSet<>())
+            for (Long rootId : owners) {
+                agg.computeIfAbsent(rootId, key -> new LinkedHashMap<>())
+                    .computeIfAbsent(relation.getTargetType(), key -> new LinkedHashSet<>())
                     .add(relation.getTargetId());
             }
+        }
+        Map<Long, Map<String, Long>> result = new LinkedHashMap<>();
+        for (Long rootId : roots) {
+            Map<String, Set<Long>> byType = agg.get(rootId);
+            if (byType == null || byType.isEmpty()) {
+                result.put(rootId, Map.of());
+                continue;
+            }
+            // 按类型去重计数：同一设备同时挂房间与楼层时只算 1 台
             Map<String, Long> counts = new LinkedHashMap<>();
             byType.forEach((type, ids) -> counts.put(type, (long) ids.size()));
             result.put(rootId, counts);
+        }
+        return result;
+    }
+
+    /**
+     * 载入「父 ID → 子空间 ID 列表」索引（一次查询，租户条件由插件追加在主表上）。
+     *
+     * @return pid → 子 ID 列表
+     */
+    private Map<Long, List<Long>> loadChildrenIndex() {
+        List<SysSpace> all = spaceMapper.selectList(new LambdaQueryWrapper<SysSpace>()
+            .select(SysSpace::getId, SysSpace::getPid));
+        Map<Long, List<Long>> children = new HashMap<>(all.size());
+        for (SysSpace space : all) {
+            long pid = space.getPid() == null ? SpaceConstants.ROOT_PARENT_ID : space.getPid();
+            children.computeIfAbsent(pid, key -> new ArrayList<>()).add(space.getId());
+        }
+        return children;
+    }
+
+    /**
+     * 在内存里收集某空间的全部后代 ID（含自身）。
+     *
+     * <p>深度受 {@link SpaceConstants#MAX_SPACE_DEPTH} 兜底限制，脏数据成环也不会无限递归。</p>
+     *
+     * @param rootId   根空间 ID
+     * @param children pid → 子 ID 列表 索引
+     * @return 该空间及全部后代 ID（含自身）
+     */
+    private List<Long> collectSubtree(Long rootId, Map<Long, List<Long>> children) {
+        List<Long> result = new ArrayList<>();
+        Set<Long> visited = new LinkedHashSet<>();
+        // 显式栈而非递归：避免脏数据成环时 StackOverflowError
+        Deque<Long> stack = new ArrayDeque<>();
+        stack.push(rootId);
+        int guard = 0;
+        int maxNodes = children.size() + 1;
+        while (!stack.isEmpty() && guard++ <= maxNodes * SpaceConstants.MAX_SPACE_DEPTH) {
+            Long current = stack.pop();
+            if (!visited.add(current)) {
+                continue;
+            }
+            result.add(current);
+            for (Long child : children.getOrDefault(current, List.of())) {
+                stack.push(child);
+            }
         }
         return result;
     }

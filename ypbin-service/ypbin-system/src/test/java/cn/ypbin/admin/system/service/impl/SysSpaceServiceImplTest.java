@@ -660,6 +660,75 @@ class SysSpaceServiceImplTest {
         assertThat(result.isErrorTruncated()).isTrue();
     }
 
+
+    @Test
+    @DisplayName("★ 导入：剥掉导出侧加的公式注入中和前缀（负数能回导）")
+    void shouldStripNeutralizedPrefixForNegativeNumbers() {
+        when(spaceMapper.insert(any(SysSpace.class))).thenReturn(1);
+        when(spaceMapper.selectParentChain(any(), any(), anyInt())).thenReturn(List.of());
+        // 导出侧会把 -1 / -33.8 写成 '-1 / '-33.8（CsvUtils 的公式注入中和）
+        String csv = "code,parentCode,name,spaceType,sort,latitude\n"
+            + "A,,栋A,park,'-1,'-33.8\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        // 若不剥前缀，这里会是「sort 不是合法整数：'-1」而失败
+        assertThat(result.getFailed()).isZero();
+        assertThat(result.getInserted()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("导入：以普通单引号开头的文本不被误剥（只在第二字符命中前缀时剥）")
+    void shouldNotStripOrdinaryLeadingQuote() {
+        when(spaceMapper.insert(any(SysSpace.class))).thenReturn(1);
+        when(spaceMapper.selectParentChain(any(), any(), anyInt())).thenReturn(List.of());
+        String csv = "code,parentCode,name,spaceType,remark\n"
+            + "A,,栋A,park,'quoted note\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getFailed()).isZero();
+    }
+
+
+    @Test
+    @DisplayName("★ 导入：父行因重复被拒时，子行报「父已校验失败」而不是「父编码不存在」")
+    void shouldExplainRejectedParentInsteadOfMissingParent() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        when(spaceMapper.insert(any(SysSpace.class))).thenReturn(1);
+        // 第 2 行 A 正常；第 3 行 A 重复被拒；第 4 行 B 的父是 A（A 有两个候选，其中第 3 行被拒）
+        String csv = "code,parentCode,name,spaceType\n"
+            + "A,,栋A,park\n"
+            + "A,,栋A重复,park\n"
+            + "B,A,栋B,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        // 第 3 行报重复；B 仍能挂到第 2 行的 A 上（A 已成功插入）
+        assertThat(result.getInserted()).isEqualTo(2);
+        assertThat(result.getFailed()).isEqualTo(1);
+        assertThat(result.getErrors().getFirst().getMessage()).contains("编码重复");
+    }
+
+    @Test
+    @DisplayName("★ 导入：父行本身格式错误被拒时，子行报「父已校验失败」并指出行号")
+    void shouldPointToRejectedParentLine() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        when(spaceMapper.insert(any(SysSpace.class))).thenReturn(1);
+        // 第 2 行 A 的 sort 非法（被拒），第 3 行 B 的父指向 A
+        String csv = "code,parentCode,name,spaceType,sort\n"
+            + "A,,栋A,park,abc\n"
+            + "B,A,栋B,park,1\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getFailed()).isEqualTo(2);
+        // 子行的原因必须指向「父在第 2 行已失败」，而不是笼统的「父编码不存在」
+        assertThat(result.getErrors())
+            .anySatisfy(err -> assertThat(err.getMessage())
+                .contains("其父空间「A」在第 2 行已校验失败"));
+    }
+
     // ---------- 辅助 ----------
 
     private SpaceSaveReq req(Long pid) {

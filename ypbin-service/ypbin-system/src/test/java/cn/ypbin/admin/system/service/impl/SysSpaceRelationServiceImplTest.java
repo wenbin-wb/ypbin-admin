@@ -508,16 +508,50 @@ class SysSpaceRelationServiceImplTest {
     }
 
     @Test
+    @DisplayName("★ 数量统计：查询次数恒为 2（1 次空间索引 + 1 次关联 IN），与空间数无关")
+    void shouldQueryTwiceWhenCounting() {
+        // 空间树：1 → 2 → 3
+        when(spaceMapper.selectList(any())).thenReturn(List.of(
+            space(1L, 0L), space(2L, 1L), space(3L, 2L)));
+        when(relationMapper.selectList(any())).thenReturn(List.of());
+
+        withTenant(() -> service.countBySpaceTrees(List.of(1L, 2L, 3L)));
+
+        // 关键：3 个根空间也只查 2 次（不是 3×2=6 次）
+        verify(spaceMapper, times(1)).selectList(any());
+        verify(relationMapper, times(1)).selectList(any());
+    }
+
+    @Test
     @DisplayName("★ 数量统计：同一设备挂多层空间时只算 1 台（去重）")
     void shouldDedupWhenCountingBySpaceTree() {
-        when(spaceMapper.selectSubtreeIds(eq(2L), any(), anyInt())).thenReturn(List.of(2L, 3L));
-        when(relationMapper.selectList(any())).thenReturn(
-            List.of(relation(1L, 2L, 100L), relation(2L, 3L, 100L), relation(3L, 3L, 200L)));
+        when(spaceMapper.selectList(any())).thenReturn(List.of(
+            space(2L, 0L), space(3L, 2L)));
+        // 同一 targetId=100 同时挂在 2 与 3 上
+        when(relationMapper.selectList(any())).thenReturn(List.of(
+            relation(1L, 2L, 100L), relation(2L, 3L, 100L)));
 
-        Map<Long, Map<String, Long>> counts = withTenant(() -> service.countBySpaceTrees(List.of(2L)));
+        Map<Long, Map<String, Long>> counts =
+            withTenant(() -> service.countBySpaceTrees(List.of(2L)));
 
-        // 关联 3 条，但只有 2 台不同设备
-        assertThat(counts.get(2L)).containsEntry("dept", 2L);
+        assertThat(counts.get(2L)).containsEntry("dept", 1L);
+    }
+
+    @Test
+    @DisplayName("数量统计：不含子树的兄弟空间不计入（子树边界正确）")
+    void shouldNotCountSiblingSubtree() {
+        // 1 → 2（子）; 9 是兄弟
+        when(spaceMapper.selectList(any())).thenReturn(List.of(
+            space(1L, 0L), space(2L, 1L), space(9L, 0L)));
+        when(relationMapper.selectList(any())).thenReturn(List.of(
+            relation(1L, 2L, 100L), relation(2L, 9L, 200L)));
+
+        Map<Long, Map<String, Long>> counts =
+            withTenant(() -> service.countBySpaceTrees(List.of(1L)));
+
+        // 只统计挂在 1 及其后代上的对象
+        assertThat(counts.get(1L)).containsEntry("dept", 1L);
+        assertThat(counts.get(1L)).doesNotContainKey("other");
     }
 
     @Test
@@ -557,9 +591,20 @@ class SysSpaceRelationServiceImplTest {
     }
 
     private static SysSpace space(Long id) {
+        return space(id, SpaceConstants.ROOT_PARENT_ID);
+    }
+
+    /**
+     * 构造带父节点的空间（子树统计用例需要真实的 pid 关系）。
+     *
+     * @param id  空间 ID
+     * @param pid 父空间 ID
+     * @return 实体
+     */
+    private static SysSpace space(Long id, Long pid) {
         SysSpace space = new SysSpace();
         space.setId(id);
-        space.setPid(SpaceConstants.ROOT_PARENT_ID);
+        space.setPid(pid);
         space.setName("空间" + id);
         space.setLevel(1);
         space.setStatus(1);

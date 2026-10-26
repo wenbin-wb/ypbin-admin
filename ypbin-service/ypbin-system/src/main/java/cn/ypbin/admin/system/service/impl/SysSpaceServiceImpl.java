@@ -251,6 +251,13 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
 
     // ---------- CSV 导入 / 导出 ----------
 
+    /**
+     * 公式注入中和可能加的前缀字符（与基座 {@code CsvUtils.FORMULA_PREFIXES} 一致）。
+     *
+     * <p>导入时要把这些前缀剥掉，否则导出后的负数无法回导。</p>
+     */
+    private static final String NEUTRALIZED_PREFIXES = "=+-@\t\r";
+
     /** 导出列顺序（表头即列名，导入按同一套名字认列）。 */
     private static final List<String> SPACE_CSV_HEADERS = List.of(
         "code", "parentCode", "name", "spaceType", "sort", "status",
@@ -351,6 +358,9 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         List<ImportRow> parsed = new ArrayList<>();
         Map<String, ImportRow> byCode = new LinkedHashMap<>();
         Map<String, Long> existingIdByCode = loadExistingIdByCode();
+        // 记录「表格里出现过、但因自身错误被丢弃」的编码：
+        // 它的子行会报「父不存在」，若不区分，用户会去补一个其实已存在（只是重复/非法）的父
+        Map<String, Integer> rejectedCodeLine = new LinkedHashMap<>();
         // 跳过表头（第 0 条）；每条 CsvRow 自带物理行号，直接用于报错定位
         for (int i = 1; i < allRows.size(); i++) {
             CsvRow csvRow = allRows.get(i);
@@ -373,6 +383,9 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
                 parsed.add(row);
             } catch (BusinessException e) {
                 result.addError(lineNo, code, e.getMessage(), SpaceConstants.MAX_IMPORT_ERRORS);
+                if (StringUtils.hasText(code)) {
+                    rejectedCodeLine.putIfAbsent(code, lineNo);
+                }
             }
         }
 
@@ -393,9 +406,17 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             if (ready.isEmpty()) {
                 // 剩余行的父编码全部找不到 ⇒ 环或父缺失。逐行给出可行动的原因。
                 for (ImportRow row : pending) {
-                    String reason = byCode.containsKey(row.parentCode)
-                        ? "父子关系成环（parentCode=" + row.parentCode + " 间接指向自己）"
-                        : "父空间编码不存在：parentCode=" + row.parentCode;
+                    String reason;
+                    if (byCode.containsKey(row.parentCode)) {
+                        reason = "父子关系成环（parentCode=" + row.parentCode + " 间接指向自己）";
+                    } else if (rejectedCodeLine.containsKey(row.parentCode)) {
+                        // 父行本身已报错被丢弃：直接指明，避免用户以为是「父编码写错了」去补一个已存在的父
+                        reason = "其父空间「" + row.parentCode + "」在第 "
+                            + rejectedCodeLine.get(row.parentCode)
+                            + " 行已校验失败，本行无法挂载（请先修正那一行）";
+                    } else {
+                        reason = "父空间编码不存在：parentCode=" + row.parentCode;
+                    }
                     result.addError(row.lineNo, row.code, reason,
                         SpaceConstants.MAX_IMPORT_ERRORS);
                 }
@@ -526,13 +547,39 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         return row;
     }
 
+    /**
+     * 取单元格文本（去首尾空白，并把公式注入中和的前缀剥掉）。
+     *
+     * <p><b>为什么要剥前导单引号</b>：导出侧 {@code CsvUtils.escapeCell} 会对首字符命中
+     * {@code = + - @ \t \r} 的单元格加 {@code '} 前缀（公式注入中和）。而负数
+     * （{@code sort=-1}、{@code latitude=-33.8}、{@code longitude=-180}）是**合法业务值**，
+     * 导出后变成 {@code '-1}，若不剥回来，导出的文件就无法再导入
+     * （回导报「sort 不是合法整数：'-1」）——「导出必须能直接再导回去」是自定契约，
+     * 被这一处前缀打破。</p>
+     *
+     * <p>只在「第二个字符命中中和前缀集合」时才剥，避免误伤以引号开头的正常文本。</p>
+     *
+     * @param cells    该行单元格
+     * @param colIndex 列名 → 列下标
+     * @param name     列名
+     * @return 去空白与中和前缀后的值（列不存在时为 null）
+     */
     private String cell(List<String> cells, Map<String, Integer> colIndex, String name) {
         Integer idx = colIndex.get(name);
         if (idx == null || idx >= cells.size()) {
             return null;
         }
         String value = cells.get(idx);
-        return value == null ? null : value.trim();
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        // 剥掉 CsvUtils 为防公式注入加的前缀（如 '-1 → -1）
+        if (trimmed.length() > 1 && trimmed.charAt(0) == '\''
+            && NEUTRALIZED_PREFIXES.indexOf(trimmed.charAt(1)) >= 0) {
+            return trimmed.substring(1);
+        }
+        return trimmed;
     }
 
     private String requireCell(List<String> cells, Map<String, Integer> colIndex, String name,

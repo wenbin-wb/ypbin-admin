@@ -90,7 +90,7 @@ public class SysSpaceController {
      * 懒加载树：只查一层（或按关键词跨层搜索）。
      *
      * <p>与 {@code /space/tree}（全量树）的分工：全量树适合空间数量小的租户，
-     * 一次渲染完整层级；万级空间用本端点按需展开，避免 MB 级响应与前端递归渲染卡顿。</p>
+     * 一次渲染完整层级；万级空间用本端点按需展开，避免 MB 级响应与客户端递归渲染卡顿。</p>
      *
      * @param parentId 父空间 ID（不传=查根层）
      * @param keyword  关键词（非空时跨层级搜索，忽略 parentId）
@@ -295,7 +295,7 @@ public class SysSpaceController {
     @PostMapping("/import")
     @SaCheckPermission("system:space:add")
     @Idempotent
-    @Log("导入空间")
+    @Log(value = "导入空间", module = "空间管理")
     public R<SpaceImportResultResp> importCsv(@RequestParam("file") MultipartFile file,
         @RequestParam(value = "mode", required = false) String mode) {
         if (file == null || file.isEmpty()) {

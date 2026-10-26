@@ -79,8 +79,13 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
     /**
      * 批量统计每个空间的直接子空间数与关联对象数（<b>一次分组查询</b>，不逐空间 count）。
      *
-     * <p>本语句不含 CTE，租户插件可正常注入（两张表都在 {@code ypbin.tenant.ignore-tables} 之外），
-     * 故此处<b>不</b>跳过租户插件。</p>
+     * <p><b>租户条件在两处都显式写出，不依赖插件递归能力</b>：外层由插件追加
+     * {@code s.tenant_id}（本语句无 CTE，插件能识别主表）；两个<b>标量子查询</b>里
+     * 额外手写 {@code c.tenant_id = s.tenant_id} / {@code r.tenant_id = s.tenant_id}。
+     * 理由：插件是否会把条件注入到标量子查询内部，取决于 JSqlParser 对其的解析深度，
+     * 这属于实现细节；一旦它不注入，A 租户会看到 B 租户同 {@code pid} 的子空间数量
+     * （{@code hasChildren} 恒 true ⇒ 树永远有箭头却展开为空），且这属**跨租户数据泄露**，
+     * 不能用「插件应该会处理」来赌。</p>
      *
      * @param spaceIds 空间主键（调用方保证非空）
      * @return 每行 {@code spaceId} / {@code childCount} / {@code relationCount}
@@ -88,9 +93,12 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
     @Select("""
         <script>
         SELECT s.id AS spaceId,
-               (SELECT COUNT(*) FROM sys_space c WHERE c.pid = s.id AND c.is_deleted = 0) AS childCount,
-               (SELECT COUNT(*) FROM sys_space_relation r WHERE r.space_id = s.id AND r.is_deleted = 0)
-                   AS relationCount
+               (SELECT COUNT(*) FROM sys_space c
+                 WHERE c.pid = s.id AND c.is_deleted = 0
+                   AND c.tenant_id = s.tenant_id) AS childCount,
+               (SELECT COUNT(*) FROM sys_space_relation r
+                 WHERE r.space_id = s.id AND r.is_deleted = 0
+                   AND r.tenant_id = s.tenant_id) AS relationCount
         FROM sys_space s
         WHERE s.is_deleted = 0 AND s.id IN
         <foreach collection='spaceIds' item='id' open='(' separator=',' close=')'>#{id}</foreach>
@@ -186,7 +194,9 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
         <script>
         SELECT s.id, s.pid, s.name, s.code,
                s.space_type AS spaceType, s.sort, s.status,
-               (SELECT COUNT(*) FROM sys_space c WHERE c.pid = s.id AND c.is_deleted = 0) > 0
+               (SELECT COUNT(*) FROM sys_space c
+                 WHERE c.pid = s.id AND c.is_deleted = 0
+                   AND c.tenant_id = s.tenant_id) > 0
                    AS hasChildren
         FROM sys_space s
         WHERE s.is_deleted = 0

@@ -50,6 +50,10 @@ import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -436,8 +440,7 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     public R<List<SysSpaceDto>> listSpaces() {
-        return R.ok(spaceService.tree().stream()
-            .flatMap(node -> flatten(node).stream())
+        return R.ok(flattenTree(spaceService.tree()).stream()
             .map(SpaceViewConverter::toDto)
             .toList());
     }
@@ -524,17 +527,40 @@ public class SystemClientImpl implements ISystemClient {
     }
 
     /**
-     * 把空间树拍平成列表（父在前、子在后）。
+     * 把空间树拍平成列表（父在前、子在后，**先序**）。
      *
-     * @param node 树节点
-     * @return 该节点及其全部后代的响应列表
+     * <p><b>为什么用显式栈而不是递归</b>：递归版本每次调用都新建一个 {@code ArrayList}
+     * 再 {@code addAll}，深层树上是 O(n²) 的拷贝；且一旦数据异常成环会直接
+     * {@code StackOverflowError}（基座 {@code TreeUtils.flatten} 的注释正是为此改用迭代）。
+     * 这里用显式栈 + 逆序入栈保证先序输出，与基座口径一致。</p>
+     *
+     * @param roots 树的根节点列表
+     * @return 拍平后的列表（父在前、子在后）
      */
-    private List<SpaceResp> flatten(SpaceResp node) {
+    private List<SpaceResp> flattenTree(List<SpaceResp> roots) {
         List<SpaceResp> result = new ArrayList<>();
-        result.add(node);
-        if (node.getChildren() != null) {
-            for (SpaceResp child : node.getChildren()) {
-                result.addAll(flatten(child));
+        if (roots == null || roots.isEmpty()) {
+            return result;
+        }
+        Deque<SpaceResp> stack = new ArrayDeque<>();
+        // 逆序入栈：保证出栈顺序与 roots 原序一致
+        for (int i = roots.size() - 1; i >= 0; i--) {
+            stack.push(roots.get(i));
+        }
+        Set<Long> visited = new HashSet<>();
+        while (!stack.isEmpty()) {
+            SpaceResp node = stack.pop();
+            // 防成环：树理论上不成环，但脏数据下也不能让本方法死循环
+            if (node == null || (node.getId() != null && !visited.add(node.getId()))) {
+                continue;
+            }
+            result.add(node);
+            List<SpaceResp> children = node.getChildren();
+            if (children == null || children.isEmpty()) {
+                continue;
+            }
+            for (int i = children.size() - 1; i >= 0; i--) {
+                stack.push(children.get(i));
             }
         }
         return result;
