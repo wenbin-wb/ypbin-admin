@@ -242,6 +242,24 @@ public class SysSpaceController {
     }
 
     /**
+     * 按空间（含全部后代）统计各类型业务对象数量（空间列表「设备数」等列用）。
+     *
+     * <p><b>为什么含后代</b>：设备挂在末级房间，用户看「A栋」那行时期望的数字包含其下所有设备。</p>
+     *
+     * <p><b>为什么一次传一批 spaceIds</b>：列表页一页几十行，逐行调就是 N 次请求。
+     * 服务端对每个空间各跑一次子树 CTE（空间数是页面行数量级，不是业务数据量级），
+     * 但有上限保护（见 `countBySpaceTrees`）。</p>
+     *
+     * @param spaceIds 根空间 ID 列表
+     * @return 空间 ID → (对象类型 → 数量)
+     */
+    @PostMapping("/relation-counts")
+    @SaCheckPermission("system:space:list")
+    public R<Map<Long, Map<String, Long>>> relationCounts(@RequestBody List<Long> spaceIds) {
+        return R.ok(relationService.countBySpaceTrees(spaceIds));
+    }
+
+    /**
      * 批量反查：一次查多个业务对象各自的空间（列表页「所在空间」列用）。
      *
      * <p>列表页有 N 条记录时，逐条调单对象反查就是 N 次 HTTP（N+1）；本端点一次返回。</p>
