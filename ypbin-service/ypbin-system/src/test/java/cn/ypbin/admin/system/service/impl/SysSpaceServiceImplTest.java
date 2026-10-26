@@ -36,7 +36,6 @@ import cn.ypbin.admin.system.mapper.SysSpaceMapper;
 import cn.ypbin.admin.system.mapper.SysSpaceRelationMapper;
 import cn.ypbin.admin.system.model.req.SpaceSaveReq;
 import cn.ypbin.admin.system.model.resp.SpaceImportResultResp;
-import cn.ypbin.starter.tools.csv.CsvUtils;
 import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginUser;
@@ -501,31 +500,36 @@ class SysSpaceServiceImplTest {
         child.setPid(1L);
         when(spaceMapper.selectList(any())).thenReturn(List.of(root, child));
 
-        String csv = withTenant(() -> service.exportCsv());
+        List<List<String>> rows = withTenant(() -> service.exportRows());
 
-        // 根节点 parentCode 为空；子节点指向父编码
-        assertThat(csv).contains("HQ,,总部园区");
-        assertThat(csv).contains("HQ-A,HQ,A栋");
+        // 根节点 parentCode 为空；子节点指向父编码（列序：code, parentCode, name）
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).get(0)).isEqualTo("HQ");
+        assertThat(rows.get(0).get(1)).isEmpty();
+        assertThat(rows.get(0).get(2)).isEqualTo("总部园区");
+        assertThat(rows.get(1).get(0)).isEqualTo("HQ-A");
+        assertThat(rows.get(1).get(1)).isEqualTo("HQ");
+        assertThat(rows.get(1).get(2)).isEqualTo("A栋");
         // 不应把内部 ID 写进 parentCode 列
-        assertThat(csv).doesNotContain("HQ-A,1,A栋");
+        assertThat(rows.get(1).get(1)).isNotEqualTo("1");
     }
 
     @Test
-    @DisplayName("导出含 UTF-8 BOM（Excel 直接打开不乱码）")
-    void shouldPrefixBomOnExport() {
-        when(spaceMapper.selectList(any())).thenReturn(List.of());
-        String csv = withTenant(() -> service.exportCsv());
-        assertThat(csv).startsWith(CsvUtils.UTF8_BOM);
+    @DisplayName("导出的表头与导入认的列名一致（导出能直接再导入）")
+    void shouldKeepExportHeadersImportable() {
+        List<String> headers = withTenant(() -> service.exportHeaders());
+        // 导入侧要求这三列必须存在（见 importCsv 的必需列校验）
+        assertThat(headers).contains("code", "parentCode", "name", "spaceType");
     }
 
     @Test
-    @DisplayName("模板：含表头与示例行，表头与导出列一致（可直接改完再导入）")
-    void shouldProvideTemplateWithSameHeaders() {
-        String template = withTenant(() -> service.importTemplateCsv());
-        assertThat(template).startsWith(CsvUtils.UTF8_BOM);
-        // 必需列都在
-        assertThat(template).contains("code").contains("parentCode")
-            .contains("name").contains("spaceType");
+    @DisplayName("模板：示例行的列数与表头一致（列数不齐会让用户填错位）")
+    void shouldProvideTemplateRowMatchingHeaders() {
+        List<String> headers = withTenant(() -> service.exportHeaders());
+        List<List<String>> rows = withTenant(() -> service.importTemplateRows());
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).hasSameSizeAs(headers);
     }
 
     // ---------- CSV 导入 ----------

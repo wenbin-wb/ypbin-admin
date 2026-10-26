@@ -55,6 +55,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -257,7 +258,12 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         "area", "capacity", "manager", "phone", "remark");
 
     @Override
-    public String exportCsv() {
+    public List<String> exportHeaders() {
+        return SPACE_CSV_HEADERS;
+    }
+
+    @Override
+    public List<List<String>> exportRows() {
         List<SysSpace> all = list(new LambdaQueryWrapper<SysSpace>()
             .orderByAsc(SysSpace::getPid)
             .orderByAsc(SysSpace::getSort)
@@ -277,29 +283,27 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
                 parentCode,
                 space.getName(),
                 space.getSpaceType(),
-                space.getSort() == null ? "" : String.valueOf(space.getSort()),
-                space.getStatus() == null ? "" : String.valueOf(space.getStatus()),
+                space.getSort() == null ? null : String.valueOf(space.getSort()),
+                space.getStatus() == null ? null : String.valueOf(space.getStatus()),
                 space.getAddress(),
-                space.getLongitude() == null ? "" : space.getLongitude().toPlainString(),
-                space.getLatitude() == null ? "" : space.getLatitude().toPlainString(),
+                space.getLongitude() == null ? null : space.getLongitude().toPlainString(),
+                space.getLatitude() == null ? null : space.getLatitude().toPlainString(),
                 space.getFloorNo(),
                 space.getRoomNo(),
-                space.getArea() == null ? "" : space.getArea().toPlainString(),
-                space.getCapacity() == null ? "" : String.valueOf(space.getCapacity()),
+                space.getArea() == null ? null : space.getArea().toPlainString(),
+                space.getCapacity() == null ? null : String.valueOf(space.getCapacity()),
                 space.getManager(),
                 space.getPhone(),
                 space.getRemark()));
         }
-        // CsvUtils 统一做 RFC 4180 转义与公式注入中和（`=cmd` 这类单元格会被加前缀）
-        return CsvUtils.UTF8_BOM + CsvUtils.toCsv(SPACE_CSV_HEADERS, rows);
+        return rows;
     }
 
     @Override
-    public String importTemplateCsv() {
-        List<List<String>> rows = List.of(Arrays.asList(
+    public List<List<String>> importTemplateRows() {
+        return List.of(Arrays.asList(
             "HQ", "", "总部园区", "park", "1", "1",
-            "", "", "", "", "", "", "", "", "", "示例行，可删除"));
-        return CsvUtils.UTF8_BOM + CsvUtils.toCsv(SPACE_CSV_HEADERS, rows);
+            null, null, null, null, null, null, null, null, null, "示例行，可删除"));
     }
 
     @Override
@@ -400,7 +404,7 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             for (ImportRow row : ready) {
                 try {
                     if (idByCode.containsKey(row.code)) {
-                        applyUpsert(row, idByCode.get(row.code));
+                        applyUpsert(row, idByCode.get(row.code), idByCode);
                         result.setUpdated(result.getUpdated() + 1);
                     } else {
                         Long newId = createSpace(row.toSaveReq(idByCode.get(row.parentCode)));
@@ -412,6 +416,14 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
                     result.addError(row.lineNo, row.code, e.getMessage(),
                         SpaceConstants.MAX_IMPORT_ERRORS);
                     pending.remove(row);
+                } catch (DuplicateKeyException e) {
+                    // 数据库唯一键冲突（如并发导入同一份文件、编码与已有行撞 uk_space_tenant_code）。
+                    // 必须**逐行归因**而不能让它冒泡：冒泡会触发整个 @Transactional 回滚，
+                    // 用户看到的是「整批失败 + 一条 SQL 异常」，与「逐行报错」的设计意图相反。
+                    result.addError(row.lineNo, row.code,
+                        "编码已存在（数据库唯一约束冲突，可能有并发导入）",
+                        SpaceConstants.MAX_IMPORT_ERRORS);
+                    pending.remove(row);
                 }
             }
         }
@@ -421,31 +433,43 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     /**
      * upsert 模式：按编码更新已存在的空间。
      *
-     * <p>只更新表格里**声明了列**的字段？——不。当前实现按整行更新（与 `updateSpace` 一致），
-     * 因为 CSV 一行就是一份完整的空间定义；若只更新部分列，用户会误以为「表格里的空值
-     * 表示保持不变」，而实际上空值会清空字段。这个语义必须在模板说明里讲清。</p>
+     * <p><b>整行覆盖</b>（与 `updateSpace` 一致）：CSV 一行就是一份完整的空间定义。
+     * 若只更新部分列，用户会误以为「表格里的空值表示保持不变」，而实际上空值会清空字段。</p>
      *
-     * @param row 导入行
-     * @param id  已存在的空间 ID
+     * @param row       导入行
+     * @param id        已存在的空间 ID
+     * @param idByCode  编码 → 空间 ID 映射（含本次已插入的行）
+     * @throws BusinessException 父编码无法解析
      */
-    private void applyUpsert(ImportRow row, Long id) {
-        updateSpace(id, row.toSaveReq(findParentIdForUpsert(row)));
+    private void applyUpsert(ImportRow row, Long id, Map<String, Long> idByCode) {
+        updateSpace(id, row.toSaveReq(resolveParentId(row, idByCode)));
     }
 
     /**
-     * upsert 时解析父空间 ID（父编码 → ID）。
+     * 由父编码解析父空间 ID。
      *
-     * @param row 导入行
+     * <p><b>为什么必须在映射里解析、解析不到就报错</b>：</p>
+     * <ul>
+     *   <li>映射（{@code idByCode}）已含全部既有空间与本次已插入的行，**不必再查库**
+     *       ——否则 5000 行导入就是 5000 次多余查询；</li>
+     *   <li>解析不到时<b>不能回退根节点</b>：那会把本该报错的子节点静默挂成顶级空间，
+     *       与第一遍扫描的严格校验（报「父空间编码不存在」）自相矛盾。</li>
+     * </ul>
+     *
+     * @param row      导入行
+     * @param idByCode 编码 → 空间 ID 映射
      * @return 父空间 ID（根节点为 ROOT_PARENT_ID）
+     * @throws BusinessException 父编码在映射中不存在
      */
-    private Long findParentIdForUpsert(ImportRow row) {
+    private Long resolveParentId(ImportRow row, Map<String, Long> idByCode) {
         if (!StringUtils.hasText(row.parentCode)) {
             return SpaceConstants.ROOT_PARENT_ID;
         }
-        SysSpace parent = getOne(new LambdaQueryWrapper<SysSpace>()
-            .eq(SysSpace::getCode, row.parentCode)
-            .last("LIMIT 1"));
-        return parent == null ? SpaceConstants.ROOT_PARENT_ID : parent.getId();
+        Long parentId = idByCode.get(row.parentCode);
+        if (parentId == null) {
+            throw new BusinessException("父空间编码不存在：parentCode=" + row.parentCode);
+        }
+        return parentId;
     }
 
     /**

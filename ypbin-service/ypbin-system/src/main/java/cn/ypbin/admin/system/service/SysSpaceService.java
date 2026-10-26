@@ -113,14 +113,26 @@ public interface SysSpaceService extends BaseService<SysSpace> {
     List<Long> listSubtreeIds(Long spaceId);
 
     /**
-     * 导出全部空间为 CSV（含父空间编码，可直接用于再次导入）。
+     * 取导出用的表头。
      *
-     * <p><b>为什么导出里写「父空间编码」而不是父 ID</b>：导出的表格要能被人看懂、被人
-     * 编辑后再导回来。ID 是系统内部值，用户无法在离线表格里推算。</p>
+     * <p><b>为什么返回结构化数据而不是拼好的 CSV 文本</b>：CSV 的转义、BOM、响应头
+     * 全部由基座的 {@code CsvUtils.export(response, fileName, headers, rows)} 负责
+     * ——它内聚了 RFC 4180 转义、公式注入中和、RFC 5987 文件名编码。
+     * 自己拼一遍就等于把这三件事各写一份（基座注释明确警告过这个坑）。</p>
      *
-     * @return CSV 文本（UTF-8，含 BOM 便于 Excel 正确识别）
+     * @return 表头
      */
-    String exportCsv();
+    List<String> exportHeaders();
+
+    /**
+     * 取导出用的数据行（与 {@link #exportHeaders()} 的列一一对应）。
+     *
+     * <p>导出里写「父空间编码」而不是父 ID：导出的表格要能被人看懂、
+     * 被人编辑后再导回来。ID 是系统内部值，用户无法在离线表格里推算。</p>
+     *
+     * @return 数据行
+     */
+    List<List<String>> exportRows();
 
     /**
      * 从 CSV 导入空间。
@@ -139,12 +151,12 @@ public interface SysSpaceService extends BaseService<SysSpace> {
     SpaceImportResultResp importCsv(String content, String mode);
 
     /**
-     * 生成导入模板 CSV（含表头与一行示例）。
+     * 取导入模板的数据行（表头复用 {@link #exportHeaders()}，加一行示例）。
      *
      * <p>模板让用户不必猜列名与格式——列名拼错会被当「未知列」忽略，
      * 用户会以为填了却没生效。</p>
      *
-     * @return CSV 文本
+     * @return 示例行
      */
-    String importTemplateCsv();
+    List<List<String>> importTemplateRows();
 }

@@ -16,13 +16,8 @@
 package cn.ypbin.admin.system.controller;
 
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.system.model.query.SpaceQuery;
 import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
@@ -41,6 +36,7 @@ import cn.ypbin.starter.tools.csv.CsvUtils;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -263,8 +259,12 @@ public class SysSpaceController {
      */
     @GetMapping("/export")
     @SaCheckPermission("system:space:list")
-    public ResponseEntity<byte[]> export() {
-        return csvResponse("space-" + LocalDate.now() + ".csv", spaceService.exportCsv());
+    public void export(HttpServletResponse response) {
+        // 交给基座：CsvUtils.export 内聚了 RFC 4180 转义、公式注入中和、BOM、
+        // 以及 RFC 5987 文件名编码（见 DownloadResponses）。
+        // 自己拼一遍就等于把这几件事各写一份——基座注释明确警告过这种重复。
+        CsvUtils.export(response, "space-" + LocalDate.now(),
+            spaceService.exportHeaders(), spaceService.exportRows());
     }
 
     /**
@@ -274,8 +274,9 @@ public class SysSpaceController {
      */
     @GetMapping("/import-template")
     @SaCheckPermission("system:space:list")
-    public ResponseEntity<byte[]> importTemplate() {
-        return csvResponse("space-import-template.csv", spaceService.importTemplateCsv());
+    public void importTemplate(HttpServletResponse response) {
+        CsvUtils.export(response, "space-import-template",
+            spaceService.exportHeaders(), spaceService.importTemplateRows());
     }
 
     /**
@@ -308,25 +309,6 @@ public class SysSpaceController {
             throw new BusinessException("读取导入文件失败：" + e.getMessage());
         }
         return R.ok(spaceService.importCsv(content, mode));
-    }
-
-    /**
-     * 生成 CSV 响应（统一 MIME、编码与文件名转义）。
-     *
-     * @param fileName 文件名
-     * @param content  CSV 文本
-     * @return HTTP 响应
-     */
-    private static ResponseEntity<byte[]> csvResponse(String fileName, String content) {
-        byte[] body = content.getBytes(StandardCharsets.UTF_8);
-        // 文件名含中文/空格时按 RFC 5987 编码，否则部分浏览器会丢扩展名
-        String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8)
-            .replace("+", "%20");
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType(CsvUtils.CSV_CONTENT_TYPE));
-        headers.set(HttpHeaders.CONTENT_DISPOSITION,
-            "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);
-        return new ResponseEntity<>(body, headers, HttpStatus.OK);
     }
 
     /**
