@@ -128,6 +128,15 @@ class SourceConventionTest {
         Pattern.compile("\\b([A-Za-z_$][\\w$]*)\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*\\(");
 
     /**
+     * <b>无接收者前缀</b>的方法调用（隐式 {@code this}）：{@code getOne(...)} / {@code list(...)}。
+     *
+     * <p>前面允许 `= return ( , ; ! & | ? :` 等定界符，但<b>排除</b> {@code .}（那是带接收者的调用，
+     * 由 {@link #METHOD_CALL} 管）与标识符字符（那是方法声明或 new 的类名）。</p>
+     */
+    private static final Pattern BARE_METHOD_CALL = Pattern.compile(
+        "(?<![\\w$.])([A-Za-z_$][\\w$]*)\\s*\\(");
+
+    /**
      * 循环体内禁止出现的接收者（DB 与 RPC）。
      *
      * <p>覆盖三类：MyBatis Mapper/Dao/Repository、JDBC 直连、Feign/HTTP 客户端。
@@ -141,6 +150,25 @@ class SourceConventionTest {
     /** 接收者的裸名（字段就叫 {@code mapper}/{@code client} 的写法也要拦） */
     private static final Pattern BARE_DB_OR_RPC_RECEIVER =
         Pattern.compile("(?i)^(mapper|dao|client|repository|jdbctemplate|sqlsession)$");
+
+    /**
+     * {@code IService}（MyBatis-Plus）里<b>隐式 {@code this} 调用</b>就会打库的方法名。
+     *
+     * <p><b>为什么需要单独一份</b>：本仓大量 service 继承 {@code BaseServiceImpl}，
+     * 直接调 {@code getOne(...)} / {@code list(...)} / {@code save(...)} 而不带接收者前缀
+     * （隐式 {@code this}）。{@link #METHOD_CALL} 要求必须有 {@code receiver.} 前缀，
+     * 因此这类调用<b>此前完全在检测范围外</b>——2026-10-27 实测：一段循环里逐条
+     * {@code getOne(...)}（典型 N+1）门禁判定为绿。</p>
+     *
+     * <p>只收「一定会打库」的方法名，避免把同名的纯内存方法（如自定义的 {@code list()}）误判；
+     * 确属误报时按 {@link #LOOP_DB_EXEMPTIONS} 登记（禁止放宽本清单）。</p>
+     */
+    private static final Set<String> IMPLICIT_DB_METHODS = Set.of(
+        "count", "exists", "getById", "getMap", "getObj", "getOne", "getOptById",
+        "list", "listByIds", "listByMap", "listMaps", "listObjs", "page", "pageMaps",
+        "query", "remove", "removeById", "removeByIds", "removeByMap", "save",
+        "saveBatch", "saveOrUpdate", "saveOrUpdateBatch", "update", "updateBatch",
+        "updateById");
 
     /**
      * 实体不继承 {@code BaseEntity}/{@code TenantBaseEntity} 的<b>显式例外清单</b>（键=类简单名，值=理由）。
@@ -167,6 +195,11 @@ class SourceConventionTest {
      * 防止有人修好代码后豁免条目静默残留、也防止有人把整类文件丢进豁免里「一键变绿」。</p>
      */
     private static final Map<String, String> LOOP_DB_EXEMPTIONS = Map.of(
+        "SysConfigServiceImpl#self.updateById",
+        "**已知技术债，非合法形态**：批量改配置时逐行 updateById（真 N+1，一次改 N 个键就是 N 次 UPDATE）。"
+            + "2026-10-27 给本门禁补上「IService 隐式 this 调用」识别后暴露的历史代码（引入于 2314b48，早于空间功能）。"
+            + "登记豁免只为不让门禁长期红着，正确修法是 SaveBatch 或单条 UPDATE ... CASE WHEN。"
+            + "同循环内还有逐键 SysCache.evictConfig（缓存失效无法批量，那部分属合理）",
         "NoticePublishServiceImpl#deliveryMapper.insertBatch",
         "分块批量插入：按 INSERT_BATCH_SIZE 切块后每块一次 insertBatch（见 insertInBatches），非逐行往返",
         "AiDocumentVectorizer#chunkMapper.insertBatch",
@@ -318,6 +351,16 @@ class SourceConventionTest {
                     || BARE_DB_OR_RPC_RECEIVER.matcher(receiver).matches();
                 if (dbOrRpc) {
                     hits.add(new LoopDbCall(lineNumber(code, span[0] + callMatcher.start()), receiver, method));
+                }
+            }
+            // 隐式 this 调用（IService 的 getOne/list/save…）：无接收者前缀，METHOD_CALL 匹配不到。
+            // 这是本仓最常见的打库写法（service 继承 BaseServiceImpl），必须单独扫。
+            Matcher bareMatcher = BARE_METHOD_CALL.matcher(body);
+            while (bareMatcher.find()) {
+                String method = bareMatcher.group(1);
+                if (IMPLICIT_DB_METHODS.contains(method)) {
+                    hits.add(new LoopDbCall(lineNumber(code, span[0] + bareMatcher.start()),
+                        "self", method));
                 }
             }
         }

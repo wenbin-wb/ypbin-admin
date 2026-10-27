@@ -20,6 +20,8 @@ import cn.ypbin.admin.system.provider.DbLogProviders;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
+import cn.ypbin.admin.system.mapper.SysMessageMapper;
+import cn.ypbin.starter.messaging.mail.MailService;
 import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
@@ -53,6 +55,8 @@ class SystemClientImplPlatformUserTest {
         mock(SysMenuService.class),
         mock(SysSpaceService.class),
         mock(SysSpaceRelationService.class),
+        mock(SysMessageMapper.class),
+        mock(MailService.class),
         new DbLogProviders.DbLogDao(mock(SysLogMapper.class)),
         providerOfTrackRecorder());
 

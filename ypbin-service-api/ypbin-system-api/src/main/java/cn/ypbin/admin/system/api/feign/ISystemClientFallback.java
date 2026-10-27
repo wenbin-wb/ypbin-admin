@@ -13,6 +13,8 @@ import cn.ypbin.admin.system.model.dto.SysSpaceDto;
 import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
+import cn.ypbin.admin.system.model.req.MailSendReq;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
@@ -187,6 +189,16 @@ public class ISystemClientFallback implements ISystemClient {
     // 这里刻意不给任何「空空间/空列表」的兜底：空间查询失败若返回空列表，
     // 调用方（如 IoT 设备详情）会显示成「这台设备没有位置」——把「system 不可用」
     // 伪装成「业务事实」，运维永远查不出来。故一律走 unavailable()，由调用方上抛或显式提示。
+
+    @Override
+    public R<Void> sendInboxMessage(InboxMessageSendReq req) {
+        return unavailable();
+    }
+
+    @Override
+    public R<Void> sendMail(MailSendReq req) {
+        return unavailable();
+    }
 
     @Override
     public R<SysSpaceDto> getSpaceById(Long spaceId) {

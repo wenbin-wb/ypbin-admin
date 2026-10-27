@@ -15,7 +15,10 @@ import cn.ypbin.admin.system.model.dto.SysSpaceDto;
 import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
+import cn.ypbin.admin.system.model.req.MailSendReq;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
+import jakarta.validation.Valid;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
@@ -250,6 +253,35 @@ public interface ISystemClient {
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone);
+
+    // ---------- 站内信 / 邮件（业务域投递通知用） ----------
+
+    /**
+     * 写一条普通站内信（供业务域投递站内通知用）。
+     *
+     * <p>复用 {@code sys_message} 表与既有落库口径，不新造站内信链路；调用方显式声明租户，
+     * 服务端进入该租户上下文写入（内部端点信任模型见 {@code InboxMessageSendReq}）。</p>
+     *
+     * <p>失败语义：system 不可达或落库失败时返回失败 {@code R}，调用方必须据
+     * {@code R.success}/{@code R.code} 判定并记完整堆栈——<b>禁止</b>把它当成功
+     * （否则通知会在无人知晓的情况下丢失）。</p>
+     *
+     * @param req 站内信请求（租户/接收人/标题/正文）
+     * @return 统一响应体
+     */
+    @PostMapping("/inbox-message-send")
+    R<Void> sendInboxMessage(@Valid @RequestBody InboxMessageSendReq req);
+
+    /**
+     * 发一封纯文本邮件（复用 system 侧既有的 JavaMail 能力）。
+     *
+     * <p>失败语义同上：返回失败 {@code R} 时调用方必须如实记为投递失败并按其重试策略退避。</p>
+     *
+     * @param req 邮件请求（收件人/主题/正文）
+     * @return 统一响应体
+     */
+    @PostMapping("/mail-send")
+    R<Void> sendMail(@Valid @RequestBody MailSendReq req);
 
     // ---------- 空间（基础主数据的跨服务只读/写入通道） ----------
 

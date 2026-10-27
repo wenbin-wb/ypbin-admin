@@ -14,6 +14,15 @@ import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
 import cn.ypbin.admin.system.feign.support.SpaceViewConverter;
+import java.time.LocalDateTime;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import cn.ypbin.starter.tenant.core.TenantContext;
+import cn.ypbin.starter.messaging.mail.MailService;
+import cn.ypbin.starter.data.core.EntityStatus;
+import cn.ypbin.admin.system.model.req.MailSendReq;
+import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
+import cn.ypbin.admin.system.mapper.SysMessageMapper;
+import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.feign.support.UserViewConverter;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
@@ -58,6 +67,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -77,6 +87,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/internal")
+@Slf4j
 @RequiredArgsConstructor
 public class SystemClientImpl implements ISystemClient {
 
@@ -89,6 +100,12 @@ public class SystemClientImpl implements ISystemClient {
     /** 密码校验限频窗口时长 */
     private static final Duration VERIFY_PASSWORD_WINDOW = Duration.ofMinutes(1);
 
+    /** 站内信消息类型：1 = 系统通知（与公告站内信同一口径，见 NoticePublishServiceImpl） */
+    private static final int MESSAGE_TYPE_SYSTEM_NOTICE = 1;
+
+    /** 站内信未读状态 */
+    private static final int MESSAGE_STATUS_UNREAD = 0;
+
     private final SysPermissionService permissionService;
     private final SysUserService userService;
     private final SysConfigMapper configMapper;
@@ -99,6 +116,12 @@ public class SystemClientImpl implements ISystemClient {
     private final SysSpaceService spaceService;
 
     private final SysSpaceRelationService spaceRelationService;
+
+    /** 站内信落库（复用既有 sys_message，不新造通知存储） */
+    private final SysMessageMapper messageMapper;
+
+    /** 邮件发送（复用既有 JavaMail 能力与既有超时配置） */
+    private final MailService mailService;
     /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
     private final LogDao logDao;
 
@@ -498,6 +521,55 @@ public class SystemClientImpl implements ISystemClient {
     @Override
     public R<Map<Long, Map<String, Long>>> countSpaceRelationsBySpaceTrees(List<Long> spaceIds) {
         return R.ok(spaceRelationService.countBySpaceTrees(spaceIds));
+    }
+
+    @Override
+    public R<Void> sendInboxMessage(InboxMessageSendReq req) {
+        // 收件人必须是**该租户下真实存在的用户**：否则站内信会写进库而收件人永远看不到
+        // （投递记录却标成 SENT）——那是「静默失效」。这里显式校验并返回失败 R，由调用方记为失败。
+        SysUser receiver = TenantContext.executeWithTenant(req.getTenantId(),
+            () -> userService.getById(req.getReceiverUserId()));
+        if (receiver == null) {
+            log.warn("站内信收件人不存在（或被逻辑删除）：tenantId={} receiverUserId={}",
+                req.getTenantId(), req.getReceiverUserId());
+            return R.fail("收件人不存在或不属于该租户：userId=" + req.getReceiverUserId());
+        }
+        SysMessage message = new SysMessage();
+        message.setId(IdWorker.getId());
+        message.setTenantId(req.getTenantId());
+        message.setReceiverUserId(req.getReceiverUserId());
+        message.setTitle(req.getTitle());
+        message.setContent(req.getContent());
+        message.setMessageType(MESSAGE_TYPE_SYSTEM_NOTICE);
+        message.setReadStatus(MESSAGE_STATUS_UNREAD);
+        LocalDateTime now = LocalDateTime.now();
+        message.setCreateTime(now);
+        message.setUpdateTime(now);
+        message.setStatus(EntityStatus.ENABLED.getCode());
+        message.setIsDeleted(0);
+        try {
+            TenantContext.runWithTenant(req.getTenantId(),
+                () -> messageMapper.insertNoticeMessage(message));
+        } catch (RuntimeException ex) {
+            // 记完整堆栈：否则「站内信一直收不到」只能靠猜
+            log.error("站内信写入失败：tenantId={} receiverUserId={} title={}",
+                req.getTenantId(), req.getReceiverUserId(), req.getTitle(), ex);
+            return R.fail("站内信写入失败：" + ex.getMessage());
+        }
+        return R.ok();
+    }
+
+    @Override
+    public R<Void> sendMail(MailSendReq req) {
+        try {
+            mailService.sendText(req.getTo(), req.getSubject(), req.getContent());
+        } catch (RuntimeException ex) {
+            // 邮件网关 500 / SMTP 超时等：原样把原因带回给调用方（它是唯一知道重试策略的一方），
+            // 这里仍记完整堆栈——两处都要留痕，否则排障时只能看到「投递失败了」而不知道为什么
+            log.error("邮件发送失败：to={} subject={}", req.getTo(), req.getSubject(), ex);
+            return R.fail("邮件发送失败：" + ex.getMessage());
+        }
+        return R.ok();
     }
 
     @Override
