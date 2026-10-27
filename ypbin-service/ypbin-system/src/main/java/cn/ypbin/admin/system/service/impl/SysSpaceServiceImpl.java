@@ -33,6 +33,7 @@ import cn.ypbin.admin.system.model.resp.SpaceResp;
 import cn.ypbin.admin.system.model.resp.SpaceImportResultResp;
 import cn.ypbin.admin.system.model.resp.SpaceTreeNodeResp;
 import cn.ypbin.admin.system.service.SysSpaceService;
+import cn.ypbin.admin.system.service.support.SpacePathResolver;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.tree.TreeUtils;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -92,7 +93,6 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     private static final String DICT_SPACE_TYPE = "space_type";
 
     /** 路径分隔符。 */
-    private static final String PATH_SEPARATOR = " / ";
 
     private final SysSpaceRelationMapper relationMapper;
 
@@ -236,7 +236,7 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             names.add(name == null ? "" : name.toString());
         }
         Collections.reverse(names);
-        return String.join(PATH_SEPARATOR, names);
+        return String.join(SpacePathResolver.PATH_SEPARATOR, names);
     }
 
     @Override
@@ -936,35 +936,21 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
      *
      * @return 空间 ID → 完整路径
      */
+    /**
+     * 拼装每个空间的完整路径（委托 {@link SpacePathResolver}）。
+     *
+     * <p>算法与分隔符口径收在该支撑类里——另一处调用方（空间关联列表的
+     * {@code fillSpacePaths}）曾各写一份，分隔符一处常量一处硬编码。</p>
+     *
+     * @param provided 已查好的全量节点快照；<b>传 {@code null} 时本方法自己查一次</b>
+     *                 （树形/列表页传进来可省掉一次全表重复查询）
+     * @return 空间 ID → 路径
+     */
     private Map<Long, String> buildPathMap(List<SysSpace> provided) {
         List<SysSpace> all = provided != null ? provided
             : list(new LambdaQueryWrapper<SysSpace>()
                 .select(SysSpace::getId, SysSpace::getPid, SysSpace::getName));
-        Map<Long, SysSpace> byId = new HashMap<>(all.size());
-        for (SysSpace space : all) {
-            byId.put(space.getId(), space);
-        }
-        Map<Long, String> paths = new HashMap<>(all.size());
-        for (SysSpace space : all) {
-            List<String> names = new ArrayList<>();
-            Long cursor = space.getId();
-            int guard = 0;
-            while (cursor != null
-                && cursor.longValue() != SpaceConstants.ROOT_PARENT_ID.longValue()
-                && guard++ <= SpaceConstants.MAX_SPACE_DEPTH) {
-                SysSpace node = byId.get(cursor);
-                if (node == null) {
-                    break;
-                }
-                names.add(node.getName());
-                cursor = node.getPid();
-            }
-            if (!names.isEmpty()) {
-                Collections.reverse(names);
-                paths.put(space.getId(), String.join(PATH_SEPARATOR, names));
-            }
-        }
-        return paths;
+        return SpacePathResolver.resolve(all);
     }
 
     /**

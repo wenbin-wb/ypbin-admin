@@ -18,6 +18,7 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.system.constant.SpaceConstants;
 import cn.ypbin.admin.system.entity.SysDictItem;
 import cn.ypbin.admin.system.entity.SysSpace;
+import cn.ypbin.admin.system.service.support.SpacePathResolver;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.admin.system.entity.SysSpaceRelation;
 import cn.ypbin.admin.system.mapper.SysDictItemMapper;
@@ -35,7 +36,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -619,30 +619,28 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
      *
      * @param items 关联响应列表
      */
+    /**
+     * 为关联列表填充空间的完整路径（委托 {@link SpacePathResolver}）。
+     *
+     * <p><b>一次性取全量节点</b>：一页关联可能指向几十个不同空间，逐个上溯查库就是
+     * N 次递归 CTE。这里取一次全量 {@code (id, pid, name)} 后在内存拼。</p>
+     *
+     * <p>分隔符与深度守卫收在支撑类里——此前本方法与 `SysSpaceServiceImpl#buildPathMap`
+     * 各写一份，分隔符一处常量一处硬编码。</p>
+     *
+     * @param items 关联列表（原地填充 {@code spacePath}）
+     */
     private void fillSpacePaths(List<SpaceRelationResp> items) {
+        if (items.isEmpty()) {
+            return;
+        }
         List<SysSpace> allSpaces = spaceMapper.selectList(new LambdaQueryWrapper<SysSpace>()
             .select(SysSpace::getId, SysSpace::getPid, SysSpace::getName));
-        Map<Long, SysSpace> byId = new HashMap<>(allSpaces.size());
-        for (SysSpace space : allSpaces) {
-            byId.put(space.getId(), space);
-        }
+        Map<Long, String> paths = SpacePathResolver.resolve(allSpaces);
         for (SpaceRelationResp item : items) {
-            List<String> names = new ArrayList<>();
-            Long cursor = item.getSpaceId();
-            // 上溯有界：最多走 MAX_SPACE_DEPTH 层，防历史脏数据成环导致死循环
-            int guard = 0;
-            while (cursor != null && cursor != SpaceConstants.ROOT_PARENT_ID
-                && guard++ <= SpaceConstants.MAX_SPACE_DEPTH) {
-                SysSpace node = byId.get(cursor);
-                if (node == null) {
-                    break;
-                }
-                names.add(node.getName());
-                cursor = node.getPid();
-            }
-            if (!names.isEmpty()) {
-                Collections.reverse(names);
-                item.setSpacePath(String.join(" / ", names));
+            String path = paths.get(item.getSpaceId());
+            if (path != null && !path.isEmpty()) {
+                item.setSpacePath(path);
             }
         }
     }
