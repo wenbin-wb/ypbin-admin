@@ -18,7 +18,6 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.model.R;
@@ -33,8 +32,8 @@ import org.mockito.MockedStatic;
 /**
  * {@link SysCache} 的「列表载荷」读取测试（unchecked 强转收敛后的行为锁定）。
  *
- * <p><b>为什么要测</b>：本类的 4 处 {@code (Class<List<T>>) (Class<?>) List.class} 被收敛到一个
- * {@code @SuppressWarnings} 的私有方法里。压制告警是「治标」，因此必须有用例证明这 4 条读取路径
+ * <p><b>为什么要测</b>：本类的列表读取路径（角色码、权限码、绑定列表）依赖 starter
+ * {@code getOrLoad} 的无 Class 重载。因此必须有用例证明这几条读取路径
  * <b>仍然拿得到列表、且列表元素没有丢</b>——否则「告警消失」可能只是因为强转写错了、类型在运行期被抹平。</p>
  *
  * @author wenbin
@@ -79,25 +78,6 @@ class SysCacheListPayloadTest {
             stubListPayload(cacheUtils, "sys:perm:user:1", codes);
 
             assertThat(SysCache.getUserPermissions(1L)).containsExactlyElementsOf(codes);
-        }
-    }
-
-    @Test
-    @DisplayName("第三方登录配置列表：列表载荷读出后可正常遍历取字段")
-    void socialConfigsListPayloadShouldRoundTrip() {
-        ISystemClient client = mock(ISystemClient.class);
-        SocialAuthConfig config = new SocialAuthConfig();
-        config.setSource("github");
-        when(client.listSocialAuthConfigs()).thenReturn(R.ok(List.of(config)));
-
-        try (MockedStatic<SpringUtils> springUtils = mockStatic(SpringUtils.class);
-            MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
-            springUtils.when(() -> SpringUtils.getBean(ISystemClient.class)).thenReturn(client);
-            stubListPayload(cacheUtils, "sys:social:configs", List.of(config));
-
-            assertThat(SysCache.listSocialAuthConfigs())
-                .singleElement()
-                .satisfies(item -> assertThat(item.getSource()).isEqualTo("github"));
         }
     }
 

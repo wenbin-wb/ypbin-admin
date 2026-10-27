@@ -204,12 +204,14 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         for (SysConfig config : configs) {
             config.setConfigValue(resolveSubmittedValue(config.getConfigKey(),
                 req.getConfigs().get(config.getConfigKey()), config.getConfigValue()));
-            if (!updateById(config)) {
-                throw new BusinessException("参数更新失败：" + config.getConfigKey());
-            }
-            // 每个变更键逐个失效 Redis 缓存（auth 等跨服务读取经 SysCache），防开关/密钥变更不生效
-            SysCache.evictConfig(config.getConfigKey());
         }
+        // 分组更新是「同一批参数一起保存」：逐条 update 是 N 次往返且中途失败会留下半更新
+        if (!updateBatchById(configs)) {
+            throw new BusinessException("参数批量更新失败");
+        }
+        // 失效 Redis 缓存（auth 等跨服务读取经 SysCache），合并键后一次删除；
+        // 防开关/密钥变更不生效，也避免按参数个数放大缓存往返
+        SysCache.evictConfigs(keys);
         publishConfigChanged(configGroup);
     }
 

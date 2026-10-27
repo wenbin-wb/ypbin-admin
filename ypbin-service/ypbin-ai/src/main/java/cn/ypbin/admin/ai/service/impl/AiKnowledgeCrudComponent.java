@@ -82,7 +82,9 @@ public class AiKnowledgeCrudComponent {
         kb.setIcon(req.getIcon());
         kb.setRemark(req.getRemark());
         kb.setDocCount(0);
-        kbMapper.insert(kb);
+        if (kbMapper.insert(kb) != 1) {
+            throw new BusinessException("知识库创建失败");
+        }
         return toResp(kb);
     }
 
@@ -94,7 +96,9 @@ public class AiKnowledgeCrudComponent {
         kb.setIcon(req.getIcon());
         kb.setRemark(req.getRemark());
         kb.setUpdateTime(LocalDateTime.now());
-        kbMapper.updateById(kb);
+        if (kbMapper.updateById(kb) != 1) {
+            throw new BusinessException("知识库更新失败");
+        }
     }
 
     public List<AiKnowledgeBaseResp> listKnowledgeBases() {
@@ -112,7 +116,9 @@ public class AiKnowledgeCrudComponent {
         if (ragService != null) {
             ragService.delete(String.valueOf(id));
         }
-        kbMapper.deleteById(id);
+        if (kbMapper.deleteById(id) != 1) {
+            throw new BusinessException("知识库删除失败");
+        }
         documentMapper.delete(new LambdaQueryWrapper<AiDocument>()
             .eq(AiDocument::getKnowledgeBaseId, id));
         chunkMapper.delete(new LambdaQueryWrapper<AiDocumentChunk>()
@@ -132,13 +138,19 @@ public class AiKnowledgeCrudComponent {
         doc.setStatus(AiDocumentStatusEnum.PROCESSING.getCode());
         doc.setSourceType("UPLOAD");
         doc.setCreateTime(LocalDateTime.now());
-        documentMapper.insert(doc);
+        if (documentMapper.insert(doc) != 1) {
+            throw new BusinessException("文档记录创建失败");
+        }
 
         byte[] bytes;
         try {
             bytes = file.getBytes();
         } catch (Exception e) {
-            markDocFailed(doc.getId(), "文件读取失败：" + e.getMessage());
+            // 同步失败状态到内存对象：否则响应仍返回 PROCESSING，而库里已是 FAILED，
+            // 前端会一直转圈等待一个永远不会完成的任务。
+            doc.setStatus(AiDocumentStatusEnum.FAILED.getCode());
+            doc.setErrorMsg("文件读取失败：" + e.getMessage());
+            markDocFailed(doc.getId(), doc.getErrorMsg());
             return AiDocumentVO.from(doc);
         }
 
@@ -147,7 +159,12 @@ public class AiKnowledgeCrudComponent {
             AiDocument pathUpdate = new AiDocument();
             pathUpdate.setId(doc.getId());
             pathUpdate.setFilePath(filePath);
-            documentMapper.updateById(pathUpdate);
+            if (documentMapper.updateById(pathUpdate) != 1) {
+                // 原文已落盘但路径没写回：向量化仍可完成，但「重试/查看原文」会不可用，必须留痕
+                log.error("[ypbin-ai] 文档路径回写失败: docId={}, filePath={}", doc.getId(), filePath);
+            } else {
+                doc.setFilePath(filePath);
+            }
         }
 
         documentVectorizer.vectorizeAsync(
@@ -171,8 +188,9 @@ public class AiKnowledgeCrudComponent {
                 results.add(uploadDocument(knowledgeBaseId, file));
             } catch (Exception e) {
                 failed++;
-                log.warn("[ypbin-ai] 批量上传单个文件失败: filename={}",
-                LogSanitizer.sanitize(file.getOriginalFilename()), e);
+                // 批量容错必须记 ERROR + 完整堆栈：WARN 在默认级别下常被过滤，事后无法定位是哪个文件
+                log.error("[ypbin-ai] 批量上传单个文件失败: filename={}",
+                    LogSanitizer.sanitize(file.getOriginalFilename()), e);
             }
         }
         if (failed > 0 && results.isEmpty()) {
@@ -183,6 +201,7 @@ public class AiKnowledgeCrudComponent {
 
     public PageResult<AiDocumentVO> pageDocuments(Long knowledgeBaseId, PageQuery query,
             String keyword) {
+        requireKb(knowledgeBaseId);
         LambdaQueryWrapper<AiDocument> wrapper = new LambdaQueryWrapper<AiDocument>()
             .eq(AiDocument::getKnowledgeBaseId, knowledgeBaseId);
         if (keyword != null && !keyword.isBlank()) {
@@ -198,13 +217,19 @@ public class AiKnowledgeCrudComponent {
 
     @Transactional(rollbackFor = Exception.class)
     public void deleteDocument(Long knowledgeBaseId, Long docId) {
+        // 先校验知识库归属与「文档确实属于该知识库」：否则可传 (kbA, kbB 的 docId)
+        // 删掉另一个库的文档并扣错 A 库的 doc_count；RAG 删除不经租户过滤，跨租户时还会误删向量。
+        requireKb(knowledgeBaseId);
+        requireDoc(knowledgeBaseId, docId);
         AiRagService ragService = ragServiceProvider.getIfAvailable();
         if (ragService != null) {
             ragService.deleteDocument(String.valueOf(knowledgeBaseId), String.valueOf(docId));
         }
-        documentMapper.deleteById(docId);
         chunkMapper.delete(new LambdaQueryWrapper<AiDocumentChunk>()
             .eq(AiDocumentChunk::getDocumentId, docId));
+        if (documentMapper.deleteById(docId) != 1) {
+            throw new BusinessException("文档删除失败");
+        }
         kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
             .eq(AiKnowledgeBase::getId, knowledgeBaseId)
             .gt(AiKnowledgeBase::getDocCount, 0)
@@ -212,7 +237,16 @@ public class AiKnowledgeCrudComponent {
     }
 
     public void retryVectorize(Long knowledgeBaseId, Long docId) {
+        requireKb(knowledgeBaseId);
         AiDocument doc = requireDoc(knowledgeBaseId, docId);
+        // 只有失败的文档才需要重试：处理中再点一次会并发写两套向量；
+        // 已就绪再点会重复 ingest（向量库按追加语义，旧向量不会被覆盖）。
+        if (AiDocumentStatusEnum.PROCESSING.getCode().equals(doc.getStatus())) {
+            throw new BusinessException("文档正在处理中，请稍候再试");
+        }
+        if (AiDocumentStatusEnum.READY.getCode().equals(doc.getStatus())) {
+            throw new BusinessException("文档已就绪，无需重试");
+        }
         if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
             throw new BusinessException("该文档未保存原文，无法重试，请删除后重新上传");
         }
@@ -220,14 +254,40 @@ public class AiKnowledgeCrudComponent {
         if (!Files.exists(path)) {
             throw new BusinessException("原文件不存在（可能已被清理），请删除后重新上传");
         }
+        AiRagService ragService = ragServiceProvider.getIfAvailable();
+        if (ragService == null) {
+            // 没有向量库时重试必然再次失败；提前拒绝，也避免白删旧分块
+            throw new BusinessException("RAG 未启用，请先配置向量库后再重试");
+        }
         try {
             byte[] bytes = Files.readAllBytes(path);
-            AiDocument update = new AiDocument();
-            update.setId(docId);
-            update.setStatus(AiDocumentStatusEnum.PROCESSING.getCode());
-            update.setErrorMsg(null);
-            update.setUpdateTime(LocalDateTime.now());
-            documentMapper.updateById(update);
+            // 顺序至关重要：**先抢占状态，再做不可回滚的删除**。
+            // 若先删向量再 CAS，两个并发重试都可能进入删除段：败者会把胜者刚 ingest 的
+            // 新向量删掉，自己再因 CAS 失败退出——文档 READY 却一条向量都不剩。
+            // 必须用 UpdateWrapper 显式 set(null)：MyBatis-Plus 默认 NOT_NULL 更新策略会忽略
+            // 实体里的 null，旧 error_msg 会残留到重试成功后，表现为「已就绪」却仍展示上次错误。
+            int affected = documentMapper.update(null, new LambdaUpdateWrapper<AiDocument>()
+                .eq(AiDocument::getId, docId)
+                .ne(AiDocument::getStatus, AiDocumentStatusEnum.PROCESSING.getCode())
+                .ne(AiDocument::getStatus, AiDocumentStatusEnum.READY.getCode())
+                .set(AiDocument::getStatus, AiDocumentStatusEnum.PROCESSING.getCode())
+                .set(AiDocument::getErrorMsg, null)
+                .set(AiDocument::getUpdateTime, LocalDateTime.now()));
+            if (affected != 1) {
+                throw new BusinessException("文档状态已变更（处理中或已就绪），请刷新后重试");
+            }
+            // 抢占成功后才清旧向量与旧分块：ingest 是追加语义，不清会让新旧两套向量
+            // 同时被检索命中；分块表「先清后插」也无法覆盖向量库里的旧数据
+            try {
+                ragService.deleteDocument(String.valueOf(knowledgeBaseId), String.valueOf(docId));
+                chunkMapper.delete(new LambdaQueryWrapper<AiDocumentChunk>()
+                    .eq(AiDocumentChunk::getDocumentId, docId));
+            } catch (RuntimeException e) {
+                // 状态已置为处理中，但清理失败：必须回写失败，否则永远停在「处理中」
+                log.error("[ypbin-ai] 重试前清理旧向量失败: docId={}", docId, e);
+                markDocFailed(docId, "清理旧向量失败：" + e.getMessage());
+                throw new BusinessException("清理旧向量失败，请稍后重试");
+            }
             documentVectorizer.vectorizeAsync(
                 docId, knowledgeBaseId, doc.getTenantId(), doc.getFilename(), bytes);
         } catch (IOException e) {
@@ -236,6 +296,7 @@ public class AiKnowledgeCrudComponent {
     }
 
     public String getDocumentContent(Long knowledgeBaseId, Long docId) {
+        requireKb(knowledgeBaseId);
         AiDocument doc = requireDoc(knowledgeBaseId, docId);
         if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
             throw new BusinessException("文档未落盘，无法读取内容");
@@ -253,6 +314,7 @@ public class AiKnowledgeCrudComponent {
     }
 
     public List<Map<String, Object>> listDocumentChunks(Long knowledgeBaseId, Long docId) {
+        requireKb(knowledgeBaseId);
         requireDoc(knowledgeBaseId, docId);
         List<AiDocumentChunk> chunks = chunkMapper.selectList(
             new LambdaQueryWrapper<AiDocumentChunk>()
@@ -280,14 +342,21 @@ public class AiKnowledgeCrudComponent {
         doc.setSourceType(sourceType);
         doc.setSourceUrl(sourceUrl);
         doc.setCreateTime(LocalDateTime.now());
-        documentMapper.insert(doc);
+        if (documentMapper.insert(doc) != 1) {
+            throw new BusinessException("文档记录创建失败");
+        }
 
         String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
         if (filePath != null) {
             AiDocument pathUpdate = new AiDocument();
             pathUpdate.setId(doc.getId());
             pathUpdate.setFilePath(filePath);
-            documentMapper.updateById(pathUpdate);
+            if (documentMapper.updateById(pathUpdate) != 1) {
+                log.error("[ypbin-ai] 导入文档路径回写失败: docId={}, filePath={}",
+                    doc.getId(), filePath);
+            } else {
+                doc.setFilePath(filePath);
+            }
         }
 
         documentVectorizer.vectorizeAsync(
@@ -386,10 +455,13 @@ public class AiKnowledgeCrudComponent {
     private void markDocFailed(Long docId, String errorMsg) {
         AiDocument update = new AiDocument();
         update.setId(docId);
-        update.setStatus(2);
+        update.setStatus(AiDocumentStatusEnum.FAILED.getCode());
         update.setErrorMsg(errorMsg != null && errorMsg.length() > 490
             ? errorMsg.substring(0, 490) : errorMsg);
         update.setUpdateTime(LocalDateTime.now());
-        documentMapper.updateById(update);
+        if (documentMapper.updateById(update) != 1) {
+            // 调用方已在异常路径上，这里不能再用异常覆盖原始失败原因；但必须留痕
+            log.error("[ypbin-ai] 文档失败状态写入失败: docId={}, errorMsg={}", docId, errorMsg);
+        }
     }
 }

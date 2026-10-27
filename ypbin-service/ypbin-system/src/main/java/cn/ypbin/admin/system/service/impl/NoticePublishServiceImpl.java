@@ -14,6 +14,7 @@ import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.entity.SysNoticeDelivery;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.enums.NoticePublishStatusEnum;
 import cn.ypbin.admin.system.mapper.SysMessageMapper;
 import cn.ypbin.admin.system.mapper.SysNoticeDeliveryMapper;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
@@ -49,7 +50,12 @@ import org.springframework.stereotype.Service;
 public class NoticePublishServiceImpl implements NoticePublishService {
 
     private static final Logger log = LoggerFactory.getLogger(NoticePublishServiceImpl.class);
-    private static final int PUBLISHED = 2;
+    /** 站内信消息类型：系统通知 */
+    private static final int MESSAGE_TYPE_SYSTEM_NOTICE = 1;
+    /** 站内信已读状态：未读 */
+    private static final int READ_STATUS_UNREAD = 0;
+    /** 未删除标记（sys_message.is_deleted） */
+    private static final int NOT_DELETED = 0;
     private static final int MAX_RETRIES = 3;
     private static final int ERROR_MAX_LENGTH = 1000;
     private static final int BATCH_SIZE = 100;
@@ -192,12 +198,12 @@ public class NoticePublishServiceImpl implements NoticePublishService {
         message.setReceiverUserId(delivery.getReceiverUserId());
         message.setTitle(notice.getTitle());
         message.setContent(notice.getContent());
-        message.setMessageType(1);
-        message.setReadStatus(0);
+        message.setMessageType(MESSAGE_TYPE_SYSTEM_NOTICE);
+        message.setReadStatus(READ_STATUS_UNREAD);
         message.setCreateTime(LocalDateTime.now());
         message.setUpdateTime(message.getCreateTime());
         message.setStatus(EntityStatus.ENABLED.getCode());
-        message.setIsDeleted(0);
+        message.setIsDeleted(NOT_DELETED);
         try {
             messageMapper.insertNoticeMessage(message);
         } catch (DuplicateKeyException e) {
@@ -299,7 +305,8 @@ public class NoticePublishServiceImpl implements NoticePublishService {
     }
 
     private boolean isCurrentPublishedVersion(SysNotice notice, SysNoticeDelivery delivery) {
-        return notice != null && notice.getPublishStatus() == PUBLISHED
+        return notice != null
+            && NoticePublishStatusEnum.PUBLISHED.getCode().equals(notice.getPublishStatus())
             && delivery.getPublishVersion().equals(notice.getPublishVersion());
     }
 

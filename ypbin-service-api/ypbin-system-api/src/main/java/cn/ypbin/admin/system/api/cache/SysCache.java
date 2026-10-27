@@ -20,6 +20,7 @@ import cn.ypbin.starter.core.util.SpringUtils;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -35,7 +36,7 @@ import org.jspecify.annotations.Nullable;
  * 密码校验走 {@code ISystemClient.verifyPassword} 直查库比对，改密即时生效。</p>
  *
  * <p><strong>关于「缓存列表载荷」的类型表达（2026-10-19 已治本）</strong>：
- * 本类 4 处「缓存载荷是列表」的读取（角色码、权限码、第三方配置列表、绑定列表）此前必须写成
+ * 本类 3 处「缓存载荷是列表」的读取（角色码、权限码、绑定列表）此前必须写成
  * {@code (Class<List<T>>) (Class<?>) List.class} 双强转——根因是 starter 的
  * {@code CacheService#getOrLoad} 只接受 {@code Class<T>}，而 {@code List<String>} 的运行时类型信息已擦除。
  * 但该 {@code type} 参数在实现里<b>只做 {@code (T)} 强转、从不参与反序列化</b>（真正的类型还原由
@@ -43,7 +44,7 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>starter 4.2.0 已补「<b>无需 Class 参数</b>」的重载
  * {@code getOrLoad(String key, Supplier<T> loader, Duration ttl)}，本类改用之后
- * <b>4 处双重强转与 {@code @SuppressWarnings("unchecked")} 全部移除</b>。
+ * <b>3 处双重强转与 {@code @SuppressWarnings("unchecked")} 全部移除</b>。
  * 此前那个「抽成 {@code uncheckedListType()} 收敛到一处」只是治标；现在根因已消除，
  * 后来人<b>不应</b>再引入双重强转（{@code SysCacheTest} 有源码级护栏钉住）。</p>
  *
@@ -66,7 +67,6 @@ public final class SysCache {
     private static final String PERM_USER_KEY = "sys:perm:user:";
     private static final String CONFIG_KEY = "sys:config:key:";
     private static final String SOCIAL_CONFIG_KEY = "sys:social:config:";
-    private static final String SOCIAL_CONFIGS_KEY = "sys:social:configs";
     private static final String SOCIAL_BINDING_KEY = "sys:social:v2:binding:";
     private static final String SOCIAL_BINDINGS_USER_KEY = "sys:social:v2:bindings:";
     private static final String SOCIAL_BOUND_KEY = "sys:social:bound:";
@@ -88,15 +88,6 @@ public final class SysCache {
         return feignClient;
     }
 
-    /**
-     * 「列表载荷」的 {@code Class} 占位（配合 {@code CacheService#getOrLoad} 的 {@code Class<T>} 签名）。
-     *
-     * <p>具体泛型信息在运行时已擦除，{@code CacheService} 也无法用它做元素级反序列化（见类注释）；
-     * 本方法只是把 4 处重复的双强转收敛到一处，其 unchecked 压制范围仅限本方法。</p>
-     *
-     * @param <T> 列表元素类型（编译期占位，运行期无信息）
-     * @return {@code List.class} 的类型化视图
-     */
     /**
      * 按用户名取用户（登录用），永久缓存。缓存载荷为不含密码的只读视图。
      */
@@ -240,36 +231,92 @@ public final class SysCache {
     }
 
     /**
-     * 第三方登录平台授权配置（auth 构建授权请求用），永久缓存。
+     * 批量清除系统参数缓存（分组更新等多键场景）。
+     *
+     * <p>合并全部键后只发一次删除请求，避免按参数逐条往返（参数分组常见十几项）。
+     * 空集合短路，元素为 null 时跳过。</p>
+     *
+     * @param configKeys 参数键集合，允许为 null/空
      */
-    public static SocialAuthConfig getSocialAuthConfig(String source) {
-        return CacheUtils.getOrLoad(
-            SOCIAL_CONFIG_KEY + source,
-            SocialAuthConfig.class,
-            () -> FeignResponses.dataOrThrow(feignClient().getSocialAuthConfig(source),
-                "系统服务暂不可用，请稍后重试"),
-            null);
+    public static void evictConfigs(Collection<String> configKeys) {
+        if (configKeys == null || configKeys.isEmpty()) {
+            return;
+        }
+        List<String> keys = new ArrayList<>();
+        for (String configKey : configKeys) {
+            if (configKey != null) {
+                keys.add(CONFIG_KEY + configKey);
+            }
+        }
+        if (!keys.isEmpty()) {
+            CacheUtils.delete(keys);
+        }
     }
 
     /**
-     * 全部启用第三方登录平台授权配置，永久缓存。
+     * 批量清除导入用户的 username / phone 缓存键。
+     *
+     * <p>导入一次可能数百行，逐用户 {@link #evictUser} + {@link #evictUserByPhone}
+     * 会放大成两倍行数的缓存往返；这里合并后一次删除。</p>
+     *
+     * @param usernames 用户名集合，允许为 null/空
+     * @param phones    手机号集合，允许为 null/空
      */
-    public static List<SocialAuthConfig> listSocialAuthConfigs() {
+    public static void evictUsersByUsernameAndPhone(Collection<String> usernames,
+            Collection<String> phones) {
+        List<String> keys = new ArrayList<>();
+        if (usernames != null) {
+            for (String username : usernames) {
+                if (username != null) {
+                    keys.add(USERNAME_KEY + username);
+                }
+            }
+        }
+        if (phones != null) {
+            for (String phone : phones) {
+                if (phone != null) {
+                    keys.add(PHONE_KEY + phone);
+                }
+            }
+        }
+        if (!keys.isEmpty()) {
+            CacheUtils.delete(keys);
+        }
+    }
+
+    /**
+     * 第三方登录平台授权配置（auth 构建授权请求用），永久缓存。
+     */
+    public static SocialAuthConfig getSocialAuthConfig(String source) {
+        // 缓存键在读写两侧都必须是同一个口径：authorize 入口的 :source 来自 URL（可能是 "GitHub"），
+        // 而写侧失效用的是小写归一值。若读取侧原样拼键，大小写变体就会各存一份永久缓存，
+        // 平台停用后 "GitHub" 那份永远清不掉。故这里统一归一，再用于缓存键与回源参数。
+        String normalizedSource = normalizeSocialSource(source);
         return CacheUtils.getOrLoad(
-            SOCIAL_CONFIGS_KEY,
-            () -> FeignResponses.dataOrThrow(feignClient().listSocialAuthConfigs(),
+            SOCIAL_CONFIG_KEY + normalizedSource,
+            SocialAuthConfig.class,
+            () -> FeignResponses.dataOrThrow(feignClient().getSocialAuthConfig(normalizedSource),
                 "系统服务暂不可用，请稍后重试"),
             null);
     }
 
     /**
      * 清除第三方登录平台授权配置缓存（平台配置变更后调用）。
+     *
+     * <p>{@code source} 与读取侧同口径（去空白 + 小写）：本方法内部再做一次归一，
+     * 调用方传 {@code GitHub} 也能清到 {@code github} 的键。</p>
+     *
+     * @param source 平台标识
      */
     public static void evictSocialConfig(String source) {
         if (source != null) {
-            CacheUtils.delete(SOCIAL_CONFIG_KEY + source);
+            CacheUtils.delete(SOCIAL_CONFIG_KEY + normalizeSocialSource(source));
         }
-        CacheUtils.delete(SOCIAL_CONFIGS_KEY);
+    }
+
+    /** 第三方平台标识归一：去空白 + 小写（缓存键的单一口径）。 */
+    private static String normalizeSocialSource(@Nullable String source) {
+        return source == null ? "" : source.trim().toLowerCase(Locale.ROOT);
     }
 
     /**

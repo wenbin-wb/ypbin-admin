@@ -48,6 +48,35 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     /** 向量化模型 */
     public static final String MODEL_TYPE_EMBEDDING = "EMBEDDING";
 
+    /** 连接超时（秒） */
+    static final int CONNECT_TIMEOUT_SECONDS = 5;
+    /** 请求超时（秒） */
+    static final int READ_TIMEOUT_SECONDS = 15;
+    /** 连接超时 */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS);
+    /** 请求超时 */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(READ_TIMEOUT_SECONDS);
+
+    /**
+     * 连接测试复用同一客户端：每次 new 会丢掉连接池与线程资源。
+     *
+     * <p>显式指定 HTTP/1.1：JDK 默认 HTTP/2，而该方法总是「新连接 + 带体 POST」，
+     * 对仅支持 h2c 探测的服务会出现 {@code EOF reached while reading}（IoT 仓实测）。</p>
+     */
+    private static final HttpClient httpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
+        .connectTimeout(CONNECT_TIMEOUT)
+        .build();
+
+    /**
+     * 取共享客户端（包级可见，仅供测试断言「单例 + 协议版本 + 超时」配置，不做真实网络调用）。
+     *
+     * @return 进程内共享的 {@link HttpClient}
+     */
+    static HttpClient httpClient() {
+        return httpClient;
+    }
+
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
 
@@ -92,7 +121,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         config.setIsDefault(0);
         // API Key AES-GCM 加密后存储，禁止明文落库
         config.setApiKey(keyCipher.encrypt(req.getApiKey()));
-        modelConfigMapper.insert(config);
+        if (modelConfigMapper.insert(config) != 1) {
+            throw new BusinessException("模型配置创建失败");
+        }
     }
 
     @Override
@@ -106,7 +137,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
             config.setApiKey(keyCipher.encrypt(req.getApiKey()));
         }
-        modelConfigMapper.updateById(config);
+        if (modelConfigMapper.updateById(config) != 1) {
+            throw new BusinessException("模型配置更新失败");
+        }
     }
 
     @Override
@@ -116,7 +149,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         if (existing.getIsDefault() != null && existing.getIsDefault() == 1) {
             throw new BusinessException("默认模型不能删除，请先更换默认模型");
         }
-        modelConfigMapper.deleteById(id);
+        if (modelConfigMapper.deleteById(id) != 1) {
+            throw new BusinessException("模型配置删除失败");
+        }
     }
 
     @Override
@@ -132,10 +167,13 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
                 .eq(AiModelConfig::getModelType, modelType)
                 .set(AiModelConfig::getIsDefault, 0));
         // 设置新默认
-        modelConfigMapper.update(null,
+        int affected = modelConfigMapper.update(null,
             new LambdaUpdateWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getId, id)
                 .set(AiModelConfig::getIsDefault, 1));
+        if (affected != 1) {
+            throw new BusinessException("默认模型设置失败");
+        }
     }
 
     @Override
@@ -149,7 +187,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         AiModelConfig update = new AiModelConfig();
         update.setId(id);
         update.setStatus(status);
-        modelConfigMapper.updateById(update);
+        if (modelConfigMapper.updateById(update) != 1) {
+            throw new BusinessException("模型状态更新失败");
+        }
     }
 
     @Override
@@ -163,7 +203,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         copy.setIsDefault(0);
         copy.setStatus(EntityStatus.ENABLED.getCode());
         // API Key 密文可直接复用（同一把密钥加密，解密语义不变）
-        modelConfigMapper.insert(copy);
+        if (modelConfigMapper.insert(copy) != 1) {
+            throw new BusinessException("模型复制失败");
+        }
         return copy.getId();
     }
 
@@ -177,14 +219,12 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         String apiKey = keyCipher.decrypt(config.getApiKey());
         long start = System.currentTimeMillis();
         try {
-            HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+            // 模型名来自用户输入，直接拼进 JSON 会被引号/反斜杠破坏报文（甚至注入字段）
             String payload = """
                 {"model":"%s","messages":[{"role":"user","content":"ping"}],"max_tokens":5}
-                """.formatted(config.getModelName());
+                """.formatted(escapeJson(config.getModelName()));
             HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .timeout(Duration.ofSeconds(15))
+                .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8));
             if (apiKey != null && !apiKey.isBlank()) {
@@ -193,7 +233,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             String[] candidates = completionUrls(baseUrl);
             HttpResponse<String> resp = null;
             for (String url : candidates) {
-                resp = client.send(builder.copy().uri(URI.create(url)).build(),
+                resp = httpClient.send(builder.copy().uri(URI.create(url)).build(),
                     HttpResponse.BodyHandlers.ofString());
                 // 404 时尝试下一个候选地址，其余错误码直接返回
                 if (resp.statusCode() != 404) {
@@ -236,6 +276,43 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     private String truncate(String text) {
         return text == null ? "" : (text.length() > 300 ? text.substring(0, 300) + "..." : text);
+    }
+
+    /**
+     * JSON 字符串转义（模型名/地址只用于报文，不引入额外依赖）。
+     *
+     * <p>除 {@code "} 与 {@code \} 外，还必须转义 U+0000–U+001F 控制字符：
+     * JSON 规范禁止裸写控制字符，模型名里混入换行/制表符会让整条报文非法，
+     * 服务端直接返回 400，而错误信息里只显示「连接失败」，排查不到根因。</p>
+     *
+     * @param value 原始字符串，可空
+     * @return 可直接放入 JSON 双引号内的字符串
+     */
+    private static String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder(value.length() + 8);
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (ch < 0x20) {
+                        escaped.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
     }
 
     @Override

@@ -99,7 +99,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         entity.setApproveStatus(STATUS_DRAFT);
         // 当前仅手工签发；支付自动获取授权为预留能力（source=payment），落地前固定手工来源
         entity.setSource("manual");
-        save(entity);
+        if (!save(entity)) {
+            throw new BusinessException("授权草稿创建失败");
+        }
         return entity.getId();
     }
 
@@ -115,7 +117,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         BeanUtils.copyProperties(req, entity);
         entity.setId(id);
         entity.setApproveStatus(STATUS_DRAFT);
-        updateById(entity);
+        if (!updateById(entity)) {
+            throw new BusinessException("授权草稿更新失败");
+        }
     }
 
     @Override
@@ -130,7 +134,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         update.setId(id);
         update.setApproveStatus(STATUS_PENDING);
         update.setRejectReason("");
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("授权提交审批失败");
+        }
     }
 
     @Override
@@ -160,7 +166,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             update.setApproveStatus(STATUS_REJECTED);
             update.setRejectReason(req.getRejectReason());
         }
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("授权审批状态更新失败");
+        }
         return issueResp;
     }
 
@@ -174,7 +182,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         SysLicense update = new SysLicense();
         update.setId(id);
         update.setApproveStatus(STATUS_REVOKED);
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("授权吊销失败");
+        }
     }
 
     @Override
@@ -185,7 +195,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             && !STATUS_REJECTED.equals(entity.getApproveStatus())) {
             throw new BusinessException("仅草稿或已驳回状态可删除");
         }
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("授权删除失败");
+        }
     }
 
     @Override
@@ -318,7 +330,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             secretKey = generateAppKey();
             app.setSecretKey(secretKey);
             app.setEnabled(1);
-            sysAppService.save(app);
+            if (!sysAppService.save(app)) {
+                throw new BusinessException("联机应用创建失败，授权签发中止");
+            }
         }
         update.setAppId(app.getId());
         LicenseIssueResp resp = new LicenseIssueResp();

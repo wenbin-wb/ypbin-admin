@@ -193,6 +193,7 @@ class SystemClientGetOrCreateUserTest {
         existing.setNickname("旧名");
         existing.setRealName("旧名");
         when(userService.getOne(any())).thenReturn(existing);
+        when(userService.updateById(any(SysUser.class))).thenReturn(true);
 
         systemClient.getOrCreateUserByUsername("wx_openid_5", "新名", null, "MINIAPP", "微信用户");
 

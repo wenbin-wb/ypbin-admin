@@ -143,7 +143,8 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
         if (users.isEmpty()) {
             return;
         }
-        users.stream().map(SysUser::getId).distinct().forEach(SysCache::evictUserAuth);
+        // 批版接口合并键后一次删除；逐个 forEach 会让 N 个用户变成 N 次缓存往返
+        SysCache.evictUserAuth(users.stream().map(SysUser::getId).distinct().toList());
     }
 
     @Override

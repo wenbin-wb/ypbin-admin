@@ -40,6 +40,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiChatRoleServiceImpl implements AiChatRoleService {
 
+    /** 内置角色标记：是 */
+    private static final int BUILTIN_YES = 1;
+    /** 内置角色标记：否 */
+    private static final int BUILTIN_NO = 0;
+    /** 用户自定义角色的默认排序值（内置角色占用更小值） */
+    private static final int CUSTOM_ROLE_SORT = 100;
+
     private final AiChatRoleMapper roleMapper;
     private final AiChatRoleFavoriteMapper favoriteMapper;
 
@@ -85,10 +92,13 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     public Long createRole(AiChatRoleSaveReq req) {
         AiChatRole role = new AiChatRole();
         BeanUtils.copyProperties(req, role);
-        role.setIsBuiltin(0);
-        role.setSort(100);
+        role.setTenantId(currentTenantId());
+        role.setIsBuiltin(BUILTIN_NO);
+        role.setSort(CUSTOM_ROLE_SORT);
         role.setStatus(EntityStatus.ENABLED.getCode());
-        roleMapper.insert(role);
+        if (roleMapper.insert(role) != 1) {
+            throw new BusinessException("角色创建失败");
+        }
         return role.getId();
     }
 
@@ -97,46 +107,75 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
     public void updateRole(Long id, AiChatRoleSaveReq req) {
         AiChatRole role = requireCustomRole(id);
         BeanUtils.copyProperties(req, role);
-        roleMapper.updateById(role);
+        role.setIsBuiltin(BUILTIN_NO);
+        if (roleMapper.updateById(role) != 1) {
+            throw new BusinessException("角色更新失败");
+        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteRole(Long id) {
         requireCustomRole(id);
-        roleMapper.deleteById(id);
+        if (roleMapper.deleteById(id) != 1) {
+            throw new BusinessException("角色删除失败");
+        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void toggleFavorite(Long roleId) {
-        Long userId = IdentityContext.getUserId().orElse(null);
+        Long userId = IdentityContext.getUserId()
+            .orElseThrow(() -> new BusinessException("当前用户未登录"));
+        // 收藏前必须确认角色可见：否则可以收藏任意租户的角色 ID，列表回显时泄露其存在性
+        requireVisibleRole(roleId);
         AiChatRoleFavorite existing = favoriteMapper.selectOne(
             new LambdaQueryWrapper<AiChatRoleFavorite>()
                 .eq(AiChatRoleFavorite::getUserId, userId)
                 .eq(AiChatRoleFavorite::getRoleId, roleId));
         if (existing != null) {
-            favoriteMapper.deleteById(existing.getId());
+            if (favoriteMapper.deleteById(existing.getId()) != 1) {
+                throw new BusinessException("取消收藏失败");
+            }
         } else {
             AiChatRoleFavorite fav = new AiChatRoleFavorite();
             fav.setUserId(userId);
             fav.setRoleId(roleId);
-            favoriteMapper.insert(fav);
+            if (favoriteMapper.insert(fav) != 1) {
+                throw new BusinessException("收藏失败");
+            }
         }
     }
 
     private AiChatRole requireCustomRole(Long id) {
-        AiChatRole role = roleMapper.selectById(id);
-        if (role == null) {
-            throw new BusinessException("角色不存在");
-        }
-        if (role.getIsBuiltin() == 1) {
+        AiChatRole role = requireVisibleRole(id);
+        if (role.getIsBuiltin() != null && role.getIsBuiltin() == BUILTIN_YES) {
             throw new BusinessException("内置角色不可修改");
         }
         return role;
     }
 
+    /**
+     * 取角色并校验可见性（内置角色或当前租户自定义角色）。
+     *
+     * @param id 角色 ID
+     * @return 角色实体
+     */
+    private AiChatRole requireVisibleRole(Long id) {
+        Long tenantId = currentTenantId();
+        AiChatRole role = TenantContext.executeIgnore(() -> roleMapper.selectById(id));
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
+        boolean builtin = role.getIsBuiltin() != null && role.getIsBuiltin() == BUILTIN_YES;
+        if (!builtin && !tenantId.equals(role.getTenantId())) {
+            throw new BusinessException("无权访问该角色");
+        }
+        return role;
+    }
+
     private Long currentTenantId() {
-        return UserContext.getTenantId().orElse(0L);
+        return UserContext.getTenantId()
+            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
     }
 }

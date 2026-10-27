@@ -12,22 +12,14 @@ package cn.ypbin.admin.ai.service.impl;
 import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.ai.service.AiWidgetService;
-import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,19 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiWidgetServiceImpl implements AiWidgetService {
 
-    /** 复用同一 SecureRandom：每次 new 既浪费熵源，也可能产生相关性 */
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
-
-    private static final Logger log = LoggerFactory.getLogger(AiWidgetServiceImpl.class);
-
-    private static final int TOKEN_BYTES = 16;
-
-    /** 匿名问答同步等待上限：远程模型无响应时及时失败，避免请求线程无限阻塞 */
-    private static final Duration ANSWER_BLOCK_TIMEOUT = Duration.ofSeconds(120);
-
     private final AiKnowledgeBaseMapper kbMapper;
-    private final ObjectProvider<AiChatService> aiChatServiceProvider;
+    private final AiPublicAccessSupport publicAccessSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -68,7 +49,7 @@ public class AiWidgetServiceImpl implements AiWidgetService {
         uw.eq(AiKnowledgeBase::getId, knowledgeBaseId);
         String token = null;
         if (enabled) {
-            token = generateToken();
+            token = publicAccessSupport.generateToken();
             uw.set(AiKnowledgeBase::getWidgetToken, token);
             uw.set(AiKnowledgeBase::getWidgetEnabled, 1);
         } else {
@@ -76,7 +57,9 @@ public class AiWidgetServiceImpl implements AiWidgetService {
             uw.set(AiKnowledgeBase::getWidgetEnabled, 0);
         }
         uw.set(AiKnowledgeBase::getUpdateTime, LocalDateTime.now());
-        kbMapper.update(null, uw);
+        if (kbMapper.update(null, uw) != 1) {
+            throw new BusinessException("挂件状态保存失败");
+        }
         return token;
     }
 
@@ -90,24 +73,7 @@ public class AiWidgetServiceImpl implements AiWidgetService {
     @Override
     public String ask(String token, String question) {
         AiKnowledgeBase kb = requireEnabledKb(token);
-        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
-        if (aiChatService == null) {
-            throw new BusinessException("AI 对话服务未配置，请先配置对话模型");
-        }
-        try {
-            // 匿名请求无登录上下文：显式绑定知识库所属租户，保证 RAG 检索与 AI 调用在正确租户内
-            List<String> tokens = TenantContext.executeWithTenant(kb.getTenantId(),
-                () -> aiChatService.chatWithKnowledge(
-                        "widget-" + kb.getId(), question, String.valueOf(kb.getId()))
-                    .collectList()
-                    .block(ANSWER_BLOCK_TIMEOUT));
-            return tokens == null ? "" : String.join("", tokens);
-        } catch (IllegalStateException e) {
-            // 模型未配置/密钥缺失等环境问题：记录日志并向调用方暴露明确的业务错误（非静默降级）
-            // 不记录 token：它是访问该挂件的凭据，落日志等于泄露；改用知识库 ID 关联排查
-            log.warn("[ypbin-ai] 挂件问答失败: kbId={} err={}", kb.getId(), e.getMessage(), e);
-            throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加对话模型");
-        }
+        return publicAccessSupport.answer(kb, "widget-" + kb.getId(), question, "挂件");
     }
 
     /**
@@ -132,11 +98,5 @@ public class AiWidgetServiceImpl implements AiWidgetService {
             throw new BusinessException("挂件未启用或令牌无效");
         }
         return list.get(0);
-    }
-
-    private String generateToken() {
-        byte[] bytes = new byte[TOKEN_BYTES];
-        SECURE_RANDOM.nextBytes(bytes);
-        return HexFormat.of().formatHex(bytes);
     }
 }

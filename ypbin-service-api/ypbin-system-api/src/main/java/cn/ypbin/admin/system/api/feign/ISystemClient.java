@@ -104,15 +104,27 @@ public interface ISystemClient {
 
     /**
      * 按关键词搜索用户（AI 工具用，限制 10 条）。
+     *
+     * <p><b>租户必须显式传入</b>：AI 工具运行在 Reactor 工作线程，Feign 请求不会携带
+     * 登录态与租户身份头，服务端隐式读取租户会退化成全局搜索（跨租户泄露）或直接失败。
+     * 调用方从自身上下文取租户后显式传递，服务端再以该值做行级过滤。</p>
+     *
+     * @param keyword  用户名或真实姓名关键词
+     * @param tenantId 租户 ID（必填）
+     * @return 匹配用户（最多 10 条）
      */
     @GetMapping("/search-users")
-    R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword);
+    R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword,
+        @RequestParam("tenantId") Long tenantId);
 
     /**
      * 用户计数（AI 工具统计用）。
+     *
+     * @param tenantId 租户 ID（必填，语义同 {@link #searchUsers}）
+     * @return 该租户的用户数
      */
     @GetMapping("/user-count")
-    R<Long> countUsers();
+    R<Long> countUsers(@RequestParam("tenantId") Long tenantId);
 
     /**
      * 按参数键读取系统参数（auth 读取登录开关/短信配置用）。

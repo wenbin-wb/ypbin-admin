@@ -155,8 +155,9 @@ public class AiKnowledgeSearchComponent {
             logEntry.setCreateTime(LocalDateTime.now());
             queryLogMapper.insert(logEntry);
         } catch (Exception e) {
-            log.warn("[ypbin-ai] 记录检索日志失败: kbId={} query={} err={}",
-                knowledgeBaseId, LogSanitizer.sanitize(query), LogSanitizer.sanitize(e.getMessage()), e);
+            // 统计旁路失败不阻断主流程，但属于「静默丢数据」，必须 ERROR + 完整堆栈
+            log.error("[ypbin-ai] 记录检索日志失败: kbId={} query={}",
+                knowledgeBaseId, LogSanitizer.sanitize(query), e);
         }
     }
 

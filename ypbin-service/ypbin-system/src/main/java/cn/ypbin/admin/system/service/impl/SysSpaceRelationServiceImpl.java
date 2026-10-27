@@ -311,8 +311,9 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
                 toPromote.add(entry.getValue());
             }
         }
-        if (!toPromote.isEmpty()) {
-            updateBatchById(toPromote);
+        if (!toPromote.isEmpty() && !updateBatchById(toPromote)) {
+            // 主空间兜底失败会让对象「没有主空间」，必须显式失败而不是静默返回
+            throw new BusinessException("主空间兜底设置失败（" + toPromote.size() + " 条）");
         }
     }
 
@@ -383,19 +384,6 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
         return grouped;
     }
 
-    /**
-     * 关联实体 → 响应（含空间侧字段）。
-     *
-     * <p>抽出来是因为 {@code listByTarget} / {@code listBySpace} / {@code listByTargets}
-     * 三处都要做同一件事；复制三份会在加字段时漏改其中一处。</p>
-     *
-     * <p>空间类型的展示文本由 {@code SpaceRelationResp.spaceType} 上的 {@code @DictText} 在序列化时
-     * 输出 {@code spaceTypeText}，<b>不在这里手工翻译</b>（否则与 starter 形成两份实现）。</p>
-     *
-     * @param relation 关联实体
-     * @param space    空间实体（可为 null：空间被删但关联残留）
-     * @return 关联响应
-     */
     /**
      * 当前租户 ID。
      *
@@ -603,22 +591,16 @@ public class SysSpaceRelationServiceImpl extends BaseServiceImpl<SysSpaceRelatio
         if (!StringUtils.hasText(targetType) || targetId == null) {
             throw new BusinessException("删除空间关联必须指定关联对象类型与对象 ID");
         }
+        // 调用方是删除部门/用户的内部链路，传的是本仓常量（已归一）；这里不再查字典校验：
+        // 清理动作不应因字典缺项/缓存不可用而失败，否则会把「删除部门/用户」一起卡住。
         // 物理删，理由同 unbind
         return baseMapper.physicalDelete(new LambdaQueryWrapper<SysSpaceRelation>()
-            .eq(SysSpaceRelation::getTargetType, targetType.trim())
+            .eq(SysSpaceRelation::getTargetType, targetType)
             .eq(SysSpaceRelation::getTargetId, targetId));
     }
 
     // ---------- 内部 ----------
 
-    /**
-     * 批量填充空间完整路径（如「总部园区 / A 栋 / 1F / 101 室」）。
-     *
-     * <p><b>为什么不在循环里调 {@code buildSpacePath}</b>：那是每条关联一次递归 CTE，
-     * 20 个空间就是 20 次查询（N+1，门禁判红）。这里一次性取全量空间，在内存里沿 pid 上溯拼路径。</p>
-     *
-     * @param items 关联响应列表
-     */
     /**
      * 为关联列表填充空间的完整路径（委托 {@link SpacePathResolver}）。
      *

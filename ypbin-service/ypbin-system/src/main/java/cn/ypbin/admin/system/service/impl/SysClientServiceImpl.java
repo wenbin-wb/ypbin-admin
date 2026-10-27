@@ -45,7 +45,9 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
         BeanUtils.copyProperties(req, client);
         String secret = generateSecret();
         client.setClientSecret(secret);
-        save(client);
+        if (!save(client)) {
+            throw new BusinessException("客户端创建失败");
+        }
         return new ClientCredentialResp(client.getClientId(), secret);
     }
 
@@ -60,7 +62,9 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
         SysClient update = new SysClient();
         update.setId(id);
         update.setClientSecret(secret);
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("密钥重置失败");
+        }
         return new ClientCredentialResp(client.getClientId(), secret);
     }
 
@@ -73,7 +77,9 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
         SysClient client = new SysClient();
         BeanUtils.copyProperties(req, client);
         client.setId(id);
-        updateById(client);
+        if (!updateById(client)) {
+            throw new BusinessException("客户端更新失败");
+        }
     }
 
     @Override
@@ -82,7 +88,9 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
         if (getById(id) == null) {
             throw new BusinessException("客户端不存在");
         }
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("客户端删除失败");
+        }
     }
 
     private ClientResp toResp(SysClient client) {

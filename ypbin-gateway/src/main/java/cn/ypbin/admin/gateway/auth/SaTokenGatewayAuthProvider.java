@@ -18,6 +18,8 @@ import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.identity.IdentityHeaders;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
@@ -35,6 +37,8 @@ import reactor.core.publisher.Mono;
  */
 @Component
 public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(SaTokenGatewayAuthProvider.class);
 
     @Override
     public Mono<GatewayAuthResult> authenticate(ServerWebExchange exchange) {
@@ -81,7 +85,9 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
                 UserContext.KEY_LOGIN_USER);
             return value instanceof LoginUser loginUser ? loginUser : null;
         } catch (Exception e) {
-            // 会话读取失败视为用户信息缺失，由调用方按未登录处理
+            // 会话反序列化/存储异常与「用户确实不存在」语义不同：必须留日志，
+            // 否则 Redis 故障会被伪装成「登录用户不存在」，排障时没有任何线索
+            log.error("读取登录会话失败：loginId={}", loginId, e);
             return null;
         }
     }

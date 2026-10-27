@@ -52,6 +52,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -151,17 +152,46 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     @Override
     public SpaceResp getSpace(Long id) {
         SysSpace space = requireSpace(id);
-        return toRespList(List.of(space)).getFirst();
+        // 单行详情不取全表快照：路径走一条递归 CTE、计数走一次分组查询，
+        // 避免「查 1 条记录却全表扫描一次」
+        SpaceResp resp = new SpaceResp();
+        BeanUtils.copyProperties(space, resp);
+        resp.setSpacePath(buildSpacePath(id));
+        long[] counter = loadCounters(List.of(id)).get(id);
+        resp.setChildCount(counter == null ? 0L : counter[0]);
+        resp.setRelationCount(counter == null ? 0L : counter[1]);
+        return resp;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSpace(SpaceSaveReq req) {
+        return createSpaceInternal(req, null, true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateSpace(Long id, SpaceSaveReq req) {
+        updateSpaceInternal(id, req, null, true);
+    }
+
+    /**
+     * 创建空间（可复用已加载的字典项/跳过逐行查重）。
+     *
+     * @param req              保存请求
+     * @param allowedTypes     已加载的空间类型允许值；null 时现查字典
+     * @param checkCodeInDb    true=查库校验编码唯一（单条 API）；false=批量导入已做过整表索引
+     * @return 新空间 ID
+     */
+    private Long createSpaceInternal(SpaceSaveReq req, Set<String> allowedTypes,
+            boolean checkCodeInDb) {
         String extJson = normalizeExtJson(req.getExtJson());
         long pid = normParentId(req.getPid());
         int level = validateParent(null, pid);
-        checkCodeUnique(req.getCode(), null);
-        requireSpaceType(req.getSpaceType());
+        if (checkCodeInDb) {
+            checkCodeUnique(req.getCode(), null);
+        }
+        requireSpaceType(req.getSpaceType(), allowedTypes);
 
         SysSpace space = new SysSpace();
         apply(space, req, pid, level, extJson);
@@ -171,15 +201,24 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         return space.getId();
     }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void updateSpace(Long id, SpaceSaveReq req) {
+    /**
+     * 更新空间（可复用已加载的字典项/跳过逐行查重）。
+     *
+     * @param id            空间 ID
+     * @param req           保存请求
+     * @param allowedTypes  已加载的空间类型允许值；null 时现查字典
+     * @param checkCodeInDb true=查库校验编码唯一（单条 API）；false=批量导入已做过整表索引
+     */
+    private void updateSpaceInternal(Long id, SpaceSaveReq req, Set<String> allowedTypes,
+            boolean checkCodeInDb) {
         SysSpace space = requireSpace(id);
         String extJson = normalizeExtJson(req.getExtJson());
         long pid = normParentId(req.getPid());
         int newLevel = validateParent(id, pid);
-        checkCodeUnique(req.getCode(), id);
-        requireSpaceType(req.getSpaceType());
+        if (checkCodeInDb) {
+            checkCodeUnique(req.getCode(), id);
+        }
+        requireSpaceType(req.getSpaceType(), allowedTypes);
 
         int oldLevel = space.getLevel() == null ? 1 : space.getLevel();
         long oldPid = space.getPid() == null ? SpaceConstants.ROOT_PARENT_ID : space.getPid();
@@ -355,6 +394,9 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         }
 
         // ---- 第一遍：解析全部行 + 格式校验，建立索引 ----
+        // 字典项只加载一次：此前每行 parseImportRow 与 createSpace/updateSpace 各查一次字典，
+        // 5000 行导入能放大成上万次额外查询
+        Set<String> allowedTypes = loadAllowedSpaceTypes();
         List<ImportRow> parsed = new ArrayList<>();
         Map<String, ImportRow> byCode = new LinkedHashMap<>();
         Map<String, Long> existingIdByCode = loadExistingIdByCode();
@@ -368,7 +410,7 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             List<String> cells = csvRow.cells();
             String code = cell(cells, colIndex, "code");
             try {
-                ImportRow row = parseImportRow(cells, colIndex, lineNo);
+                ImportRow row = parseImportRow(cells, colIndex, lineNo, allowedTypes);
                 if (byCode.containsKey(row.code)) {
                     throw new BusinessException(
                         "编码重复（表格内已出现于第 " + byCode.get(row.code).lineNo + " 行）");
@@ -425,10 +467,12 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             for (ImportRow row : ready) {
                 try {
                     if (idByCode.containsKey(row.code)) {
-                        applyUpsert(row, idByCode.get(row.code), idByCode);
+                        applyUpsert(row, idByCode.get(row.code), idByCode, allowedTypes);
                         result.setUpdated(result.getUpdated() + 1);
                     } else {
-                        Long newId = createSpace(row.toSaveReq(idByCode.get(row.parentCode)));
+                        // 第一遍已用整表索引校验过编码唯一性，这里不再逐行查库
+                        Long newId = createSpaceInternal(
+                            row.toSaveReq(idByCode.get(row.parentCode)), allowedTypes, false);
                         idByCode.put(row.code, newId);
                         result.setInserted(result.getInserted() + 1);
                     }
@@ -457,13 +501,16 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
      * <p><b>整行覆盖</b>（与 `updateSpace` 一致）：CSV 一行就是一份完整的空间定义。
      * 若只更新部分列，用户会误以为「表格里的空值表示保持不变」，而实际上空值会清空字段。</p>
      *
-     * @param row       导入行
-     * @param id        已存在的空间 ID
-     * @param idByCode  编码 → 空间 ID 映射（含本次已插入的行）
+     * @param row          导入行
+     * @param id           已存在的空间 ID
+     * @param idByCode     编码 → 空间 ID 映射（含本次已插入的行）
+     * @param allowedTypes 已加载的空间类型允许值
      * @throws BusinessException 父编码无法解析
      */
-    private void applyUpsert(ImportRow row, Long id, Map<String, Long> idByCode) {
-        updateSpace(id, row.toSaveReq(resolveParentId(row, idByCode)));
+    private void applyUpsert(ImportRow row, Long id, Map<String, Long> idByCode,
+            Set<String> allowedTypes) {
+        updateSpaceInternal(id, row.toSaveReq(resolveParentId(row, idByCode)),
+            allowedTypes, false);
     }
 
     /**
@@ -513,13 +560,15 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     /**
      * 解析并校验一行导入数据。
      *
-     * @param cells    该行单元格
-     * @param colIndex 列名 → 列下标
-     * @param lineNo   物理行号（用于报错定位）
+     * @param cells        该行单元格
+     * @param colIndex     列名 → 列下标
+     * @param lineNo       物理行号（用于报错定位）
+     * @param allowedTypes 已加载的空间类型允许值
      * @return 导入行
      * @throws BusinessException 该行格式或取值不合法
      */
-    private ImportRow parseImportRow(List<String> cells, Map<String, Integer> colIndex, int lineNo) {
+    private ImportRow parseImportRow(List<String> cells, Map<String, Integer> colIndex, int lineNo,
+            Set<String> allowedTypes) {
         ImportRow row = new ImportRow();
         row.lineNo = lineNo;
         row.code = requireCell(cells, colIndex, "code", SpaceConstants.MAX_CODE_LENGTH);
@@ -527,7 +576,7 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         row.spaceType = requireCell(cells, colIndex, "spaceType",
             SpaceConstants.MAX_SPACE_TYPE_LENGTH);
         // 类型必须是字典已登记的项值（与 createSpace 同一判据，不另立一套）
-        requireSpaceType(row.spaceType);
+        requireSpaceType(row.spaceType, allowedTypes);
         row.parentCode = cell(cells, colIndex, "parentCode");
         if (StringUtils.hasText(row.parentCode) && row.parentCode.equals(row.code)) {
             throw new BusinessException("parentCode 不能等于自身 code");
@@ -776,19 +825,30 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
      * 而库里没有任何报错。
      * 与关联类型 {@code space_target_type} 的校验同口径：字典是取值的单一来源。</p>
      *
-     * @param spaceType 空间类型
+     * @param spaceType    空间类型
+     * @param allowedTypes 已加载的允许值；null 时现查字典（供批量导入复用，避免逐行查库）
      */
-    private void requireSpaceType(String spaceType) {
+    private void requireSpaceType(String spaceType, Set<String> allowedTypes) {
         if (!StringUtils.hasText(spaceType)) {
             throw new BusinessException("空间类型不能为空");
         }
-        for (SysDictItem item : dictItemMapper.selectByDictCode(DICT_SPACE_TYPE)) {
-            if (spaceType.trim().equals(item.getValue())) {
-                return;
-            }
+        Set<String> allowed = allowedTypes != null ? allowedTypes : loadAllowedSpaceTypes();
+        if (!allowed.contains(spaceType.trim())) {
+            throw new BusinessException("空间类型不合法：" + spaceType
+                + "（允许值见字典 space_type，新增类型请先在字典里加项）");
         }
-        throw new BusinessException("空间类型不合法：" + spaceType
-            + "（允许值见字典 space_type，新增类型请先在字典里加项）");
+    }
+
+    /**
+     * 一次加载字典 {@code space_type} 的全部项值。
+     *
+     * @return 允许的空间类型集合
+     */
+    private Set<String> loadAllowedSpaceTypes() {
+        return dictItemMapper.selectByDictCode(DICT_SPACE_TYPE).stream()
+            .map(SysDictItem::getValue)
+            .filter(StringUtils::hasText)
+            .collect(Collectors.toSet());
     }
 
     private void checkCodeUnique(String code, Long excludeId) {
@@ -927,15 +987,6 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         return result;
     }
 
-    /**
-     * 一次取全量空间节点，在内存里算出每个节点的完整路径。
-     *
-     * <p><b>为什么不逐条调 {@code buildSpacePath}</b>：那是每条一次递归 CTE。
-     * 树页面有 N 行就要 N 次查询（N+1，架构门禁判红）。这里一次取全量、内存上溯，
-     * 复杂度 O(n × 深度)，深度上限只有 6。</p>
-     *
-     * @return 空间 ID → 完整路径
-     */
     /**
      * 拼装每个空间的完整路径（委托 {@link SpacePathResolver}）。
      *

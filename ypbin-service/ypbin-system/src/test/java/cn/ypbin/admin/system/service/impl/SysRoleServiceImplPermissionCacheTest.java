@@ -12,7 +12,6 @@ package cn.ypbin.admin.system.service.impl;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
@@ -101,6 +100,7 @@ class SysRoleServiceImplPermissionCacheTest {
             new SysUserRole(7L, ROLE_ID),
             new SysUserRole(8L, ROLE_ID),
             new SysUserRole(7L, ROLE_ID)));
+        when(roleMapper.updateById(any(SysRole.class))).thenReturn(1);
 
         try (MockedStatic<SysCache> sysCache = mockStatic(SysCache.class);
             MockedStatic<UserContext> userContext = mockStatic(UserContext.class)) {
@@ -121,6 +121,7 @@ class SysRoleServiceImplPermissionCacheTest {
         when(menuMapper.selectList(any())).thenReturn(List.of(enabledMenu(10L), enabledMenu(11L)));
         when(authTemplateService.resolveTenantMenuIds(TENANT_ID)).thenReturn(Set.of(10L, 11L));
         when(userRoleMapper.selectList(any())).thenReturn(List.of());
+        when(roleMapper.updateById(any(SysRole.class))).thenReturn(1);
 
         try (MockedStatic<SysCache> sysCache = mockStatic(SysCache.class);
             MockedStatic<UserContext> userContext = mockStatic(UserContext.class)) {

@@ -10,9 +10,9 @@
 package cn.ypbin.admin.auth.support;
 
 import cn.ypbin.admin.system.api.cache.SysCache;
-import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.starter.core.exception.BusinessException;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -32,8 +32,6 @@ public class AuthConfigReader {
 
     /** 布尔真值集合 */
     private static final Set<String> TRUE_VALUES = Set.of("true", "1", "on", "yes");
-
-    private final ISystemClient systemClient;
 
     /**
      * 取字符串参数。
@@ -59,7 +57,8 @@ public class AuthConfigReader {
      */
     public boolean getBoolean(String key, boolean defaultValue) {
         String value = getString(key, null);
-        return value == null ? defaultValue : TRUE_VALUES.contains(value.trim().toLowerCase());
+        return value == null ? defaultValue
+            : TRUE_VALUES.contains(value.trim().toLowerCase(Locale.ROOT));
     }
 
     /**

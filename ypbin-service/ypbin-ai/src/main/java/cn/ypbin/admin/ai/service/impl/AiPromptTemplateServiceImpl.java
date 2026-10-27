@@ -61,7 +61,9 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl);
         tpl.setTenantId(tenantId);
-        templateMapper.insert(tpl);
+        if (templateMapper.insert(tpl) != 1) {
+            throw new BusinessException("模板创建失败");
+        }
     }
 
     @Override
@@ -71,14 +73,18 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl, "id", "tenantId", "status");
         tpl.setId(id);
-        templateMapper.updateById(tpl);
+        if (templateMapper.updateById(tpl) != 1) {
+            throw new BusinessException("模板更新失败");
+        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteTemplate(Long id) {
         requireTemplate(id);
-        templateMapper.deleteById(id);
+        if (templateMapper.deleteById(id) != 1) {
+            throw new BusinessException("模板删除失败");
+        }
     }
 
     @Override
@@ -86,11 +92,13 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     public void updateStatus(Long id, Integer status) {
         AiPromptTemplate tpl = requireTemplate(id);
         tpl.setStatus(status);
-        templateMapper.updateById(tpl);
+        if (templateMapper.updateById(tpl) != 1) {
+            throw new BusinessException("模板状态更新失败");
+        }
     }
 
     /**
-     * 查询模板并校验归属当前租户。
+     * 实体 → 响应视图。
      *
      * @param tpl 模板实体
      * @return 响应视图

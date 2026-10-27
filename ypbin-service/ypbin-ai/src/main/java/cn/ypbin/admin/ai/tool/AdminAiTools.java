@@ -9,17 +9,18 @@
  */
 package cn.ypbin.admin.ai.tool;
 
+import cn.ypbin.admin.ai.core.AiChatUserContext;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
-import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
+import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import java.util.List;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import lombok.RequiredArgsConstructor;
-
 
 /**
  * 管理平台内置 AI 工具集。
@@ -30,7 +31,12 @@ import lombok.RequiredArgsConstructor;
  * <p>工具运行于 Reactor 工作线程，租户上下文由 {@code TenantThreadLocalAccessor} +
  * {@code Hooks.enableAutomaticContextPropagation} 自动传播，无需手动绑定。
  * 禁止在工具方法内调用 {@code StpUtil} / {@code UserContext}，Sa-Token 上下文
- * 依赖 HTTP 请求线程，在 Reactor 工作线程会抛 {@code SaTokenContextException}。
+ * 依赖 HTTP 请求线程，在 Reactor 工作线程会抛 {@code SaTokenContextException}。</p>
+ *
+ * <p><b>公开入口防护</b>：工具是全局注册的，知识库公开分享/网页挂件走的
+ * {@code chatWithKnowledge} 也会挂载本类。匿名访客只绑定了知识库所属租户，
+ * 因此仅凭租户无法判定调用者身份；凡是暴露租户内业务数据的工具，必须先经
+ * {@link #adminOnlyHint()} 确认本次对话来自管理端登录会话。</p>
  *
  * @author wenbin
  * @since 2026-08-15
@@ -43,15 +49,23 @@ public class AdminAiTools {
     private final ISystemClient systemFeignClient;
 
     /**
-     * 按用户名或真实姓名查找用户信息。
+     * 按用户名或真实姓名查找当前租户的用户。
      *
      * @param keyword 用户名或真实姓名关键词
      * @return 匹配的用户列表（最多 10 条），含 ID、用户名、真实姓名、状态
      */
     @Tool(name = "searchUser",
-        description = "按用户名或真实姓名搜索系统用户，返回用户基本信息，限制 10 条")
+        description = "按用户名或真实姓名搜索当前租户的系统用户，返回用户基本信息，限制 10 条")
     public String searchUser(String keyword) {
-        var resp = systemFeignClient.searchUsers(keyword);
+        String denied = adminOnlyHint();
+        if (denied != null) {
+            return denied;
+        }
+        Long tenantId = TenantContext.getTenantId().orElse(null);
+        if (tenantId == null) {
+            return "无法确定当前租户，无法搜索用户";
+        }
+        R<List<SysUserDto>> resp = systemFeignClient.searchUsers(keyword, tenantId);
         if (resp == null || !resp.isSuccess() || resp.getData() == null) {
             return "系统服务暂不可用，请稍后重试";
         }
@@ -67,18 +81,41 @@ public class AdminAiTools {
     }
 
     /**
-     * 获取系统基础统计数据。
+     * 获取当前租户的基础统计数据。
      *
-     * @return 注册用户总数
+     * @return 当前租户的用户总数
      */
     @Tool(name = "getSystemStats",
-        description = "获取当前系统基础统计：注册用户总数")
+        description = "获取当前租户的基础统计：用户总数")
     public String getSystemStats() {
-        String userCount = feignCount(systemFeignClient.countUsers(), "用户数");
+        String denied = adminOnlyHint();
+        if (denied != null) {
+            return denied;
+        }
+        Long tenantId = TenantContext.getTenantId().orElse(null);
+        if (tenantId == null) {
+            return "无法确定当前租户，无法获取统计";
+        }
+        String userCount = feignCount(systemFeignClient.countUsers(tenantId), "用户数");
         if (userCount.startsWith("ERROR:")) {
             return userCount;
         }
         return String.format("系统统计 - 正常用户数: %s", userCount);
+    }
+
+    /**
+     * 管理端会话校验。
+     *
+     * <p>公开分享/挂件问答不会写入 {@link AiChatUserContext}，这里据此拒绝，
+     * 避免匿名访客借 AI 枚举知识库所属租户的用户。</p>
+     *
+     * @return 拒绝提示；管理端会话返回 {@code null}
+     */
+    private static String adminOnlyHint() {
+        if (AiChatUserContext.getUserId().isEmpty()) {
+            return "该工具仅在管理端登录会话中可用";
+        }
+        return null;
     }
 
     private static String feignCount(R<Long> resp, String label) {

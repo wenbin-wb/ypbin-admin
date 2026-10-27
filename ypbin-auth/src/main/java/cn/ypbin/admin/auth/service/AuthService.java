@@ -9,7 +9,6 @@
  */
 package cn.ypbin.admin.auth.service;
 
-import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.auth.dto.LoginReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
@@ -82,12 +81,16 @@ public class AuthService {
         }
         // 密码不入缓存（安全），校验走 system 直查库比对
         R<Boolean> verifyResp = permissionFeignClient.verifyPassword(user.getId(), req.getPassword());
-        boolean passwordOk = verifyResp != null && verifyResp.isSuccess()
-            && Boolean.TRUE.equals(verifyResp.getData());
-        if (!passwordOk) {
+        if (verifyResp == null || !verifyResp.isSuccess()) {
+            // 系统服务不可用 ≠ 密码错误：不能累加失败次数，否则一次 system 抖动会锁掉一批账号
+            throw new BusinessException("系统服务暂不可用，请稍后重试");
+        }
+        if (!Boolean.TRUE.equals(verifyResp.getData())) {
             attemptLimiter.recordFailure(req.getUsername(), ip);
             throw new BusinessException("用户名或密码错误");
         }
+        // 禁用状态只在口令校验通过后返回：提前判会把登录变成「无需口令的账号状态探针」，
+        // 且绕过错误次数限制（攻击者可无限枚举哪些账号被禁用）
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }

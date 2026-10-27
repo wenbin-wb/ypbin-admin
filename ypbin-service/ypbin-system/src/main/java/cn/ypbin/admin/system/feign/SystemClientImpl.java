@@ -13,6 +13,7 @@ import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.feign.support.SpaceViewConverter;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
@@ -207,14 +208,15 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/search-users")
-    public R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword) {
-        return R.ok(UserViewConverter.toUserDtoList(userService.searchUsers(keyword)));
+    public R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword,
+            @RequestParam("tenantId") Long tenantId) {
+        return R.ok(UserViewConverter.toUserDtoList(userService.searchUsers(keyword, tenantId)));
     }
 
     @Override
     @GetMapping("/user-count")
-    public R<Long> countUsers() {
-        return R.ok(userService.countUsers());
+    public R<Long> countUsers(@RequestParam("tenantId") Long tenantId) {
+        return R.ok(userService.countUsers(tenantId));
     }
 
     @Override
@@ -224,6 +226,11 @@ public class SystemClientImpl implements ISystemClient {
         value.setConfigKey(configKey);
         SysConfig config = configMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
             .eq(SysConfig::getConfigKey, configKey), false);
+        if (config == null) {
+            // 参数缺失是合法的读侧默认值（调用方据此走缺省），但配置键写错时表现完全相同，
+            // 留一条 debug 便于定位「开关怎么都不生效」
+            log.debug("内部读取系统参数不存在，按空值返回：configKey={}", configKey);
+        }
         String rawValue = config == null ? "" : config.getConfigValue();
         // 密钥/口令类参数禁止经 internal 出网（纵深防御：即使凭证被泄露，密钥也不得明文返回）。
         // 判据与形态统一由 ConfigValueMasker 提供，与列表页完全一致（详见该类注释的选择理由）。
@@ -370,8 +377,9 @@ public class SystemClientImpl implements ISystemClient {
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam("userType") String userType,
         @RequestParam("defaultRealName") String defaultRealName) {
-        SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getUsername, username));
+        // 内部链路无租户身份头：显式忽略租户过滤，否则插件 fail-closed 会直接抛「缺少租户上下文」
+        SysUser user = TenantContext.executeIgnore(() -> userService.getOne(
+            new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username)));
         if (user == null) {
             // 端侧标识与展示名必须由调用方显式给出：**不做静默默认**。
             // 理由（2026-09-18 复核教训）：默认值会静默决定落库语义，调用方漏传时表现为
@@ -390,8 +398,13 @@ public class SystemClientImpl implements ISystemClient {
             user.setAvatar(avatar);
             user.setUserType(userType);
             user.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
-            user.setStatus(1);
-            userService.save(user);
+            user.setStatus(UserStatusEnum.ENABLED.getCode());
+            // 写入同样必须忽略租户：sys_user 不在 ignore-tables，匿名内部链路没有身份头，
+            // 漏掉这一层会在 INSERT 时被租户插件 fail-closed 拒绝（查询成功、写入失败）
+            SysUser created = user;
+            if (!TenantContext.executeIgnore(() -> userService.save(created))) {
+                throw new BusinessException("用户创建失败：username=" + username);
+            }
         } else {
             boolean updated = false;
             if (StringUtils.hasText(nickname) && !nickname.equals(user.getNickname())) {
@@ -403,8 +416,9 @@ public class SystemClientImpl implements ISystemClient {
                 user.setAvatar(avatar);
                 updated = true;
             }
-            if (updated) {
-                userService.updateById(user);
+            SysUser changed = user;
+            if (updated && !TenantContext.executeIgnore(() -> userService.updateById(changed))) {
+                throw new BusinessException("用户资料更新失败：userId=" + user.getId());
             }
         }
         return R.ok(UserViewConverter.toDto(user));
@@ -416,7 +430,8 @@ public class SystemClientImpl implements ISystemClient {
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone) {
-        SysUser user = userService.getById(userId);
+        // 同上：内部链路无租户上下文，必须显式忽略租户过滤
+        SysUser user = TenantContext.executeIgnore(() -> userService.getById(userId));
         if (user == null) {
             return R.fail("用户不存在");
         }
@@ -434,8 +449,8 @@ public class SystemClientImpl implements ISystemClient {
             user.setPhone(phone.trim());
             updated = true;
         }
-        if (updated) {
-            userService.updateById(user);
+        if (updated && !TenantContext.executeIgnore(() -> userService.updateById(user))) {
+            return R.fail("用户资料更新失败");
         }
         return R.ok(UserViewConverter.toDto(user));
     }

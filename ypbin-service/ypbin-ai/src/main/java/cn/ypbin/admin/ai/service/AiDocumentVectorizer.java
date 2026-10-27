@@ -18,6 +18,7 @@ import cn.ypbin.admin.ai.mapper.AiDocumentMapper;
 import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.starter.ai.rag.AiRagService;
 import cn.ypbin.starter.ai.rag.DocumentLoader;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
@@ -69,17 +70,27 @@ public class AiDocumentVectorizer {
                 ragService.ingest(String.valueOf(knowledgeBaseId), chunks);
                 // 分块落库（供分块可视化）：先清历史再批量插入，保证与向量库一致
                 persistChunks(docId, knowledgeBaseId, chunks);
-                // 更新文档状态为"就绪"
-                AiDocument update = new AiDocument();
-                update.setId(docId);
-                update.setChunkCount(chunks.size());
-                update.setStatus(AiDocumentStatusEnum.READY.getCode());
-                update.setUpdateTime(LocalDateTime.now());
-                documentMapper.updateById(update);
+                // 更新文档状态为"就绪"，并显式清空上次失败原因：
+                // MyBatis-Plus 默认 NOT_NULL 策略会忽略实体里的 null，实体更新清不掉 error_msg。
+                int readyUpdated = documentMapper.update(null,
+                    new LambdaUpdateWrapper<AiDocument>()
+                        .eq(AiDocument::getId, docId)
+                        .set(AiDocument::getChunkCount, chunks.size())
+                        .set(AiDocument::getStatus, AiDocumentStatusEnum.READY.getCode())
+                        .set(AiDocument::getErrorMsg, null)
+                        .set(AiDocument::getUpdateTime, LocalDateTime.now()));
+                if (readyUpdated != 1) {
+                    throw new IllegalStateException("文档就绪状态写入失败：docId=" + docId);
+                }
                 // 更新知识库文档计数（原子 SQL，避免并发读改写漂移）
-                kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
+                int kbUpdated = kbMapper.update(null, new LambdaUpdateWrapper<AiKnowledgeBase>()
                     .eq(AiKnowledgeBase::getId, knowledgeBaseId)
                     .setSql("doc_count = doc_count + 1"));
+                if (kbUpdated != 1) {
+                    // 文档本身已就绪（向量可用），这里只计数失败；不改文档状态，留 ERROR 供运维修正
+                    log.error("[ypbin-ai] 知识库文档计数更新失败（知识库可能已被删除）: "
+                        + "kbId={}, docId={}", knowledgeBaseId, docId);
+                }
                 log.debug("[ypbin-ai] 文档向量化完成: docId={}, chunks={}", docId, chunks.size());
             } catch (Exception e) {
                 log.error("[ypbin-ai] 文档向量化失败: docId={}", docId, e);
@@ -98,17 +109,11 @@ public class AiDocumentVectorizer {
     }
 
     /**
-     * 分块落库：删除该文档旧分块后按顺序批量插入。
-     *
-     * <p>向量化重试时会重新切片，必须先清旧数据再写入，避免与向量库不一致。
-     * 落库失败仅记录日志不阻断向量化主流程（分块可视化是诊断旁路）。</p>
-     */
-    /**
      * 按固定批次批量写入分块。
      *
      * <p><b>语义变化（有意）</b>：此前逐条 {@code insert} 且本方法无事务，失败时前面已写入的分块会留下
      * （部分成功）；改为单条多值 INSERT 后一批全有全无。分块是「整份文档」的派生数据，半份分块毫无意义，
-     * 故全有全无更符合语义；失败仍由外层 catch 记 WARN，不阻断向量化主流程。</p>
+     * 故全有全无更符合语义；失败由 {@code persistChunks} 转成异常，最终把文档标为失败（不再静默）。</p>
      *
      * <p>分块数由文档大小决定（不可控），故按 {@code INSERT_BATCH_SIZE} 分块以规避
      * {@code max_allowed_packet}——这是分块批量写，不是逐行往返。</p>
@@ -145,24 +150,38 @@ public class AiDocumentVectorizer {
             // 循环内只构建内存行（避免 N 次数据库往返），循环外按固定大小分块批量写
             insertChunksInBatches(rows);
             log.debug("[ypbin-ai] 分块落库完成: docId={}, chunks={}", docId, chunks.size());
-        } catch (Exception e) {
-            log.warn("[ypbin-ai] 分块落库失败（不影响向量化）: docId={} err={}", docId, e.getMessage(), e);
+        } catch (RuntimeException e) {
+            // 分块落库失败不能吞：外层会把文档标为就绪并把 chunk_count 写成解析出的切片数，
+            // 而实际一行分块都没落库 —— 「已就绪」的文档在分块可视化里永远是空的。
+            // 交给外层 catch 统一 markDocFailed，让失败可见；重试路径会先清掉已写入的旧向量。
+            log.error("[ypbin-ai] 分块落库失败，文档按失败处理: docId={}", docId, e);
+            throw new IllegalStateException("分块落库失败：" + e.getMessage(), e);
         }
     }
 
-    /** 从知识库实体取租户 ID（向量化线程内无请求上下文） */
+    /**
+     * 从知识库实体取租户 ID（向量化线程内无请求上下文）。
+     *
+     * <p>取不到时<b>显式失败</b>：回退到 0 会把分块写进「平台租户」，
+     * 既查不到也删不掉，是比任务失败更糟的静默数据污染。</p>
+     */
     private Long tenantIdOf(Long knowledgeBaseId) {
         AiKnowledgeBase kb = kbMapper.selectById(knowledgeBaseId);
-        return kb != null && kb.getTenantId() != null ? kb.getTenantId() : 0L;
+        if (kb == null || kb.getTenantId() == null) {
+            throw new BusinessException("知识库不存在或缺少租户信息：id=" + knowledgeBaseId);
+        }
+        return kb.getTenantId();
     }
 
     private void markDocFailed(Long docId, String errorMsg) {
         AiDocument update = new AiDocument();
         update.setId(docId);
-        update.setStatus(2);
+        update.setStatus(AiDocumentStatusEnum.FAILED.getCode());
         update.setErrorMsg(errorMsg != null && errorMsg.length() > 490
             ? errorMsg.substring(0, 490) : errorMsg);
         update.setUpdateTime(LocalDateTime.now());
-        documentMapper.updateById(update);
+        if (documentMapper.updateById(update) != 1) {
+            log.error("[ypbin-ai] 文档失败状态写入失败: docId={}, errorMsg={}", docId, errorMsg);
+        }
     }
 }

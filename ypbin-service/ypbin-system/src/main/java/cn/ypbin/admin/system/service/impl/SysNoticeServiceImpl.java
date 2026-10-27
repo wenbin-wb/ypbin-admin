@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.system.entity.SysNotice;
+import cn.ypbin.admin.system.enums.NoticePublishStatusEnum;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
@@ -38,10 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNotice>
     implements SysNoticeService {
 
-    private static final int DRAFT = 0;
-    private static final int PENDING = 1;
-    private static final int PUBLISHED = 2;
-    private static final int REVOKED = 3;
     private static final int IMMEDIATE = 1;
     private static final int SCHEDULED = 2;
 
@@ -61,22 +58,22 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         notice.setPublishVersion(0L);
         notice.setPublishTime(null);
         if (isDraft(req)) {
-            notice.setPublishStatus(DRAFT);
+            notice.setPublishStatus(NoticePublishStatusEnum.DRAFT.getCode());
             saveRequired(notice, "新增公告失败");
             return;
         }
         validateSubmission(notice);
-        if (notice.getPublishType() == SCHEDULED) {
+        if (Integer.valueOf(SCHEDULED).equals(notice.getPublishType())) {
             validateScheduledTime(notice);
-            notice.setPublishStatus(PENDING);
+            notice.setPublishStatus(NoticePublishStatusEnum.PENDING.getCode());
             saveRequired(notice, "新增公告失败");
             noticePublishService.validateDeliveries(requireNotice(notice.getId()));
             return;
         }
-        notice.setPublishStatus(DRAFT);
+        notice.setPublishStatus(NoticePublishStatusEnum.DRAFT.getCode());
         saveRequired(notice, "新增公告失败");
         SysNotice saved = requireNotice(notice.getId());
-        publishCurrent(saved, DRAFT, 0L);
+        publishCurrent(saved, NoticePublishStatusEnum.DRAFT.getCode(), 0L);
     }
 
     @Override
@@ -84,7 +81,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     @Transactional(rollbackFor = Exception.class)
     public void updateNotice(Long id, NoticeSaveReq req) {
         SysNotice current = requireNotice(id);
-        if (current.getPublishStatus() == PUBLISHED) {
+        if (isStatus(current, NoticePublishStatusEnum.PUBLISHED)) {
             throw new BusinessException("已发布公告禁止编辑");
         }
         SysNotice update = new SysNotice();
@@ -94,14 +91,14 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         update.setPublishVersion(current.getPublishVersion());
         update.setPublishTime(current.getPublishTime());
         if (isDraft(req)) {
-            update.setPublishStatus(DRAFT);
+            update.setPublishStatus(NoticePublishStatusEnum.DRAFT.getCode());
             updateRequired(update, current, "公告状态已变化，修改失败");
             return;
         }
         validateSubmission(update);
-        if (update.getPublishType() == SCHEDULED) {
+        if (Integer.valueOf(SCHEDULED).equals(update.getPublishType())) {
             validateScheduledTime(update);
-            update.setPublishStatus(PENDING);
+            update.setPublishStatus(NoticePublishStatusEnum.PENDING.getCode());
             noticePublishService.validateDeliveries(update);
             updateRequired(update, current, "公告状态已变化，修改失败");
             return;
@@ -116,11 +113,12 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     @Transactional(rollbackFor = Exception.class)
     public void publish(Long id) {
         SysNotice notice = requireNotice(id);
-        if (notice.getPublishStatus() == PUBLISHED) {
+        if (isStatus(notice, NoticePublishStatusEnum.PUBLISHED)) {
             throw new BusinessException("公告已发布，禁止重复发布");
         }
-        if (notice.getPublishStatus() != DRAFT && notice.getPublishStatus() != PENDING
-            && notice.getPublishStatus() != REVOKED) {
+        if (!isStatus(notice, NoticePublishStatusEnum.DRAFT)
+            && !isStatus(notice, NoticePublishStatusEnum.PENDING)
+            && !isStatus(notice, NoticePublishStatusEnum.REVOKED)) {
             throw new BusinessException("公告当前状态不允许发布");
         }
         validateSubmission(notice);
@@ -131,7 +129,8 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     @Transactional(rollbackFor = Exception.class)
     public void publishScheduled(Long id, long expectedVersion) {
         SysNotice notice = requireNotice(id);
-        if (notice.getPublishStatus() != PENDING || notice.getPublishVersion() == null
+        if (!isStatus(notice, NoticePublishStatusEnum.PENDING)
+            || notice.getPublishVersion() == null
             || notice.getPublishVersion().longValue() != expectedVersion) {
             throw new BusinessException("定时公告状态已变化，发布失败");
         }
@@ -139,17 +138,19 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
             throw new BusinessException("定时公告尚未到发布时间");
         }
         validateSubmission(notice);
-        publishCurrent(notice, PENDING, expectedVersion);
+        publishCurrent(notice, NoticePublishStatusEnum.PENDING.getCode(), expectedVersion);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void revoke(Long id) {
         SysNotice notice = requireNotice(id);
-        if (notice.getPublishStatus() != PUBLISHED) {
+        if (!isStatus(notice, NoticePublishStatusEnum.PUBLISHED)) {
             throw new BusinessException("仅已发布公告允许撤回");
         }
-        int affected = baseMapper.revokeCas(id, notice.getPublishVersion(), LocalDateTime.now());
+        int affected = baseMapper.revokeCas(id, NoticePublishStatusEnum.PUBLISHED.getCode(),
+            NoticePublishStatusEnum.REVOKED.getCode(), notice.getPublishVersion(),
+            LocalDateTime.now());
         if (affected != 1) {
             throw new BusinessException("公告状态已变化，撤回失败");
         }
@@ -159,12 +160,14 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     @Transactional(rollbackFor = Exception.class)
     public void deleteNotice(Long id) {
         SysNotice notice = requireNotice(id);
-        if (notice.getPublishStatus() == PUBLISHED) {
+        if (isStatus(notice, NoticePublishStatusEnum.PUBLISHED)) {
             throw new BusinessException("已发布公告禁止删除");
         }
         long affected = baseMapper.delete(new LambdaQueryWrapper<SysNotice>()
             .eq(SysNotice::getId, id)
-            .eq(SysNotice::getPublishStatus, notice.getPublishStatus())
+            // 内存里把 NULL 状态当草稿（见 requireNotice），SQL 必须同口径：
+            // 直接 eq 会因 NULL ≠ 0 而永远匹配不到，历史行既发不出去也删不掉
+            .apply("COALESCE(publish_status, 0) = {0}", notice.getPublishStatus())
             .eq(SysNotice::getPublishVersion, notice.getPublishVersion()));
         if (affected != 1) {
             throw new BusinessException("公告状态已变化，删除失败");
@@ -174,12 +177,12 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     private void publishCurrent(SysNotice notice, int expectedStatus, long expectedVersion) {
         long nextVersion = expectedVersion + 1;
         LocalDateTime publishTime = LocalDateTime.now();
-        int affected = baseMapper.publishCas(notice.getId(), expectedStatus, expectedVersion,
-            nextVersion, publishTime);
+        int affected = baseMapper.publishCas(notice.getId(), expectedStatus,
+            NoticePublishStatusEnum.PUBLISHED.getCode(), expectedVersion, nextVersion, publishTime);
         if (affected != 1) {
             throw new BusinessException("公告状态已变化，发布失败");
         }
-        notice.setPublishStatus(PUBLISHED);
+        notice.setPublishStatus(NoticePublishStatusEnum.PUBLISHED.getCode());
         notice.setPublishVersion(nextVersion);
         notice.setPublishTime(publishTime);
         noticePublishService.freezeDeliveries(notice, nextVersion);
@@ -201,7 +204,8 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
             && !notice.getEffectiveTime().isBefore(notice.getExpireTime())) {
             throw new BusinessException("生效时间必须早于失效时间");
         }
-        if (notice.getPublishType() != IMMEDIATE && notice.getPublishType() != SCHEDULED) {
+        Integer publishType = notice.getPublishType();
+        if (publishType == null || (publishType != IMMEDIATE && publishType != SCHEDULED)) {
             throw new BusinessException("发布方式不合法");
         }
     }
@@ -220,7 +224,22 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         if (notice.getPublishVersion() == null) {
             notice.setPublishVersion(0L);
         }
+        if (notice.getPublishStatus() == null) {
+            // 历史行可能没有状态：按草稿处理，避免后续 Integer 拆箱比较抛 NPE
+            notice.setPublishStatus(NoticePublishStatusEnum.DRAFT.getCode());
+        }
         return notice;
+    }
+
+    /**
+     * 判断公告当前状态是否等于给定状态（空值安全）。
+     *
+     * @param notice   公告
+     * @param expected 期望状态
+     * @return 是否匹配
+     */
+    private static boolean isStatus(SysNotice notice, NoticePublishStatusEnum expected) {
+        return expected.getCode().equals(notice.getPublishStatus());
     }
 
     private void saveRequired(SysNotice notice, String message) {
@@ -246,6 +265,6 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     }
 
     private boolean isDraft(NoticeSaveReq req) {
-        return Integer.valueOf(DRAFT).equals(req.getPublishStatus());
+        return NoticePublishStatusEnum.DRAFT.getCode().equals(req.getPublishStatus());
     }
 }

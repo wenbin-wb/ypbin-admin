@@ -13,6 +13,7 @@ import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysUser;
+import cn.ypbin.admin.system.entity.SysUserPasswordHistory;
 import cn.ypbin.admin.system.enums.GenderEnum;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.mapper.SysDeptMapper;
@@ -21,6 +22,7 @@ import cn.ypbin.admin.system.model.query.UserQuery;
 import cn.ypbin.admin.system.model.vo.UserExportVo;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.admin.system.model.vo.UserImportVo;
+import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.datapermission.annotation.DataPermission;
 import cn.ypbin.starter.excel.util.ExcelUtils;
@@ -32,9 +34,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -68,14 +72,15 @@ public class UserExcelComponent {
      */
     private static final int INSERT_BATCH_SIZE = 500;
 
-    /** 导入默认初始密码（行内未填密码时使用） */
-    private static final String DEFAULT_PASSWORD = "123456";
+    /** 单次 IN 查询的元素上限（避免 SQL 过长/参数过多） */
+    private static final int QUERY_BATCH_SIZE = 500;
 
     /** 导出列时间格式 */
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
+    private final UserAccountSupport accountSupport;
 
     @DataPermission
     public void exportUsers(UserQuery query, HttpServletResponse response) {
@@ -146,13 +151,14 @@ public class UserExcelComponent {
         Long currentTenantId = UserContext.getTenantId()
             .orElseThrow(() -> new BusinessException("无法确定当前租户"));
 
-        // 预加载库中已有用户名/手机号到内存判重，避免逐行查库（用户名/手机号全局唯一）
-        Set<String> existingUsernames = TenantContext.executeIgnore(() ->
-            userMapper.selectList(new LambdaQueryWrapper<SysUser>().select(SysUser::getUsername))
-                .stream().map(SysUser::getUsername).collect(Collectors.toSet()));
-        Set<String> existingPhones = TenantContext.executeIgnore(() ->
-            userMapper.selectList(new LambdaQueryWrapper<SysUser>().select(SysUser::getPhone))
-                .stream().map(SysUser::getPhone).filter(StringUtils::hasText).collect(Collectors.toSet()));
+        // 只为「本次文件里出现的」用户名/手机号做一次批量查重：
+        // 此前为判重把全表两列拉进内存，用户量大时是白付的全表扫描与内存占用
+        Set<String> fileUsernames = list.stream().map(UserImportVo::getUsername)
+            .filter(StringUtils::hasText).map(String::trim).collect(Collectors.toSet());
+        Set<String> filePhones = list.stream().map(UserImportVo::getPhone)
+            .filter(StringUtils::hasText).map(String::trim).collect(Collectors.toSet());
+        Set<String> existingUsernames = loadExistingValues(fileUsernames, true);
+        Set<String> existingPhones = loadExistingValues(filePhones, false);
         // 记录本文件内已成功导入的用户名/手机号，拦截文件内重复
         Set<String> importedUsernames = new HashSet<>();
         Set<String> importedPhones = new HashSet<>();
@@ -184,12 +190,27 @@ public class UserExcelComponent {
                 continue;
             }
 
-            String rawPassword = StringUtils.hasText(vo.getPassword()) ? vo.getPassword().trim() : DEFAULT_PASSWORD;
+            // 不再提供「默认口令」：批量导入的用户也必须走与 createUser 相同的密码策略，
+            // 否则一次导入就能制造一批已知弱口令账号。空密码直接按行失败并提示补填。
+            if (!StringUtils.hasText(vo.getPassword())) {
+                result.setFailureCount(result.getFailureCount() + 1);
+                result.getFailureMessages().add("第 " + rowNum + " 行：初始密码不能为空");
+                continue;
+            }
+            String rawPassword = vo.getPassword().trim();
+            try {
+                accountSupport.validatePassword(rawPassword, username);
+            } catch (BusinessException e) {
+                result.setFailureCount(result.getFailureCount() + 1);
+                result.getFailureMessages().add("第 " + rowNum + " 行：" + e.getMessage());
+                continue;
+            }
             SysUser user = new SysUser();
             user.setUsername(username);
             user.setRealName(vo.getRealName().trim());
             user.setNickname(vo.getRealName().trim());
             user.setPassword(PasswordEncoderUtil.encode(rawPassword));
+            user.setPwdResetTime(LocalDateTime.now());
             user.setUserType(AdminConstants.USER_TYPE_TENANT);
             user.setTenantId(currentTenantId);
             user.setStatus(UserStatusEnum.ENABLED.getCode());
@@ -205,6 +226,9 @@ public class UserExcelComponent {
             result.setSuccessCount(result.getSuccessCount() + 1);
         }
         insertInBatches(pending);
+        // 初始密码必须补记历史：导入是直插 sys_user 的批量路径，绕过了 createUser；
+        // 不补记的话，用户在导入后第一次改密时查不到这条密码，「不得与最近 N 次重复」会放行
+        recordInitialPasswordHistories(pending);
         // 缓存清空必须在落库之后：SysCache 回源带「空值哨兵」防穿透缓存，
         // 若先清缓存后落库，导入窗口内的登录/短信登录会把「用户不存在」写进缓存且此后不再清理
         evictImportedUserCaches(pending);
@@ -217,10 +241,51 @@ public class UserExcelComponent {
      * @param users 已落库用户
      */
     private void evictImportedUserCaches(List<SysUser> users) {
-        for (SysUser user : users) {
-            SysCache.evictUser(null, user.getUsername());
-            SysCache.evictUserByPhone(user.getPhone());
+        SysCache.evictUsersByUsernameAndPhone(
+            users.stream().map(SysUser::getUsername).toList(),
+            users.stream().map(SysUser::getPhone).filter(Objects::nonNull).toList());
+    }
+
+    /**
+     * 批量查询「本次文件里出现的」用户名或手机号是否已存在。
+     *
+     * @param candidates 待查值（文件内去重后）
+     * @param byUsername true=按用户名查，false=按手机号查
+     * @return 库中已存在的值集合
+     */
+    private Set<String> loadExistingValues(Set<String> candidates, boolean byUsername) {
+        if (candidates.isEmpty()) {
+            return Set.of();
         }
+        Set<String> existing = new HashSet<>();
+        for (List<String> chunk : partition(candidates)) {
+            List<SysUser> rows = TenantContext.executeIgnore(() -> userMapper.selectList(
+                byUsername
+                    ? new LambdaQueryWrapper<SysUser>()
+                        .select(SysUser::getUsername)
+                        .in(SysUser::getUsername, chunk)
+                    : new LambdaQueryWrapper<SysUser>()
+                        .select(SysUser::getPhone)
+                        .in(SysUser::getPhone, chunk)));
+            for (SysUser row : rows) {
+                String value = byUsername ? row.getUsername() : row.getPhone();
+                if (StringUtils.hasText(value)) {
+                    existing.add(value);
+                }
+            }
+        }
+        return existing;
+    }
+
+    /** 按固定大小切分集合（避免 IN 参数过多） */
+    private static List<List<String>> partition(Collection<String> values) {
+        List<String> list = new ArrayList<>(values);
+        List<List<String>> chunks = new ArrayList<>();
+        for (int fromIndex = 0; fromIndex < list.size(); fromIndex += QUERY_BATCH_SIZE) {
+            chunks.add(list.subList(fromIndex,
+                Math.min(fromIndex + QUERY_BATCH_SIZE, list.size())));
+        }
+        return chunks;
     }
 
     /**
@@ -237,6 +302,28 @@ public class UserExcelComponent {
         for (int fromIndex = 0; fromIndex < users.size(); fromIndex += INSERT_BATCH_SIZE) {
             int toIndex = Math.min(fromIndex + INSERT_BATCH_SIZE, users.size());
             userMapper.insertBatch(users.subList(fromIndex, toIndex));
+        }
+    }
+
+    /**
+     * 为导入用户补记初始密码历史（与 {@code createUser} 同口径）。
+     *
+     * <p>导入直插 sys_user 并带回填的主键，故这里在落库之后按用户 ID 构造历史行；
+     * 行数由上传文件决定（不可控），按 {@code INSERT_BATCH_SIZE} 分块批量写。</p>
+     *
+     * @param users 已落库用户（主键已回填）
+     */
+    private void recordInitialPasswordHistories(List<SysUser> users) {
+        for (int fromIndex = 0; fromIndex < users.size(); fromIndex += INSERT_BATCH_SIZE) {
+            int toIndex = Math.min(fromIndex + INSERT_BATCH_SIZE, users.size());
+            List<SysUserPasswordHistory> rows = new ArrayList<>(toIndex - fromIndex);
+            for (SysUser user : users.subList(fromIndex, toIndex)) {
+                SysUserPasswordHistory row = new SysUserPasswordHistory();
+                row.setUserId(user.getId());
+                row.setPassword(user.getPassword());
+                rows.add(row);
+            }
+            accountSupport.recordPasswordHistoryBatch(rows);
         }
     }
 

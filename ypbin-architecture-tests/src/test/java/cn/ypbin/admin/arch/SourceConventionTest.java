@@ -195,11 +195,6 @@ class SourceConventionTest {
      * 防止有人修好代码后豁免条目静默残留、也防止有人把整类文件丢进豁免里「一键变绿」。</p>
      */
     private static final Map<String, String> LOOP_DB_EXEMPTIONS = Map.of(
-        "SysConfigServiceImpl#self.updateById",
-        "**已知技术债，非合法形态**：批量改配置时逐行 updateById（真 N+1，一次改 N 个键就是 N 次 UPDATE）。"
-            + "2026-10-27 给本门禁补上「IService 隐式 this 调用」识别后暴露的历史代码（引入于 2314b48，早于空间功能）。"
-            + "登记豁免只为不让门禁长期红着，正确修法是 SaveBatch 或单条 UPDATE ... CASE WHEN。"
-            + "同循环内还有逐键 SysCache.evictConfig（缓存失效无法批量，那部分属合理）",
         "NoticePublishServiceImpl#deliveryMapper.insertBatch",
         "分块批量插入：按 INSERT_BATCH_SIZE 切块后每块一次 insertBatch（见 insertInBatches），非逐行往返",
         "AiDocumentVectorizer#chunkMapper.insertBatch",
@@ -208,7 +203,10 @@ class SourceConventionTest {
         "UserExcelComponent#userMapper.insertBatch",
         "分块批量插入：导入行数由上传文件决定（不可控），按 INSERT_BATCH_SIZE 分块后每块一次 insertBatch，"
             + "规避 max_allowed_packet，非逐行往返",
-        "AiModelConfigServiceImpl#client.send",
+        "UserExcelComponent#userMapper.selectList",
+        "分块批量 IN 查询：文件内待查值按 QUERY_BATCH_SIZE 切块后每块一次 selectList，"
+            + "规避 IN 参数过多，非逐行往返",
+        "AiModelConfigServiceImpl#httpClient.send",
         "误报：候选补全地址回退尝试（for 遍历 completionUrls，命中首个非 404 即 break），"
             + "循环次数与数据量无关，不存在 N+1；规则只看「循环体里有没有 RPC 接收者」，识别不了 break 语义");
 

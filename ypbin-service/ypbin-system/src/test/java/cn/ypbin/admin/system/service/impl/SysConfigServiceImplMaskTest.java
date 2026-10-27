@@ -12,8 +12,11 @@ package cn.ypbin.admin.system.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +29,7 @@ import cn.ypbin.admin.system.model.resp.ConfigResp;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -82,7 +86,9 @@ class SysConfigServiceImplMaskTest {
     @BeforeEach
     void setUp() {
         configMapper = mock(SysConfigMapper.class);
-        configService = new SysConfigServiceImpl(mock(ApplicationEventPublisher.class));
+        // 用 spy：updateGroup 的批量落库走 ServiceImpl#updateBatchById（内部用 MP SqlHelper 取
+        // baseMapper），在 mock mapper 上无法执行；stub 掉批量方法后即可只断言「提交了什么」
+        configService = spy(new SysConfigServiceImpl(mock(ApplicationEventPublisher.class)));
         // ServiceImpl 的 baseMapper 由容器注入，单测里手工装配（不启动 Spring）
         ReflectionTestUtils.setField(configService, "baseMapper", configMapper);
     }
@@ -157,7 +163,7 @@ class SysConfigServiceImplMaskTest {
         SysConfig stored = config(SENSITIVE_KEY, RAW_SECRET);
         stored.setConfigGroup("sms");
         when(configMapper.selectList(any())).thenReturn(List.of(stored));
-        when(configMapper.updateById(any(SysConfig.class))).thenReturn(1);
+        doReturn(true).when(configService).updateBatchById(anyList());
 
         ConfigUpdateBatchReq req = new ConfigUpdateBatchReq();
         req.setConfigs(Map.of(SENSITIVE_KEY, MASKED_SECRET));
@@ -166,9 +172,9 @@ class SysConfigServiceImplMaskTest {
             configService.updateGroup("sms", req);
         }
 
-        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
-        verify(configMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getConfigValue())
+        ArgumentCaptor<Collection<SysConfig>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(configService).updateBatchById(captor.capture());
+        assertThat(submittedValue(captor))
             .as("把 ****0001 写库会让真实密钥静默损坏且不报错；必须保留库内原值")
             .isEqualTo(RAW_SECRET);
     }
@@ -179,7 +185,7 @@ class SysConfigServiceImplMaskTest {
         SysConfig stored = config(SENSITIVE_KEY, RAW_SECRET);
         stored.setConfigGroup("sms");
         when(configMapper.selectList(any())).thenReturn(List.of(stored));
-        when(configMapper.updateById(any(SysConfig.class))).thenReturn(1);
+        doReturn(true).when(configService).updateBatchById(anyList());
 
         ConfigUpdateBatchReq req = new ConfigUpdateBatchReq();
         req.setConfigs(Map.of(SENSITIVE_KEY, "brandNewSecret9999"));
@@ -188,9 +194,9 @@ class SysConfigServiceImplMaskTest {
             configService.updateGroup("sms", req);
         }
 
-        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
-        verify(configMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getConfigValue()).isEqualTo("brandNewSecret9999");
+        ArgumentCaptor<Collection<SysConfig>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(configService).updateBatchById(captor.capture());
+        assertThat(submittedValue(captor)).isEqualTo("brandNewSecret9999");
     }
 
     @Test
@@ -214,7 +220,7 @@ class SysConfigServiceImplMaskTest {
         SysConfig stored = config("CUSTOM_DISPLAY_TEXT", "old-value");
         stored.setConfigGroup("site");
         when(configMapper.selectList(any())).thenReturn(List.of(stored));
-        when(configMapper.updateById(any(SysConfig.class))).thenReturn(1);
+        doReturn(true).when(configService).updateBatchById(anyList());
 
         // 非敏感键的真实值完全可能以 4 个星号开头；若不加「键敏感」守卫就会被静默丢弃
         ConfigUpdateBatchReq req = new ConfigUpdateBatchReq();
@@ -224,9 +230,9 @@ class SysConfigServiceImplMaskTest {
             configService.updateGroup("site", req);
         }
 
-        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
-        verify(configMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getConfigValue())
+        ArgumentCaptor<Collection<SysConfig>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(configService).updateBatchById(captor.capture());
+        assertThat(submittedValue(captor))
             .as("非敏感键的掩码形真实值必须写库；否则用户改了值却不生效且无报错")
             .isEqualTo("****brand-new-name");
     }
@@ -237,7 +243,7 @@ class SysConfigServiceImplMaskTest {
         SysConfig stored = config(SENSITIVE_KEY, RAW_SECRET);
         stored.setConfigGroup("sms");
         when(configMapper.selectList(any())).thenReturn(List.of(stored));
-        when(configMapper.updateById(any(SysConfig.class))).thenReturn(1);
+        doReturn(true).when(configService).updateBatchById(anyList());
 
         ConfigUpdateBatchReq req = new ConfigUpdateBatchReq();
         req.setConfigs(Map.of(SENSITIVE_KEY, "  " + MASKED_SECRET + "  "));
@@ -246,9 +252,9 @@ class SysConfigServiceImplMaskTest {
             configService.updateGroup("sms", req);
         }
 
-        ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
-        verify(configMapper).updateById(captor.capture());
-        assertThat(captor.getValue().getConfigValue())
+        ArgumentCaptor<Collection<SysConfig>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(configService).updateBatchById(captor.capture());
+        assertThat(submittedValue(captor))
             .as("前导/尾随空格不得绕过「未修改」识别，否则掩码会被当真实值写库")
             .isEqualTo(RAW_SECRET);
     }
@@ -269,6 +275,17 @@ class SysConfigServiceImplMaskTest {
         ArgumentCaptor<SysConfig> captor = ArgumentCaptor.forClass(SysConfig.class);
         verify(configMapper).insert(captor.capture());
         assertThat(captor.getValue().getConfigValue()).isEqualTo("****brand-new-name");
+    }
+
+    /**
+     * 批量落库参数里的唯一一项取值。
+     *
+     * @param captor updateBatchById 的入参捕获器
+     * @return 提交写入的参数值
+     */
+    private static String submittedValue(ArgumentCaptor<Collection<SysConfig>> captor) {
+        assertThat(captor.getValue()).hasSize(1);
+        return captor.getValue().iterator().next().getConfigValue();
     }
 
     private static SysConfig config(String configKey, String configValue) {

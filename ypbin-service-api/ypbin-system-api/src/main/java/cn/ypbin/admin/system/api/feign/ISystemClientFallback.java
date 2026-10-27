@@ -91,12 +91,12 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<SysUserDto>> searchUsers(String keyword) {
+    public R<List<SysUserDto>> searchUsers(String keyword, Long tenantId) {
         return unavailable();
     }
 
     @Override
-    public R<Long> countUsers() {
+    public R<Long> countUsers(Long tenantId) {
         return unavailable();
     }
 

@@ -50,9 +50,9 @@ public interface SysUserService extends BaseService<SysUser> {
 
     boolean verifyPassword(Long userId, String rawPassword);
 
-    long countUsers();
+    long countUsers(Long tenantId);
 
-    List<SysUser> searchUsers(String keyword);
+    List<SysUser> searchUsers(String keyword, Long tenantId);
 
     void updateLastLoginTime(Long userId);
 

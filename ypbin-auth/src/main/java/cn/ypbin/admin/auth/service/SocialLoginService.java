@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.social.core.SocialService;
 import java.util.List;
@@ -89,8 +90,12 @@ public class SocialLoginService {
         }
 
         String accessToken = authUser.getToken() == null ? null : authUser.getToken().getAccessToken();
-        systemClient.saveSocialBinding(userId, normalizedSource, authUser.getUuid(),
+        R<Void> resp = systemClient.saveSocialBinding(userId, normalizedSource, authUser.getUuid(),
             authUser.getNickname(), authUser.getAvatar(), accessToken);
+        // 远程失败不能报成功，也不能清缓存（清了反而让后续读取回源到「未绑定」）
+        if (resp == null || !resp.isSuccess()) {
+            throw new BusinessException("第三方账号绑定失败，请稍后重试");
+        }
         SysCache.evictSocialBinding(userId, normalizedSource, authUser.getUuid());
     }
 
@@ -100,7 +105,10 @@ public class SocialLoginService {
     public void unbind(String source) {
         Long userId = currentUserId();
         String normalizedSource = normalizeSource(source);
-        systemClient.unbindSocial(userId, normalizedSource);
+        R<Void> resp = systemClient.unbindSocial(userId, normalizedSource);
+        if (resp == null || !resp.isSuccess()) {
+            throw new BusinessException("第三方账号解绑失败，请稍后重试");
+        }
         SysCache.evictSocialBinding(userId, normalizedSource, null);
     }
 
