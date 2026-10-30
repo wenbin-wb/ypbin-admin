@@ -156,8 +156,9 @@ mvn -f ypbin-admin-server/pom.xml spring-boot:run
 - **实时通道**：`WS /miniapp/cardtab/ws/room/{roomId}`、`WS /miniapp/familymenu/ws/room/{roomId}`；
   先调 `POST .../ws-ticket` 换 60 秒一次性 ticket，再以 `?ticket=xxx` 建连。
 - **反向代理**：nginx 需透传 `Upgrade` / `Connection` 头；微信后台需把 `wss://<域名>` 配为 socket 合法域名。
-- **数据库**：Flyway `V5`～`V8` 自动建表、灌入 100 道预设菜谱、登记 `MINIAPP` 认证方式，
-  并对旧库做幂等的契约对齐（`meal_time` → `order_type`、订单状态取值）。
+- **数据库**：基础迁移为 `V1__schema.sql`（系统 + AI 建表）/ `V2__data.sql`（系统 + AI 种子）；
+  小程序是单独脚本 `V3__miniapp.sql`（建表 + 100 道预设菜 + `MINIAPP` 认证方式 + 旧库契约幂等对齐）。
+  开发阶段已整合脚本：旧版 V1-V4 的开发库建议直接重建；生产库不要在已发版后这样合并脚本。
 
 ## 📁 项目结构
 

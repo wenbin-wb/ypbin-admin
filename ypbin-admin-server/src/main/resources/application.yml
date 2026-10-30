@@ -31,9 +31,11 @@ spring:
   flyway:
     enabled: true               # 开启 Flyway 数据库迁移
     baseline-on-migrate: true   # 对已有 schema 的库执行 baseline（空库无影响）
-    # 非 Flyway 初始化的库（如由微服务版 deploy/sql/001-007 建库）从 V4 起算：
-    # 视为已完成 V1-V4，只补跑小程序相关的 V5-V8（均幂等）。
-    baseline-version: 4
+    # 非 Flyway 初始化的库（如由微服务版 deploy/sql/001-007 建库）从 V2 起算：
+    # 视为已完成 V1-V2（系统 + AI 基础），只补跑小程序 V3（幂等）。
+    # 注意：开发阶段迁移已整合为 V1/V2/V3；旧版 V1-V4 的开发库请直接重建
+    # （或手工清理 flyway_schema_history 中已合并的版本），不要在生产库上这样调整。
+    baseline-version: 2
     validate-on-migrate: true   # 校验已执行迁移的 checksum，防历史迁移被篡改
     locations: classpath:db/migration
     encoding: UTF-8
