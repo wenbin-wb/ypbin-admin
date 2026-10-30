@@ -1,6 +1,6 @@
 # ypbin-admin 微服务版部署指南
 
-> 微服务版（main 分支）：网关 + 认证 + 系统 + AI + 任务 五服务架构，
+> 微服务版（main 分支）：网关 + 认证 + 系统 + AI 四服务架构，
 > 基于 Spring Cloud Alibaba（Nacos 注册/配置中心 + Sentinel 限流 + OpenFeign 服务调用）。
 
 ## 架构
@@ -11,7 +11,6 @@
 | `ypbin-auth` | 18081 | 认证服务：账号/手机验证码/第三方登录、验证码、sa-token 登录态 |
 | `ypbin-system` | 18082 | 系统服务：用户/角色/菜单/部门/岗位/字典/文件/日志/任务/通知/租户等 |
 | `ypbin-ai` | 18083 | AI 服务：知识库/对话/模型/统计 |
-| `ypbin-job` | 18084 | 定时任务调度 |
 | `nacos` | 8848 | 注册中心 + 配置中心（共享配置 `ypbin-common.yaml`） |
 | `sentinel-dashboard` | 8858 | 限流控制台（可选） |
 | `mysql` | 3306 | 共享数据库（所有服务共用 `ypbin_admin` 库） |
@@ -34,7 +33,7 @@
 
 ## 一键部署（推荐）
 
-**方式一：一键脚本**（自动完成环境检查→拉取 starter/admin→构建 starter→打包 5 服务→启动→健康检查）：
+**方式一：一键脚本**（自动完成环境检查→拉取 starter/admin→构建 starter→打包 4 个服务→启动→健康检查）：
 
 ```bash
 # Docker 模式（生产服务器，含 Nacos/Redis/MySQL 基础设施）
@@ -71,30 +70,31 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
 **方式二：手动**：
 
 ```bash
-# 拉取 microservice 分支
+# 拉取 main 分支
 git clone -b main https://github.com/wenbin-wb/ypbin-admin.git
 cd ypbin-admin/deploy
 
 # 配置环境变量
 cp .env.example .env   # 修改敏感项（MYSQL_ROOT_PASSWORD 等）
 
-# 启动（基础设施 + 5 微服务）
+# 启动（基础设施 + 4 个服务）
 docker compose -f docker-compose.yml up -d --build
 ```
 
 > 各服务 Dockerfile 位于服务目录内（`ypbin-gateway/Dockerfile` 等），compose 构建自动使用。
 
-### Nacos 配置中心（可选，推荐）
+### Nacos 配置中心（必需）
 
-默认各服务本地 yml 已含全部配置（nacos 地址/限流/租户开关），无 Nacos 配置中心也可运行。
-生产建议创建共享配置统一管理：
+各服务本地 yml 只保留端口、服务名、Nacos 地址与少量业务开关；**网关路由与共享配置都在 Nacos 模板里**：
 
-1. 登录 Nacos 控制台（`http://<host>:8848/nacos`，默认账号 `nacos/nacos`）
-2. 新建配置：Data ID `ypbin-common.yaml`、Group `DEFAULT_GROUP`、格式 YAML
-3. 内容见 `deploy/nacos/ypbin-common.yaml`（限流 dashboard 地址等，可覆盖各服务默认值）
+- `deploy/nacos/ypbin-common.yaml`：限流、租户、数据权限等共享配置
+- `deploy/nacos/ypbin-gateway.yaml`：网关路由、鉴权白名单、Sa-Token 配置
 
-各服务通过 `spring.config.import: optional:nacos:ypbin-common.yaml` 引入，
-本地开发无该配置时静默跳过（optional 前缀），不影响启动。
+`install.sh` 会自动渲染并导入这些模板；手工部署时需先在 Nacos 控制台按同名 Data ID / `DEFAULT_GROUP` 逐份创建，
+并把模板内的 `${...}` 占位符（如 `GATEWAY_SIGN_TOKEN`）替换为 `deploy/.env` 中的真实值。
+**缺少 `ypbin-gateway.yaml` 时网关没有任何路由**——`optional:` 前缀只保证启动不报错，不会补默认路由。
+
+各服务通过 `spring.config.import: optional:nacos:...` 引入；Nacos 不可达时进程仍可启动，但无法注册/发现服务。
 
 ## 手动构建部署
 
@@ -108,7 +108,6 @@ docker build -t ypbin/ypbin-gateway:local ypbin-gateway/
 docker build -t ypbin/ypbin-auth:local ypbin-auth/
 docker build -t ypbin/ypbin-system:local ypbin-service/ypbin-system/
 docker build -t ypbin/ypbin-ai:local ypbin-service/ypbin-ai/
-docker build -t ypbin/ypbin-job:local ypbin-service/ypbin-job/
 
 # 3. 编排启动
 docker compose -f deploy/docker-compose.yml up -d
@@ -123,14 +122,15 @@ curl http://localhost:18080/actuator/health
 # 登录（经网关）
 curl -X POST http://localhost:18080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123456"}'
+  -d '{"username":"admin","password":"pt5aQ5E6t8dkVkMp"}'
 # 返回 { code:200, data:{ tokenValue:"..." } }
+# 口令来自 deploy/sql/002-data.sql 的种子账号，仅供初始化；登录后立即改密。
 
 # 带 token 访问业务接口（网关校验后签发身份头转发）
 curl http://localhost:18080/system/user/list \
   -H "Authorization: Bearer <token>"
 
-# Nacos 控制台确认 5 服务注册
+# Nacos 控制台确认 4 个服务注册
 # http://localhost:8848/nacos → 服务管理 → 服务列表
 ```
 
@@ -198,12 +198,12 @@ NACOS_IMPORT_STRICT=1 时：发现白名单外差异即中止导入
 
 ```yaml
 spring.cloud.gateway.server.webflux.routes:
-  - id: auth    uri: lb://ypbin-auth    predicates: Path=/auth/**,/captcha/**,/user/**,/open-api/**
+  - id: auth    uri: lb://ypbin-auth    predicates: Path=/auth/**,/auth/social/**
   - id: system  uri: lb://ypbin-system  predicates: Path=/system/**
-  - id: ai      uri: lb://ypbin-ai      predicates: Path=/ai/**,/share/**,/widget/**
+  - id: ai      uri: lb://ypbin-ai      predicates: Path=/ai/**
 ```
 
-白名单路径（无需登录）：`/auth/login`、`/captcha/**`、`/open-api/**` 等，见 gateway yml `ypbin.gateway.auth.whitelist`。
+白名单路径（无需登录）：`/auth/login`、`/auth/sms/**`、`/auth/captcha/**`、`/auth/social/**`、`/system/open-api/**`、`/ai/share/**`、`/ai/widget/**`、`/system/ypbin/sse/subscribe`、`/system/tracking/ingest` 等，见 gateway 模板 `ypbin.gateway.auth.exclude-paths`。
 
 ## 环境变量
 
@@ -220,7 +220,7 @@ spring.cloud.gateway.server.webflux.routes:
 
 1. **服务起不来，报 Nacos 连接失败** → 确认 `NACOS_ADDR` 可达；本地开发可先起 Nacos 容器
 2. **登录返回 401** → 分两种，先看**错误口令**是否返回 `409`：
-   - 错误口令也 401 ⇒ 网关白名单未包含该路径；检查 gateway yml `whitelist`；
+   - 错误口令也 401 ⇒ 网关白名单未包含该路径；检查 gateway 的 `ypbin.gateway.auth.exclude-paths`；
    - **错误口令返回 409、正确口令 401 `登录状态无效`** ⇒ auth 的 `ypbin.security.identity.enabled`
      被继承成了 `true`（见上文「身份头账号体系」一节），auth 日志会出现 `SaTokenExceptionHandler [未认证] type=-1`。
 3. **auth 报"系统服务暂不可用"** → `ypbin-system` 未注册到 Nacos；检查 system 服务日志
@@ -231,7 +231,7 @@ spring.cloud.gateway.server.webflux.routes:
 
 | 维度 | 单体版（boot 分支） | 微服务版（main） |
 |---|---|---|
-| 架构 | 单应用（8080） | 网关 + 5 服务 |
+| 架构 | 单应用（8080） | 网关 + 4 服务 |
 | 注册中心 | 无 | Nacos |
 | 服务调用 | 本地 Bean | OpenFeign + 身份头 |
 | 当前用户 | `UserContext`（sa-token 会话） | `IdentityContext`（身份头） |

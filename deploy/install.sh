@@ -11,7 +11,7 @@
 #   （gitee.com/wenbin_wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
 #   两者都不可达时按下方 YPBIN_REPO 手工指定镜像/代理前缀后重跑。
 #
-# 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
+# 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 4 服务）：
 #   NO_DOCKER=1 bash deploy/install.sh
 #   注意：无 Docker 模式要求外部已有 Nacos/Redis/MySQL，用环境变量指定地址
 #
@@ -19,7 +19,7 @@
 #   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven，Maven 走阿里云镜像）
 #   [2/7] 拉取代码   —— starter + admin（main 分支）+ admin-ui（main），源自动探测/降级
 #   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.2.3 及新能力）
-#   [4/7] 构建后端   —— Maven 打包 5 个服务可执行 jar
+#   [4/7] 构建后端   —— Maven 打包 4 个服务可执行 jar
 #   [5/7] 生成配置   —— .env 凭据 + Nacos 共享配置提示
 #   [6/7] 启动服务   —— Docker: compose up（含基础设施）；NO_DOCKER: java -jar 逐个启动
 #   [7/7] 健康检查   —— 验证网关/各服务注册，输出访问地址
@@ -1002,12 +1002,12 @@ else
 fi
 fi
 
-# ---------- [4/7] 构建后端 5 服务 ----------
+# ---------- [4/7] 构建后端 4 服务 ----------
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
   info "[4/7] 跳过构建（restart 模式，复用已有 jar）"
   JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
 else
-info "[4/7] 构建后端 5 个服务"
+info "[4/7] 构建后端 4 个服务"
 cd "$ROOT/ypbin-admin"
 # 完整输出错误（不吞日志）
 if ! mvn -DskipTests clean package 2>&1 | tee /tmp/admin-build.log | tail -20; then
@@ -1539,7 +1539,7 @@ fi
 
 # ---------- [6/7] 启动服务 ----------
 if [ "$NO_DOCKER" = "1" ]; then
-  info "[6/7] 无 Docker 模式：java -jar 启动 5 服务（需外部 Nacos/Redis/MySQL）"
+  info "[6/7] 无 Docker 模式：java -jar 启动 4 服务（需外部 Nacos/Redis/MySQL）"
   [ -n "${NACOS_ADDR:-}" ] || die "NO_DOCKER 模式需设置 NACOS_ADDR"
   mkdir -p "$ROOT/logs"
   # 时区必须显式传给 JVM：Docker 模式靠镜像 ENV TZ=Asia/Shanghai 生效，java -jar 直启没有这层保障，
