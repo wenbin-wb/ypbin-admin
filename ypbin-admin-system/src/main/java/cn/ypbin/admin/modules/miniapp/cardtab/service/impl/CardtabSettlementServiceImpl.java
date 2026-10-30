@@ -100,12 +100,13 @@ public class CardtabSettlementServiceImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CardtabSettlementResp saveSettlement(Long roomId) {
-        // 结算会锁定房间账目，只允许房内成员发起（不能由无关用户替别人结束牌局）
-        accessSupport.requireMember(roomId);
-        CardtabRoom room = accessSupport.requireRoom(roomId);
+        // 锁住房间行：并发结算串行（后来者读到 SETTLED 直接拒绝），且结算计算期间无法再记账/撤销
+        CardtabRoom room = accessSupport.requireRoomForUpdate(roomId);
         if (CardtabRoomStatusEnum.SETTLED.is(room.getRoomStatus())) {
             throw new BusinessException("房间已结算，请勿重复提交");
         }
+        // 结算会锁定房间账目，只允许房内成员发起（不能由无关用户替别人结束牌局）
+        accessSupport.requireMember(roomId);
 
         CardtabSettlementResp resp = calculateSettlement(room);
         resp.setStatus(CardtabRoomStatusEnum.SETTLED.getCode());

@@ -104,9 +104,10 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (!StringUtils.hasText(username)) {
             throw new BusinessException("小程序用户名不能为空");
         }
-        // 登录时尚无租户上下文：按用户名全局定位（用户名全局唯一）
+        // 登录时尚无租户上下文：按用户名全局定位（用户名全局唯一）。
+        // 必须包含逻辑删除行：否则已删除的小程序用户再次登录会走 insert 并撞 uk_username。
         SysUser user = TenantContext.executeIgnore(() ->
-            getOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username), false));
+            baseMapper.selectByUsernameIncludeDeleted(username));
         if (user == null) {
             SysUser created = new SysUser();
             created.setUsername(username);
@@ -124,6 +125,15 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
                 throw new BusinessException("创建小程序用户失败");
             }
             return created;
+        }
+        if (Integer.valueOf(1).equals(user.getIsDeleted())) {
+            // 小程序账号由微信身份自动开立：删除后再次登录应恢复同一账号。
+            // 仅恢复小程序用户，避免把被删除的管理员账号复活。
+            if (user.getUserType() != null && !USER_TYPE_MINIAPP.equals(user.getUserType())) {
+                throw new BusinessException("账号已注销，请联系管理员");
+            }
+            TenantContext.runIgnore(() -> baseMapper.restoreDeletedByUsername(username));
+            user.setIsDeleted(0);
         }
         boolean updated = false;
         if (user.getTenantId() == null) {

@@ -100,6 +100,7 @@ ypbin:
       - /open/license/**
       - /miniapp/cardtab/rooms/code/**        # 小程序按口令查房间（只返回预览视图）
       - /miniapp/familymenu/preset-dish/list  # 全局预设菜字典（不隶属任何餐厅）
+      - /miniapp/familymenu/presetDish/list   # 同上（控制器双映射兼容 camelCase）
       - /miniapp/cardtab/ws/**                # WS 握手无法携带 Authorization，由一次性 ticket 核销
       - /miniapp/familymenu/ws/**
       - /actuator/health        # 健康检查放行（仅此低危端点，不放 env/beans 等）

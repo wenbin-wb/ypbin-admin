@@ -14,6 +14,7 @@ import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoom;
 import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoomMember;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabEventTypeEnum;
+import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabExpenseStatusEnum;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabMemberRoleEnum;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabMemberStatusEnum;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabRoomStatusEnum;
@@ -195,9 +196,11 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         if (CollectionUtils.isEmpty(roomIds)) {
             return 0;
         }
-        // 单次 IN + 时间范围查询，不做循环查询；逻辑删除由 BaseEntity 的 @TableLogic 自动过滤
+        // 单次 IN + 时间范围查询，不做循环查询；逻辑删除由 BaseEntity 的 @TableLogic 自动过滤。
+        // 已撤销的支出不计入：与 countByRoomIds 的「未撤销」口径保持一致。
         return Math.toIntExact(expenseMapper.selectCount(new LambdaQueryWrapper<CardtabExpense>()
             .in(CardtabExpense::getRoomId, roomIds)
+            .eq(CardtabExpense::getExpenseStatus, CardtabExpenseStatusEnum.NORMAL.getCode())
             .ge(CardtabExpense::getCreateTime, LocalDate.now().atStartOfDay())));
     }
 

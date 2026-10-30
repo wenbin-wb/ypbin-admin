@@ -55,11 +55,11 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> createExpense(Long roomId, CardtabExpenseReq req) {
-        CardtabRoom room = accessSupport.requireRoom(roomId);
+        // 先锁房间行，再读成员：所有账目读写都在锁内完成，避免拿到等待锁之前的旧积分
+        CardtabRoom room = accessSupport.requireRoomForUpdate(roomId);
         if (!CardtabRoomStatusEnum.ONGOING.is(room.getRoomStatus())) {
             throw new BusinessException("房间不存在或已结算，无法记账");
         }
-
         // 成员身份 + 未退出，由守卫统一校验（此前各方法各写一遍，容易漏）
         CardtabRoomMember fromMember = accessSupport.requireMember(roomId);
 
@@ -119,7 +119,12 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void revokeExpense(Long roomId, Long expenseId) {
-        // 撤销会反向调整双方积分，必须先确认调用者属于该房间
+        // 锁住房间行：与记账/结算串行；已结算房间的账目已锁定，禁止再改
+        CardtabRoom room = accessSupport.requireRoomForUpdate(roomId);
+        if (!CardtabRoomStatusEnum.ONGOING.is(room.getRoomStatus())) {
+            throw new BusinessException("房间已结算或关闭，无法撤销支出");
+        }
+        // 撤销会反向调整双方积分，必须确认调用者属于该房间
         accessSupport.requireMember(roomId);
 
         CardtabExpense expense = getById(expenseId);

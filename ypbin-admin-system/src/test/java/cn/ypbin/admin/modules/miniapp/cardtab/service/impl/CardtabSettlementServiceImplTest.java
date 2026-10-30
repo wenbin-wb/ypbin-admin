@@ -237,7 +237,7 @@ class CardtabSettlementServiceImplTest {
     @DisplayName("非成员结算他人房间：拒绝（此前任何人可锁死别人牌局）")
     void nonMemberCannotSettleOthersRoom() {
         givenCurrentUserIsNotMember();
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("ONGOING"));
+        when(roomMapper.selectByIdForUpdate(ROOM_ID)).thenReturn(room("ONGOING"));
 
         assertThatThrownBy(() -> service.saveSettlement(ROOM_ID))
             .isInstanceOf(BusinessException.class)
@@ -252,7 +252,7 @@ class CardtabSettlementServiceImplTest {
     @DisplayName("已结算房间再次结算：显式拒绝，不覆盖既有快照")
     void settledRoomCannotBeSettledAgain() {
         givenCurrentUserIsMember();
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(room("SETTLED"));
+        when(roomMapper.selectByIdForUpdate(ROOM_ID)).thenReturn(room("SETTLED"));
 
         assertThatThrownBy(() -> service.saveSettlement(ROOM_ID))
             .isInstanceOf(BusinessException.class)
@@ -276,7 +276,7 @@ class CardtabSettlementServiceImplTest {
     void saveSettlementShouldPersistSnapshotAndEvent() {
         givenCurrentUserIsMember();
         CardtabRoom active = room("ONGOING");
-        when(roomMapper.selectById(ROOM_ID)).thenReturn(active);
+        when(roomMapper.selectByIdForUpdate(ROOM_ID)).thenReturn(active);
         when(memberMapper.selectList(any())).thenReturn(List.of(
             member(1, "小红", "30"), member(2, "阿明", "-30")));
         when(snapshotMapper.insert(any(CardtabSettlementSnapshot.class))).thenReturn(1);

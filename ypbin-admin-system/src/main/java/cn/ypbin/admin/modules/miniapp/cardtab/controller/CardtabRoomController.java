@@ -17,6 +17,7 @@ import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabRoomDetailResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.service.CardtabRoomService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.model.PageResult;
+import cn.ypbin.starter.tools.limiter.RateLimit;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -60,7 +61,10 @@ public class CardtabRoomController {
 
     /**
      * 按口令查询房间。
+     *
+     * <p>匿名入口且口令仅 4-6 位：必须限流，否则可被脚本高速枚举房间名称与成员数。</p>
      */
+    @RateLimit(count = 20, window = 60, message = "查询过于频繁，请稍后再试")
     @GetMapping("/code/{roomCode}")
     public R<CardtabRoomDetailResp> getRoomByCode(@PathVariable String roomCode) {
         return R.ok(roomService.getRoomByCode(roomCode));

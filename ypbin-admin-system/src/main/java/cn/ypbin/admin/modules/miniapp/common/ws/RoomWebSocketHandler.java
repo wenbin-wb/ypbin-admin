@@ -44,6 +44,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     /** 发送超时（毫秒） */
     private static final int SEND_TIMEOUT_MS = 10_000;
 
+    /**
+     * 会话属性键：装饰后的安全会话。
+     *
+     * <p>注册表持有的是 {@link ConcurrentWebSocketSessionDecorator}，而关闭回调拿到的是原始
+     * session；两者不是同一对象，注销时必须按装饰后的实例移除，否则连接会滞留在注册表。</p>
+     */
+    static final String ATTR_SAFE_SESSION = "wsSafeSession";
+
     private final RoomSocketRegistry roomSocketRegistry;
 
     @Override
@@ -56,6 +64,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         }
         WebSocketSession safeSession = new ConcurrentWebSocketSessionDecorator(
             session, SEND_TIMEOUT_MS, SEND_BUFFER_LIMIT);
+        session.getAttributes().put(ATTR_SAFE_SESSION, safeSession);
         roomSocketRegistry.register(roomId, safeSession);
         log.debug("WS 已连接；roomId={}，userId={}，当前连接数={}",
             roomId, session.getAttributes().get(WsTicketHandshakeInterceptor.ATTR_USER_ID),
@@ -73,7 +82,10 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         Long roomId = roomIdOf(session);
         if (roomId != null) {
-            roomSocketRegistry.unregister(roomId, session);
+            // 注册表里存的是装饰后的 session，必须按同一实例注销
+            WebSocketSession registered = session.getAttributes().get(ATTR_SAFE_SESSION)
+                instanceof WebSocketSession safe ? safe : session;
+            roomSocketRegistry.unregister(roomId, registered);
         }
         log.debug("WS 已断开；sessionId={}，status={}", session.getId(), status);
     }

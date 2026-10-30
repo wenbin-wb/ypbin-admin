@@ -25,6 +25,7 @@ import cn.ypbin.admin.modules.auth.core.LoginSupport;
 import cn.ypbin.admin.modules.auth.core.MiniappLoginReq;
 import cn.ypbin.admin.modules.auth.model.resp.MiniappLoginResp;
 import cn.ypbin.admin.modules.system.entity.SysUser;
+import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -136,6 +137,24 @@ class MiniappLoginServiceTest {
         assertThat(resp.getOpenid()).doesNotStartWith("mock_");
         // username 必须由真实 openid 派生，不得是 mock_
         verify(userService).getOrCreateMiniappUser(eq("wx_openid-abc"), any(), any());
+    }
+
+    @Test
+    @DisplayName("被禁用的小程序用户：拒绝登录，不建立会话")
+    void disabledUserShouldThrow() {
+        properties.setAppid("wx-app");
+        properties.setSecret("wx-secret");
+        SysUser user = new SysUser();
+        user.setId(99L);
+        user.setUsername("wx_openid-abc");
+        user.setStatus(UserStatusEnum.DISABLED.getCode());
+        when(userService.getOrCreateMiniappUser(anyString(), any(), any())).thenReturn(user);
+        MiniappLoginService stub = serviceWithWechatResponse("{\"openid\":\"openid-abc\"}");
+
+        assertThatThrownBy(() -> stub.login(req("good-code")))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("禁用");
+        verify(loginSupport, never()).completeLogin(any(), anyString());
     }
 
     @Test

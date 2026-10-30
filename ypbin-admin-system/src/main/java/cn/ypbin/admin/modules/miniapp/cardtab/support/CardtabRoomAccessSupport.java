@@ -77,6 +77,23 @@ public class CardtabRoomAccessSupport {
     }
 
     /**
+     * 校验房间存在并锁定房间行（调用方须处于事务中）。
+     *
+     * <p>账目类写操作（记账/撤销/结算）统一用本方法取房间：行锁把这些写操作串行，
+     * 防止并发覆盖积分、重复结算，以及「结算计算期间又记了一笔」。</p>
+     *
+     * @param roomId 房间 ID
+     * @return 房间实体
+     */
+    public CardtabRoom requireRoomForUpdate(Long roomId) {
+        CardtabRoom room = roomMapper.selectByIdForUpdate(roomId);
+        if (room == null) {
+            throw new BusinessException("房间不存在");
+        }
+        return room;
+    }
+
+    /**
      * 在当前用户视角下查找房间成员记录（缺省不含逻辑删除数据）。
      *
      * @param roomId 房间 ID
@@ -106,14 +123,15 @@ public class CardtabRoomAccessSupport {
     }
 
     /**
-     * 校验当前用户是房间房主。
+     * 校验当前用户是房间房主，并锁定房间行（调用方须处于事务中）。
      *
      * @param roomId 房间 ID
      * @return 房间实体
      */
     public CardtabRoom requireOwner(Long roomId) {
         Long userId = currentUserId();
-        CardtabRoom room = requireRoom(roomId);
+        // 设置修改是写操作：锁住房间行，避免与结算交错时把已结算状态覆盖回进行中
+        CardtabRoom room = requireRoomForUpdate(roomId);
         if (!userId.equals(room.getOwnerUserId())) {
             throw new BusinessException("只有房主可以执行该操作");
         }

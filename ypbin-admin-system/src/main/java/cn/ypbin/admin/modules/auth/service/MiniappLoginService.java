@@ -14,6 +14,7 @@ import cn.ypbin.admin.modules.auth.core.LoginSupport;
 import cn.ypbin.admin.modules.auth.core.MiniappLoginReq;
 import cn.ypbin.admin.modules.auth.model.resp.MiniappLoginResp;
 import cn.ypbin.admin.modules.system.entity.SysUser;
+import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -85,6 +86,10 @@ public class MiniappLoginService {
         String openid = resolveOpenid(req.getCode());
         String username = "wx_" + openid;
         SysUser user = userService.getOrCreateMiniappUser(username, req.getNickname(), req.getAvatarUrl());
+        // 与账号密码登录保持一致：被禁用的账号不得建立会话
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
+            throw new BusinessException("账号已被禁用");
+        }
 
         LoginResp loginResp = loginSupport.completeLogin(user, USER_TYPE_MINIAPP);
         MiniappLoginResp resp = new MiniappLoginResp();

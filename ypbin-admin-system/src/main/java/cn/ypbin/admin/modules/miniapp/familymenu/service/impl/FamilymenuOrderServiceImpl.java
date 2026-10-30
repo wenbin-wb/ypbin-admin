@@ -175,7 +175,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         // 批量取全部明细与点菜人昵称：原实现在 stream().map 里逐单查两次库（N+1），
         // 且该形态不被架构门禁识别，故必须在此手动批量化
         List<Long> orderIds = orders.stream().map(FamilymenuOrder::getId).toList();
-        Map<Long, List<FamilymenuOrderDetailResp>> detailMap = loadDetailsByOrders(orderIds);
+        Map<Long, List<FamilymenuOrderDetailResp>> detailMap = loadDetailsByOrders(orderIds, roomId);
 
         return orders.stream().map(o -> {
             FamilymenuOrderResp resp = new FamilymenuOrderResp();
@@ -227,7 +227,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
             throw new BusinessException("订单不存在");
         }
         accessSupport.requireMember(order.getRoomId());
-        return loadDetails(orderId);
+        return loadDetails(orderId, order.getRoomId());
     }
 
     /**
@@ -236,25 +236,25 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
     private FamilymenuOrderResp getOrderDetailInternal(FamilymenuOrder order) {
         FamilymenuOrderResp resp = new FamilymenuOrderResp();
         BeanUtils.copyProperties(order, resp);
-        resp.setDetails(loadDetails(order.getId()));
+        resp.setDetails(loadDetails(order.getId(), order.getRoomId()));
         return resp;
     }
 
     /**
      * 取单个订单的明细（含点菜人昵称）。
      */
-    private List<FamilymenuOrderDetailResp> loadDetails(Long orderId) {
+    private List<FamilymenuOrderDetailResp> loadDetails(Long orderId, Long roomId) {
         List<FamilymenuOrderDetail> list = detailMapper.selectList(
             new LambdaQueryWrapper<FamilymenuOrderDetail>()
                 .eq(FamilymenuOrderDetail::getOrderId, orderId)
                 .orderByAsc(FamilymenuOrderDetail::getId));
-        return toDetailRespList(list);
+        return toDetailRespList(list, roomId);
     }
 
     /**
      * 批量取多个订单的明细（单次 IN 查询，避免逐单查库）。
      */
-    private Map<Long, List<FamilymenuOrderDetailResp>> loadDetailsByOrders(List<Long> orderIds) {
+    private Map<Long, List<FamilymenuOrderDetailResp>> loadDetailsByOrders(List<Long> orderIds, Long roomId) {
         if (CollectionUtils.isEmpty(orderIds)) {
             return Map.of();
         }
@@ -269,14 +269,17 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         }
 
         Map<Long, List<FamilymenuOrderDetailResp>> result = new HashMap<>();
-        grouped.forEach((orderId, details) -> result.put(orderId, toDetailRespList(details)));
+        grouped.forEach((orderId, details) -> result.put(orderId, toDetailRespList(details, roomId)));
         return result;
     }
 
     /**
      * 明细 → 出参（统一在此批量补点菜人昵称，杜绝逐条查库）。
+     *
+     * @param list   订单明细
+     * @param roomId 订单所属餐厅；昵称必须限定在该餐厅内，避免同一用户在多餐厅时串用他店昵称
      */
-    private List<FamilymenuOrderDetailResp> toDetailRespList(List<FamilymenuOrderDetail> list) {
+    private List<FamilymenuOrderDetailResp> toDetailRespList(List<FamilymenuOrderDetail> list, Long roomId) {
         if (CollectionUtils.isEmpty(list)) {
             return List.of();
         }
@@ -287,6 +290,7 @@ public class FamilymenuOrderServiceImpl extends BaseServiceImpl<FamilymenuOrderM
         if (!CollectionUtils.isEmpty(requesterIds)) {
             List<FamilymenuMember> members = memberMapper.selectList(
                 new LambdaQueryWrapper<FamilymenuMember>()
+                    .eq(roomId != null, FamilymenuMember::getRoomId, roomId)
                     .in(FamilymenuMember::getUserId, requesterIds));
             for (FamilymenuMember m : members) {
                 nameMap.putIfAbsent(m.getUserId(), m.getNickname());
