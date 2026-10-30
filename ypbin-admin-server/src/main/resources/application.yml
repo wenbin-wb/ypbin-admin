@@ -31,6 +31,9 @@ spring:
   flyway:
     enabled: true               # 开启 Flyway 数据库迁移
     baseline-on-migrate: true   # 对已有 schema 的库执行 baseline（空库无影响）
+    # 非 Flyway 初始化的库（如由微服务版 deploy/sql/001-007 建库）从 V4 起算：
+    # 视为已完成 V1-V4，只补跑小程序相关的 V5-V8（均幂等）。
+    baseline-version: 4
     validate-on-migrate: true   # 校验已执行迁移的 checksum，防历史迁移被篡改
     locations: classpath:db/migration
     encoding: UTF-8
@@ -60,6 +63,15 @@ ypbin:
     job:
       reconcile-delay: ${ADMIN_JOB_RECONCILE_DELAY:30000}  # 通知投递对账延迟（毫秒）
 
+  # ---------- 微信小程序登录 ----------
+  # 未配置 appid/secret 且未显式开启 mock 时登录直接失败（fail-closed），
+  # 避免「任意 code 换出稳定身份」的伪登录。生产必须保持 mock-enabled=false。
+  wechat:
+    miniapp:
+      appid: ${WECHAT_MINIAPP_APPID:}
+      secret: ${WECHAT_MINIAPP_SECRET:}
+      mock-enabled: ${WECHAT_MINIAPP_MOCK_ENABLED:false}
+
   # ---------- Web 层 ----------
   web:
     repeatable-read:
@@ -79,12 +91,17 @@ ypbin:
       - /auth/login
       - /auth/sms/send
       - /auth/sms/login
+      - /auth/miniapp/login     # 小程序登录（匿名入口）
       - /auth/social/authorize/**
       - /auth/social/callback/**
       - /auth/social/platforms
       - /captcha
       - /captcha/verify
       - /open/license/**
+      - /miniapp/cardtab/rooms/code/**        # 小程序按口令查房间（只返回预览视图）
+      - /miniapp/familymenu/preset-dish/list  # 全局预设菜字典（不隶属任何餐厅）
+      - /miniapp/cardtab/ws/**                # WS 握手无法携带 Authorization，由一次性 ticket 核销
+      - /miniapp/familymenu/ws/**
       - /actuator/health        # 健康检查放行（仅此低危端点，不放 env/beans 等）
       - /error
 
@@ -116,6 +133,21 @@ ypbin:
       - sys_auth_template
       - sys_template_menu
       - sys_license
+      # 小程序业务表不带 tenant_id（用户归属由登录建号时写入 sys_user 的 tenant_id 决定）
+      - cardtab_room
+      - cardtab_room_member
+      - cardtab_expense
+      - cardtab_room_event
+      - cardtab_settlement_snapshot
+      - cardtab_game_template
+      - cardtab_feedback
+      - familymenu_room
+      - familymenu_member
+      - familymenu_dish
+      - familymenu_preset_dish
+      - familymenu_wishlist
+      - familymenu_order
+      - familymenu_order_detail
 
   # ---------- 接口签名 ----------
   sign:

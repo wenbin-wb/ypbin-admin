@@ -25,6 +25,21 @@ public interface SysNoticeService extends BaseService<SysNotice> {
 
     List<NoticeResp> listNotices();
 
+    /**
+     * 对外可见的公告列表：已发布且未过期，置顶优先、发布时间倒序。
+     *
+     * @return 公告列表
+     */
+    List<NoticeResp> listPublishedNotices();
+
+    /**
+     * 按 ID 读取对外可见的公告（已发布且未过期）。
+     *
+     * @param id 公告 ID
+     * @return 公告；不存在或不可见时为 null
+     */
+    NoticeResp getPublishedNotice(Long id);
+
     void createNotice(NoticeSaveReq req);
 
     void updateNotice(Long id, NoticeSaveReq req);

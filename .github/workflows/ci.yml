@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, boot, feature/miniapp-backend ]
+    branches: [ main, boot, boot-miniapp, feature/miniapp-backend ]
   pull_request:
-    branches: [ main, boot, feature/miniapp-backend ]
+    branches: [ main, boot, boot-miniapp, feature/miniapp-backend ]
 
 jobs:
   build:

@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -65,6 +66,12 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> implements SysUserService {
+
+    /** 小程序用户类型标识 */
+    private static final String USER_TYPE_MINIAPP = "MINIAPP";
+
+    /** 小程序用户首次登录且未带昵称时的默认展示名 */
+    private static final String DEFAULT_MINIAPP_NICKNAME = "微信用户";
 
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
@@ -89,6 +96,78 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
         return TenantContext.executeIgnore(() ->
             getOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getPhone, normalizedPhone), true));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SysUser getOrCreateMiniappUser(String username, String nickname, String avatar) {
+        if (!StringUtils.hasText(username)) {
+            throw new BusinessException("小程序用户名不能为空");
+        }
+        // 登录时尚无租户上下文：按用户名全局定位（用户名全局唯一）
+        SysUser user = TenantContext.executeIgnore(() ->
+            getOne(new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username), false));
+        if (user == null) {
+            SysUser created = new SysUser();
+            created.setUsername(username);
+            created.setRealName(StringUtils.hasText(nickname) ? nickname : DEFAULT_MINIAPP_NICKNAME);
+            created.setNickname(nickname);
+            created.setAvatar(avatar);
+            created.setUserType(USER_TYPE_MINIAPP);
+            // 小程序用户不设登录密码，随机占位以满足非空约束
+            created.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
+            created.setStatus(EntityStatus.ENABLED.getCode());
+            created.setTenantId(AdminConstants.DEFAULT_TENANT_ID);
+            Boolean saved = TenantContext.executeWithTenant(AdminConstants.DEFAULT_TENANT_ID,
+                () -> save(created));
+            if (!Boolean.TRUE.equals(saved)) {
+                throw new BusinessException("创建小程序用户失败");
+            }
+            return created;
+        }
+        boolean updated = false;
+        if (user.getTenantId() == null) {
+            // 兼容历史数据：旧版小程序服务未启用租户，落库的 tenant_id 为空。
+            // 单体开启租户隔离后，登录态需要租户上下文，故在登录时补默认租户。
+            user.setTenantId(AdminConstants.DEFAULT_TENANT_ID);
+            updated = true;
+        }
+        if (StringUtils.hasText(nickname) && !nickname.equals(user.getNickname())) {
+            user.setNickname(nickname);
+            user.setRealName(nickname);
+            updated = true;
+        }
+        if (StringUtils.hasText(avatar) && !avatar.equals(user.getAvatar())) {
+            user.setAvatar(avatar);
+            updated = true;
+        }
+        if (updated) {
+            // 已按全局唯一的用户名定位到具体用户，按主键更新；忽略租户条件以兼容 tenant_id 为空的旧数据
+            TenantContext.runIgnore(() -> updateById(user));
+        }
+        return user;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateMiniappProfile(Long userId, String nickname, String avatar, String phone) {
+        SysUser user = getById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        if (StringUtils.hasText(nickname)) {
+            user.setNickname(nickname.trim());
+            user.setRealName(nickname.trim());
+        }
+        if (StringUtils.hasText(avatar)) {
+            user.setAvatar(avatar.trim());
+        }
+        String normalizedPhone = accountSupport.normalizePhone(phone);
+        if (normalizedPhone != null) {
+            accountSupport.checkPhoneUnique(normalizedPhone, userId);
+            user.setPhone(normalizedPhone);
+        }
+        updateById(user);
     }
 
     @Override

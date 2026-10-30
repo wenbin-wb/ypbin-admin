@@ -33,6 +33,26 @@ public interface SysUserService extends BaseService<SysUser> {
 
     SysUser getByPhone(String phone);
 
+    /**
+     * 按用户名获取小程序用户，不存在时创建（供小程序匿名登录入口使用）。
+     *
+     * @param username 用户名（由小程序端身份派生）
+     * @param nickname 昵称，可空
+     * @param avatar   头像地址，可空
+     * @return 用户实体
+     */
+    SysUser getOrCreateMiniappUser(String username, String nickname, String avatar);
+
+    /**
+     * 更新小程序用户资料：仅更新显式提供的字段，未提供（空白）的字段保持不变。
+     *
+     * @param userId   用户 ID
+     * @param nickname 昵称，可为空
+     * @param avatar   头像地址，可为空
+     * @param phone    手机号，可为空
+     */
+    void updateMiniappProfile(Long userId, String nickname, String avatar, String phone);
+
     void updateLastLoginTime(Long userId);
 
     PageResult<UserResp> pageUsers(UserQuery query);

@@ -9,6 +9,9 @@
  */
 package cn.ypbin.admin.modules.auth.controller;
 
+import cn.ypbin.admin.modules.auth.core.MiniappLoginReq;
+import cn.ypbin.admin.modules.auth.model.resp.MiniappLoginResp;
+import cn.ypbin.admin.modules.auth.service.MiniappLoginService;
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
@@ -37,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final MiniappLoginService miniappLoginService;
 
     /**
      * 账号密码登录。
@@ -46,6 +50,16 @@ public class AuthController {
     @PostMapping("/auth/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
         return R.ok(authService.login(req, WebRequestUtils.ip()));
+    }
+
+    /**
+     * 微信小程序登录。
+     */
+    @Log(value = "小程序登录", module = "认证")
+    @RateLimit(count = 10, window = 60, message = "登录过于频繁，请稍后再试")
+    @PostMapping("/auth/miniapp/login")
+    public R<MiniappLoginResp> miniappLogin(@RequestBody MiniappLoginReq req) {
+        return R.ok(miniappLoginService.login(req));
     }
 
     /**

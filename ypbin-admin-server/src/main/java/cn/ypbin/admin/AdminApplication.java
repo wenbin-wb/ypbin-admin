@@ -11,6 +11,7 @@ package cn.ypbin.admin;
 
 import cn.ypbin.admin.bootstrap.SecurityBootstrapProperties;
 import cn.ypbin.admin.common.config.LicenseIssuerProperties;
+import cn.ypbin.admin.modules.auth.config.WechatMiniappProperties;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -23,7 +24,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * @since 2026-08-01
  */
 @SpringBootApplication
-@EnableConfigurationProperties({SecurityBootstrapProperties.class, LicenseIssuerProperties.class})
+@EnableConfigurationProperties({SecurityBootstrapProperties.class, LicenseIssuerProperties.class,
+    WechatMiniappProperties.class})
 @MapperScan("cn.ypbin.admin.**.mapper")
 public class AdminApplication {
 

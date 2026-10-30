@@ -3,7 +3,7 @@
 # ypbin-admin 一键部署脚本（零配置，全自动）
 #
 # 用法（新服务器一键安装）：
-#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot-miniapp/deploy/install.sh)
 #
 # 阶段总览：
 #   [1/7] 环境准备   —— 一次性检查并安装全部依赖（系统/Docker/JDK21/Maven/Node/pnpm/镜像/网络）
@@ -15,7 +15,7 @@
 #   [7/7] 健康检查   —— 验证 admin / admin-ui 可访问，输出凭据
 #
 # 自定义参数（可选，通过环境变量覆盖）：
-#   YPBIN_ROOT=/opt/ypbin/boot      部署根目录（默认 /opt/ypbin/boot）
+#   YPBIN_ROOT=/opt/ypbin/boot-miniapp      部署根目录（默认 /opt/ypbin/boot-miniapp）
 #   YPBIN_REPO=https://github.com/wenbin-wb   仓库前缀
 #   ADMIN_PORT=8080                admin 后端端口
 #   ADMIN_UI_PORT=18080            admin-ui 前端端口
@@ -35,7 +35,7 @@ set -euo pipefail
 # 用法不变：bash <(curl -fsSL ...)
 # ============================================================
 SCRIPT_VERSION="2026.08.29.5"
-SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh}"
+SCRIPT_URL="${YPBIN_SCRIPT_URL:-https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot-miniapp/deploy/install.sh}"
 SCRIPT_API_URL="${YPBIN_SCRIPT_API_URL:-https://api.github.com/repos/wenbin-wb/ypbin-admin/contents/deploy/install.sh?ref=boot}"
 
 if [ "${YPBIN_SKIP_SELF_UPDATE:-0}" != "1" ]; then
@@ -75,8 +75,10 @@ die()  { echo -e "\n  ${RED}✗  错误：$*${NC}\n"; exit 1; }
 step() { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 # ---------- 参数 ----------
-ROOT="${YPBIN_ROOT:-/opt/ypbin/boot}"
+ROOT="${YPBIN_ROOT:-/opt/ypbin/boot-miniapp}"
 REPO_BASE="${YPBIN_REPO:-https://github.com/wenbin-wb}"
+# 本脚本属于 boot-miniapp 分支：ypbin-admin 必须检出该分支（默认分支是微服务版 main）
+ADMIN_BRANCH="${YPBIN_ADMIN_BRANCH:-boot-miniapp}"
 ADMIN_PORT="${ADMIN_PORT:-8080}"
 ADMIN_UI_PORT="${ADMIN_UI_PORT:-18080}"
 MYSQL_PORT="${MYSQL_PORT:-3307}"
@@ -326,7 +328,18 @@ case "$MODE" in
   frontend|upload-frontend) REPOS_TO_PULL="ypbin-admin ypbin-admin-ui" ;;
 esac
 for repo in $REPOS_TO_PULL; do
-  if [ ! -d "$repo/.git" ]; then
+  if [ "$repo" = "ypbin-admin" ]; then
+    if [ ! -d "$repo/.git" ]; then
+      info "clone $repo（分支 $ADMIN_BRANCH）"
+      git clone --quiet --branch "$ADMIN_BRANCH" "$REPO_BASE/$repo.git"
+    else
+      info "更新 $repo（分支 $ADMIN_BRANCH）"
+      (cd "$repo" && git fetch --quiet origin "$ADMIN_BRANCH" \
+        && git checkout --quiet "$ADMIN_BRANCH" \
+        && git pull --ff-only --quiet origin "$ADMIN_BRANCH") \
+        || warn "$repo 更新失败（本地有改动？）"
+    fi
+  elif [ ! -d "$repo/.git" ]; then
     info "clone $repo"
     git clone --quiet "$REPO_BASE/$repo.git"
   else
@@ -573,6 +586,6 @@ echo "  │  密码: $(grep '^ADMIN_BOOTSTRAP_PASSWORD=' "$DEPLOY_DIR/.env" | cu
 echo "  └──────────────────────────────────────────────┘"
 echo ""
 echo "  凭据已存: $DEPLOY_DIR/.env（勿提交版本管理）"
-echo "  之后更新: bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)"
+echo "  之后更新: bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot-miniapp/deploy/install.sh)"
 echo "  或手动:   cd $DEPLOY_DIR && docker compose up -d --build"
 echo "  清理空间: bash $ROOT/cleanup.sh --snap"

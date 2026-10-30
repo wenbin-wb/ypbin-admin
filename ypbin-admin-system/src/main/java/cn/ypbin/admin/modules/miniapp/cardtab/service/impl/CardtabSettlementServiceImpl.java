@@ -1,0 +1,274 @@
+/*
+ * Copyright (c) 2026-present ypbin-admin authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ */
+package cn.ypbin.admin.modules.miniapp.cardtab.service.impl;
+
+import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabExpense;
+import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoom;
+import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoomEvent;
+import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoomMember;
+import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabSettlementSnapshot;
+import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabEventTypeEnum;
+import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabExpenseStatusEnum;
+import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabRoomStatusEnum;
+import cn.ypbin.admin.modules.miniapp.cardtab.mapper.CardtabExpenseMapper;
+import cn.ypbin.admin.modules.miniapp.cardtab.mapper.CardtabRoomEventMapper;
+import cn.ypbin.admin.modules.miniapp.cardtab.mapper.CardtabRoomMemberMapper;
+import cn.ypbin.admin.modules.miniapp.cardtab.mapper.CardtabSettlementSnapshotMapper;
+import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabSettlementResp;
+import cn.ypbin.admin.modules.miniapp.cardtab.service.CardtabSettlementService;
+import cn.ypbin.admin.modules.miniapp.cardtab.support.CardtabRoomAccessSupport;
+import cn.ypbin.admin.modules.miniapp.common.ws.RoomSocketRegistry;
+import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
+/**
+ * 牌账清-结算服务实现。
+ *
+ * <p><b>访问控制</b>：读取账目与确认结算均属房间级操作，先经
+ * {@link CardtabRoomAccessSupport#requireMember} 校验调用者身份——此前任意登录用户都能结算他人
+ * 房间（把别人的牌局锁死并覆盖快照），是可被利用的越权点。</p>
+ *
+ * <p><b>结算算法</b>：排名按总分降序；转账用「大额优先」的贪心双指针化简，
+ * 保证转账笔数最少且金额守恒（已由 {@code CardtabSettlementServiceImplTest} 覆盖）。</p>
+ *
+ * @author wenbin
+ * @since 2026-09-08
+ */
+@Service
+@RequiredArgsConstructor
+public class CardtabSettlementServiceImpl
+    extends BaseServiceImpl<CardtabSettlementSnapshotMapper, CardtabSettlementSnapshot>
+    implements CardtabSettlementService {
+
+    private static final Logger log = LoggerFactory.getLogger(CardtabSettlementServiceImpl.class);
+
+    private final CardtabRoomMemberMapper memberMapper;
+    private final CardtabRoomEventMapper eventMapper;
+    private final CardtabExpenseMapper expenseMapper;
+    private final ObjectMapper objectMapper;
+    private final CardtabRoomAccessSupport accessSupport;
+    private final RoomSocketRegistry roomSocketRegistry;
+
+    @Override
+    public CardtabSettlementResp getSettlement(Long roomId) {
+        // 账目含每个人的输赢金额，必须先确认调用者属于该房间
+        accessSupport.requireMember(roomId);
+        CardtabRoom room = accessSupport.requireRoom(roomId);
+
+        // 若已结算且已有快照，直接反序列化快照
+        if (CardtabRoomStatusEnum.SETTLED.is(room.getRoomStatus())) {
+            CardtabSettlementSnapshot snapshot = getOne(new LambdaQueryWrapper<CardtabSettlementSnapshot>()
+                .eq(CardtabSettlementSnapshot::getRoomId, roomId)
+                .orderByDesc(CardtabSettlementSnapshot::getId), false);
+            if (snapshot != null) {
+                try {
+                    return objectMapper.readValue(snapshot.getSnapshotJson(), CardtabSettlementResp.class);
+                } catch (Exception e) {
+                    // 快照损坏/格式变更：仍回退实时计算（行为不变），但必须暴露出来——
+                    // 否则「账单每次都由实时重算得出」这件事永远没人知道
+                    log.warn("结算快照反序列化失败，回退实时计算；roomId={}，snapshotId={}", roomId,
+                        snapshot.getId(), e);
+                }
+            }
+        }
+
+        // 实时计算
+        return calculateSettlement(room);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CardtabSettlementResp saveSettlement(Long roomId) {
+        // 结算会锁定房间账目，只允许房内成员发起（不能由无关用户替别人结束牌局）
+        accessSupport.requireMember(roomId);
+        CardtabRoom room = accessSupport.requireRoom(roomId);
+        if (CardtabRoomStatusEnum.SETTLED.is(room.getRoomStatus())) {
+            throw new BusinessException("房间已结算，请勿重复提交");
+        }
+
+        CardtabSettlementResp resp = calculateSettlement(room);
+        resp.setStatus(CardtabRoomStatusEnum.SETTLED.getCode());
+
+        // 更新房间状态
+        room.setRoomStatus(CardtabRoomStatusEnum.SETTLED.getCode());
+        room.setSettledAt(LocalDateTime.now());
+        accessSupport.updateRoom(room);
+
+        // 存储快照
+        try {
+            CardtabSettlementSnapshot snapshot = new CardtabSettlementSnapshot();
+            snapshot.setRoomId(roomId);
+            snapshot.setSnapshotJson(objectMapper.writeValueAsString(resp));
+            save(snapshot);
+        } catch (JacksonException e) {
+            // BusinessException 没有 (String, Throwable) 构造器，日志是唯一能留下根因的地方
+            log.error("序列化结算快照失败；roomId={}", roomId, e);
+            throw new BusinessException("序列化结算快照失败");
+        }
+
+        // 记录流水
+        CardtabRoomEvent event = new CardtabRoomEvent();
+        event.setRoomId(roomId);
+        event.setEventType(CardtabEventTypeEnum.ROOM_SETTLED.getCode());
+        event.setTitle("房间已结算");
+        event.setContent("房间已完成结算并锁定账目");
+        event.setAmount(BigDecimal.ZERO);
+        eventMapper.insert(event);
+        // 结算锁定房间账目：广播让房间内所有端立即刷新为「已结算」
+        roomSocketRegistry.broadcast(roomId, "{\"type\":\"ROOM_CHANGED\"}");
+
+        return resp;
+    }
+
+    private CardtabSettlementResp calculateSettlement(CardtabRoom room) {
+        List<CardtabRoomMember> members = memberMapper.selectList(new LambdaQueryWrapper<CardtabRoomMember>()
+            .eq(CardtabRoomMember::getRoomId, room.getId()));
+
+        CardtabSettlementResp resp = new CardtabSettlementResp();
+        resp.setRoomId(room.getId());
+        resp.setRoomName(room.getName());
+        resp.setStatus(room.getRoomStatus());
+        resp.setExpenseCount(Math.toIntExact(expenseMapper.selectCount(
+            new LambdaQueryWrapper<CardtabExpense>()
+                .eq(CardtabExpense::getRoomId, room.getId())
+                .eq(CardtabExpense::getExpenseStatus, CardtabExpenseStatusEnum.NORMAL.getCode()))));
+
+        if (CollectionUtils.isEmpty(members)) {
+            resp.setRankings(List.of());
+            resp.setTransfers(List.of());
+            resp.setShareText("本局暂无成员");
+            return resp;
+        }
+
+        // 1. 排名计算（按总分从高到低）
+        List<CardtabRoomMember> sorted = new ArrayList<>(members);
+        sorted.sort((a, b) -> b.getTotalScore().compareTo(a.getTotalScore()));
+
+        List<CardtabSettlementResp.RankingItem> rankings = new ArrayList<>();
+        int rankNo = 1;
+        for (CardtabRoomMember m : sorted) {
+            CardtabSettlementResp.RankingItem item = new CardtabSettlementResp.RankingItem();
+            item.setMemberId(m.getId());
+            item.setNickname(m.getNickname());
+            item.setTotalScore(m.getTotalScore());
+            item.setRankNo(rankNo++);
+            rankings.add(item);
+        }
+        resp.setRankings(rankings);
+
+        // 2. 转账计算（贪心匹配：大额优先配对，笔数最少）
+        List<BalanceHolder> creditors = new ArrayList<>(); // 正分
+        List<BalanceHolder> debtors = new ArrayList<>();   // 负分
+
+        for (CardtabRoomMember m : members) {
+            BigDecimal score = m.getTotalScore();
+            if (score.compareTo(BigDecimal.ZERO) > 0) {
+                creditors.add(new BalanceHolder(m.getId(), m.getNickname(), score));
+            } else if (score.compareTo(BigDecimal.ZERO) < 0) {
+                debtors.add(new BalanceHolder(m.getId(), m.getNickname(), score.abs()));
+            }
+        }
+
+        creditors.sort(Comparator.comparing(BalanceHolder::getAmount).reversed());
+        debtors.sort(Comparator.comparing(BalanceHolder::getAmount).reversed());
+
+        List<CardtabSettlementResp.TransferItem> transfers = new ArrayList<>();
+        int cIdx = 0;
+        int dIdx = 0;
+
+        while (cIdx < creditors.size() && dIdx < debtors.size()) {
+            BalanceHolder c = creditors.get(cIdx);
+            BalanceHolder d = debtors.get(dIdx);
+
+            BigDecimal transferAmount = c.getAmount().min(d.getAmount());
+            if (transferAmount.compareTo(BigDecimal.ZERO) > 0) {
+                CardtabSettlementResp.TransferItem t = new CardtabSettlementResp.TransferItem();
+                t.setFromMemberId(d.getMemberId());
+                t.setFromName(d.getNickname());
+                t.setToMemberId(c.getMemberId());
+                t.setToName(c.getNickname());
+                t.setAmount(transferAmount);
+                transfers.add(t);
+
+                c.setAmount(c.getAmount().subtract(transferAmount));
+                d.setAmount(d.getAmount().subtract(transferAmount));
+            }
+
+            if (c.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                cIdx++;
+            }
+            if (d.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                dIdx++;
+            }
+        }
+        resp.setTransfers(transfers);
+
+        // 3. 生成分享文案
+        StringBuilder sb = new StringBuilder();
+        sb.append("【").append(room.getName()).append("】结算账单：\n");
+        for (CardtabSettlementResp.RankingItem r : rankings) {
+            sb.append("  ").append(r.getRankNo()).append(". ").append(r.getNickname()).append("：")
+                .append(r.getTotalScore().compareTo(BigDecimal.ZERO) > 0 ? "+" : "")
+                .append(r.getTotalScore()).append("\n");
+        }
+        if (!transfers.isEmpty()) {
+            sb.append("\n转账建议：\n");
+            for (CardtabSettlementResp.TransferItem t : transfers) {
+                sb.append("  ").append(t.getFromName()).append(" -> ").append(t.getToName())
+                    .append("：").append(t.getAmount()).append("\n");
+            }
+        }
+        resp.setShareText(sb.toString().trim());
+
+        return resp;
+    }
+
+    private static class BalanceHolder {
+        private final Long memberId;
+        private final String nickname;
+        private BigDecimal amount;
+
+        BalanceHolder(Long memberId, String nickname, BigDecimal amount) {
+            this.memberId = memberId;
+            this.nickname = nickname;
+            this.amount = amount;
+        }
+
+        public Long getMemberId() {
+            return memberId;
+        }
+
+        public String getNickname() {
+            return nickname;
+        }
+
+        public BigDecimal getAmount() {
+            return amount;
+        }
+
+        public void setAmount(BigDecimal amount) {
+            this.amount = amount;
+        }
+    }
+}

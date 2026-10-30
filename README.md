@@ -111,20 +111,16 @@
 | 前端 | Vue 3.5 · TypeScript · Ant Design Vue 4 · Vite · Pinia |
 | 文档 | SpringDoc OpenAPI · Swagger UI |
 
-## 🧭 分支维护档位（先读）
+## 🧭 本分支定位（先读）
 
-本分支（`boot`）是**单体形态**的长期分支，与 `main`（微服务形态）**结构不同、不能 merge**，只能按项移植。
+本分支（`boot-miniapp`）从 `boot` 单体分支切出，承载微信小程序（牌账清 CardTab & 家庭菜单 FamilyMenu）的后端。
 
-- **维护档位：最小维护**（2026-09-18 决定）
-  - **跟**：`ypbin-starter` 版本升级、通用配置与安全修复、CI/工作流对齐；
-  - **不跟**：业务功能演进——**新功能只在 `main` 上开发**，本分支不追业务。
-- **为什么保留**：① 维护成本实测≈0（2026-09-18 把 starter 从 3.1.0 升到 3.4.0 是**零代码改动**、
-  29 项测试全绿）；② 它是本仓**唯一保留的单体部署形态**，低资源部署可用。
+- **形态：单体**（`ypbin-admin-system` + `ypbin-admin-server`）。部署方式与 `boot` 相同，
+  额外提供小程序接口：`/auth/miniapp/login`、`/miniapp/cardtab/**`、`/miniapp/familymenu/**`。
+- **与 `main`（微服务）结构不同、不能 merge**，只能按项移植；`main` 的业务修复可按项 cherry-pick。
+- **与 `boot` 的关系**：`boot` 保持最小维护；小程序业务只在本分支演进，不回灌 `boot`。
 - ⚠️ **每次 starter 发版后必须跟进升级本分支**：本分支 CI 有硬断言「`ypbin-starter.version` 必须等于
   最新 Release」，不跟进则本分支**一 push 就红**（流程见 `ypbin-starter/RELEASING.md` §5.4）。
-- **退役判据**（满足任一即转归档：不再维护、只在记忆里登记，保留分支与 tag）：
-  1. 下一次 `ypbin-starter` 发版后**连续 2 个版本**无人跟进升级；
-  2. 确认无人部署单体形态（本分支 `deploy/install.sh` 的单体部署路径长期无使用者）。
 
 ---
 
@@ -135,7 +131,7 @@
 新服务器零配置一键安装（自动装依赖、构建、启动全部容器）：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/deploy/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot-miniapp/deploy/install.sh)
 ```
 
 交互模式会询问：操作模式（完整部署 / 只更新后端 / 只更新前端 / 手动上传前端包）、端口（默认 MySQL 3307 / Redis 6380 / 后端 8080 / 前端 18080）、部署目录等；加 `-y` 全自动跳过所有询问（CI / 无头环境）。详细见 [部署文档](https://ypbin.cn/guide/admin/deployment)。
@@ -151,10 +147,22 @@ mvn -f ypbin-admin-server/pom.xml spring-boot:run
 
 前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 
+### 小程序后端接入
+
+- **登录**：`POST /auth/miniapp/login`，body `{appid, code, nickname, avatarUrl}`。服务端配置
+  `WECHAT_MINIAPP_APPID` / `WECHAT_MINIAPP_SECRET`；未配置且未显式开启 Mock 时登录直接失败（fail-closed）。
+- **业务接口**：`/miniapp/cardtab/**`（牌账清）、`/miniapp/familymenu/**`（家庭菜单）、
+  `/miniapp/notice/**`（公告）、`/miniapp/user/me`、`/miniapp/file/upload`。
+- **实时通道**：`WS /miniapp/cardtab/ws/room/{roomId}`、`WS /miniapp/familymenu/ws/room/{roomId}`；
+  先调 `POST .../ws-ticket` 换 60 秒一次性 ticket，再以 `?ticket=xxx` 建连。
+- **反向代理**：nginx 需透传 `Upgrade` / `Connection` 头；微信后台需把 `wss://<域名>` 配为 socket 合法域名。
+- **数据库**：Flyway `V5`～`V8` 自动建表、灌入 100 道预设菜谱、登记 `MINIAPP` 认证方式，
+  并对旧库做幂等的契约对齐（`meal_time` → `order_type`、订单状态取值）。
+
 ## 📁 项目结构
 
 ```
-ypbin-admin-system    业务模块：common（公共）+ modules/{ai,auth,job,system}
+ypbin-admin-system    业务模块：common（公共）+ modules/{ai,auth,job,miniapp,system}
 ypbin-admin-server    启动层：主类、配置、数据库迁移（Flyway）
 ```
 
@@ -163,8 +171,9 @@ ypbin-admin-server    启动层：主类、配置、数据库迁移（Flyway）
 ```
 modules/
 ├── ai/          AI 对话、知识库、模型配置
-├── auth/        登录、验证码、短信/第三方登录
+├── auth/        登录、验证码、短信/第三方登录、微信小程序登录
 ├── job/         定时任务管理、执行器、任务日志
+├── miniapp/     小程序：牌账清（房间/记账/结算/实时通道）、家庭菜单（餐厅/菜品/订单）
 └── system/      RBAC、菜单、部门、租户、系统参数、消息公告等系统底座
 ```
 

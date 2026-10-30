@@ -20,6 +20,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-app-web</artifactId>
         </dependency>
+        <!-- WebSocket：小程序房间/餐厅变更的实时推送 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <!-- 通用 CRUD 基类 -->
         <dependency>
             <groupId>cn.ypbin</groupId>
@@ -123,6 +128,13 @@
             <groupId>com.rometools</groupId>
             <artifactId>rome</artifactId>
             <version>2.1.0</version>
+        </dependency>
+
+        <!-- 单元测试（JUnit 5 + AssertJ + Mockito） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
