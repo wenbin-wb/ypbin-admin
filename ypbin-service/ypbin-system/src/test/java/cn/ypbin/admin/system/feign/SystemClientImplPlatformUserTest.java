@@ -57,6 +57,7 @@ class SystemClientImplPlatformUserTest {
         mock(SysSpaceRelationService.class),
         mock(SysMessageMapper.class),
         mock(MailService.class),
+        mock(ObjectProvider.class),
         new DbLogProviders.DbLogDao(mock(SysLogMapper.class)),
         providerOfTrackRecorder());
 

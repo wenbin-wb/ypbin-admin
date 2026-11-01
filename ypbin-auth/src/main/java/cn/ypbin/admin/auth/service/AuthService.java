@@ -12,6 +12,7 @@ package cn.ypbin.admin.auth.service;
 import cn.ypbin.admin.auth.dto.LoginReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
+import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
@@ -79,8 +80,11 @@ public class AuthService {
             && !Objects.equals(req.getTenantId(), user.getTenantId()))) {
             throw new BusinessException("用户名或密码错误");
         }
-        // 密码不入缓存（安全），校验走 system 直查库比对
-        R<Boolean> verifyResp = permissionFeignClient.verifyPassword(user.getId(), req.getPassword());
+        // 密码不入缓存（安全），校验走 system 直查库比对；明文密码只放请求体，不进 URL
+        PasswordVerifyReq verifyReq = new PasswordVerifyReq();
+        verifyReq.setUserId(user.getId());
+        verifyReq.setRawPassword(req.getPassword());
+        R<Boolean> verifyResp = permissionFeignClient.verifyPassword(verifyReq);
         if (verifyResp == null || !verifyResp.isSuccess()) {
             // 系统服务不可用 ≠ 密码错误：不能累加失败次数，否则一次 system 抖动会锁掉一批账号
             throw new BusinessException("系统服务暂不可用，请稍后重试");

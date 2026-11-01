@@ -18,6 +18,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -73,7 +74,9 @@ public class AiWidgetServiceImpl implements AiWidgetService {
     @Override
     public String ask(String token, String question) {
         AiKnowledgeBase kb = requireEnabledKb(token);
-        return publicAccessSupport.answer(kb, "widget-" + kb.getId(), question, "挂件");
+        // 每次访问独立 conversationId：固定成 widget-{kbId} 会让所有匿名访客共享 Memory 历史
+        String conversationId = "widget-" + kb.getId() + "-" + UUID.randomUUID();
+        return publicAccessSupport.answer(kb, conversationId, question, "挂件");
     }
 
     /**

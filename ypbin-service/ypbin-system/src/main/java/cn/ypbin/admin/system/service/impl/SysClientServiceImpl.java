@@ -17,6 +17,8 @@ import cn.ypbin.admin.system.model.resp.ClientResp;
 import cn.ypbin.admin.system.service.SysClientService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.BeanUtils;
@@ -41,6 +43,7 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ClientCredentialResp createClient(SysClientSaveReq req) {
+        checkClientIdUnique(req.getClientId(), null);
         SysClient client = new SysClient();
         BeanUtils.copyProperties(req, client);
         String secret = generateSecret();
@@ -59,10 +62,11 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
             throw new BusinessException("客户端不存在");
         }
         String secret = generateSecret();
-        SysClient update = new SysClient();
-        update.setId(id);
-        update.setClientSecret(secret);
-        if (!updateById(update)) {
+        // 只 set 目标列：new SysClient() + updateById 会带上 BaseEntity 的 status 默认值
+        boolean updated = update(new LambdaUpdateWrapper<SysClient>()
+            .eq(SysClient::getId, id)
+            .set(SysClient::getClientSecret, secret));
+        if (!updated) {
             throw new BusinessException("密钥重置失败");
         }
         return new ClientCredentialResp(client.getClientId(), secret);
@@ -71,14 +75,32 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateClient(Long id, SysClientSaveReq req) {
-        if (getById(id) == null) {
+        SysClient existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("客户端不存在");
         }
+        checkClientIdUnique(req.getClientId(), id);
         SysClient client = new SysClient();
         BeanUtils.copyProperties(req, client);
         client.setId(id);
+        client.setStatus(existing.getStatus());
         if (!updateById(client)) {
             throw new BusinessException("客户端更新失败");
+        }
+    }
+
+    /**
+     * 客户端 ID 唯一性校验（与库内唯一键同口径：已逻辑删除的客户端不占用 ID）。
+     *
+     * @param clientId  客户端 ID
+     * @param excludeId 编辑时排除自身 ID，新增传 {@code null}
+     */
+    private void checkClientIdUnique(String clientId, Long excludeId) {
+        boolean exists = exists(new LambdaQueryWrapper<SysClient>()
+            .eq(SysClient::getClientId, clientId)
+            .ne(excludeId != null, SysClient::getId, excludeId));
+        if (exists) {
+            throw new BusinessException("客户端 ID 已存在：" + clientId);
         }
     }
 

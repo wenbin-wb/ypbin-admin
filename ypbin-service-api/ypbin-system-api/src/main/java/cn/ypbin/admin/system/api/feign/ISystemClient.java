@@ -17,6 +17,9 @@ import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
 import cn.ypbin.admin.system.model.req.MailSendReq;
+import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
+import cn.ypbin.admin.system.model.req.SmsSendReq;
+import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import jakarta.validation.Valid;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -146,8 +149,7 @@ public interface ISystemClient {
      * 密码校验（system 直查库比对；密码不落缓存，改密即时生效）。
      */
     @PostMapping("/verify-password")
-    R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
-        @RequestParam("rawPassword") String rawPassword);
+    R<Boolean> verifyPassword(@RequestBody PasswordVerifyReq req);
 
     /**
      * 第三方登录平台授权配置（auth 构建授权请求用，含密钥明文，仅限内部传递）。
@@ -186,11 +188,7 @@ public interface ISystemClient {
      * 新增第三方绑定。
      */
     @PostMapping("/social-bind-save")
-    R<Void> saveSocialBinding(@RequestParam("userId") Long userId,
-        @RequestParam("platform") String platform, @RequestParam("openId") String openId,
-        @RequestParam(value = "nickname", required = false) String nickname,
-        @RequestParam(value = "avatar", required = false) String avatar,
-        @RequestParam(value = "accessToken", required = false) String accessToken);
+    R<Void> saveSocialBinding(@RequestBody SocialBindSaveReq req);
 
     /**
      * 解绑（按用户+平台）。
@@ -441,4 +439,16 @@ public interface ISystemClient {
     R<Integer> unbindSpaceRelations(@RequestParam("spaceId") Long spaceId,
         @RequestParam("targetType") String targetType,
         @RequestParam("targetIds") List<Long> targetIds);
+
+    /**
+     * 经 system 的短信厂商配置代发短信。
+     *
+     * <p>sms4j 在 starter 中是可选依赖，厂商配置也只注册在 system 进程内。auth 等
+     * 无短信厂商依赖的服务必须走本端点；失败信息由 system 返回，调用方不得当作成功。</p>
+     *
+     * @param req 手机号、模板与变量
+     * @return 发送结果（厂商返回失败时为失败 R）
+     */
+    @PostMapping("/sms-send")
+    R<Void> sendSms(@RequestBody SmsSendReq req);
 }

@@ -1073,7 +1073,8 @@ rand_hex() { # $1=字节数，输出 2 倍长度小写十六进制
 }
 
 if [ ! -f "$ENV_FILE" ]; then
-  MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
+  # 与其他凭据同口径随机生成：时间戳口令只有约 86400 量级熵，且 3306 一旦暴露即可被离线猜解
+  MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(rand_hex 16)}"
   # AI 模型密钥的加密密钥：不接受内置默认值——公开已知的默认值等同未加密。
   # 首次全新部署（.env 不存在、无旧密文）时自动随机生成并写入 .env，同时醒目提示妥善保存；
   # 复用旧 .env 时绝不自动生成（换值即旧密文永久不可解密），见下方 check_required_key 前置校验。
@@ -1089,6 +1090,10 @@ if [ ! -f "$ENV_FILE" ]; then
   NACOS_AUTH_TOKEN="${NACOS_AUTH_TOKEN:-$(rand_b64_48)}"
   NACOS_AUTH_IDENTITY_KEY="${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}"
   NACOS_AUTH_IDENTITY_VALUE="${NACOS_AUTH_IDENTITY_VALUE:-$(rand_hex 32)}"
+  # Nacos 控制台管理员：随机口令（不再使用 nacos/nacos）。控制台能读改全部服务配置，
+  # 其中包含 MySQL root 口令与内部调用凭证，弱口令等同全环境失守。
+  NACOS_USERNAME="${NACOS_USERNAME:-nacos}"
+  NACOS_PASSWORD="${NACOS_PASSWORD:-$(rand_hex 16)}"
   # 内部 Feign 调用凭证（/internal/** 守卫，auth/system/ai 共享一致值），随机生成
   INTERNAL_TOKEN="${INTERNAL_TOKEN:-$(rand_hex 32)}"
   GATEWAY_SIGN_TOKEN="${GATEWAY_SIGN_TOKEN:-$(rand_hex 32)}"
@@ -1109,6 +1114,8 @@ AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
 NACOS_AUTH_TOKEN=$NACOS_AUTH_TOKEN
 NACOS_AUTH_IDENTITY_KEY=$NACOS_AUTH_IDENTITY_KEY
 NACOS_AUTH_IDENTITY_VALUE=$NACOS_AUTH_IDENTITY_VALUE
+NACOS_USERNAME=$NACOS_USERNAME
+NACOS_PASSWORD=$NACOS_PASSWORD
 INTERNAL_TOKEN=$INTERNAL_TOKEN
 GATEWAY_SIGN_TOKEN=$GATEWAY_SIGN_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
@@ -1121,7 +1128,8 @@ ADMIN_UI_PORT=$ADMIN_UI_PORT
 ADMIN_UI_DIST_DIR=$ADMIN_UI_DIST_DIR
 EOF
   chmod 600 "$ENV_FILE"
-  ok "已生成 .env（MySQL 密码：$MYSQL_ROOT_PASSWORD，可改 $ENV_FILE）"
+  ok "已生成 .env（凭据已写入，见 $ENV_FILE；不再在日志回显 MySQL 密码）"
+  warn ">>> Nacos 控制台管理员口令已随机生成：$NACOS_USERNAME / $NACOS_PASSWORD（见 .env 的 NACOS_PASSWORD）"
   warn ">>> XXL-Job 控制台初始口令已生成：admin / $XXL_JOB_ADMIN_PASSWORD（已写入 $ENV_FILE 的 XXL_JOB_ADMIN_PASSWORD，请妥善保存）"
 else
   warn "复用已有 .env"
@@ -1154,6 +1162,12 @@ env_key_backfill() { # $1=键名 $2=取值命令（仅缺键时才执行，命�
 env_key_backfill NACOS_AUTH_TOKEN 'rand_b64_48'
 env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
 env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
+# 旧 .env 升级：保留既有 nacos/nacos 行为可继续导入配置；仅提示改密，不能自动换（会与已存在管理员不匹配）
+env_key_backfill NACOS_USERNAME 'printf nacos'
+if ! grep -q "^NACOS_PASSWORD=" "$ENV_FILE"; then
+  env_key_backfill NACOS_PASSWORD 'printf nacos'
+  warn ">>> 检测到旧版 .env：Nacos 控制台仍使用默认口令 nacos/nacos，请尽快在控制台改密并同步 .env"
+fi
 env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
 env_key_backfill GATEWAY_SIGN_TOKEN 'rand_hex 32'
 if [ "$NO_DOCKER" = "1" ]; then
@@ -1243,7 +1257,13 @@ fi
 
 NACOS_CONSOLE_URL="${NACOS_CONSOLE_URL:-http://localhost:8080}"
 NACOS_USERNAME="${NACOS_USERNAME:-nacos}"
-NACOS_PASSWORD="${NACOS_PASSWORD:-nacos}"
+if [ "$NO_DOCKER" = "1" ]; then
+  # 外部 Nacos：管理员由运维维护，沿用旧默认值
+  NACOS_PASSWORD="${NACOS_PASSWORD:-nacos}"
+else
+  # 内置 Nacos：口令必须由 [5/7] 写入 .env；缺失即失败，禁止回退到 nacos/nacos
+  NACOS_PASSWORD="${NACOS_PASSWORD:?内置 Nacos 管理员口令缺失：请检查 .env 的 NACOS_PASSWORD}"
+fi
 
 # 等待 Nacos Console 就绪（v3 独立 Console 端口）
 NACOS_READY=0

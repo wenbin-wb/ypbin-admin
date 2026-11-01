@@ -11,16 +11,20 @@ package cn.ypbin.admin.auth.controller;
 
 import cn.ypbin.admin.auth.config.SocialAuthRegistryInitializer;
 import cn.ypbin.admin.auth.service.SocialLoginService;
+import cn.ypbin.admin.auth.support.SocialOAuthStateSupport;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.log.enums.Include;
 import cn.ypbin.starter.social.core.SocialService;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.web.util.WebRequestUtils;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import me.zhyd.oauth.request.AuthRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,6 +46,7 @@ public class SocialAuthController {
     private final SocialService socialService;
     private final SocialLoginService socialLoginService;
     private final SocialAuthRegistryInitializer registryInitializer;
+    private final SocialOAuthStateSupport stateSupport;
 
     /**
      * 已注册的第三方平台列表。未配置任何平台时返回空集合。

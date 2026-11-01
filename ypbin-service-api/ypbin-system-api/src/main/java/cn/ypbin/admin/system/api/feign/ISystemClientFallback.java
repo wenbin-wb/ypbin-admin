@@ -15,6 +15,9 @@ import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
 import cn.ypbin.admin.system.model.req.MailSendReq;
+import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
+import cn.ypbin.admin.system.model.req.SmsSendReq;
+import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
@@ -91,6 +94,11 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
+    public R<Void> sendSms(SmsSendReq req) {
+        return unavailable();
+    }
+
+    @Override
     public R<List<SysUserDto>> searchUsers(String keyword, Long tenantId) {
         return unavailable();
     }
@@ -106,7 +114,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<Boolean> verifyPassword(Long userId, String rawPassword) {
+    public R<Boolean> verifyPassword(PasswordVerifyReq req) {
         return unavailable();
     }
 
@@ -136,8 +144,7 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<Void> saveSocialBinding(Long userId, String platform, String openId,
-        String nickname, String avatar, String accessToken) {
+    public R<Void> saveSocialBinding(SocialBindSaveReq req) {
         return unavailable();
     }
 

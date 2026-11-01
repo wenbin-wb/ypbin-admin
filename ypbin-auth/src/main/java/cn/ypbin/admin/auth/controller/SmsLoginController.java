@@ -46,7 +46,7 @@ public class SmsLoginController {
      * 发送验证码。每 IP 60 秒最多 5 次。
      */
     @PostMapping("/sms/send")
-    @RateLimit(count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
+    @RateLimit(key = "#phone", count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
     public R<Void> sendCode(@RequestParam String phone) {
         if (!configReader.getBoolean(LoginConfigKeys.LOGIN_SMS_ENABLED, false)) {
             throw new BusinessException("短信验证码登录未开启");
