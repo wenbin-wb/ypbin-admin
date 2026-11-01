@@ -16,6 +16,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.admin.system.entity.SysUser;
@@ -27,12 +28,16 @@ import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.log.dao.LogDao;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -82,6 +87,19 @@ class SystemClientGetOrCreateUserTest {
     private SystemClientImpl systemClient;
 
     private SysUser createdUser;
+
+    /** 内部写路径现在会失效 SysCache；单测无 Spring 容器，静态 mock 掉即可 */
+    private MockedStatic<SysCache> sysCache;
+
+    @BeforeEach
+    void mockSysCache() {
+        sysCache = Mockito.mockStatic(SysCache.class);
+    }
+
+    @AfterEach
+    void closeSysCache() {
+        sysCache.close();
+    }
 
     private void givenNoExistingUser() {
         when(userService.getOne(any())).thenReturn(null);
