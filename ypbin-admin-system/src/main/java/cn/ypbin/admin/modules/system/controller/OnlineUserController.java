@@ -38,7 +38,6 @@ import org.springframework.web.bind.annotation.RestController;
 @PlatformAccess
 public class OnlineUserController {
 
-    private final OnlineUserService onlineUserService;
     private final SysUserService userService;
 
     @GetMapping("/list")
@@ -48,11 +47,11 @@ public class OnlineUserController {
     }
 
     @Idempotent
-    @DeleteMapping("/{token}")
+    @DeleteMapping("/{tokenHash}")
     @SaCheckPermission("system:online-user:kickout")
     @Log(value = "强制下线用户", module = "会话管理")
-    public R<Void> kickout(@PathVariable String token) {
-        onlineUserService.kickoutByToken(token);
+    public R<Void> kickout(@PathVariable String tokenHash) {
+        userService.kickoutByTokenHash(tokenHash);
         return R.ok();
     }
 }

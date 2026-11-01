@@ -71,7 +71,8 @@ public class AiShareController {
 
     /** 对分享知识库提问（非流式，RAG 增强）；按客户端 IP 限流，防止滥用消耗模型资源 */
     @PostMapping("/{token}/ask")
-    @RateLimit(key = "share:ask", window = 60, count = 10, message = "请求过于频繁，请稍后再试")
+    @RateLimit(key = "#token + ':share:ask'", window = 60, count = 10,
+        message = "请求过于频繁，请稍后再试")
     public R<String> ask(
             @PathVariable String token,
             @RequestHeader(value = "X-Share-Password", required = false) String password,

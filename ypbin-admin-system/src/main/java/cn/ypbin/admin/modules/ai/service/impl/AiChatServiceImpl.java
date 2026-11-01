@@ -42,6 +42,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
@@ -77,6 +79,9 @@ public class AiChatServiceImpl implements AiChatSessionService {
     /** 单轮对话落库消息数（用户消息 + 助手回复） */
     private static final int MESSAGES_PER_TURN = 2;
 
+    /** 内置角色标记（{@code ai_chat_role.is_builtin=1}，tenant_id=0） */
+    private static final int BUILTIN_YES = 1;
+
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
     private final AiChatRoleMapper roleMapper;
@@ -84,14 +89,20 @@ public class AiChatServiceImpl implements AiChatSessionService {
     /** starter AI 对话服务（可选注入：AI 未启用时不影响服务启动） */
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
 
+    /** 短事务模板：把远程模型调用隔在事务外，避免长时间占用数据库连接 */
+    private final TransactionTemplate transactionTemplate;
+
     public AiChatServiceImpl(AiChatSessionMapper sessionMapper,
                              AiChatMessageMapper messageMapper,
                              AiChatRoleMapper roleMapper,
-                             ObjectProvider<AiChatService> aiChatServiceProvider) {
+                             ObjectProvider<AiChatService> aiChatServiceProvider,
+                             PlatformTransactionManager transactionManager) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.roleMapper = roleMapper;
         this.aiChatServiceProvider = aiChatServiceProvider;
+        // Spring Boot 只自动装配 PlatformTransactionManager，不提供 TransactionTemplate Bean
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -123,6 +134,10 @@ public class AiChatServiceImpl implements AiChatSessionService {
         Long userId = LoginHelper.getUserId();
         Long tenantId = UserContext.getTenantId().orElseThrow(
             () -> new BusinessException("无法获取当前租户上下文"));
+        if (req.getRoleId() != null) {
+            // 入库前校验角色可见性（内置角色 tenant_id=0 或本租户自定义角色）
+            requireVisibleRole(req.getRoleId());
+        }
         AiChatSession session = new AiChatSession();
         session.setUserId(userId);
         session.setTenantId(tenantId);
@@ -262,8 +277,14 @@ public class AiChatServiceImpl implements AiChatSessionService {
         return emitter;
     }
 
+    /**
+     * 重新生成最后一条回答。
+     *
+     * <p><strong>为什么方法上不再标 {@code @Transactional}</strong>：远程模型调用最长可能等待
+     * 很久，把它包在事务里会长时间占用数据库连接与行锁。现在只把「读消息」与
+     * 「删旧答 + 插新答」放在事务里，远程调用在事务外执行；模型调用失败时旧回答仍然保留。</p>
+     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public AiChatMessageResp regenerateLastMessage(Long sessionId) {
         requireSession(sessionId);
         AiChatService aiSvc = aiChatServiceProvider.getIfAvailable();
@@ -277,7 +298,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         if (messages.isEmpty()) {
             throw new BusinessException("会话暂无消息，无法重新生成");
         }
-        // 删除最后一条助手回复（若是助手消息），取最后一条用户消息作为重生成输入
+        // 取最后一条助手回复（待替换）与最后一条用户消息作为重生成输入
         String lastUserContent = null;
         AiChatMessage lastAssistant = null;
         for (int i = messages.size() - 1; i >= 0; i--) {
@@ -294,31 +315,40 @@ public class AiChatServiceImpl implements AiChatSessionService {
         if (lastAssistant == null || lastUserContent == null) {
             throw new BusinessException("缺少可重新生成的对话消息");
         }
-        messageMapper.deleteById(lastAssistant.getId());
-
-        Long userId = LoginHelper.getUserId();
-        Long tenantId = UserContext.getTenantId().orElseThrow(
+        final AiChatMessage assistantToReplace = lastAssistant;
+        final Long userId = LoginHelper.getUserId();
+        final Long tenantId = UserContext.getTenantId().orElseThrow(
             () -> new BusinessException("无法获取当前租户上下文"));
         String convId = String.valueOf(sessionId);
         String rolePrompt = resolveRoleSystemPrompt(sessionId);
+        final String input = lastUserContent;
         String reply;
         if (rolePrompt != null) {
-            reply = aiSvc.chatWithSystemPrompt(convId, rolePrompt, lastUserContent)
+            reply = aiSvc.chatWithSystemPrompt(convId, rolePrompt, input)
                 .collectList().blockOptional().orElse(List.of())
                 .stream().collect(Collectors.joining());
         } else {
-            reply = aiSvc.chat(convId, lastUserContent);
+            reply = aiSvc.chat(convId, input);
         }
-        AiChatMessage newReply = new AiChatMessage();
-        newReply.setSessionId(sessionId);
-        newReply.setUserId(userId);
-        newReply.setTenantId(tenantId);
-        newReply.setRole(ROLE_ASSISTANT);
-        newReply.setContent(reply);
-        newReply.setModelName(modelName());
-        newReply.setCreateTime(LocalDateTime.now());
-        messageMapper.insert(newReply);
-        return toMessageResp(newReply);
+        // 远程调用成功后再进短事务：删旧答 + 插新答要么同时成功、要么同时回滚
+        AiChatMessage saved = transactionTemplate.execute(status -> {
+            if (messageMapper.deleteById(assistantToReplace.getId()) != 1) {
+                throw new BusinessException("原回答已变化，请刷新后重试");
+            }
+            AiChatMessage newReply = new AiChatMessage();
+            newReply.setSessionId(sessionId);
+            newReply.setUserId(userId);
+            newReply.setTenantId(tenantId);
+            newReply.setRole(ROLE_ASSISTANT);
+            newReply.setContent(reply);
+            newReply.setModelName(modelName());
+            newReply.setCreateTime(LocalDateTime.now());
+            if (messageMapper.insert(newReply) != 1) {
+                throw new BusinessException("消息保存失败");
+            }
+            return newReply;
+        });
+        return toMessageResp(saved);
     }
 
     @Override
@@ -405,11 +435,49 @@ public class AiChatServiceImpl implements AiChatSessionService {
         if (session == null || session.getRoleId() == null) {
             return null;
         }
-        AiChatRole role = roleMapper.selectById(session.getRoleId());
-        if (role == null || role.getSystemPrompt() == null || role.getSystemPrompt().isBlank()) {
+        // 内置角色 tenant_id=0，普通 selectById 会被租户插件过滤掉 → 人设静默不生效
+        AiChatRole role = TenantContext.executeIgnore(() -> roleMapper.selectById(session.getRoleId()));
+        if (role == null) {
+            return null;
+        }
+        if (!isVisibleRole(role)) {
+            // 历史脏数据可能存了其他租户的 roleId：不回退成默认助手，也不泄露对方人设，留痕暴露
+            log.warn("[ypbin-ai] 会话角色不可见，忽略该角色：sessionId={}, roleId={}",
+                sessionId, session.getRoleId());
+            return null;
+        }
+        if (role.getSystemPrompt() == null || role.getSystemPrompt().isBlank()) {
             return null;
         }
         return role.getSystemPrompt();
+    }
+
+    /**
+     * 取角色并校验可见性（内置角色或当前租户自定义角色）。
+     *
+     * @param roleId 角色 ID
+     * @return 角色实体
+     */
+    private AiChatRole requireVisibleRole(Long roleId) {
+        AiChatRole role = TenantContext.executeIgnore(() -> roleMapper.selectById(roleId));
+        if (role == null || !isVisibleRole(role)) {
+            throw new BusinessException("角色不存在或无权使用");
+        }
+        return role;
+    }
+
+    /**
+     * 角色是否对当前租户可见：内置角色全局可见，自定义角色仅所属租户可见。
+     *
+     * @param role 角色
+     * @return 是否可见
+     */
+    private boolean isVisibleRole(AiChatRole role) {
+        if (role.getIsBuiltin() != null && role.getIsBuiltin() == BUILTIN_YES) {
+            return true;
+        }
+        Long tenantId = UserContext.getTenantId().orElse(null);
+        return tenantId != null && tenantId.equals(role.getTenantId());
     }
 
     private AiChatSessionResp toSessionResp(AiChatSession session) {

@@ -58,4 +58,11 @@ public interface SysUserService extends BaseService<SysUser> {
     UserImportResult importUsers(MultipartFile file);
 
     List<OnlineUserResp> listOnlineUsers(String keyword);
+
+    /**
+     * 按会话令牌指纹强制下线（列表不再回传 token 原文，踢人只能凭指纹反查）。
+     *
+     * @param tokenHash 会话令牌指纹
+     */
+    void kickoutByTokenHash(String tokenHash);
 }

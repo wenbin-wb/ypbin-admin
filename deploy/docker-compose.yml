@@ -8,9 +8,11 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      # 默认只绑回环：对外暴露 3306 等于把整库交给内网扫描
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:${MYSQL_PORT:-3307}:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      # 用 MYSQL_PWD 环境变量而非命令行 -p：后者会出现在 docker inspect / ps 的 argv 里
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -19,7 +21,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6380}:6379"
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:${REDIS_PORT:-6380}:6379"
 
   admin:
     build:
@@ -59,7 +61,8 @@ services:
     volumes:
       - admin-data:/opt/ypbin/ypbin-admin/data
     ports:
-      - "${ADMIN_PORT:-8080}:8080"
+      # 后端只经 admin-ui(nginx) 代理访问：默认不对外暴露，避免绕过 nginx 直连
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:${ADMIN_PORT:-8080}:8080"
     depends_on:
       mysql:
         condition: service_healthy

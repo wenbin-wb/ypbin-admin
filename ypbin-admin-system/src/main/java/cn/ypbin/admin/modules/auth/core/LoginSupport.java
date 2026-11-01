@@ -12,9 +12,11 @@ package cn.ypbin.admin.modules.auth.core;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.common.provider.Ip2regionLocationResolver;
 import cn.ypbin.admin.modules.system.entity.SysUser;
+import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.client.LoginClient;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
@@ -54,6 +56,10 @@ public class LoginSupport {
      * @return 登录结果
      */
     public LoginResp completeLogin(SysUser user, String authType) {
+        // 禁用校验放在唯一收尾处：各入口容易漏掉，导致被禁用用户换一条链路即可继续登录
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
+            throw new BusinessException("账号已被禁用");
+        }
         LoginClient client = LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, authType);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());

@@ -16,6 +16,7 @@ import cn.ypbin.admin.modules.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.admin.modules.ai.model.req.AiModelConfigSaveReq;
 import cn.ypbin.admin.modules.ai.model.resp.AiModelConfigResp;
 import cn.ypbin.admin.modules.ai.service.AiModelConfigService;
+import cn.ypbin.admin.modules.ai.support.AiUrlSafetyGuard;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -50,6 +51,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
+    /** 统一 SSRF 守卫（与知识库 URL 导入共用同一口径） */
+    private final AiUrlSafetyGuard urlSafetyGuard;
 
     @Override
     public List<AiModelConfigResp> listModels() {
@@ -91,10 +94,12 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateModel(Long id, AiModelConfigSaveReq req) {
-        requireModel(id);
+        AiModelConfig existing = requireModel(id);
         AiModelConfig config = new AiModelConfig();
         BeanUtils.copyProperties(req, config, "id", "tenantId", "isDefault", "status", "apiKey");
         config.setId(id);
+        // new 出来的实体带着 BaseEntity 的 status 默认值 1，必须显式保留库内状态
+        config.setStatus(existing.getStatus());
         // 留空表示不修改，非空则重新加密
         if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
             config.setApiKey(keyCipher.encrypt(req.getApiKey()));
@@ -167,6 +172,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new BusinessException("该模型未配置接口地址（baseUrl），无法测试");
         }
+        // baseUrl 由用户填写：必须与知识库 URL 导入同一套 SSRF 校验
+        urlSafetyGuard.requireSafeUrl(baseUrl, "模型接口地址");
         String apiKey = keyCipher.decrypt(config.getApiKey());
         long start = System.currentTimeMillis();
         try {
@@ -186,6 +193,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             String[] candidates = completionUrls(baseUrl);
             HttpResponse<String> resp = null;
             for (String url : candidates) {
+                // 候选地址由 baseUrl 派生，仍逐个校验（防止拼接后指向非预期主机）
+                urlSafetyGuard.requireSafeUrl(url, "模型接口地址");
                 resp = client.send(builder.copy().uri(URI.create(url)).build(),
                     HttpResponse.BodyHandlers.ofString());
                 // 404 时尝试下一个候选地址，其余错误码直接返回
@@ -195,9 +204,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             }
             if (resp == null || resp.statusCode() != 200) {
                 int code = resp == null ? 0 : resp.statusCode();
-                String body = resp == null ? "" : resp.body();
-                throw new BusinessException("连接失败（HTTP " + code + "）："
-                    + (body == null || body.isBlank() ? "无响应内容" : truncate(body)));
+                // 不回显响应体：内网目标/元数据服务的返回内容不应出现在接口响应里
+                throw new BusinessException("连接失败（HTTP " + code + "），请检查接口地址与 API Key");
             }
             return System.currentTimeMillis() - start;
         } catch (IOException e) {
@@ -225,10 +233,6 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         }
         // 根路径（如 https://api.deepseek.com）：先试 /chat/completions，404 再试 /v1/chat/completions
         return new String[] {normalized + "/chat/completions", normalized + "/v1/chat/completions"};
-    }
-
-    private String truncate(String text) {
-        return text == null ? "" : (text.length() > 300 ? text.substring(0, 300) + "..." : text);
     }
 
     @Override
