@@ -29,6 +29,7 @@ import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.log.model.LogRecord;
+import cn.ypbin.starter.messaging.sms.SmsService;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import java.time.Instant;
@@ -70,8 +71,14 @@ class SystemClientImplLogIngestTest {
             mock(SocialBindService.class),
             mock(SysMenuService.class),
             mock(SysNoticeService.class),
+            providerOfSms(),
             new DbLogProviders.DbLogDao(logMapper),
             recorderProvider);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<SmsService> providerOfSms() {
+        return mock(ObjectProvider.class);
     }
 
     @SuppressWarnings("unchecked")

@@ -23,10 +23,16 @@ services:
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?请在deploy/.env设置NACOS_AUTH_TOKEN}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?请在deploy/.env设置NACOS_AUTH_IDENTITY_KEY}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?请在deploy/.env设置NACOS_AUTH_IDENTITY_VALUE}
+      # 说明：不在此打开 NACOS_AUTH_ENABLE（服务端 API 鉴权）。开启后所有 Nacos 客户端必须
+      # 同步配置用户名/口令，否则服务注册与配置拉取全部失败；本仓客户端尚未配置凭据。
+      # 当前用「端口默认只绑 127.0.0.1 + 控制台管理员随机口令」收敛暴露面；若需对外开放 Nacos，
+      # 应同时打开本节开关，并为 gateway/auth/system/ai 配置 spring.cloud.nacos.username/password。
     ports:
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:8848:8848"
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:9848:9848"
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:8080:8080"
+      # 控制台/注册中心/鉴权端口默认只绑回环：Nacos 内渲染的配置含数据库口令与内部凭证，
+      # 不应暴露到宿主机外网。需要外部访问时显式设置 INTERNAL_BIND_ADDR=0.0.0.0
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:8848:8848"
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:9848:9848"
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:8080:8080"
     volumes:
       - ypbin-nacos-data:/home/nacos/data
     healthcheck:
@@ -67,7 +73,8 @@ services:
       MYSQL_DATABASE: ypbin_admin
       TZ: Asia/Shanghai
     ports:
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:3306:3306"
+      # 数据库默认只绑回环：对外暴露 3306 等于把整库交给内网扫描
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:3306:3306"
     volumes:
       - ypbin-mysql-data:/var/lib/mysql
     healthcheck:
@@ -116,7 +123,8 @@ services:
       WECHAT_MINIAPP_APPID: ${WECHAT_MINIAPP_APPID:-}
       WECHAT_MINIAPP_SECRET: ${WECHAT_MINIAPP_SECRET:-}
     ports:
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:18081:18081"
+      # 业务服务只经网关访问：默认不对外暴露，避免绕过网关直连
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:18081:18081"
     depends_on:
       nacos:
         condition: service_healthy
@@ -136,7 +144,7 @@ services:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
     ports:
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:18082:18082"
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:18082:18082"
     depends_on:
       nacos:
         condition: service_healthy
@@ -157,7 +165,7 @@ services:
       SENTINEL_ADDR: sentinel-dashboard:8858
       AI_MODEL_SECRET_KEY: ${AI_MODEL_SECRET_KEY:?请在 deploy/.env 设置 AI_MODEL_SECRET_KEY（16/24/32 字节）}
     ports:
-      - "${INTERNAL_BIND_ADDR:-0.0.0.0}:18083:18083"
+      - "${INTERNAL_BIND_ADDR:-127.0.0.1}:18083:18083"
     depends_on:
       nacos:
         condition: service_healthy

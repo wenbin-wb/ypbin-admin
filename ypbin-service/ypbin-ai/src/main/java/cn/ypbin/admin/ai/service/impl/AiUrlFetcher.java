@@ -9,8 +9,10 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.ai.support.AiUrlSafetyGuard;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
+import lombok.RequiredArgsConstructor;
 import org.jsoup.Connection;
 import org.springframework.resilience.annotation.Retryable;
 import org.springframework.stereotype.Component;
@@ -33,7 +35,11 @@ import org.springframework.stereotype.Component;
  * @since 2026-09-13
  */
 @Component
+@RequiredArgsConstructor
 public class AiUrlFetcher {
+
+    /** 统一 SSRF 守卫（与模型测试连接共用同一口径） */
+    private final AiUrlSafetyGuard urlSafetyGuard;
 
     /** 瞬时网络故障重试参数：首退避 300ms，翻倍递增，上限 2s，抖动 100ms，共 3 次机会 */
     private static final int MAX_RETRIES = 2;
@@ -75,7 +81,7 @@ public class AiUrlFetcher {
     }
 
     private Connection.Response doFetch(String url, boolean ignoreContentType) throws IOException {
-        Connection connection = AiKnowledgeImportComponent.guardedConnection(url);
+        Connection connection = urlSafetyGuard.guardedConnection(url, "导入地址");
         if (ignoreContentType) {
             connection = connection.ignoreContentType(true);
         }

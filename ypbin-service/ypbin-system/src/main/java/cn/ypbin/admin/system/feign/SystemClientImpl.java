@@ -19,6 +19,9 @@ import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
+import cn.ypbin.admin.system.model.req.SmsSendReq;
+import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.service.SocialBindService;
@@ -33,16 +36,20 @@ import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.dao.LogDao;
 import cn.ypbin.starter.log.model.LogRecord;
+import cn.ypbin.starter.messaging.sms.SmsService;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -62,6 +69,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/internal")
+@Slf4j
 @RequiredArgsConstructor
 public class SystemClientImpl implements ISystemClient {
 
@@ -88,6 +96,12 @@ public class SystemClientImpl implements ISystemClient {
     private final SocialBindService socialBindService;
     private final SysMenuService menuService;
     private final SysNoticeService noticeService;
+    /**
+     * 短信发送（可选）：sms4j 是 starter 的可选依赖，未引入或厂商未配置时 Bean 不存在。
+     * 用 {@link ObjectProvider} 允许 system 在未配置短信时正常启动，但取不到时不静默成功。
+     */
+    private final ObjectProvider<SmsService> smsServiceProvider;
+
     /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
     private final LogDao logDao;
 
@@ -200,10 +214,9 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @PostMapping("/verify-password")
-    public R<Boolean> verifyPassword(@RequestParam("userId") Long userId,
-        @RequestParam("rawPassword") String rawPassword) {
-        requireVerifyNotExceeded(userId);
-        return R.ok(userService.verifyPassword(userId, rawPassword));
+    public R<Boolean> verifyPassword(@Valid @RequestBody PasswordVerifyReq req) {
+        requireVerifyNotExceeded(req.getUserId());
+        return R.ok(userService.verifyPassword(req.getUserId(), req.getRawPassword()));
     }
 
     /**
@@ -280,18 +293,14 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @PostMapping("/social-bind-save")
-    public R<Void> saveSocialBinding(@RequestParam("userId") Long userId,
-        @RequestParam("platform") String platform, @RequestParam("openId") String openId,
-        @RequestParam(value = "nickname", required = false) String nickname,
-        @RequestParam(value = "avatar", required = false) String avatar,
-        @RequestParam(value = "accessToken", required = false) String accessToken) {
+    public R<Void> saveSocialBinding(@Valid @RequestBody SocialBindSaveReq req) {
         SysUserSocial social = new SysUserSocial();
-        social.setUserId(userId);
-        social.setPlatform(platform);
-        social.setOpenId(openId);
-        social.setNickname(nickname);
-        social.setAvatar(avatar);
-        social.setAccessToken(accessToken);
+        social.setUserId(req.getUserId());
+        social.setPlatform(req.getPlatform());
+        social.setOpenId(req.getOpenId());
+        social.setNickname(req.getNickname());
+        social.setAvatar(req.getAvatar());
+        social.setAccessToken(req.getAccessToken());
         socialBindService.save(social);
         return R.ok();
     }
@@ -436,5 +445,40 @@ public class SystemClientImpl implements ISystemClient {
     @GetMapping("/notice-published-detail")
     public R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id) {
         return R.ok(noticeService.getPublishedNotice(id));
+    }
+
+    @Override
+    @PostMapping("/sms-send")
+    public R<Void> sendSms(@RequestBody SmsSendReq req) {
+        if (req == null || !StringUtils.hasText(req.getPhone())
+            || !StringUtils.hasText(req.getTemplateId())) {
+            return R.fail("短信发送参数不完整：手机号与模板不能为空");
+        }
+        SmsService smsService = smsServiceProvider.getIfAvailable();
+        if (smsService == null) {
+            // 厂商依赖/配置缺失必须暴露：返回成功会让调用方把验证码留在缓存，用户永远收不到短信
+            log.error("短信服务未配置（sms4j 未引入或厂商未配置），拒绝发送：phone={}",
+                maskPhone(req.getPhone()));
+            return R.fail("短信服务未配置，请先完成短信厂商配置");
+        }
+        Map<String, String> variables = req.getVariables() == null ? Map.of() : req.getVariables();
+        boolean sent = smsService.sendByTemplate(req.getPhone(), req.getTemplateId(), variables);
+        if (!sent) {
+            log.error("短信发送失败（厂商返回 false）：phone={}, templateId={}",
+                maskPhone(req.getPhone()), req.getTemplateId());
+            return R.fail("短信发送失败，请检查短信厂商配置");
+        }
+        return R.ok();
+    }
+
+    /**
+     * 手机号脱敏（日志用）：保留前 3 位与后 4 位。
+     *
+     * @param phone 手机号
+     * @return 脱敏后的手机号
+     */
+    private static String maskPhone(String phone) {
+        return phone.length() <= 7 ? "****"
+            : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
 }

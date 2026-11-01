@@ -15,8 +15,10 @@ import cn.hutool.http.useragent.UserAgentUtil;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.api.cache.SysCache;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
@@ -67,6 +69,11 @@ public class LoginSupport {
      * @return 登录结果
      */
     public LoginResp completeLogin(SysUserDto user, String authType, String ip, @Nullable String userAgent) {
+        // 禁用校验放在唯一收尾处：账号/手机入口各自校验过，但新增登录入口（如社交登录）
+        // 很容易漏掉，导致被禁用用户换一条链路就能继续登录
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
+            throw new BusinessException("账号已被禁用");
+        }
         LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, authType);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());

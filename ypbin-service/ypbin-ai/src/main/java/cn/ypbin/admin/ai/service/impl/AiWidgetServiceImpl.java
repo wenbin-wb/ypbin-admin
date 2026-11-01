@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -95,10 +96,12 @@ public class AiWidgetServiceImpl implements AiWidgetService {
             throw new BusinessException("AI 对话服务未配置，请先配置对话模型");
         }
         try {
+            // 每次访问独立 conversationId：固定成 widget-{kbId} 会让所有匿名访客共享 Memory 历史
+            String conversationId = "widget-" + kb.getId() + "-" + UUID.randomUUID();
             // 匿名请求无登录上下文：显式绑定知识库所属租户，保证 RAG 检索与 AI 调用在正确租户内
             List<String> tokens = TenantContext.executeWithTenant(kb.getTenantId(),
                 () -> aiChatService.chatWithKnowledge(
-                        "widget-" + kb.getId(), question, String.valueOf(kb.getId()))
+                        conversationId, question, String.valueOf(kb.getId()))
                     .collectList()
                     .block(ANSWER_BLOCK_TIMEOUT));
             return tokens == null ? "" : String.join("", tokens);

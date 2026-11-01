@@ -25,3 +25,10 @@ ypbin:
   ai:
     model-config:
       secret-key: ${AI_MODEL_SECRET_KEY:}
+
+  # ---------- 限流 ----------
+  # 分享/挂件是匿名入口：按 IP 限流若不信任转发头，所有访客共用「网关地址」这一个桶，
+  # 单个访客即可让全站问答 429。前提：入口必须**覆盖** X-Forwarded-For（不能追加）。
+  tools:
+    rate-limit:
+      trust-forwarded: true

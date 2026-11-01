@@ -16,6 +16,7 @@ import cn.ypbin.admin.ai.mapper.AiModelConfigMapper;
 import cn.ypbin.admin.ai.model.req.AiModelConfigSaveReq;
 import cn.ypbin.admin.ai.model.resp.AiModelConfigResp;
 import cn.ypbin.admin.ai.service.AiModelConfigService;
+import cn.ypbin.admin.ai.support.AiUrlSafetyGuard;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -50,6 +51,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
 
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
+    /** 统一 SSRF 守卫（与知识库 URL 导入共用同一口径） */
+    private final AiUrlSafetyGuard urlSafetyGuard;
 
     @Override
     public List<AiModelConfigResp> listModels() {
@@ -98,10 +101,13 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateModel(Long id, AiModelConfigSaveReq req) {
-        requireModel(id);
+        AiModelConfig existing = requireModel(id);
         AiModelConfig config = new AiModelConfig();
         BeanUtils.copyProperties(req, config, "id", "tenantId", "isDefault", "status", "apiKey");
         config.setId(id);
+        // new 出来的实体带着 BaseEntity 的 status 默认值 1，必须显式保留库内状态，
+        // 否则编辑已停用的模型会把它重新启用
+        config.setStatus(existing.getStatus());
         // 留空表示不修改，非空则重新加密
         if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
             config.setApiKey(keyCipher.encrypt(req.getApiKey()));
@@ -174,6 +180,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new BusinessException("该模型未配置接口地址（baseUrl），无法测试");
         }
+        // baseUrl 由用户填写：必须与知识库 URL 导入同一套 SSRF 校验，
+        // 否则平台管理员可让服务端去请求内网/云元数据地址
+        urlSafetyGuard.requireSafeUrl(baseUrl, "模型接口地址");
         String apiKey = keyCipher.decrypt(config.getApiKey());
         long start = System.currentTimeMillis();
         try {
@@ -193,6 +202,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             String[] candidates = completionUrls(baseUrl);
             HttpResponse<String> resp = null;
             for (String url : candidates) {
+                // 候选地址由 baseUrl 派生，仍逐个校验（防止拼接后指向非预期主机）
+                urlSafetyGuard.requireSafeUrl(url, "模型接口地址");
                 resp = client.send(builder.copy().uri(URI.create(url)).build(),
                     HttpResponse.BodyHandlers.ofString());
                 // 404 时尝试下一个候选地址，其余错误码直接返回
@@ -202,9 +213,8 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             }
             if (resp == null || resp.statusCode() != 200) {
                 int code = resp == null ? 0 : resp.statusCode();
-                String body = resp == null ? "" : resp.body();
-                throw new BusinessException("连接失败（HTTP " + code + "）："
-                    + (body == null || body.isBlank() ? "无响应内容" : truncate(body)));
+                // 不回显响应体：内网目标/元数据服务的返回内容不应出现在接口响应里
+                throw new BusinessException("连接失败（HTTP " + code + "），请检查接口地址与 API Key");
             }
             return System.currentTimeMillis() - start;
         } catch (IOException e) {
@@ -234,8 +244,41 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         return new String[] {normalized + "/chat/completions", normalized + "/v1/chat/completions"};
     }
 
-    private String truncate(String text) {
-        return text == null ? "" : (text.length() > 300 ? text.substring(0, 300) + "..." : text);
+    /**
+     * JSON 字符串转义（模型名/地址只用于报文，不引入额外依赖）。
+     *
+     * <p>除 {@code "} 与 {@code \} 外，还必须转义 U+0000–U+001F 控制字符：
+     * JSON 规范禁止裸写控制字符，模型名里混入换行/制表符会让整条报文非法，
+     * 服务端直接返回 400，而错误信息里只显示「连接失败」，排查不到根因。</p>
+     *
+     * @param value 原始字符串，可空
+     * @return 可直接放入 JSON 双引号内的字符串
+     */
+    private static String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        StringBuilder escaped = new StringBuilder(value.length() + 8);
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (ch < 0x20) {
+                        escaped.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
     }
 
     @Override

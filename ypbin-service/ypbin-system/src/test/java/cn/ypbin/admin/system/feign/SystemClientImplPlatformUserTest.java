@@ -24,6 +24,7 @@ import cn.ypbin.admin.system.service.SysPermissionService;
 import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.admin.system.mapper.SysLogMapper;
+import cn.ypbin.starter.messaging.sms.SmsService;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,8 +52,14 @@ class SystemClientImplPlatformUserTest {
         mock(SocialBindService.class),
         mock(SysMenuService.class),
         mock(SysNoticeService.class),
+        providerOfSms(),
         new DbLogProviders.DbLogDao(mock(SysLogMapper.class)),
         providerOfTrackRecorder());
+
+    @SuppressWarnings("unchecked")
+    private static ObjectProvider<SmsService> providerOfSms() {
+        return mock(ObjectProvider.class);
+    }
 
     @SuppressWarnings("unchecked")
     private static ObjectProvider<TrackRecorder> providerOfTrackRecorder() {

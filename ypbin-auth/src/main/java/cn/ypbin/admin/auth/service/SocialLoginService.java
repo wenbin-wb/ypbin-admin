@@ -14,10 +14,12 @@ import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.security.identity.IdentityContext;
+import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.social.core.SocialService;
 import java.util.List;
 import java.util.Locale;
@@ -89,8 +91,18 @@ public class SocialLoginService {
         }
 
         String accessToken = authUser.getToken() == null ? null : authUser.getToken().getAccessToken();
-        systemClient.saveSocialBinding(userId, normalizedSource, authUser.getUuid(),
-            authUser.getNickname(), authUser.getAvatar(), accessToken);
+        SocialBindSaveReq bindReq = new SocialBindSaveReq();
+        bindReq.setUserId(userId);
+        bindReq.setPlatform(normalizedSource);
+        bindReq.setOpenId(authUser.getUuid());
+        bindReq.setNickname(authUser.getNickname());
+        bindReq.setAvatar(authUser.getAvatar());
+        bindReq.setAccessToken(accessToken);
+        R<Void> resp = systemClient.saveSocialBinding(bindReq);
+        // 远程失败不能报成功，也不能清缓存（清了反而让后续读取回源到「未绑定」）
+        if (resp == null || !resp.isSuccess()) {
+            throw new BusinessException("第三方账号绑定失败，请稍后重试");
+        }
         SysCache.evictSocialBinding(userId, normalizedSource, authUser.getUuid());
     }
 
@@ -125,7 +137,9 @@ public class SocialLoginService {
     }
 
     private Long currentUserId() {
-        return IdentityContext.getUserId()
+        // auth 是登录发牌方，identity.enabled=false（不装配身份头过滤器），
+        // 当前用户只能从自己的 sa-token 会话取
+        return UserContext.getUserIdSafely()
             .orElseThrow(() -> new BusinessException("当前用户未登录"));
     }
 
