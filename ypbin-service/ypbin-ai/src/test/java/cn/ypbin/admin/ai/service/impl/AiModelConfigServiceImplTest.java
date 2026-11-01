@@ -10,11 +10,21 @@
 package cn.ypbin.admin.ai.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import cn.ypbin.admin.ai.core.AiKeyCipher;
+import cn.ypbin.admin.ai.entity.AiModelConfig;
+import cn.ypbin.admin.ai.mapper.AiModelConfigMapper;
+import cn.ypbin.admin.ai.model.req.AiModelConfigSaveReq;
+import cn.ypbin.admin.ai.support.AiUrlSafetyGuard;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * AI 模型连通性所用的 HTTP 客户端的**配置级**门禁（不做真实网络调用）。
@@ -64,5 +74,31 @@ class AiModelConfigServiceImplTest {
         assertThat(timeout)
             .as("连接超时必须显式设置（仓内铁律：远程调用禁止无超时默认客户端）")
             .isEqualTo(Duration.ofSeconds(AiModelConfigServiceImpl.CONNECT_TIMEOUT_SECONDS));
+    }
+
+    @Test
+    @DisplayName("编辑模型必须保留库内 status：局部更新不得把已停用模型重新启用")
+    void updateModelMustPreserveStatus() {
+        AiModelConfigMapper mapper = mock(AiModelConfigMapper.class);
+        AiKeyCipher keyCipher = mock(AiKeyCipher.class);
+        AiModelConfig existing = new AiModelConfig();
+        existing.setId(1L);
+        existing.setStatus(0);
+        existing.setApiKey("cipher");
+        when(mapper.selectById(1L)).thenReturn(existing);
+        when(mapper.updateById(any(AiModelConfig.class))).thenReturn(1);
+
+        AiModelConfigSaveReq req = new AiModelConfigSaveReq();
+        req.setName("测试模型");
+        req.setProvider("openai");
+        req.setModelName("gpt-test");
+        new AiModelConfigServiceImpl(mapper, keyCipher, mock(AiUrlSafetyGuard.class))
+            .updateModel(1L, req);
+
+        ArgumentCaptor<AiModelConfig> captor = ArgumentCaptor.forClass(AiModelConfig.class);
+        verify(mapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus())
+            .as("BaseEntity.status 默认值为 1，局部更新若不显式保留库内状态会静默解禁")
+            .isEqualTo(0);
     }
 }

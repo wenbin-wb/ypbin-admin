@@ -28,8 +28,9 @@ CREATE TABLE sys_user
     update_time     DATETIME     NULL COMMENT '更新时间',
     status          TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 禁用',
     is_deleted      TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    username_alive  VARCHAR(64)  AS (IF(is_deleted = 0, username, NULL)) STORED COMMENT '用户名唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_username (username),
+    UNIQUE KEY uk_username (username_alive),
     UNIQUE KEY uk_phone (phone),
     KEY idx_user_type (user_type)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '系统用户';
@@ -51,8 +52,9 @@ CREATE TABLE sys_role
     update_time DATETIME     NULL COMMENT '更新时间',
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 禁用',
     is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    code_alive  VARCHAR(64)  AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_tenant_code (tenant_id, code),
+    UNIQUE KEY uk_tenant_code (tenant_id, code_alive),
     KEY idx_role_type (role_type)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '系统角色';
 
@@ -131,8 +133,9 @@ CREATE TABLE sys_tenant
     update_time   DATETIME     NULL COMMENT '更新时间',
     status        TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 禁用',
     is_deleted    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    code_alive    VARCHAR(64)  AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_code (code)
+    UNIQUE KEY uk_code (code_alive)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '租户';
 
 -- 用户-角色关联
@@ -172,8 +175,9 @@ CREATE TABLE sys_dict
     update_time DATETIME     NULL COMMENT '更新时间',
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 禁用',
     is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    code_alive  VARCHAR(64)  AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_code (code)
+    UNIQUE KEY uk_code (code_alive)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '数据字典类型';
 
 -- 数据字典项
@@ -281,8 +285,9 @@ CREATE TABLE sys_client
     update_time        DATETIME     NULL COMMENT '更新时间',
     status             TINYINT      NOT NULL DEFAULT 1 COMMENT '状态',
     is_deleted         TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    client_id_alive    VARCHAR(64)  AS (IF(is_deleted = 0, client_id, NULL)) STORED COMMENT '客户端 ID 唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_client_id (client_id)
+    UNIQUE KEY uk_client_id (client_id_alive)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '登录客户端';
 
 -- 岗位
@@ -301,8 +306,9 @@ CREATE TABLE sys_post
     update_time DATETIME     NULL COMMENT '更新时间',
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态',
     is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    code_alive  VARCHAR(64)  AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_tenant_code (tenant_id, code)
+    UNIQUE KEY uk_tenant_code (tenant_id, code_alive)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '岗位';
 
 -- 用户-岗位关联
@@ -451,9 +457,10 @@ CREATE TABLE sys_user_social
     update_time  DATETIME     NULL COMMENT '更新时间',
     status       TINYINT      NOT NULL DEFAULT 1 COMMENT '状态',
     is_deleted   TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    open_id_alive VARCHAR(128) AS (IF(is_deleted = 0, open_id, NULL)) STORED COMMENT 'openId 唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
     KEY idx_user_id (user_id),
-    UNIQUE KEY uk_platform_open (platform, open_id)
+    UNIQUE KEY uk_platform_open (platform, open_id_alive)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户-第三方平台绑定';
 
 -- 权限模板
@@ -469,8 +476,9 @@ CREATE TABLE sys_auth_template
     update_time DATETIME     NULL COMMENT '更新时间',
     status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态',
     is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    code_alive  VARCHAR(64)  AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_code (code)
+    UNIQUE KEY uk_code (code_alive)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '权限模板';
 
 -- 权限模板-菜单关联

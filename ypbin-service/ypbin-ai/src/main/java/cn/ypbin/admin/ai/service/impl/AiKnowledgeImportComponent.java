@@ -17,10 +17,6 @@ import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;
 import com.rometools.rome.io.SyndFeedInput;
 import java.io.StringReader;
-import java.net.InetAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +27,6 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.http.client.InetAddressFilter;
 import org.springframework.stereotype.Component;
 
 /**
@@ -55,38 +50,14 @@ public class AiKnowledgeImportComponent {
 
     private static final Logger log = LoggerFactory.getLogger(AiKnowledgeImportComponent.class);
 
-    /** 网络抓取 UA，标识为知识库抓取机器人 */
-    private static final String USER_AGENT = "Mozilla/5.0 (compatible; ypbin-knowledge-bot/1.0)";
-
-    /** 抓取超时（毫秒） */
-    private static final int FETCH_TIMEOUT_MS = 15_000;
-
-    /** 响应体大小上限（字节）：防超长页面/恶意大响应拖垮内存 */
-    private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
-
     /** Sitemap 单次导入 URL 上限 */
     private static final int SITEMAP_MAX_URLS = 100;
 
     /** RSS 单次导入尝试条数上限（成功与失败均计数，防止条目连续失败时无界抓取） */
     private static final int RSS_MAX_ATTEMPTS = 50;
 
-    /** 导入地址长度上限（防御超长 URL 探测） */
-    private static final int MAX_URL_LENGTH = 2048;
-
-    /** 协议白名单：http */
-    private static final String SCHEME_HTTP = "http";
-
-    /** 协议白名单：https */
-    private static final String SCHEME_HTTPS = "https";
-
     /** 重定向拒绝时的可读提示 */
     private static final String REDIRECT_REJECT_HINT = "（已拒绝跟随重定向，请使用最终直达地址）";
-
-    /**
-     * 出站地址白名单过滤器：仅匹配公网可路由地址（Boot 4.1 内置完整特殊用途网段清单），
-     * 用于阻断 SSRF（内网、环回、链路本地、CGNAT 元数据段等）。
-     */
-    private static final InetAddressFilter EXTERNAL_ADDRESS_FILTER = InetAddressFilter.externalAddresses();
 
     private final AiKnowledgeCrudComponent crudComponent;
 
@@ -238,24 +209,6 @@ public class AiKnowledgeImportComponent {
     }
 
     /**
-     * 构造受防护的 Jsoup 连接：先做协议/目标地址校验，再显式设置超时、响应体上限与
-     * 禁止重定向（重定向会绕过域名层校验，直接拒绝并要求使用直达地址）。
-     *
-     * <p>包级可见供 {@link AiUrlFetcher} 复用，使 SSRF 校验与抓取重试在同一收口内。</p>
-     *
-     * @param url 目标地址
-     * @return Jsoup 连接
-     */
-    static Connection guardedConnection(String url) {
-        requireSafeHttpUrl(url);
-        return Jsoup.connect(url)
-            .userAgent(USER_AGENT)
-            .timeout(FETCH_TIMEOUT_MS)
-            .maxBodySize(MAX_BODY_BYTES)
-            .followRedirects(false);
-    }
-
-    /**
      * 响应状态校验：已禁止跟随重定向，3xx 视为应改用直达地址；4xx/5xx 直接失败。
      *
      * @param response 响应
@@ -270,76 +223,5 @@ public class AiKnowledgeImportComponent {
         if (status >= 400) {
             throw new BusinessException("抓取失败（HTTP " + status + "）：" + url);
         }
-    }
-
-    /**
-     * URL 入站校验：协议白名单（仅 http/https）+ 主机解析地址非内网/保留网段。
-     * 校验失败抛业务异常并给出明确文案。
-     *
-     * @param rawUrl 待校验 URL
-     */
-    private static void requireSafeHttpUrl(String rawUrl) {
-        if (rawUrl == null || rawUrl.isBlank()) {
-            throw new BusinessException("导入地址不能为空");
-        }
-        if (rawUrl.length() > MAX_URL_LENGTH) {
-            throw new BusinessException("导入地址过长，已拒绝");
-        }
-        URI uri;
-        try {
-            uri = new URI(rawUrl);
-        } catch (URISyntaxException e) {
-            throw new BusinessException("导入地址格式不合法：" + rawUrl);
-        }
-        String scheme = uri.getScheme();
-        if (scheme == null
-            || !(SCHEME_HTTP.equalsIgnoreCase(scheme) || SCHEME_HTTPS.equalsIgnoreCase(scheme))) {
-            throw new BusinessException("仅支持 http/https 协议的导入地址");
-        }
-        if (uri.getUserInfo() != null) {
-            throw new BusinessException("导入地址不允许包含用户信息");
-        }
-        String host = uri.getHost();
-        if (host == null || host.isBlank()) {
-            throw new BusinessException("导入地址缺少主机名：" + rawUrl);
-        }
-        if (isBlockedHost(host)) {
-            throw new BusinessException("导入地址指向内网或保留网段，已拒绝：" + rawUrl);
-        }
-    }
-
-    /**
-     * 校验主机名解析出的全部地址（任一命中黑名单即整体拒绝），并处理 DNS 解析失败。
-     *
-     * @param host 主机名或 IP
-     * @return 命中黑名单返回 true
-     */
-    private static boolean isBlockedHost(String host) {
-        try {
-            for (InetAddress address : InetAddress.getAllByName(host)) {
-                if (isBlockedAddress(address)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (UnknownHostException e) {
-            // 解析失败即拒绝（fail-closed），不能把请求发给无法校验归属的目标
-            throw new BusinessException("导入地址域名解析失败：" + host);
-        }
-    }
-
-    /**
-     * 单地址黑名单判定：仅放行「公网可路由地址」，其余（环回、链路本地、私网、CGNAT、
-     * 组播、文档/基准测试/协议保留等特殊用途网段）一律拦截。
-     *
-     * <p>判定委托 Spring Boot 4.1 的 {@link InetAddressFilter#externalAddresses()}——它由框架维护
-     * 完整的特殊用途网段清单（含 {@code 100.64.0.0/10} CGNAT，即云厂商元数据服务段如
-     * 100.100.100.200），比自行枚举更全面且随版本更新，避免遗漏新保留段。</p>
-     *
-     * @param address 解析出的地址
-     * @return 命中黑名单返回 true
-     */
-    private static boolean isBlockedAddress(InetAddress address) {
-        return !EXTERNAL_ADDRESS_FILTER.matches(address);
     }
 }

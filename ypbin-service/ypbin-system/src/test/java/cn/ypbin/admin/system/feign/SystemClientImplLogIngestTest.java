@@ -76,6 +76,7 @@ class SystemClientImplLogIngestTest {
             mock(SysSpaceRelationService.class),
         mock(SysMessageMapper.class),
         mock(MailService.class),
+            mock(ObjectProvider.class),
             new DbLogProviders.DbLogDao(logMapper),
             recorderProvider);
     }
