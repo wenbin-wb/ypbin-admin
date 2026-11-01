@@ -230,9 +230,11 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     }
 
     private void updateRequired(SysNotice notice, SysNotice current, String message) {
+        // 历史行的 publish_status 可能为 NULL（requireNotice 在内存里归一为草稿 0）；
+        // 直接 eq(0) 永远匹配不到 NULL，必须与删除/发布/撤回同口径用 COALESCE
         boolean updated = update(notice, new LambdaUpdateWrapper<SysNotice>()
             .eq(SysNotice::getId, current.getId())
-            .eq(SysNotice::getPublishStatus, current.getPublishStatus())
+            .apply("COALESCE(publish_status, 0) = {0}", current.getPublishStatus())
             .eq(SysNotice::getPublishVersion, current.getPublishVersion()));
         if (!updated) {
             throw new BusinessException(message);
