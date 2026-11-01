@@ -247,7 +247,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         accountSupport.checkPhoneUnique(phone, id);
         validateAssignments(existing, req.getRoleIds(), req.getPostIds());
         SysUser user = new SysUser();
-        BeanUtils.copyProperties(req, user, "roleIds", "postIds", "password", "phone");
+        // status 不随编辑表单更新：它必须走 updateStatus（有「禁止禁用自己」与强制下线保护），
+        // 否则一次普通编辑就能绕过这两道守卫
+        BeanUtils.copyProperties(req, user, "roleIds", "postIds", "password", "phone", "status");
         user.setId(id);
         // 密码留空表示不修改
         String encoded = null;
