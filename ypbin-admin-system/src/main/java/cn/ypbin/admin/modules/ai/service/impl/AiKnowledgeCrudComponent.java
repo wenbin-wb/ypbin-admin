@@ -139,10 +139,12 @@ public class AiKnowledgeCrudComponent {
 
         String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
         if (filePath != null) {
-            AiDocument pathUpdate = new AiDocument();
-            pathUpdate.setId(doc.getId());
-            pathUpdate.setFilePath(filePath);
-            documentMapper.updateById(pathUpdate);
+            // 只 set 目标列：new AiDocument() + updateById 会带上 BaseEntity 的 status 默认值 1，
+            // 把仍在向量化的文档提前写成「就绪」
+            documentMapper.update(null, new LambdaUpdateWrapper<AiDocument>()
+                .eq(AiDocument::getId, doc.getId())
+                .set(AiDocument::getFilePath, filePath)
+                .set(AiDocument::getUpdateTime, LocalDateTime.now()));
         }
 
         documentVectorizer.vectorizeAsync(
@@ -278,10 +280,12 @@ public class AiKnowledgeCrudComponent {
 
         String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
         if (filePath != null) {
-            AiDocument pathUpdate = new AiDocument();
-            pathUpdate.setId(doc.getId());
-            pathUpdate.setFilePath(filePath);
-            documentMapper.updateById(pathUpdate);
+            // 只 set 目标列：new AiDocument() + updateById 会带上 BaseEntity 的 status 默认值 1，
+            // 把仍在向量化的文档提前写成「就绪」
+            documentMapper.update(null, new LambdaUpdateWrapper<AiDocument>()
+                .eq(AiDocument::getId, doc.getId())
+                .set(AiDocument::getFilePath, filePath)
+                .set(AiDocument::getUpdateTime, LocalDateTime.now()));
         }
 
         documentVectorizer.vectorizeAsync(

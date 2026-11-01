@@ -96,11 +96,12 @@ public class UserProfileServiceImpl implements UserProfileService {
         accountSupport.checkPasswordHistory(userId, req.getNewPassword());
 
         String encoded = PasswordEncoderUtil.encode(req.getNewPassword());
-        SysUser update = new SysUser();
-        update.setId(userId);
-        update.setPassword(encoded);
-        update.setPwdResetTime(LocalDateTime.now());
-        userMapper.updateById(update);
+        // 只 set 目标列：new SysUser() + updateById 会带上 BaseEntity 的 status 默认值 1，
+        // 导致「禁用用户自助改密」把账号静默重新启用
+        userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
+            .eq(SysUser::getId, userId)
+            .set(SysUser::getPassword, encoded)
+            .set(SysUser::getPwdResetTime, LocalDateTime.now()));
         accountSupport.recordPasswordHistory(userId, encoded);
     }
 }

@@ -18,6 +18,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,6 +31,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class SmsCodeService {
+
+    private static final Logger log = LoggerFactory.getLogger(SmsCodeService.class);
 
     private static final String CODE_PREFIX = "sms:code:";
     private static final String COOLDOWN_PREFIX = "sms:cooldown:";
@@ -58,7 +62,13 @@ public class SmsCodeService {
         try {
             String templateId = configService.getString("SMS_TEMPLATE_ID", "");
             cacheService.set(codeKey, code, Duration.ofSeconds(expireSeconds));
-            SmsUtils.sendByTemplate(normalizedPhone, templateId, Map.of("code", code));
+            // 厂商返回 false 时必须失败：若当作成功，验证码留在缓存而用户永远收不到短信
+            boolean sent = SmsUtils.sendByTemplate(normalizedPhone, templateId, Map.of("code", code));
+            if (!sent) {
+                log.error("短信发送失败（厂商返回 false）：phone={}, templateId={}",
+                    maskPhone(normalizedPhone), templateId);
+                throw new BusinessException("短信发送失败，请检查短信厂商配置");
+            }
         } catch (RuntimeException e) {
             cacheService.compareAndDelete(codeKey, code);
             cacheService.compareAndDelete(cooldownKey, cooldownOwner);
@@ -85,5 +95,11 @@ public class SmsCodeService {
             throw new BusinessException("手机号不能为空");
         }
         return phone.trim();
+    }
+
+    /** 日志脱敏：保留前 3 位与后 4 位。 */
+    private static String maskPhone(String phone) {
+        return phone.length() <= 7 ? "****"
+            : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
 }

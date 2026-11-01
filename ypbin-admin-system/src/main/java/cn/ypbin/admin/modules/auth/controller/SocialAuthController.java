@@ -9,16 +9,21 @@
  */
 package cn.ypbin.admin.modules.auth.controller;
 
+import cn.ypbin.admin.modules.auth.core.SocialOAuthStateSupport;
 import cn.ypbin.admin.modules.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.auth.service.SocialLoginService;
+import cn.ypbin.admin.modules.system.service.SocialConfigService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.log.enums.Include;
 import cn.ypbin.starter.social.core.SocialService;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import me.zhyd.oauth.request.AuthRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +43,8 @@ public class SocialAuthController {
 
     private final SocialService socialService;
     private final SocialLoginService socialLoginService;
+    private final SocialConfigService socialConfigService;
+    private final SocialOAuthStateSupport stateSupport;
 
     /**
      * 已注册的第三方平台列表。未配置任何平台时返回空集合。
@@ -51,17 +58,23 @@ public class SocialAuthController {
      * 生成授权跳转地址。
      */
     @GetMapping("/authorize/{source}")
-    public R<String> authorize(@PathVariable String source) {
-        return R.ok(socialService.authorizeUrl(source));
+    public R<String> authorize(@PathVariable String source, HttpServletResponse response) {
+        // 平台启用状态由 createEnabledRequest 校验；state 与浏览器 Cookie 绑定，回调时比对
+        AuthRequest request = socialConfigService.createEnabledRequest(source);
+        String state = stateSupport.issue(source, response);
+        return R.ok(request.authorize(state));
     }
 
     /**
      * 授权回调 → 用 code 换用户信息 → 绑定已有账号或自动注册并登录。
      */
     @Idempotent
-    @Log(value = "第三方登录回调", module = "第三方登录")
+    @Log(value = "第三方登录回调", module = "第三方登录", excludes = Include.REQUEST_PARAM)
     @PostMapping("/callback/{source}")
-    public R<LoginResp> callback(@PathVariable String source, SocialCallbackReq req) {
+    public R<LoginResp> callback(@PathVariable String source, SocialCallbackReq req,
+            HttpServletResponse response) {
+        // state 与浏览器 Cookie 绑定：缺少/不符直接拒绝（防登录 CSRF 与重放）
+        stateSupport.verify(source, req.getState(), response);
         return R.ok(socialLoginService.login(source, req));
     }
 
@@ -69,9 +82,11 @@ public class SocialAuthController {
      * 已登录用户绑定第三方账号。
      */
     @Idempotent
-    @Log(value = "绑定第三方账号", module = "第三方登录")
+    @Log(value = "绑定第三方账号", module = "第三方登录", excludes = Include.REQUEST_PARAM)
     @PostMapping("/bind/{source}")
-    public R<Void> bind(@PathVariable String source, SocialCallbackReq req) {
+    public R<Void> bind(@PathVariable String source, SocialCallbackReq req,
+            HttpServletResponse response) {
+        stateSupport.verify(source, req.getState(), response);
         socialLoginService.bind(source, req);
         return R.ok();
     }

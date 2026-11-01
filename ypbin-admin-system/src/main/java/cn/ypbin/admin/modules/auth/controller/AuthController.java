@@ -46,7 +46,7 @@ public class AuthController {
      * 账号密码登录。
      */
     @Log(value = "登录", module = "认证")
-    @RateLimit(count = 10, window = 60, message = "登录过于频繁，请稍后再试")
+    @RateLimit(key = "#req.username", count = 10, window = 60, message = "登录过于频繁，请稍后再试")
     @PostMapping("/auth/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
         return R.ok(authService.login(req, WebRequestUtils.ip()));

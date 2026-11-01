@@ -74,7 +74,8 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateTemplate(Long id, AuthTemplateSaveReq req) {
-        if (getById(id) == null) {
+        SysAuthTemplate existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("权限模板不存在");
         }
         validateMenuIds(req.getMenuIds());
@@ -82,6 +83,8 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
         SysAuthTemplate template = new SysAuthTemplate();
         BeanUtils.copyProperties(req, template, "menuIds");
         template.setId(id);
+        // new 出来的实体带着 BaseEntity 的 status 默认值 1，必须显式保留库内状态
+        template.setStatus(existing.getStatus());
         if (!updateById(template)) {
             throw new BusinessException("修改权限模板失败");
         }

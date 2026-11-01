@@ -27,6 +27,7 @@ import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
 import cn.ypbin.admin.modules.system.service.SysUserService;
+import cn.ypbin.admin.modules.system.service.support.OnlineTokenFingerprint;
 import cn.ypbin.admin.modules.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -182,10 +183,10 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     @Override
     public void updateLastLoginTime(Long userId) {
-        SysUser update = new SysUser();
-        update.setId(userId);
-        update.setLastLoginTime(LocalDateTime.now());
-        updateById(update);
+        // 只 set 目标列：new SysUser() + updateById 会连带写入 BaseEntity 的 status 默认值
+        update(new LambdaUpdateWrapper<SysUser>()
+            .eq(SysUser::getId, userId)
+            .set(SysUser::getLastLoginTime, LocalDateTime.now()));
     }
 
     @Override
@@ -259,9 +260,11 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             user.setPassword(encoded);
             user.setPwdResetTime(LocalDateTime.now());
         }
+        // 手机号区分「未提交（null，保持不变）」与「显式清空（空串）」：
+        // wrapper 的 set 不受 MyBatis-Plus「null 不更新」保护
         boolean updated = update(user, new LambdaUpdateWrapper<SysUser>()
             .eq(SysUser::getId, id)
-            .set(SysUser::getPhone, phone));
+            .set(req.getPhone() != null, SysUser::getPhone, phone));
         if (!updated) {
             throw new BusinessException("用户更新失败");
         }
@@ -322,11 +325,12 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         accountSupport.validatePassword(password, user.getUsername());
         accountSupport.checkPasswordHistory(id, password);
         String encoded = PasswordEncoderUtil.encode(password);
-        SysUser update = new SysUser();
-        update.setId(id);
-        update.setPassword(encoded);
-        update.setPwdResetTime(LocalDateTime.now());
-        updateById(update);
+        // 只 set 目标列：new SysUser() + updateById 会带上 BaseEntity 的 status 默认值 1，
+        // 导致「重置已禁用用户密码」把账号静默重新启用
+        update(new LambdaUpdateWrapper<SysUser>()
+            .eq(SysUser::getId, id)
+            .set(SysUser::getPassword, encoded)
+            .set(SysUser::getPwdResetTime, LocalDateTime.now()));
         accountSupport.recordPasswordHistory(id, encoded);
     }
 
@@ -451,9 +455,27 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             : listByIds(ids).stream().collect(Collectors.toMap(SysUser::getId, SysUser::getRealName, (a, b) -> a));
         return users.stream().map(u -> {
             OnlineUserResp r = new OnlineUserResp();
-            BeanUtils.copyProperties(u, r);
+            BeanUtils.copyProperties(u, r, "token");
             r.setRealName(realNameById.get(u.getUserId()));
+            // 只回传不可逆指纹：token 原文是可复用的 Bearer 凭据，不能出现在列表响应里
+            r.setTokenHash(OnlineTokenFingerprint.hash(u.getToken()));
             return r;
         }).toList();
+    }
+
+    @Override
+    public void kickoutByTokenHash(String tokenHash) {
+        if (!StringUtils.hasText(tokenHash)) {
+            throw new BusinessException("会话标识不能为空");
+        }
+        // 会话存储没有「按指纹查」的接口，只能枚举当前在线会话后逐个比对（低频管理动作）
+        for (OnlineUser onlineUser : onlineUserService.list()) {
+            String currentHash = OnlineTokenFingerprint.hash(onlineUser.getToken());
+            if (currentHash != null && currentHash.equalsIgnoreCase(tokenHash.trim())) {
+                onlineUserService.kickoutByToken(onlineUser.getToken());
+                return;
+            }
+        }
+        throw new BusinessException("会话不存在或已失效");
     }
 }

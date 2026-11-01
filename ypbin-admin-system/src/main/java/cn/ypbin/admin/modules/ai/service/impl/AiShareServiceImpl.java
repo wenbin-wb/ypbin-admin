@@ -37,6 +37,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,9 +160,11 @@ public class AiShareServiceImpl implements AiShareService {
         }
         try {
             // 匿名请求无登录上下文：显式绑定知识库所属租户，保证 RAG 检索与 AI 调用在正确租户内
+            // 每次访问独立 conversationId：固定成 share-{kbId} 会让所有匿名访客共享 Memory 历史
+            String conversationId = "share-" + kb.getId() + "-" + UUID.randomUUID();
             List<String> tokens = TenantContext.executeWithTenant(kb.getTenantId(),
                 () -> aiChatService.chatWithKnowledge(
-                        "share-" + kb.getId(), question, String.valueOf(kb.getId()))
+                        conversationId, question, String.valueOf(kb.getId()))
                     .collectList()
                     .block());
             return tokens == null ? "" : String.join("", tokens);

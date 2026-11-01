@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -62,8 +63,10 @@ public class AiKnowledgeSearchComponent {
             throw new BusinessException("AI 对话服务未配置，请在【AI 配置】中添加对话模型");
         }
         recordQuery(knowledgeBaseId, question, "QUERY");
+        // 每次提问独立 conversationId：固定成 kb-query-{kbId} 会让同租户所有用户共享 Memory 历史
+        String conversationId = "kb-query-" + knowledgeBaseId + "-" + UUID.randomUUID();
         List<String> tokens = aiChatService.chatWithKnowledge(
-                "kb-query-" + knowledgeBaseId, question, String.valueOf(knowledgeBaseId))
+                conversationId, question, String.valueOf(knowledgeBaseId))
             .collectList()
             .block(QUERY_BLOCK_TIMEOUT);
         return tokens == null ? "" : String.join("", tokens);

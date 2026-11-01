@@ -60,10 +60,12 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateTemplate(Long id, AiPromptTemplateSaveReq req) {
-        requireTemplate(id);
+        AiPromptTemplate existing = requireTemplate(id);
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl, "id", "tenantId", "status");
         tpl.setId(id);
+        // new 出来的实体带着 BaseEntity 的 status 默认值 1，必须显式保留库内状态
+        tpl.setStatus(existing.getStatus());
         templateMapper.updateById(tpl);
     }
 

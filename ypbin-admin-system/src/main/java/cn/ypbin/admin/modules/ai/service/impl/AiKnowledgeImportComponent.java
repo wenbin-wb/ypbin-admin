@@ -11,13 +11,12 @@ package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.admin.modules.ai.model.req.AiDocumentImportReq;
 import cn.ypbin.admin.modules.ai.model.resp.AiDocumentVO;
+import cn.ypbin.admin.modules.ai.support.AiUrlSafetyGuard;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;
 import com.rometools.rome.io.SyndFeedInput;
-import com.rometools.rome.io.XmlReader;
-import java.net.URI;
-import java.net.URL;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,16 +43,13 @@ public class AiKnowledgeImportComponent {
 
     private static final Logger log = LoggerFactory.getLogger(AiKnowledgeImportComponent.class);
 
-    /** 网络抓取 UA，标识为知识库抓取机器人 */
-    private static final String USER_AGENT = "Mozilla/5.0 (compatible; ypbin-knowledge-bot/1.0)";
-
-    /** 抓取超时（毫秒） */
-    private static final int FETCH_TIMEOUT_MS = 15_000;
-
     /** Sitemap 单次导入上限 */
     private static final int SITEMAP_MAX_URLS = 100;
 
     private final AiKnowledgeCrudComponent crudComponent;
+
+    /** 统一 SSRF 守卫（与模型测试连接共用同一口径） */
+    private final AiUrlSafetyGuard urlSafetyGuard;
 
     public List<AiDocumentVO> importFromUrl(Long knowledgeBaseId, AiDocumentImportReq req) {
         crudComponent.requireKb(knowledgeBaseId);
@@ -73,10 +69,7 @@ public class AiKnowledgeImportComponent {
         String content;
         String title;
         try {
-            var htmlDoc = Jsoup.connect(url)
-                .userAgent(USER_AGENT)
-                .timeout(FETCH_TIMEOUT_MS)
-                .get();
+            var htmlDoc = urlSafetyGuard.guardedConnection(url, "导入地址").get();
             title = (customTitle != null && !customTitle.isBlank())
                 ? customTitle : htmlDoc.title();
             if (title.isBlank()) {
@@ -101,9 +94,7 @@ public class AiKnowledgeImportComponent {
         int limit = (maxUrls == null || maxUrls < 1) ? 10 : Math.min(maxUrls, SITEMAP_MAX_URLS);
         List<String> urls;
         try {
-            var xml = Jsoup.connect(sitemapUrl)
-                .userAgent(USER_AGENT)
-                .timeout(FETCH_TIMEOUT_MS)
+            var xml = urlSafetyGuard.guardedConnection(sitemapUrl, "导入地址")
                 .ignoreContentType(true)
                 .get();
             // 优先 urlset 的 loc；若为 sitemapindex，则递归取出子 sitemap 的 url
@@ -115,9 +106,7 @@ public class AiKnowledgeImportComponent {
                         break;
                     }
                     try {
-                        var subXml = Jsoup.connect(sub.text())
-                            .userAgent(USER_AGENT)
-                            .timeout(FETCH_TIMEOUT_MS)
+                        var subXml = urlSafetyGuard.guardedConnection(sub.text(), "导入地址")
                             .ignoreContentType(true)
                             .get();
                         locs.addAll(subXml.select("urlset > url > loc"));
@@ -154,8 +143,14 @@ public class AiKnowledgeImportComponent {
     private List<AiDocumentVO> importRss(Long knowledgeBaseId, String feedUrl) {
         List<SyndEntry> entries;
         try {
-            URL url = URI.create(feedUrl).toURL();
-            SyndFeed feed = new SyndFeedInput().build(new XmlReader(url));
+            // 先经统一 SSRF 守卫抓取文本（禁止重定向、限制大小），再从字符串解析，
+            // 避免 XmlReader(URL) 自行建立不受控连接
+            // 用 execute() 取原始响应体（get() 返回的是解析后的 Document，body() 会是 Element）
+            String rss = urlSafetyGuard.guardedConnection(feedUrl, "导入地址")
+                .ignoreContentType(true)
+                .execute()
+                .body();
+            SyndFeed feed = new SyndFeedInput().build(new StringReader(rss));
             entries = feed.getEntries() != null ? feed.getEntries() : List.of();
         } catch (Exception e) {
             throw new BusinessException("解析 RSS/Atom 失败：" + e.getMessage());
