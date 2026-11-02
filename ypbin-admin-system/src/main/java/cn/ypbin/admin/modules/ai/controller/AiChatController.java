@@ -87,17 +87,6 @@ public class AiChatController {
     }
 
     /**
-     * 发送消息（同步）。
-     */
-    @Idempotent
-    @PostMapping("/send")
-    @SaCheckPermission("ai:chat:send")
-    @Log(value = "发送对话消息", module = "AI 对话")
-    public R<AiChatMessageResp> sendMessage(@Valid @RequestBody AiChatSendReq req) {
-        return R.ok(chatSessionService.sendMessage(req));
-    }
-
-    /**
      * 发送消息（流式 SSE）。
      *
      * <p>SSE 长连接由前端唯一触发、请求与响应同生命周期，防重组件不适用于流式语义；

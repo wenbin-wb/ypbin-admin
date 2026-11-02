@@ -179,12 +179,6 @@ public class AiChatServiceImpl implements AiChatSessionService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public AiChatMessageResp sendMessage(AiChatSendReq req) {
-        throw new BusinessException("请使用流式接口 /ai/chat/stream 发送消息");
-    }
-
-    @Override
     public SseEmitter sendMessageStream(AiChatSendReq req) {
         Long sessionId = req.getSessionId();
         // 无 sessionId：先创建会话（携带角色），使会话成为唯一载体
@@ -271,10 +265,14 @@ public class AiChatServiceImpl implements AiChatSessionService {
                     autoTitleIfNew(finalSessionId, req.getContent());
                 }
             })
-            .subscribe();
+            // 必须提供 errorConsumer：doOnError 只是副作用算子，错误仍会传播到
+            // subscribe() 的 onErrorDropped（打印一条无上下文的 Reactor 错误）
+            .subscribe(token -> { }, error -> { });
         subscriptionRef.set(subscription);
         emitter.onTimeout(() -> disposeQuietly(subscriptionRef));
         emitter.onError(e -> disposeQuietly(subscriptionRef));
+        // 客户端正常断开/完成时同样释放上游订阅
+        emitter.onCompletion(() -> disposeQuietly(subscriptionRef));
         return emitter;
     }
 
