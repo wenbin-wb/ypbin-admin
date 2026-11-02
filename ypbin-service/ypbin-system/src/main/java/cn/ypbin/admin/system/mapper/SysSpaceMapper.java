@@ -77,6 +77,35 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
         @Param("tenantId") Long tenantId, @Param("maxDepth") int maxDepth);
 
     /**
+     * 一次取回一批空间的自身 + 全部祖先（供列表页拼路径，替代全量快照）。
+     *
+     * @param spaceIds 当前页空间 ID（调用方保证非空）
+     * @param tenantId 租户 ID
+     * @param maxDepth 上溯深度上限
+     * @return 节点（id/pid/name），含自身与祖先
+     */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("""
+        <script>
+        WITH RECURSIVE ancestors AS (
+            SELECT id, pid, name, 0 AS depth
+            FROM sys_space
+            WHERE tenant_id = #{tenantId} AND is_deleted = 0
+              AND id IN
+              <foreach collection="spaceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            UNION
+            SELECT s.id, s.pid, s.name, a.depth + 1
+            FROM sys_space s
+            INNER JOIN ancestors a ON s.id = a.pid
+            WHERE s.tenant_id = #{tenantId} AND s.is_deleted = 0 AND a.depth &lt; #{maxDepth}
+        )
+        SELECT id, pid, name FROM ancestors
+        </script>
+        """)
+    List<SysSpace> selectAncestorNodes(@Param("spaceIds") List<Long> spaceIds,
+        @Param("tenantId") Long tenantId, @Param("maxDepth") int maxDepth);
+
+    /**
      * 批量统计每个空间的直接子空间数与关联对象数（<b>一次分组查询</b>，不逐空间 count）。
      *
      * <p><b>租户条件在两处都显式写出，不依赖插件递归能力</b>：外层由插件追加
