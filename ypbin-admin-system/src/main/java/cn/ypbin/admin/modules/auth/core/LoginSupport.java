@@ -9,7 +9,9 @@
  */
 package cn.ypbin.admin.modules.auth.core;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.common.constant.PwdChangeKeys;
 import cn.ypbin.admin.common.provider.Ip2regionLocationResolver;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
@@ -70,9 +72,12 @@ public class LoginSupport {
         loginUser.setClientType(client.getClientType());
         loginUser.setAuthType(authType);
         UserContext.setLoginUser(loginUser);
+        boolean mustChangePassword = Integer.valueOf(PwdChangeKeys.REQUIRED_YES)
+            .equals(user.getPwdChangeRequired());
+        StpUtil.getSession().set(PwdChangeKeys.REQUIRED, mustChangePassword);
         userService.updateLastLoginTime(user.getId());
         recordTerminal();
-        return new LoginResp(LoginHelper.getTokenValue());
+        return new LoginResp(LoginHelper.getTokenValue(), mustChangePassword);
     }
 
     /**

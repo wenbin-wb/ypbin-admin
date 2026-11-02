@@ -68,4 +68,12 @@ public class SysUser extends TenantBaseEntity {
 
     /** 最后修改密码时间（用于密码有效期判定） */
     private LocalDateTime pwdResetTime;
+
+    /**
+     * 是否强制下次登录修改密码（1 是 0 否）。
+     *
+     * <p>种子初始口令与管理员重置口令后置 1：登录响应会带 {@code mustChangePassword}，
+     * 拦截器只放行改密/登出等少数路径，改密成功后清零。</p>
+     */
+    private Integer pwdChangeRequired;
 }

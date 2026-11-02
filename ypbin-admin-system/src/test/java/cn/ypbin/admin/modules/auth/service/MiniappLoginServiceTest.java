@@ -84,7 +84,8 @@ class MiniappLoginServiceTest {
         user.setNickname("微信用户");
         user.setRealName("微信用户");
         when(userService.getOrCreateMiniappUser(anyString(), any(), any())).thenReturn(user);
-        when(loginSupport.completeLogin(any(), anyString())).thenReturn(new LoginResp("token-xyz"));
+        when(loginSupport.completeLogin(any(), anyString()))
+            .thenReturn(new LoginResp("token-xyz", false));
     }
 
     @Test
