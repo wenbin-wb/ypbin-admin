@@ -52,7 +52,7 @@ public class AiChatMessage extends TenantBaseEntity {
     /** 工具调用记录（JSON 数组） */
     private String toolCalls;
 
-    /** 图片附件（多模态输入，JSON 数组） */
+    /** 图片附件（预留列：多模态未接入，当前不会写入） */
     private String images;
 
     /** 扩展元数据（latency_ms、temperature 等） */
