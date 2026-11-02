@@ -10,10 +10,11 @@
 package cn.ypbin.admin.modules.system.service;
 
 import cn.ypbin.admin.modules.system.entity.SysNotice;
+import cn.ypbin.admin.modules.system.model.query.NoticeQuery;
 import cn.ypbin.admin.modules.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.NoticeResp;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
-import java.util.List;
 
 /**
  * 公告服务。
@@ -23,7 +24,7 @@ import java.util.List;
  */
 public interface SysNoticeService extends BaseService<SysNotice> {
 
-    List<NoticeResp> listNotices();
+    PageResult<NoticeResp> pageNotices(NoticeQuery query);
 
     /**
      * 对外可见的公告列表：已发布且未过期，置顶优先、发布时间倒序。

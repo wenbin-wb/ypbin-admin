@@ -10,14 +10,15 @@
 package cn.ypbin.admin.modules.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.modules.system.model.query.NoticeQuery;
 import cn.ypbin.admin.modules.system.model.resp.NoticeResp;
 import cn.ypbin.admin.modules.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.modules.system.service.SysNoticeService;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,8 +44,8 @@ public class SysNoticeController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:notice:list")
-    public R<List<NoticeResp>> list() {
-        return R.ok(noticeService.listNotices());
+    public R<PageResult<NoticeResp>> list(@Valid NoticeQuery query) {
+        return R.ok(noticeService.pageNotices(query));
     }
 
     @Idempotent

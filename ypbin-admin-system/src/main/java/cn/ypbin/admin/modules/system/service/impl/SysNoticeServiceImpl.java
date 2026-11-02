@@ -11,11 +11,13 @@ package cn.ypbin.admin.modules.system.service.impl;
 
 import cn.ypbin.admin.modules.system.entity.SysNotice;
 import cn.ypbin.admin.modules.system.mapper.SysNoticeMapper;
+import cn.ypbin.admin.modules.system.model.query.NoticeQuery;
 import cn.ypbin.admin.modules.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.NoticeResp;
 import cn.ypbin.admin.modules.system.service.NoticePublishService;
 import cn.ypbin.admin.modules.system.service.SysNoticeService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 公告服务实现。
@@ -48,8 +51,17 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     private final NoticePublishService noticePublishService;
 
     @Override
-    public List<NoticeResp> listNotices() {
-        return list().stream().map(this::toResp).toList();
+    public PageResult<NoticeResp> pageNotices(NoticeQuery query) {
+        PageResult<SysNotice> source = page(query, new LambdaQueryWrapper<SysNotice>()
+            // 列表不取正文（MEDIUMTEXT），正文由详情接口单独读取
+            .select(SysNotice.class, info -> !"content".equals(info.getColumn()))
+            .like(StringUtils.hasText(query.getTitle()), SysNotice::getTitle, query.getTitle())
+            .eq(query.getNoticeType() != null, SysNotice::getNoticeType, query.getNoticeType())
+            .eq(query.getPublishStatus() != null,
+                SysNotice::getPublishStatus, query.getPublishStatus())
+            .orderByDesc(SysNotice::getCreateTime));
+        List<NoticeResp> items = source.getItems().stream().map(this::toResp).toList();
+        return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
     }
 
     @Override

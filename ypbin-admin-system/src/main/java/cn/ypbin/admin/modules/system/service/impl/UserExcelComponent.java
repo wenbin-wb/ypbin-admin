@@ -58,11 +58,11 @@ public class UserExcelComponent {
 
     private static final Logger log = LoggerFactory.getLogger(UserExcelComponent.class);
 
-    /** 导入默认初始密码（行内未填密码时使用） */
-    private static final String DEFAULT_PASSWORD = "123456";
-
     /** 导出列时间格式 */
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /** 单次导出上限：与日志/埋点导出口径一致，超限显式报错而不是把堆打满 */
+    private static final long EXPORT_LIMIT = 20_000L;
 
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
@@ -75,9 +75,13 @@ public class UserExcelComponent {
             .like(StringUtils.hasText(query.getRealName()), SysUser::getRealName, query.getRealName())
             .like(StringUtils.hasText(query.getPhone()), SysUser::getPhone, query.getPhone())
             .eq(query.getStatus() != null, SysUser::getStatus, query.getStatus())
-            .eq(query.getDeptId() != null, SysUser::getDeptId, query.getDeptId())
-            .orderByDesc(SysUser::getCreateTime);
+            .eq(query.getDeptId() != null, SysUser::getDeptId, query.getDeptId());
 
+        long total = userMapper.selectCount(wrapper);
+        if (total > EXPORT_LIMIT) {
+            throw new BusinessException("导出数据量超过 " + EXPORT_LIMIT + " 条，请缩小筛选范围后再试");
+        }
+        wrapper.orderByDesc(SysUser::getCreateTime);
         List<SysUser> users = userMapper.selectList(wrapper);
         List<Long> deptIds = users.stream()
             .map(SysUser::getDeptId)
@@ -173,7 +177,13 @@ public class UserExcelComponent {
                 continue;
             }
 
-            String rawPassword = StringUtils.hasText(vo.getPassword()) ? vo.getPassword().trim() : DEFAULT_PASSWORD;
+            // 不再提供默认口令：批量导入与 createUser 同一密码策略，空密码按行失败
+            if (!StringUtils.hasText(vo.getPassword())) {
+                result.setFailureCount(result.getFailureCount() + 1);
+                result.getFailureMessages().add("第 " + rowNum + " 行：初始密码不能为空");
+                continue;
+            }
+            String rawPassword = vo.getPassword().trim();
             SysUser user = new SysUser();
             user.setUsername(username);
             user.setRealName(vo.getRealName().trim());

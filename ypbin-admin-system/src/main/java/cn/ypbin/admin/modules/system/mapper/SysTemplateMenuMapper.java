@@ -31,4 +31,12 @@ public interface SysTemplateMenuMapper extends BaseMapper<SysTemplateMenu> {
      */
     @Select("SELECT menu_id FROM sys_template_menu WHERE template_id = #{templateId}")
     List<Long> selectMenuIdsByTemplateId(@Param("templateId") Long templateId);
+
+    /**
+     * 一次取出全部模板-菜单关联（模板列表批量组装用，替代逐模板查询的 N+1）。
+     *
+     * @return 全部关联行
+     */
+    @Select("SELECT template_id, menu_id FROM sys_template_menu")
+    List<SysTemplateMenu> selectAll();
 }
