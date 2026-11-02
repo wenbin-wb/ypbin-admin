@@ -32,6 +32,7 @@ import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import cn.ypbin.starter.tenant.core.TenantThreadLocalAccessor;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -455,21 +456,20 @@ public class AiChatServiceImpl implements AiChatSessionService {
      * @return 更新后的会话；会话不存在时返回 {@code null}
      */
     private AiChatSession updateSessionStats(Long sessionId, int addedTokens, int addedMessages) {
-        // doOnComplete 运行在 Reactor 线程，无租户上下文；忽略租户拦截以避免 tenant_id=NULL 查不到
-        AiChatSession session = TenantContext.executeIgnore(() -> sessionMapper.selectById(sessionId));
-        if (session == null) {
-            return null;
-        }
-        session.setTotalTokens((session.getTotalTokens() == null ? 0 : session.getTotalTokens())
-            + addedTokens);
-        session.setMessageCount((session.getMessageCount() == null ? 0 : session.getMessageCount())
-            + addedMessages);
-        session.setLastMessageAt(LocalDateTime.now());
-        int affected = TenantContext.executeIgnore(() -> sessionMapper.updateById(session));
+        // 原子累加：先读后加再写在同一会话并发流式时会丢更新（两个回调覆盖同一行）。
+        // doOnComplete 运行在 Reactor 线程，无租户上下文；忽略租户拦截。
+        int affected = TenantContext.executeIgnore(() -> sessionMapper.update(null,
+            new LambdaUpdateWrapper<AiChatSession>()
+                .eq(AiChatSession::getId, sessionId)
+                .setSql("total_tokens = COALESCE(total_tokens, 0) + " + addedTokens)
+                .setSql("message_count = COALESCE(message_count, 0) + " + addedMessages)
+                .set(AiChatSession::getLastMessageAt, LocalDateTime.now())));
         if (affected != 1) {
             log.error("[ypbin-ai] 会话统计更新失败：sessionId={}", sessionId);
+            return null;
         }
-        return session;
+        // 回读一次供同回调内的标题更新复用（总查询次数与原实现相同：一次写 + 一次读）
+        return TenantContext.executeIgnore(() -> sessionMapper.selectById(sessionId));
     }
 
     /**
