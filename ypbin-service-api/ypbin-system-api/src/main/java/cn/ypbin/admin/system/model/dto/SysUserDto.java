@@ -59,4 +59,7 @@ public class SysUserDto implements Serializable {
 
     /** 状态（EntityStatus/UserStatusEnum 的 code，与实体字段同名同类型） */
     private Integer status;
+
+    /** 是否强制下次登录修改密码（1 是 0 否，与实体字段同名同类型） */
+    private Integer pwdChangeRequired;
 }

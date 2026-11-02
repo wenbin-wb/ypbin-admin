@@ -18,6 +18,7 @@ import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.identity.IdentityHeaders;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,21 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
 
     private static final Logger log = LoggerFactory.getLogger(SaTokenGatewayAuthProvider.class);
 
+    /**
+     * 强制改密标记的会话键（与 {@code cn.ypbin.admin.common.support.PwdChangeKeys#REQUIRED} 一致）。
+     *
+     * <p>网关不依赖 {@code ypbin-common}（避免把业务工具带进网关），故此处保留字面量并注明来源；
+     * 两处不一致时表现为「标记不生效」或「改密后仍被拦截」，由 {@code PwdChangeKeyContractTest} 钉住。</p>
+     */
+    static final String PWD_CHANGE_REQUIRED_KEY = "pwdChangeRequired";
+
+    /** 强制改密期间仍放行的路径（改密本身、登出、身份查询）。 */
+    private static final Set<String> PWD_CHANGE_ALLOWED_PATHS = Set.of(
+        "/auth/logout",
+        "/auth/user/info",
+        "/auth/check",
+        "/system/user/profile/password");
+
     @Override
     public Mono<GatewayAuthResult> authenticate(ServerWebExchange exchange) {
         String token = resolveToken(exchange);
@@ -55,6 +71,9 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
             LoginUser loginUser = readLoginUser(loginId.toString());
             if (loginUser == null) {
                 return Mono.just(GatewayAuthResult.failure("登录用户不存在"));
+            }
+            if (readMustChangePassword(loginId) && !isPwdChangeAllowed(exchange)) {
+                return Mono.just(GatewayAuthResult.failure("当前为初始密码，请先修改密码后再继续操作"));
             }
             return Mono.just(GatewayAuthResult.success(buildTrustedHeaders(loginUser)));
         } catch (NotLoginException e) {
@@ -92,6 +111,33 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
             // 会话读取失败视为用户信息缺失，由调用方按未登录处理
             return null;
         }
+    }
+
+    /**
+     * 读取「是否必须先改密」标记（登录时写入，改密后随会话被踢出失效）。
+     *
+     * @param loginId 登录 ID
+     * @return true=必须改密；读取失败时放行并记录日志（避免存储抖动把所有用户锁在改密页）
+     */
+    private boolean readMustChangePassword(Object loginId) {
+        try {
+            Object value = StpUtil.getSessionByLoginId(loginId.toString())
+                .get(PWD_CHANGE_REQUIRED_KEY);
+            return Boolean.TRUE.equals(value);
+        } catch (RuntimeException e) {
+            log.error("读取强制改密标记失败：loginId={}", loginId, e);
+            return false;
+        }
+    }
+
+    /**
+     * 强制改密期间是否允许该路径（改密、登出、身份查询）。
+     *
+     * @param exchange 当前请求
+     * @return true=放行
+     */
+    private boolean isPwdChangeAllowed(ServerWebExchange exchange) {
+        return PWD_CHANGE_ALLOWED_PATHS.contains(exchange.getRequest().getPath().value());
     }
 
     /**

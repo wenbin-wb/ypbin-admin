@@ -22,6 +22,7 @@ CREATE TABLE sys_user
     remark          VARCHAR(255) NULL COMMENT '备注',
     last_login_time DATETIME     NULL COMMENT '最后登录时间',
     pwd_reset_time  DATETIME     NULL COMMENT '最后改密时间',
+    pwd_change_required TINYINT  NOT NULL DEFAULT 0 COMMENT '是否强制下次登录修改密码：1 是 0 否（初始口令/管理员重置时置 1）',
     create_user     BIGINT       NULL COMMENT '创建人',
     create_time     DATETIME     NULL COMMENT '创建时间',
     update_user     BIGINT       NULL COMMENT '更新人',

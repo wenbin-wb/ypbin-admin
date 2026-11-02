@@ -14,3 +14,10 @@ spring:
     import:
       - optional:nacos:ypbin-common.yaml
       - optional:nacos:ypbin-system.yaml
+
+ypbin:
+  security:
+    super-admin:
+      # 部署时由 install.sh 随机生成并注入（compose 透传 SUPER_ADMIN_INIT_PASSWORD）；
+      # 为空则保留种子口令，仍由 pwd_change_required 强制首登改密
+      init-password: ${SUPER_ADMIN_INIT_PASSWORD:}
