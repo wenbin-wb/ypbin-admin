@@ -44,7 +44,7 @@ public class AiChatMessageResp {
     /** 工具调用记录（JSON 字符串） */
     private String toolCalls;
 
-    /** 图片附件 */
+    /** 图片附件（预留：多模态未接入，当前恒为空） */
     private List<String> images;
 
     /** 创建时间 */

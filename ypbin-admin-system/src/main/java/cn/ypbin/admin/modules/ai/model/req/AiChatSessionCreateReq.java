@@ -27,6 +27,10 @@ public class AiChatSessionCreateReq {
     /** 角色 ID（可选） */
     private Long roleId;
 
-    /** 模型 ID（可选） */
+    /**
+     * 模型 ID（预留）。
+     *
+     * <p>当前仅支持租户默认对话模型：传默认模型 ID 有效，传其它值会被明确拒绝。</p>
+     */
     private Long modelId;
 }

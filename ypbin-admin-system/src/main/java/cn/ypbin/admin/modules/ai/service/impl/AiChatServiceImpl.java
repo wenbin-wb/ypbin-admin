@@ -13,6 +13,7 @@ import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.modules.ai.entity.AiChatMessage;
 import cn.ypbin.admin.modules.ai.entity.AiChatRole;
 import cn.ypbin.admin.modules.ai.entity.AiChatSession;
+import cn.ypbin.admin.modules.ai.entity.AiModelConfig;
 import cn.ypbin.admin.modules.ai.mapper.AiChatMessageMapper;
 import cn.ypbin.admin.modules.ai.mapper.AiChatRoleMapper;
 import cn.ypbin.admin.modules.ai.mapper.AiChatSessionMapper;
@@ -21,6 +22,7 @@ import cn.ypbin.admin.modules.ai.model.req.AiChatSessionCreateReq;
 import cn.ypbin.admin.modules.ai.model.resp.AiChatMessageResp;
 import cn.ypbin.admin.modules.ai.model.resp.AiChatSessionResp;
 import cn.ypbin.admin.modules.ai.service.AiChatSessionService;
+import cn.ypbin.admin.modules.ai.service.AiModelConfigService;
 import cn.ypbin.admin.modules.ai.support.AiChatSseSupport;
 import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -86,6 +88,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
     private final AiChatSessionMapper sessionMapper;
     private final AiChatMessageMapper messageMapper;
     private final AiChatRoleMapper roleMapper;
+    private final AiModelConfigService modelConfigService;
 
     /** starter AI 对话服务（可选注入：AI 未启用时不影响服务启动） */
     private final ObjectProvider<AiChatService> aiChatServiceProvider;
@@ -96,11 +99,13 @@ public class AiChatServiceImpl implements AiChatSessionService {
     public AiChatServiceImpl(AiChatSessionMapper sessionMapper,
                              AiChatMessageMapper messageMapper,
                              AiChatRoleMapper roleMapper,
+                             AiModelConfigService modelConfigService,
                              ObjectProvider<AiChatService> aiChatServiceProvider,
                              PlatformTransactionManager transactionManager) {
         this.sessionMapper = sessionMapper;
         this.messageMapper = messageMapper;
         this.roleMapper = roleMapper;
+        this.modelConfigService = modelConfigService;
         this.aiChatServiceProvider = aiChatServiceProvider;
         // Spring Boot 只自动装配 PlatformTransactionManager，不提供 TransactionTemplate Bean
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -132,6 +137,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSession(AiChatSessionCreateReq req) {
+        requireSupportedModel(req.getModelId());
         Long userId = LoginHelper.getUserId();
         Long tenantId = UserContext.getTenantId().orElseThrow(
             () -> new BusinessException("无法获取当前租户上下文"));
@@ -145,13 +151,58 @@ public class AiChatServiceImpl implements AiChatSessionService {
         session.setTitle(req.getTitle() != null ? req.getTitle() : DEFAULT_TITLE);
         session.setRoleId(req.getRoleId());
         session.setModelId(req.getModelId());
-        session.setContextWindow(10);
+        // context_window 暂不赋值：starter 的记忆窗口由全局配置控制，本列当前不参与对话；
+        // 不写一个「看起来生效」的常量 10，表的 NOT NULL DEFAULT 10 已给出同一初值
         session.setTotalTokens(0);
         session.setMessageCount(0);
         session.setIsPinned(0);
         session.setStatus(EntityStatus.ENABLED.getCode());
         sessionMapper.insert(session);
         return session.getId();
+    }
+
+    /**
+     * 校验发送请求里的可选能力；做不到的能力显式拒绝，不静默丢弃。
+     *
+     * <p>starter 的对话接口只接受文本、模型由租户默认配置统一解析：图片与「切换到非默认模型」
+     * 都没有落地路径，继续静默忽略会让前端以为设置已经生效。</p>
+     *
+     * @param req 发送请求
+     */
+    private void requireSupportedSendOptions(AiChatSendReq req) {
+        if (req.getImages() != null && !req.getImages().isEmpty()) {
+            throw new BusinessException("当前版本不支持图片输入（多模态未接入），请仅发送文本内容");
+        }
+        if (Boolean.FALSE.equals(req.getStream())) {
+            throw new BusinessException("该接口固定为流式返回，不支持 stream=false");
+        }
+        if (req.getModelId() == null) {
+            return;
+        }
+        if (req.getSessionId() != null) {
+            throw new BusinessException("会话创建后不支持切换模型，请新建会话时使用租户默认模型");
+        }
+        requireSupportedModel(req.getModelId());
+    }
+
+    /**
+     * 模型选择只支持「租户默认对话模型」。
+     *
+     * <p>starter 的 {@code AiModelConfigResolver#resolve()} 不带参数、按租户默认配置构建
+     * ChatClient，业务侧无法让它改用其它模型；因此传默认模型 ID 视为有效，传其它 ID 必须
+     * 明确拒绝，而不是存下 {@code session.model_id} 却继续用默认模型。</p>
+     *
+     * @param modelId 请求的模型 ID；null 表示使用默认模型
+     */
+    private void requireSupportedModel(Long modelId) {
+        if (modelId == null) {
+            return;
+        }
+        AiModelConfig defaultModel = modelConfigService.getDefaultModel();
+        if (defaultModel == null || !modelId.equals(defaultModel.getId())) {
+            throw new BusinessException(
+                "当前版本仅支持租户默认对话模型，暂不支持切换到其它模型（modelId=" + modelId + "）");
+        }
     }
 
     @Override
@@ -180,6 +231,8 @@ public class AiChatServiceImpl implements AiChatSessionService {
 
     @Override
     public SseEmitter sendMessageStream(AiChatSendReq req) {
+        // 先把「接收了但做不到」的入参挡掉：静默忽略比报错更难排查
+        requireSupportedSendOptions(req);
         Long sessionId = req.getSessionId();
         // 无 sessionId：先创建会话（携带角色），使会话成为唯一载体
         if (sessionId == null) {
