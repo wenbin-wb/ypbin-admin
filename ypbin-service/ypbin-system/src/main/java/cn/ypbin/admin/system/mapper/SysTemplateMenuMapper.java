@@ -35,6 +35,14 @@ public interface SysTemplateMenuMapper extends BaseMapper<SysTemplateMenu> {
     List<Long> selectMenuIdsByTemplateId(@Param("templateId") Long templateId);
 
     /**
+     * 一次取出全部模板-菜单关联（模板列表批量组装用，替代逐模板查询的 N+1）。
+     *
+     * @return 全部关联行
+     */
+    @Select("SELECT template_id, menu_id FROM sys_template_menu")
+    List<SysTemplateMenu> selectAll();
+
+    /**
      * 批量插入权限模板-菜单关联行（单条多值 INSERT）。
      *
      * <p>复合主键表没有代理主键、也没有审计列，故不涉及主键回填；权限模板-菜单关联的规模由一次请求的入参决定，

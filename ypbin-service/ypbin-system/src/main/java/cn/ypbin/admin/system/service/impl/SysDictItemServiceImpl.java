@@ -21,6 +21,7 @@ import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.json.dict.DictUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,7 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createItem(DictItemSaveReq req) {
+        requireDict(req.getDictId());
         checkValueUnique(req.getDictId(), req.getValue(), null);
         SysDictItem item = new SysDictItem();
         BeanUtils.copyProperties(req, item);
@@ -60,15 +62,34 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateItem(Long id, DictItemSaveReq req) {
-        if (getById(id) == null) {
+        SysDictItem existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("字典项不存在");
         }
+        requireDict(req.getDictId());
         checkValueUnique(req.getDictId(), req.getValue(), id);
         SysDictItem item = new SysDictItem();
         BeanUtils.copyProperties(req, item);
         item.setId(id);
-        updateById(item);
-        refreshDict(req.getDictId());
+        if (!updateById(item)) {
+            throw new BusinessException("字典项更新失败");
+        }
+        // 换字典时旧字典的缓存也必须刷新，否则 @DictText 仍会翻译出已移走的项
+        refreshDict(existing.getDictId());
+        if (!Objects.equals(existing.getDictId(), req.getDictId())) {
+            refreshDict(req.getDictId());
+        }
+    }
+
+    /**
+     * 校验目标字典存在，防止把字典项挂到不存在的字典上（孤儿项）。
+     *
+     * @param dictId 字典 ID
+     */
+    private void requireDict(Long dictId) {
+        if (dictId == null || dictMapper.selectById(dictId) == null) {
+            throw new BusinessException("字典不存在：" + dictId);
+        }
     }
 
     @Override

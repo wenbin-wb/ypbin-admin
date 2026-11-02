@@ -10,8 +10,10 @@
 package cn.ypbin.admin.system.service;
 
 import cn.ypbin.admin.system.entity.SysNotice;
+import cn.ypbin.admin.system.model.query.NoticeQuery;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
 import java.util.List;
 
@@ -23,7 +25,7 @@ import java.util.List;
  */
 public interface SysNoticeService extends BaseService<SysNotice> {
 
-    List<NoticeResp> listNotices();
+    PageResult<NoticeResp> pageNotices(NoticeQuery query);
 
     void createNotice(NoticeSaveReq req);
 

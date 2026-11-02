@@ -71,6 +71,9 @@ public class UserExcelComponent {
     /** 导入默认初始密码（行内未填密码时使用） */
     private static final String DEFAULT_PASSWORD = "123456";
 
+    /** 单次导出上限：与日志/埋点导出口径一致，超限显式报错而不是把堆打满 */
+    private static final long EXPORT_LIMIT = 20_000L;
+
     /** 导出列时间格式 */
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -85,9 +88,14 @@ public class UserExcelComponent {
             .like(StringUtils.hasText(query.getRealName()), SysUser::getRealName, query.getRealName())
             .like(StringUtils.hasText(query.getPhone()), SysUser::getPhone, query.getPhone())
             .eq(query.getStatus() != null, SysUser::getStatus, query.getStatus())
-            .eq(query.getDeptId() != null, SysUser::getDeptId, query.getDeptId())
-            .orderByDesc(SysUser::getCreateTime);
+            .eq(query.getDeptId() != null, SysUser::getDeptId, query.getDeptId());
 
+        long total = userMapper.selectCount(wrapper);
+        if (total > EXPORT_LIMIT) {
+            throw new BusinessException(
+                "导出数据量超过 " + EXPORT_LIMIT + " 条，请缩小筛选范围后再试");
+        }
+        wrapper.orderByDesc(SysUser::getCreateTime);
         List<SysUser> users = userMapper.selectList(wrapper);
         List<Long> deptIds = users.stream()
             .map(SysUser::getDeptId)

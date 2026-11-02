@@ -29,6 +29,7 @@ import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import cn.ypbin.starter.tenant.core.TenantThreadLocalAccessor;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -407,18 +408,17 @@ public class AiChatServiceImpl implements AiChatSessionService {
     }
 
     private void updateSessionStats(Long sessionId, int addedTokens, int addedMessages) {
-        // doOnComplete 运行在 Reactor 线程，无租户上下文；忽略租户拦截以避免 tenant_id=NULL 查不到
-        AiChatSession session = TenantContext.executeIgnore(() -> sessionMapper.selectById(sessionId));
-        if (session == null) {
-            return;
+        // 原子累加：先读后加再写在同一会话并发流式时会丢更新（两个回调覆盖同一行）。
+        // doOnComplete 运行在 Reactor 线程，无租户上下文；忽略租户拦截。
+        int affected = TenantContext.executeIgnore(() -> sessionMapper.update(null,
+            new LambdaUpdateWrapper<AiChatSession>()
+                .eq(AiChatSession::getId, sessionId)
+                .setSql("total_tokens = COALESCE(total_tokens, 0) + " + addedTokens)
+                .setSql("message_count = COALESCE(message_count, 0) + " + addedMessages)
+                .set(AiChatSession::getLastMessageAt, LocalDateTime.now())));
+        if (affected != 1) {
+            log.error("[ypbin-ai] 会话统计更新失败：sessionId={}", sessionId);
         }
-        session.setTotalTokens(session.getTotalTokens() + addedTokens);
-        session.setMessageCount(session.getMessageCount() + addedMessages);
-        session.setLastMessageAt(LocalDateTime.now());
-        TenantContext.executeIgnore(() -> {
-            sessionMapper.updateById(session);
-            return null;
-        });
     }
 
     /** 新会话首条消息后自动截取标题（前 {@link #TITLE_MAX_LENGTH} 字），避免长期"新对话" */
