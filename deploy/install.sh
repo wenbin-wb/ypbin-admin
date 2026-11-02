@@ -43,6 +43,9 @@
 #   NACOS_AUTH_TOKEN= NACOS_AUTH_IDENTITY_KEY= NACOS_AUTH_IDENTITY_VALUE=
 #                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
 #                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
+#   NACOS_USERNAME= NACOS_PASSWORD=
+#                                  Nacos 控制台管理员账号（服务端已开启鉴权；各服务
+#                                  拉配置复用同一账号，自动随机生成口令，一般无需手传）
 #   INTERNAL_TOKEN=                /internal/** 服务间 Feign 调用凭证（守卫校验，自动随机生成，
 #                                  auth/system/ai 共享一致值，一般无需手传）
 #   GATEWAY_SIGN_TOKEN=            网关身份头签名标记（防伪造，自动随机生成；gateway 签发、

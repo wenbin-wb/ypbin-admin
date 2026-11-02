@@ -112,7 +112,7 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
 
 **网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
 
-**初始口令**：业务超管在种子 `deploy/sql/002-data.sql`（bcrypt，首登立即改密）；MySQL/Redis/Nacos/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos/XXL-JOB 控制台默认 `nacos/nacos`、`admin/123456`。
+**初始口令**：业务超管在种子 `deploy/sql/002-data.sql`（bcrypt，首登立即改密）；MySQL/Redis/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos 已开启服务端鉴权，控制台账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`（各服务拉配置复用同一账号）；XXL-JOB 控制台初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `XXL_JOB_ADMIN_PASSWORD`。
 
 **方式二：手动**：
 
@@ -128,6 +128,17 @@ cp .env.example .env   # 修改敏感项（MYSQL_ROOT_PASSWORD 等）
 docker compose -f docker-compose.yml up -d --build
 ```
 
+> **Nacos 已开启服务端鉴权**：手工 compose 首次部署需先初始化管理员（`install.sh` 会自动完成），
+> 否则各服务拉不到配置。可先起基础设施、初始化管理员，再启动业务服务：
+>
+> ```bash
+> docker compose -f docker-compose.yml up -d nacos redis mysql
+> curl -X POST http://localhost:8080/v3/auth/user/admin \
+>   -H "Content-Type: application/x-www-form-urlencoded" \
+>   --data-urlencode "username=$NACOS_USERNAME" --data-urlencode "password=$NACOS_PASSWORD"
+> docker compose -f docker-compose.yml up -d --build
+> ```
+
 > 各服务 Dockerfile 位于服务目录内（`ypbin-gateway/Dockerfile` 等），compose 构建自动使用。
 
 ### Nacos 配置中心（可选，推荐）
@@ -135,7 +146,7 @@ docker compose -f docker-compose.yml up -d --build
 默认各服务本地 yml 已含全部配置（nacos 地址/限流/租户开关），无 Nacos 配置中心也可运行。
 生产建议创建共享配置统一管理：
 
-1. 登录 Nacos 控制台（`http://<host>:8848/nacos`，默认账号 `nacos/nacos`）
+1. 登录 Nacos 控制台（`http://<host>:8848/nacos`，账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`）
 2. 新建配置：Data ID `ypbin-common.yaml`、Group `DEFAULT_GROUP`、格式 YAML
 3. 内容见 `deploy/nacos/ypbin-common.yaml`（限流 dashboard 地址等，可覆盖各服务默认值）
 
@@ -208,6 +219,8 @@ spring.cloud.gateway.server.webflux.routes:
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `NACOS_ADDR` | `localhost:8848` | Nacos 地址 |
+| `NACOS_USERNAME` | `nacos` | Nacos 鉴权账号（服务端已开启鉴权，各服务共用） |
+| `NACOS_PASSWORD` | — | Nacos 鉴权口令（install.sh 随机生成；手工部署必填） |
 | `SENTINEL_ADDR` | `localhost:8858` | Sentinel 控制台地址 |
 | `DB_HOST/DB_PORT/DB_NAME` | `localhost/3306/ypbin_admin` | 共享数据库（system 服务用） |
 | `DB_USER/DB_PASSWORD` | `root/空` | 数据库凭据 |
@@ -221,6 +234,8 @@ spring.cloud.gateway.server.webflux.routes:
 3. **auth 报"系统服务暂不可用"** → `ypbin-system` 未注册到 Nacos；检查 system 服务日志
 4. **接口 403** → 当前用户非平台用户（`@PlatformAccess` 限制）或权限码不足
 5. **改配置不生效** → 共享配置在 Nacos 修改后，服务需 `refresh`（`spring.config.import` 支持自动刷新）或重启
+6. **服务日志报 Nacos 403 / 用户名密码错误** → 服务端已开启鉴权，确认 `.env` 的
+   `NACOS_USERNAME/NACOS_PASSWORD` 与控制台一致（改了控制台口令要同步改 `.env` 并重启各服务）
 
 ## 单体版 vs 微服务版
 
