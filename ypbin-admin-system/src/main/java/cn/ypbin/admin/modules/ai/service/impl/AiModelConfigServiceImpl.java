@@ -272,10 +272,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     private AiModelConfigResp toResp(AiModelConfig config) {
         AiModelConfigResp resp = new AiModelConfigResp();
         BeanUtils.copyProperties(config, resp, "apiKey");
-        // API Key 脱敏
-        if (config.getApiKey() != null && config.getApiKey().length() > 6) {
-            resp.setApiKeyMasked(config.getApiKey().substring(0, 6) + "****");
-        } else if (config.getApiKey() != null) {
+        // 只表示「已配置」，不回显任何密文片段：库内是 AES-GCM 密文，
+        // 取其前几位既无信息量，又会让调用方误以为看到了明文片段
+        if (config.getApiKey() != null) {
             resp.setApiKeyMasked("****");
         }
         return resp;

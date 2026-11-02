@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.entity;
 
 import cn.ypbin.starter.data.core.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serial;
 import lombok.Getter;
 import lombok.Setter;
@@ -47,6 +48,7 @@ public class SysUserSocial extends BaseEntity {
     /** 第三方头像 */
     private String avatar;
 
-    /** 第三方 accessToken */
+    /** 第三方 accessToken（永不序列化：属可取用凭据） */
+    @JsonIgnore
     private String accessToken;
 }

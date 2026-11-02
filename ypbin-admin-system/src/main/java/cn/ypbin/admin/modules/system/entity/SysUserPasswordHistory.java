@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.entity;
 
 import cn.ypbin.starter.data.core.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serial;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,6 +33,7 @@ public class SysUserPasswordHistory extends BaseEntity {
     /** 用户 ID */
     private Long userId;
 
-    /** 历史密码（BCrypt 密文） */
+    /** 历史密码（BCrypt 密文；永不序列化） */
+    @JsonIgnore
     private String password;
 }

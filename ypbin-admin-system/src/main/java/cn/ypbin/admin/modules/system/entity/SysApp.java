@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.entity;
 
 import cn.ypbin.starter.data.core.BaseEntity;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.io.Serial;
 import java.time.LocalDateTime;
 import lombok.Getter;
@@ -33,7 +34,8 @@ public class SysApp extends BaseEntity {
     /** Access Key */
     private String accessKey;
 
-    /** Secret Key */
+    /** Secret Key（永不序列化：实体一旦被误当响应体，凭据会直接泄露） */
+    @JsonIgnore
     private String secretKey;
 
     /** 应用名称 */

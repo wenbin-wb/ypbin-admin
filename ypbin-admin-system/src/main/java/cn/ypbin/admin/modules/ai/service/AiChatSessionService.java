@@ -48,11 +48,6 @@ public interface AiChatSessionService {
     List<AiChatMessageResp> listMessages(Long sessionId);
 
     /**
-     * 发送消息（同步，返回完整 AI 响应）。
-     */
-    AiChatMessageResp sendMessage(AiChatSendReq req);
-
-    /**
      * 发送消息（流式，返回 SSE Emitter）。
      */
     SseEmitter sendMessageStream(AiChatSendReq req);
