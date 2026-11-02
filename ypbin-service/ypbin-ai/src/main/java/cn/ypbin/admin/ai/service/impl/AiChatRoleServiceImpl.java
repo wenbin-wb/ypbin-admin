@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.admin.ai.entity.AiChatRole;
@@ -174,8 +175,7 @@ public class AiChatRoleServiceImpl implements AiChatRoleService {
         return role;
     }
 
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 }

@@ -107,8 +107,23 @@ public class AiPublicAccessSupport {
             // 模型未配置/密钥缺失等环境问题：记录日志并向调用方暴露明确的业务错误（非静默降级）
             // 不记录 token：它是访问该公开入口的凭据，落日志等于泄露；改用知识库 ID 关联排查
             log.warn("[ypbin-ai] {}问答失败: kbId={} err={}", scene, kb.getId(), e.getMessage(), e);
+            if (isTimeout(e)) {
+                // block(timeout) 超时也是 IllegalStateException，不能伪装成「模型未配置」
+                throw new BusinessException("AI 模型响应超时，请稍后重试");
+            }
             throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加对话模型");
         }
+    }
+
+    /**
+     * 判断异常是否为「阻塞等待超时」（Reactor block 超时抛 IllegalStateException）。
+     *
+     * @param e 异常
+     * @return 是否超时
+     */
+    private static boolean isTimeout(IllegalStateException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("Timeout");
     }
 
     /**

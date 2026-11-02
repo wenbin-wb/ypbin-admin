@@ -58,8 +58,12 @@ public class SaTokenGatewayAuthProvider implements GatewayAuthProvider {
             }
             return Mono.just(GatewayAuthResult.success(buildTrustedHeaders(loginUser)));
         } catch (NotLoginException e) {
-            // 仅未登录/过期走 401 语义；其它异常按服务端错误记录后拒绝
+            // 仅未登录/过期走 401 语义
             return Mono.just(GatewayAuthResult.failure("登录状态已过期，请重新登录"));
+        } catch (RuntimeException e) {
+            // Redis/Sa-Token 存储异常与「未登录」语义不同：必须留日志，否则会被误判为凭证过期
+            log.error("网关鉴权异常，拒绝本次请求", e);
+            return Mono.just(GatewayAuthResult.failure("认证服务暂不可用，请稍后重试"));
         }
     }
 

@@ -15,6 +15,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.admin.system.constant.SpaceConstants;
 import cn.ypbin.admin.system.entity.SysDictItem;
 import cn.ypbin.admin.system.entity.SysSpace;
@@ -997,9 +998,8 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
      *
      * @return 当前租户 ID
      */
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 
     private long normParentId(Long pid) {
