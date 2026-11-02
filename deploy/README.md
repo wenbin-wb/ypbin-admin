@@ -27,6 +27,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/d
 
 脚本自动完成：环境检测（Linux/Docker/JDK21/Maven/Node）→ 拉取代码 → 构建 admin 后端 jar → 构建 admin-ui 前端 → 生成凭据 `.env` → docker compose 启动 → 健康检查 + 凭据输出。
 
+> 初始管理员口令随机生成并写入 `.env` 的 `ADMIN_BOOTSTRAP_PASSWORD`；种子 admin/approver 标记为
+> `pwd_change_required=1`，**首次登录必须先改密**，改密前只放行改密/登出/身份查询接口。
+
 ### 交互模式（默认）
 
 运行时会询问关键步骤（回车用默认值）：

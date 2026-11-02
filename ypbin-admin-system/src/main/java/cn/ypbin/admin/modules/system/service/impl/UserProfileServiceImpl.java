@@ -15,6 +15,7 @@
  */
 package cn.ypbin.admin.modules.system.service.impl;
 
+import cn.ypbin.admin.common.constant.PwdChangeKeys;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserPostMapper;
@@ -101,7 +102,9 @@ public class UserProfileServiceImpl implements UserProfileService {
         userMapper.update(null, new LambdaUpdateWrapper<SysUser>()
             .eq(SysUser::getId, userId)
             .set(SysUser::getPassword, encoded)
-            .set(SysUser::getPwdResetTime, LocalDateTime.now()));
+            .set(SysUser::getPwdResetTime, LocalDateTime.now())
+            // 自助改密完成 ⇒ 解除强制改密（下次登录的会话标记随重新登录刷新）
+            .set(SysUser::getPwdChangeRequired, PwdChangeKeys.REQUIRED_NO));
         accountSupport.recordPasswordHistory(userId, encoded);
     }
 }
