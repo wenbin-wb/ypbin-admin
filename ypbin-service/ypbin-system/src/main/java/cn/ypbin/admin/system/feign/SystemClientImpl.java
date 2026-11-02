@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.feign;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
@@ -411,6 +412,11 @@ public class SystemClientImpl implements ISystemClient {
             if (!TenantContext.executeIgnore(() -> userService.save(created))) {
                 throw new BusinessException("用户创建失败：username=" + username);
             }
+            // 内部直插绕过 SysUserServiceImpl 的写路径，必须自行失效永久缓存（含「不存在」哨兵）
+            SysCache.evictUser(created.getId(), username);
+            if (StringUtils.hasText(created.getPhone())) {
+                SysCache.evictUserByPhone(created.getPhone());
+            }
         } else {
             boolean updated = false;
             if (StringUtils.hasText(nickname) && !nickname.equals(user.getNickname())) {
@@ -425,6 +431,12 @@ public class SystemClientImpl implements ISystemClient {
             SysUser changed = user;
             if (updated && !TenantContext.executeIgnore(() -> userService.updateById(changed))) {
                 throw new BusinessException("用户资料更新失败：userId=" + user.getId());
+            }
+            if (updated) {
+                SysCache.evictUser(user.getId(), user.getUsername());
+                if (StringUtils.hasText(user.getPhone())) {
+                    SysCache.evictUserByPhone(user.getPhone());
+                }
             }
         }
         return R.ok(UserViewConverter.toDto(user));
@@ -441,6 +453,7 @@ public class SystemClientImpl implements ISystemClient {
         if (user == null) {
             return R.fail("用户不存在");
         }
+        String oldPhone = user.getPhone();
         boolean updated = false;
         if (StringUtils.hasText(nickname)) {
             user.setNickname(nickname.trim());
@@ -455,8 +468,18 @@ public class SystemClientImpl implements ISystemClient {
             user.setPhone(phone.trim());
             updated = true;
         }
-        if (updated && !TenantContext.executeIgnore(() -> userService.updateById(user))) {
-            return R.fail("用户资料更新失败");
+        if (updated) {
+            if (!TenantContext.executeIgnore(() -> userService.updateById(user))) {
+                return R.fail("用户资料更新失败");
+            }
+            // 内部更新绕过 SysUserServiceImpl 的写路径：旧/新手机号与用户快照都必须失效
+            SysCache.evictUser(user.getId(), user.getUsername());
+            if (StringUtils.hasText(oldPhone)) {
+                SysCache.evictUserByPhone(oldPhone);
+            }
+            if (StringUtils.hasText(user.getPhone())) {
+                SysCache.evictUserByPhone(user.getPhone());
+            }
         }
         return R.ok(UserViewConverter.toDto(user));
     }
