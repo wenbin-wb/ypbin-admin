@@ -27,6 +27,17 @@ public interface SysNoticeService extends BaseService<SysNotice> {
 
     PageResult<NoticeResp> pageNotices(NoticeQuery query);
 
+    /**
+     * 公告详情（含正文）。
+     *
+     * <p>列表查询刻意排除 {@code content}（富文本体积大）；编辑/预览前必须在这里补齐，
+     * 否则用列表行提交会把正文清空。</p>
+     *
+     * @param id 公告 ID
+     * @return 公告详情
+     */
+    NoticeResp getNotice(Long id);
+
     void createNotice(NoticeSaveReq req);
 
     void updateNotice(Long id, NoticeSaveReq req);
