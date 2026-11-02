@@ -26,9 +26,14 @@ import cn.ypbin.admin.modules.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.modules.system.service.SysTenantService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.security.online.OnlineUserService;
+import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,11 +48,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTenant> implements SysTenantService {
 
+    private static final Logger log = LoggerFactory.getLogger(SysTenantServiceImpl.class);
+
     private final SysAuthTemplateService authTemplateService;
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final SysDeptMapper deptMapper;
     private final SysPostMapper postMapper;
+    private final OnlineUserService onlineUserService;
 
     @Override
     public List<TenantResp> listTenants() {
@@ -71,7 +79,8 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateTenant(Long id, TenantSaveReq req) {
-        if (getById(id) == null) {
+        SysTenant existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("租户不存在");
         }
         checkNameUnique(req.getName(), id);
@@ -83,6 +92,35 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
         if (!updateById(tenant)) {
             throw new BusinessException("租户更新失败");
         }
+        boolean disabledNow = Integer.valueOf(0).equals(req.getStatus())
+            && !Integer.valueOf(0).equals(existing.getStatus());
+        if (disabledNow) {
+            // 禁用租户后既有 Sa-Token 会话仍然有效，必须把该租户在线用户踢下线
+            kickoutTenantUsers(id);
+        }
+    }
+
+    /**
+     * 踢掉指定租户用户的在线会话。
+     *
+     * <p>单个用户踢下线失败不阻断其余用户（Redis 抖动时仍尽量收敛暴露面），但必须记 error 日志。</p>
+     *
+     * @param tenantId 租户 ID
+     */
+    private void kickoutTenantUsers(Long tenantId) {
+        List<Long> userIds = TenantContext.executeIgnore(() -> userMapper.selectList(
+                new LambdaQueryWrapper<SysUser>()
+                    .eq(SysUser::getTenantId, tenantId)
+                    .select(SysUser::getId)))
+            .stream().map(SysUser::getId).distinct().toList();
+        for (Long userId : userIds) {
+            try {
+                onlineUserService.kickoutByUserId(userId);
+            } catch (RuntimeException e) {
+                log.error("租户禁用后踢下线失败：tenantId={}, userId={}", tenantId, userId, e);
+            }
+        }
+        log.info("租户已禁用并踢下线，tenantId={}, users={}", tenantId, userIds.size());
     }
 
     @Override

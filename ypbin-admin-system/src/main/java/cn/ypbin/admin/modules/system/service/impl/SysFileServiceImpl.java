@@ -26,12 +26,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,7 +42,6 @@ import org.springframework.web.multipart.MultipartFile;
  * @since 2026-08-02
  */
 @Service
-@RequiredArgsConstructor
 public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> implements SysFileService {
 
     private static final Logger log = LoggerFactory.getLogger(SysFileServiceImpl.class);
@@ -53,6 +52,15 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
     private static final String LOCATOR_MISSING = "LOCATOR_MISSING";
 
     private final FileStorageService fileStorageService;
+
+    /** 每个不可回滚步骤单独提交，避免「物理文件已删、DB 状态被回滚」 */
+    private final TransactionTemplate transactionTemplate;
+
+    public SysFileServiceImpl(FileStorageService fileStorageService,
+            PlatformTransactionManager transactionManager) {
+        this.fileStorageService = fileStorageService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     @Override
     public PageResult<FileResp> pageFiles(FileQuery query) {
@@ -90,18 +98,19 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void deleteFile(Long id) {
         SysFile file = getById(id);
         if (file == null) {
             throw new BusinessException("文件不存在");
         }
         if (STORAGE_DELETED.equals(file.getStorageStatus())) {
-            removeMetadata(file);
+            // 物理文件已删：只补删元数据；失败可重试并再次命中本分支
+            inTransaction(() -> removeMetadata(file));
             return;
         }
         if (!hasLocator(file)) {
-            updateStorageStatus(file.getId(), LOCATOR_MISSING, "文件缺少完整存储定位信息");
+            inTransaction(() -> updateStorageStatus(
+                file.getId(), LOCATOR_MISSING, "文件缺少完整存储定位信息"));
             throw new BusinessException("文件缺少完整存储定位信息，无法删除物理文件");
         }
 
@@ -109,7 +118,9 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
             fileStorageService.delete(file.getPlatform(), file.getBucket(), file.getPath());
         } catch (RuntimeException storageFailure) {
             try {
-                updateStorageStatus(file.getId(), DELETE_FAILED, errorMessage(storageFailure));
+                // 独立事务提交失败状态：随后抛出的异常不会再把这条状态更新回滚掉
+                inTransaction(() -> updateStorageStatus(
+                    file.getId(), DELETE_FAILED, errorMessage(storageFailure)));
             } catch (RuntimeException statusFailure) {
                 statusFailure.addSuppressed(storageFailure);
                 log.error("物理文件删除失败且状态记录失败，fileId={}", file.getId(), storageFailure);
@@ -117,8 +128,19 @@ public class SysFileServiceImpl extends BaseServiceImpl<SysFileMapper, SysFile> 
             }
             throw storageFailure;
         }
-        updateStorageStatus(file.getId(), STORAGE_DELETED, null);
-        removeMetadata(file);
+        // 物理删除已不可回滚：先独立提交 STORAGE_DELETED，再删元数据；
+        // 元数据删除失败时重试会命中上面的 STORAGE_DELETED 短路，只需补删元数据
+        inTransaction(() -> updateStorageStatus(file.getId(), STORAGE_DELETED, null));
+        inTransaction(() -> removeMetadata(file));
+    }
+
+    /**
+     * 在独立事务中执行数据库写操作。
+     *
+     * @param action 写操作
+     */
+    private void inTransaction(Runnable action) {
+        transactionTemplate.executeWithoutResult(status -> action.run());
     }
 
     private String validateModule(String module) {
