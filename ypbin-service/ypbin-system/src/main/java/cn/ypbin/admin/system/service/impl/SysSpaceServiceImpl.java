@@ -40,11 +40,13 @@ import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Locale;
@@ -145,7 +147,13 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             .orderByAsc(SysSpace::getPid)
             .orderByAsc(SysSpace::getSort)
             .orderByAsc(SysSpace::getId));
-        List<SpaceResp> items = toRespList(source.getItems());
+        List<SysSpace> pageItems = source.getItems();
+        // 只取当前页的自身 + 祖先链拼路径：原先 buildPathMap(null) 每次翻页都扫租户全量空间
+        List<SysSpace> pathSource = pageItems.isEmpty() ? List.of()
+            : baseMapper.selectAncestorNodes(
+                pageItems.stream().map(SysSpace::getId).toList(), currentTenantId(),
+                SpaceConstants.MAX_SPACE_DEPTH + SpaceConstants.PARENT_CHAIN_MARGIN);
+        List<SpaceResp> items = toRespList(pageItems, pathSource);
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
     }
 
@@ -166,7 +174,7 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSpace(SpaceSaveReq req) {
-        return createSpaceInternal(req, null, true);
+        return createSpaceInternal(req, null, true, null, null);
     }
 
     @Override
@@ -184,10 +192,11 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
      * @return 新空间 ID
      */
     private Long createSpaceInternal(SpaceSaveReq req, Set<String> allowedTypes,
-            boolean checkCodeInDb) {
+            boolean checkCodeInDb, Integer knownLevel, Long presetId) {
         String extJson = normalizeExtJson(req.getExtJson());
         long pid = normParentId(req.getPid());
-        int level = validateParent(null, pid);
+        // 批量导入已在内存快照里校验过父链并算出层级，不再逐行跑递归 CTE
+        int level = knownLevel != null ? knownLevel : validateParent(null, pid);
         if (checkCodeInDb) {
             checkCodeUnique(req.getCode(), null);
         }
@@ -195,6 +204,10 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
 
         SysSpace space = new SysSpace();
         apply(space, req, pid, level, extJson);
+        if (presetId != null) {
+            // 导入需预先拿到 ID 才能让子行解析父引用；单条新增仍交给 MyBatis-Plus 生成
+            space.setId(presetId);
+        }
         if (!save(space)) {
             throw new BusinessException("空间创建失败");
         }
@@ -399,7 +412,9 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         Set<String> allowedTypes = loadAllowedSpaceTypes();
         List<ImportRow> parsed = new ArrayList<>();
         Map<String, ImportRow> byCode = new LinkedHashMap<>();
-        Map<String, Long> existingIdByCode = loadExistingIdByCode();
+        // 一次性取「编码 → ID」与「ID → (pid, level)」快照：父链校验/层级计算全部在内存完成
+        SpaceIndex index = loadSpaceIndex();
+        Map<String, Long> existingIdByCode = index.idByCode();
         // 记录「表格里出现过、但因自身错误被丢弃」的编码：
         // 它的子行会报「父不存在」，若不区分，用户会去补一个其实已存在（只是重复/非法）的父
         Map<String, Integer> rejectedCodeLine = new LinkedHashMap<>();
@@ -466,14 +481,21 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
             }
             for (ImportRow row : ready) {
                 try {
-                    if (idByCode.containsKey(row.code)) {
-                        applyUpsert(row, idByCode.get(row.code), idByCode, allowedTypes);
+                    Long existingId = idByCode.get(row.code);
+                    Long parentId = resolveParentId(row, idByCode);
+                    if (existingId != null) {
+                        // upsert：仍走 updateSpaceInternal（它还负责子树深度校验与 level 刷新）
+                        int level = validateParentInMemory(existingId, parentId, index.nodeById());
+                        applyUpsert(row, existingId, idByCode, allowedTypes);
+                        index.nodeById().put(existingId, new long[] {parentId, level});
                         result.setUpdated(result.getUpdated() + 1);
                     } else {
-                        // 第一遍已用整表索引校验过编码唯一性，这里不再逐行查库
-                        Long newId = createSpaceInternal(
-                            row.toSaveReq(idByCode.get(row.parentCode)), allowedTypes, false);
+                        // 第一遍已用整表索引校验过编码唯一性；层级在内存算，不逐行跑 CTE
+                        int level = validateParentInMemory(null, parentId, index.nodeById());
+                        Long newId = IdWorker.getId();
+                        createSpaceInternal(row.toSaveReq(parentId), allowedTypes, false, level, newId);
                         idByCode.put(row.code, newId);
+                        index.nodeById().put(newId, new long[] {parentId, level});
                         result.setInserted(result.getInserted() + 1);
                     }
                     pending.remove(row);
@@ -541,20 +563,81 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
     }
 
     /**
-     * 载入「已存在编码 → ID」（一次查询，不逐行查）。
+     * 载入导入所需的租户空间索引（一次查询）：编码 → ID、ID → (pid, level)。
      *
-     * @return 编码 → 空间 ID
+     * @return 空间索引
      */
-    private Map<String, Long> loadExistingIdByCode() {
+    private SpaceIndex loadSpaceIndex() {
         List<SysSpace> all = list(new LambdaQueryWrapper<SysSpace>()
-            .select(SysSpace::getId, SysSpace::getCode));
-        Map<String, Long> map = new HashMap<>(all.size());
+            .select(SysSpace::getId, SysSpace::getCode, SysSpace::getPid, SysSpace::getLevel));
+        Map<String, Long> idByCode = new HashMap<>(all.size());
+        Map<Long, long[]> nodeById = new HashMap<>(all.size());
         for (SysSpace space : all) {
             if (space.getCode() != null) {
-                map.put(space.getCode(), space.getId());
+                idByCode.put(space.getCode(), space.getId());
+            }
+            nodeById.put(space.getId(), new long[] {
+                space.getPid() == null ? SpaceConstants.ROOT_PARENT_ID : space.getPid(),
+                space.getLevel() == null ? 1 : space.getLevel()});
+        }
+        return new SpaceIndex(idByCode, nodeById);
+    }
+
+    /**
+     * 在内存快照上校验父链并计算层级（导入路径，替代逐行递归 CTE）。
+     *
+     * <p>与 {@link #validateParent} 的判定口径一致：父必须存在、不能成环、不能挂到自身后代、
+     * 链尾必须到根、总深度不超过上限。导入的整表快照已在调用前一次性加载。</p>
+     *
+     * @param selfId   当前空间 ID（新建为 null）
+     * @param parentId 归一后的父空间 ID（0=根）
+     * @param nodeById ID → (pid, level) 快照（含本次已插入的新行）
+     * @return 该空间应处的层级
+     */
+    private int validateParentInMemory(Long selfId, long parentId, Map<Long, long[]> nodeById) {
+        if (parentId == SpaceConstants.ROOT_PARENT_ID) {
+            return 1;
+        }
+        if (selfId != null && selfId.longValue() == parentId) {
+            throw new BusinessException("空间不能作为自己的父空间");
+        }
+        int depth = 0;
+        long cursor = parentId;
+        Set<Long> visited = new HashSet<>();
+        while (cursor != SpaceConstants.ROOT_PARENT_ID) {
+            if (!visited.add(cursor)) {
+                throw new BusinessException(
+                    "空间层级数据异常（父子关系成环或层级过深）：请检查空间树的父空间配置");
+            }
+            if (selfId != null && selfId.longValue() == cursor) {
+                throw new BusinessException("空间不能挂到自己的后代下（父链上出现了当前空间本身）");
+            }
+            long[] node = nodeById.get(cursor);
+            if (node == null) {
+                throw new BusinessException("父空间不存在：" + cursor);
+            }
+            cursor = node[0];
+            depth++;
+            if (depth > SpaceConstants.MAX_SPACE_DEPTH) {
+                throw new BusinessException("空间层级不能超过 " + SpaceConstants.MAX_SPACE_DEPTH
+                    + " 层（当前将超过上限）");
             }
         }
-        return map;
+        int newDepth = depth + 1;
+        if (newDepth > SpaceConstants.MAX_SPACE_DEPTH) {
+            throw new BusinessException("空间层级不能超过 " + SpaceConstants.MAX_SPACE_DEPTH
+                + " 层（当前将达第 " + newDepth + " 层）");
+        }
+        return newDepth;
+    }
+
+    /**
+     * 导入用的空间索引快照。
+     *
+     * @param idByCode 编码 → 空间 ID
+     * @param nodeById 空间 ID → (pid, level)
+     */
+    private record SpaceIndex(Map<String, Long> idByCode, Map<Long, long[]> nodeById) {
     }
 
     /**
@@ -572,6 +655,10 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         ImportRow row = new ImportRow();
         row.lineNo = lineNo;
         row.code = requireCell(cells, colIndex, "code", SpaceConstants.MAX_CODE_LENGTH);
+        // 与单条 API 的 @Pattern 同一判据：导入不能成为绕过编码格式的后门
+        if (!row.code.matches(SpaceConstants.CODE_PATTERN)) {
+            throw new BusinessException("空间编码只能包含字母、数字、下划线与连字符");
+        }
         row.name = requireCell(cells, colIndex, "name", SpaceConstants.MAX_NAME_LENGTH);
         row.spaceType = requireCell(cells, colIndex, "spaceType",
             SpaceConstants.MAX_SPACE_TYPE_LENGTH);
@@ -593,6 +680,24 @@ public class SysSpaceServiceImpl extends BaseServiceImpl<SysSpaceMapper, SysSpac
         row.latitude = parseDecimalCell(cells, colIndex, "latitude");
         row.area = parseDecimalCell(cells, colIndex, "area");
         row.capacity = parseIntCell(cells, colIndex, "capacity");
+        // 与 SpaceSaveReq 的 Bean Validation 同口径：导入通道不能绕过数值范围
+        if (row.status != null && row.status != 0 && row.status != 1) {
+            throw new BusinessException("状态只能为 0 或 1");
+        }
+        if (row.longitude != null && (row.longitude.compareTo(BigDecimal.valueOf(-180)) < 0
+            || row.longitude.compareTo(BigDecimal.valueOf(180)) > 0)) {
+            throw new BusinessException("经度范围 -180 ~ 180");
+        }
+        if (row.latitude != null && (row.latitude.compareTo(BigDecimal.valueOf(-90)) < 0
+            || row.latitude.compareTo(BigDecimal.valueOf(90)) > 0)) {
+            throw new BusinessException("纬度范围 -90 ~ 90");
+        }
+        if (row.area != null && row.area.signum() < 0) {
+            throw new BusinessException("面积不能为负");
+        }
+        if (row.capacity != null && row.capacity < 0) {
+            throw new BusinessException("容量不能为负");
+        }
         return row;
     }
 
