@@ -206,6 +206,9 @@ class SourceConventionTest {
         "UserExcelComponent#userMapper.selectList",
         "分块批量 IN 查询：文件内待查值按 QUERY_BATCH_SIZE 切块后每块一次 selectList，"
             + "规避 IN 参数过多，非逐行往返",
+        "SysSpaceServiceImpl#baseMapper.insertBatch",
+        "分块批量插入：导入行数由用户表格决定（上限 MAX_IMPORT_ROWS），"
+            + "按 IMPORT_INSERT_BATCH_SIZE 切块后每块一次 insertBatch，非逐行往返",
         "AiModelConfigServiceImpl#httpClient.send",
         "误报：候选补全地址回退尝试（for 遍历 completionUrls，命中首个非 404 即 break），"
             + "循环次数与数据量无关，不存在 N+1；规则只看「循环体里有没有 RPC 接收者」，识别不了 break 语义");

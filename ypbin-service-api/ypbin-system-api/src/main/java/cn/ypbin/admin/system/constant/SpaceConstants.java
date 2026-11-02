@@ -100,6 +100,14 @@ public final class SpaceConstants {
     public static final int MAX_IMPORT_ERRORS = 100;
 
     /**
+     * 导入写入每批行数。
+     *
+     * <p>单条多值 INSERT 的参数个数有上限：按 500 行切块，单批约 1.2 万个绑定参数，
+     * 既远低于 MySQL 默认的 {@code max_allowed_packet}，也不至于小到退回逐行往返。</p>
+     */
+    public static final int IMPORT_INSERT_BATCH_SIZE = 500;
+
+    /**
      * 导入模式：仅新增（已存在的编码报错）。
      *
      * <p>默认模式。<b>刻意不做「存在就更新」</b>：用户手里的表格往往只是一部分空间，
