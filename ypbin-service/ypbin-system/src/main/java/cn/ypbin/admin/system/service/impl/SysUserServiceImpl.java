@@ -10,6 +10,7 @@
 package cn.ypbin.admin.system.service.impl;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.common.support.PwdChangeKeys;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysPost;
 import cn.ypbin.admin.system.entity.SysRole;
@@ -363,7 +364,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         boolean updated = update(new LambdaUpdateWrapper<SysUser>()
             .eq(SysUser::getId, id)
             .set(SysUser::getPassword, encoded)
-            .set(SysUser::getPwdResetTime, LocalDateTime.now()));
+            .set(SysUser::getPwdResetTime, LocalDateTime.now())
+            // 管理员重置的口令也是一次性初始口令：下次登录必须先自行改密
+            .set(SysUser::getPwdChangeRequired, PwdChangeKeys.REQUIRED_YES));
         if (!updated) {
             throw new BusinessException("密码重置失败");
         }

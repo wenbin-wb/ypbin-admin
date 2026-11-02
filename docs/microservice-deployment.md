@@ -65,7 +65,7 @@ NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD
 
 **网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
 
-**初始口令**：业务超管在种子 `deploy/sql/002-data.sql`（bcrypt，首登立即改密）；MySQL/Redis/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos 已开启服务端鉴权，控制台账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`（`gateway/auth/system/ai` 拉配置复用同一账号），XXL-JOB 控制台初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `XXL_JOB_ADMIN_PASSWORD`（不再内置 `admin/123456`）。
+**初始口令**：平台超管 `admin` 的初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `SUPER_ADMIN_INIT_PASSWORD`，system 服务启动时用 BCrypt 写入种子账号（SQL 里只有演示占位哈希）；首次登录响应带 `mustChangePassword=true`，网关只放行改密/登出等少数路径，改密成功后解除。手工 compose 未提供该变量时保留种子演示口令（`pt5aQ5E6t8dkVkMp`），同样强制首登改密。MySQL/Redis/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos 已开启服务端鉴权，控制台账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`（`gateway/auth/system/ai` 拉配置复用同一账号），XXL-JOB 控制台初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `XXL_JOB_ADMIN_PASSWORD`（不再内置 `admin/123456`）。
 
 **方式二：手动**：
 
@@ -91,6 +91,9 @@ docker compose -f docker-compose.yml up -d --build
 >   --data-urlencode "username=$NACOS_USERNAME" --data-urlencode "password=$NACOS_PASSWORD"
 > docker compose -f docker-compose.yml up -d --build
 > ```
+
+> 手工部署未设置 `SUPER_ADMIN_INIT_PASSWORD` 时，超管初始口令为种子演示值 `pt5aQ5E6t8dkVkMp`；
+> 登录响应会带 `mustChangePassword=true`，必须先改密才能访问其它接口。
 
 > 各服务 Dockerfile 位于服务目录内（`ypbin-gateway/Dockerfile` 等），compose 构建自动使用。
 
@@ -228,6 +231,7 @@ spring.cloud.gateway.server.webflux.routes:
 | `DB_USER/DB_PASSWORD` | `root/空` | 数据库凭据 |
 | `REDIS_HOST/REDIS_PORT` | `localhost/6379` | Redis |
 | `MYSQL_ROOT_PASSWORD` | — | compose 内建 MySQL 密码（必填） |
+| `SUPER_ADMIN_INIT_PASSWORD` | 空 | 平台超管初始口令（install.sh 随机生成；为空保留种子演示口令，均强制首登改密） |
 
 ## 常见问题
 

@@ -6,6 +6,16 @@
 
 ## [未发布]
 
+### 变更（2026-11-02）· 平台超管初始口令与强制首登改密
+
+- **种子超管口令不再直接用于安装脚本部署**：`install.sh` 随机生成 `SUPER_ADMIN_INIT_PASSWORD`
+  写入 `.env`（600），system 启动时用 BCrypt 写入种子账号；SQL 仍保留演示哈希供手工/开发部署，
+  两种路径都要求首登改密。
+- **新增 `sys_user.pwd_change_required`**：登录响应新增 `mustChangePassword`，网关在标记为真时
+  只放行改密/登出/身份查询；自助改密后清零，管理员重置口令后置 1。
+- **已有库升级需执行** `deploy/sql/migration/2026-11-02-user-pwd-change-required.sql`（幂等）——
+  实体已包含新列，未执行会使用户查询 SQL 报 `Unknown column`。
+
 ### 变更（2026-10-18）· 跟随 ypbin-starter 4.0.0 下沉（issue #82/#83）
 
 - **内部调用凭证改为 starter 官方守卫 + 官方 Feign 携带**：删除 `ypbin-system` 的

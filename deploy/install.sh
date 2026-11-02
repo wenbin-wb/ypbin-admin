@@ -50,6 +50,8 @@
 #                                  auth/system/ai 共享一致值，一般无需手传）
 #   GATEWAY_SIGN_TOKEN=            网关身份头签名标记（防伪造，自动随机生成；gateway 签发、
 #                                  auth/system/ai 校验，一般无需手传）
+#   SUPER_ADMIN_INIT_PASSWORD=     平台超管 admin 初始口令（自动随机生成并写入 .env；
+#                                  非空时由 system 启动写入种子账号，首次登录强制改密）
 #   XXL_JOB_ADMIN_PASSWORD=        XXL-Job 调度中心 admin 初始口令（自动随机生成并写入 .env，
 #                                  不复用 MYSQL_ROOT_PASSWORD；SQL 导入前按口令替换哈希占位符）
 #   REBUILD_FRONTEND=1             强制重新构建前端。默认：产物比源码新则复用、否则自动重建
@@ -1110,6 +1112,9 @@ if [ ! -f "$ENV_FILE" ]; then
   # XXL-JOB 调度中心初始口令：随机生成（不复用 MYSQL_ROOT_PASSWORD），登录时与库内 sha256 哈希比对。
   # 明文仅写入 .env（600）并在部署日志一次性提示；SQL 模板里的占位符由导入前 sed 替换为哈希（见 import_xxl_job_sql）。
   XXL_JOB_ADMIN_PASSWORD="${XXL_JOB_ADMIN_PASSWORD:-$(rand_hex 16)}"
+  # 平台超管初始口令：随机生成（不再使用仓库内公开的演示口令）。由 system 服务启动时
+  # 用 BCrypt 写入种子账号（SQL 模板保持占位哈希），并强制首登改密——明文不进 SQL。
+  SUPER_ADMIN_INIT_PASSWORD="${SUPER_ADMIN_INIT_PASSWORD:-$(rand_hex 16)}"
   cat > "$ENV_FILE" <<EOF
 # 由 install.sh 生成
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
@@ -1123,6 +1128,7 @@ INTERNAL_TOKEN=$INTERNAL_TOKEN
 GATEWAY_SIGN_TOKEN=$GATEWAY_SIGN_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
 XXL_JOB_ADMIN_PASSWORD=$XXL_JOB_ADMIN_PASSWORD
+SUPER_ADMIN_INIT_PASSWORD=$SUPER_ADMIN_INIT_PASSWORD
 # 留空：模板要求时 install.sh 会 fail-fast（值须与 xxl-job-admin 里 ypbin-system 执行器一致）
 XXL_JOB_ACCESS_TOKEN=
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
@@ -1134,6 +1140,7 @@ EOF
   ok "已生成 .env（凭据已写入，见 $ENV_FILE；不再在日志回显 MySQL 密码）"
   warn ">>> Nacos 控制台管理员口令已随机生成：$NACOS_USERNAME / $NACOS_PASSWORD（见 .env 的 NACOS_PASSWORD）"
   warn ">>> XXL-Job 控制台初始口令已生成：admin / $XXL_JOB_ADMIN_PASSWORD（已写入 $ENV_FILE 的 XXL_JOB_ADMIN_PASSWORD，请妥善保存）"
+  warn ">>> 平台超管初始口令已生成：admin / $SUPER_ADMIN_INIT_PASSWORD（已写入 $ENV_FILE 的 SUPER_ADMIN_INIT_PASSWORD；首次登录必须修改）"
 else
   warn "复用已有 .env"
   # 复用场景需把 .env 变量载入环境，供后续 Nacos 占位符替换 / compose 使用
@@ -1173,6 +1180,15 @@ if ! grep -q "^NACOS_PASSWORD=" "$ENV_FILE"; then
 fi
 env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
 env_key_backfill GATEWAY_SIGN_TOKEN 'rand_hex 32'
+# 旧 .env 升级：补一个随机超管初始口令（仓库内演示口令不再用于安装脚本部署）。
+# 已有键（含显式留空）不覆盖：留空表示保留种子口令，仍强制首登改密。
+if ! grep -q "^SUPER_ADMIN_INIT_PASSWORD=" "$ENV_FILE"; then
+  SUPER_ADMIN_INIT_PASSWORD="$(rand_hex 16)"
+  printf 'SUPER_ADMIN_INIT_PASSWORD=%s\n' "$SUPER_ADMIN_INIT_PASSWORD" >> "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  export SUPER_ADMIN_INIT_PASSWORD
+  warn ">>> 已为旧 .env 补生成平台超管初始口令：admin / $SUPER_ADMIN_INIT_PASSWORD（首次登录必须修改）"
+fi
 if [ "$NO_DOCKER" = "1" ]; then
   env_key_backfill REDIS_PASSWORD 'printf ""'
 else
