@@ -33,7 +33,10 @@ import cn.ypbin.starter.license.core.LicenseStatus;
 import cn.ypbin.starter.tools.crypto.Sm2Utils;
 import cn.ypbin.starter.tools.crypto.Sm2Utils.KeyPairBase64;
 import cn.ypbin.starter.tools.crypto.Sm4Utils;
+import cn.ypbin.starter.tools.lock.LockService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -72,6 +75,8 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
 
     private final LicenseIssuerProperties issuerProperties;
     private final SysAppService sysAppService;
+    /** 联机应用按被授权方串行创建，避免并发首次签发建出两个同名应用 */
+    private final LockService lockService;
 
     @Override
     public PageResult<LicenseResp> pageLicense(LicenseQuery query) {
@@ -99,7 +104,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         entity.setApproveStatus(STATUS_DRAFT);
         // 当前仅手工签发；支付自动获取授权为预留能力（source=payment），落地前固定手工来源
         entity.setSource("manual");
-        save(entity);
+        if (!save(entity)) {
+            throw new BusinessException("授权草稿创建失败");
+        }
         return entity.getId();
     }
 
@@ -115,7 +122,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         BeanUtils.copyProperties(req, entity);
         entity.setId(id);
         entity.setApproveStatus(STATUS_DRAFT);
-        updateById(entity);
+        if (!updateById(entity)) {
+            throw new BusinessException("授权草稿更新失败");
+        }
     }
 
     @Override
@@ -130,7 +139,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         update.setId(id);
         update.setApproveStatus(STATUS_PENDING);
         update.setRejectReason("");
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("授权提交审批失败");
+        }
     }
 
     @Override
@@ -160,7 +171,14 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             update.setApproveStatus(STATUS_REJECTED);
             update.setRejectReason(req.getRejectReason());
         }
-        updateById(update);
+        // 状态迁移用 CAS：并发审批时只有第一个把 PENDING 改掉的人成功，
+        // 后到者拿到明确失败，而不是拿着一个库中已被覆盖的授权码返回给调用方
+        boolean updated = update(update, new LambdaUpdateWrapper<SysLicense>()
+            .eq(SysLicense::getId, id)
+            .eq(SysLicense::getApproveStatus, STATUS_PENDING));
+        if (!updated) {
+            throw new BusinessException("授权状态已变化，请刷新后重试");
+        }
         return issueResp;
     }
 
@@ -174,7 +192,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
         SysLicense update = new SysLicense();
         update.setId(id);
         update.setApproveStatus(STATUS_REVOKED);
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("授权吊销失败");
+        }
     }
 
     @Override
@@ -185,7 +205,9 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
             && !STATUS_REJECTED.equals(entity.getApproveStatus())) {
             throw new BusinessException("仅草稿或已驳回状态可删除");
         }
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("授权删除失败");
+        }
     }
 
     @Override
@@ -306,27 +328,40 @@ public class SysLicenseServiceImpl extends BaseServiceImpl<SysLicenseMapper, Sys
      * @return 联机应用交付信息，新建应用时携带一次性密钥
      */
     private LicenseIssueResp ensureOnlineApp(SysLicense entity, SysLicense update) {
-        SysApp app = sysAppService.getOne(new LambdaQueryWrapper<SysApp>()
-            .eq(SysApp::getAppName, entity.getSubject())
-            .eq(SysApp::getEnabled, 1)
-            .last("LIMIT 1"), false);
-        String secretKey = null;
-        if (app == null) {
-            app = new SysApp();
-            app.setAppName(entity.getSubject());
-            app.setAccessKey(generateAppKey());
-            secretKey = generateAppKey();
-            app.setSecretKey(secretKey);
-            app.setEnabled(1);
-            sysAppService.save(app);
+        // 同一被授权方串行创建：并发首次签发时，两个请求都会「查不到 → 新建」，
+        // 没有唯一键兜底就会建出两个同名应用。这里用分布式锁把「查 + 建」变成临界区。
+        String lockKey = "license:app:" + entity.getSubject();
+        String owner = UUID.randomUUID().toString();
+        if (!lockService.tryLock(lockKey, owner, Duration.ofSeconds(10))) {
+            throw new BusinessException("联机应用正在创建中，请稍后重试");
         }
-        update.setAppId(app.getId());
-        LicenseIssueResp resp = new LicenseIssueResp();
-        resp.setAppId(app.getId());
-        resp.setAppName(app.getAppName());
-        resp.setAccessKey(app.getAccessKey());
-        resp.setSecretKey(secretKey);
-        return resp;
+        try {
+            SysApp app = sysAppService.getOne(new LambdaQueryWrapper<SysApp>()
+                .eq(SysApp::getAppName, entity.getSubject())
+                .eq(SysApp::getEnabled, 1)
+                .last("LIMIT 1"), false);
+            String secretKey = null;
+            if (app == null) {
+                app = new SysApp();
+                app.setAppName(entity.getSubject());
+                app.setAccessKey(generateAppKey());
+                secretKey = generateAppKey();
+                app.setSecretKey(secretKey);
+                app.setEnabled(1);
+                if (!sysAppService.save(app)) {
+                    throw new BusinessException("联机应用创建失败，授权签发中止");
+                }
+            }
+            update.setAppId(app.getId());
+            LicenseIssueResp resp = new LicenseIssueResp();
+            resp.setAppId(app.getId());
+            resp.setAppName(app.getAppName());
+            resp.setAccessKey(app.getAccessKey());
+            resp.setSecretKey(secretKey);
+            return resp;
+        } finally {
+            lockService.unlock(lockKey, owner);
+        }
     }
 
     /**

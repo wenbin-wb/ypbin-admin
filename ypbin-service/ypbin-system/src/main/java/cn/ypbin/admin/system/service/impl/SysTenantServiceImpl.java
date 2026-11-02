@@ -27,11 +27,14 @@ import cn.ypbin.admin.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.system.service.SysTenantService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.security.online.OnlineUserService;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,11 +49,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTenant> implements SysTenantService {
 
+    private static final Logger log = LoggerFactory.getLogger(SysTenantServiceImpl.class);
+
     private final SysAuthTemplateService authTemplateService;
     private final SysUserMapper userMapper;
     private final SysRoleMapper roleMapper;
     private final SysDeptMapper deptMapper;
     private final SysPostMapper postMapper;
+    private final OnlineUserService onlineUserService;
 
     @Override
     public List<TenantResp> listTenants() {
@@ -87,10 +93,36 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
         if (!updateById(tenant)) {
             throw new BusinessException("租户更新失败");
         }
-        if (!Objects.equals(existing.getTemplateId(), req.getTemplateId())) {
-            // 重绑权限模板后，租户下用户角色/权限缓存（永久键）随模板变化，须批量失效
-            evictTenantUsers(id);
+        boolean disabledNow = Integer.valueOf(0).equals(req.getStatus())
+            && !Integer.valueOf(0).equals(existing.getStatus());
+        if (disabledNow || !Objects.equals(existing.getTemplateId(), req.getTemplateId())) {
+            // 重绑模板或禁用租户后，租户下用户的角色/权限缓存（永久键）都必须批量失效
+            List<Long> userIds = evictTenantUsers(id);
+            if (disabledNow) {
+                // 缓存失效不够：已建立的 Sa-Token 会话仍然有效，必须把在线用户踢下线
+                kickoutTenantUsers(id, userIds);
+            }
         }
+    }
+
+    /**
+     * 踢掉指定租户用户的在线会话。
+     *
+     * <p>单个用户踢下线失败不阻断其余用户（Redis 抖动时仍尽量收敛暴露面），但必须记 error 日志。</p>
+     *
+     * @param tenantId 租户 ID
+     * @param userIds  该租户的用户 ID
+     */
+    private void kickoutTenantUsers(Long tenantId, List<Long> userIds) {
+        for (Long userId : userIds) {
+            try {
+                onlineUserService.kickoutByUserId(userId);
+            } catch (RuntimeException e) {
+                log.error("租户禁用后踢下线失败：tenantId={}, userId={}", tenantId, userId, e);
+            }
+        }
+        log.info("租户已禁用：权限缓存已失效并踢下线，tenantId={}, users={}",
+            tenantId, userIds.size());
     }
 
     @Override
@@ -149,15 +181,18 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
      *
      * @param tenantId 租户 ID
      */
-    private void evictTenantUsers(Long tenantId) {
+    private List<Long> evictTenantUsers(Long tenantId) {
         List<SysUser> users = TenantContext.executeIgnore(() -> userMapper.selectList(
             new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getTenantId, tenantId)
                 .select(SysUser::getId)));
         if (users.isEmpty()) {
-            return;
+            return List.of();
         }
-        users.stream().map(SysUser::getId).distinct().forEach(SysCache::evictUserAuth);
+        List<Long> userIds = users.stream().map(SysUser::getId).distinct().toList();
+        // 批版接口合并键后一次删除；逐个 forEach 会让 N 个用户变成 N 次缓存往返
+        SysCache.evictUserAuth(userIds);
+        return userIds;
     }
 
     private TenantResp toResp(SysTenant tenant) {
