@@ -21,6 +21,7 @@ import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import java.util.List;
 import java.util.Map;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -278,4 +279,36 @@ public interface SysSpaceMapper extends BaseMapper<SysSpace> {
         """)
     List<Long> selectSubtreeIds(@Param("rootId") Long rootId, @Param("tenantId") Long tenantId,
         @Param("maxDepth") int maxDepth);
+
+    /**
+     * 批量插入空间（单条多值 INSERT）。
+     *
+     * <p>导入逐行 {@code insert} 时，N 行就是 N 次数据库往返（同一事务内）；改为分块多值
+     * INSERT。主键与审计字段的填充与内置 {@code insert} 走同一套 MyBatis-Plus 参数处理
+     * （{@code IdType.ASSIGN_ID} 回填 id、{@code MetaObjectHandler} 填 create_user/create_time），
+     * 故批量路径与逐条路径的落库结果一致。</p>
+     *
+     * <p><b>刻意不写 {@code is_deleted}/{@code code_alive} 列</b>：前者由
+     * {@code NOT NULL DEFAULT 0} 生效，后者是生成列；显式绑定 null 在严格模式下会直接报
+     * {@code 1048 Column ... cannot be null}。</p>
+     *
+     * @param rows 待插入空间（调用方保证非空且已按批切块）
+     * @return 影响行数
+     */
+    @Insert("""
+        <script>
+        INSERT INTO sys_space
+        (id, tenant_id, pid, name, code, space_type, level, sort, address, longitude, latitude,
+         floor_no, room_no, area, capacity, manager, phone, status, remark, ext_json,
+         create_user, create_time, update_user, update_time)
+        VALUES
+        <foreach collection='rows' item='r' separator=','>
+        (#{r.id}, #{r.tenantId}, #{r.pid}, #{r.name}, #{r.code}, #{r.spaceType}, #{r.level},
+         #{r.sort}, #{r.address}, #{r.longitude}, #{r.latitude}, #{r.floorNo}, #{r.roomNo},
+         #{r.area}, #{r.capacity}, #{r.manager}, #{r.phone}, #{r.status}, #{r.remark},
+         #{r.extJson}, #{r.createUser}, #{r.createTime}, #{r.updateUser}, #{r.updateTime})
+        </foreach>
+        </script>
+        """)
+    int insertBatch(@Param("rows") List<SysSpace> rows);
 }
