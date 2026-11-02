@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.cache.SysCache;
@@ -302,9 +303,8 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         roleDeptMapper.insertBatch(rows);
     }
 
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 
     private RoleResp toResp(SysRole role) {

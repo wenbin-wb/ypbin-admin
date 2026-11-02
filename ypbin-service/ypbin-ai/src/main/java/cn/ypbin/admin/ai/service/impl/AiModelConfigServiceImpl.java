@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.ai.core.AiKeyCipher;
 import cn.ypbin.admin.ai.entity.AiModelConfig;
@@ -343,8 +344,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
     private static Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        return TenantSupport.currentTenantId();
     }
 
     private AiModelConfig requireModel(Long id) {
@@ -358,10 +358,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     private AiModelConfigResp toResp(AiModelConfig config) {
         AiModelConfigResp resp = new AiModelConfigResp();
         BeanUtils.copyProperties(config, resp, "apiKey");
-        // API Key 脱敏
-        if (config.getApiKey() != null && config.getApiKey().length() > 6) {
-            resp.setApiKeyMasked(config.getApiKey().substring(0, 6) + "****");
-        } else if (config.getApiKey() != null) {
+        // 只表示「已配置」，不回显任何密文片段：库内是 AES-GCM 密文，
+        // 取其前几位既无信息量，又会让调用方误以为看到了明文片段
+        if (config.getApiKey() != null) {
             resp.setApiKeyMasked("****");
         }
         return resp;

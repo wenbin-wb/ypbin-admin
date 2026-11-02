@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.admin.ai.entity.AiDocument;
 import cn.ypbin.admin.ai.entity.AiKnowledgeBase;
 import cn.ypbin.admin.ai.entity.AiQueryLog;
@@ -134,8 +135,7 @@ public class AiStatsServiceImpl implements AiStatsService {
     }
 
     private static Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        return TenantSupport.currentTenantId();
     }
 
     /**
