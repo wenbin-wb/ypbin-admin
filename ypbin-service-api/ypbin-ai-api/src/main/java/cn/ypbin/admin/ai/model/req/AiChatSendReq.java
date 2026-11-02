@@ -30,19 +30,24 @@ public class AiChatSendReq {
     /** 角色 ID（指定角色，null 为默认助手） */
     private Long roleId;
 
-    /** 模型 ID（指定模型，null 使用角色推荐或默认模型） */
+    /**
+     * 模型 ID（预留）。
+     *
+     * <p>当前仅支持租户默认对话模型：传默认模型 ID 有效，传其它值会被明确拒绝
+     * （starter 按租户默认配置构建 ChatClient，无法按会话切换模型）。</p>
+     */
     private Long modelId;
 
     /** 用户消息内容 */
     @NotBlank(message = "消息内容不能为空")
     private String content;
 
-    /** 图片附件 URL 列表（多模态输入） */
+    /** 图片附件 URL 列表（预留：多模态未接入，传非空会被明确拒绝） */
     private List<String> images;
 
     /** 关联知识库 ID（RAG 检索增强对话，null 则不启用 RAG） */
     private Long knowledgeBaseId;
 
-    /** 是否流式响应（true 返回 SSE，false 返回完整结果） */
+    /** 兼容字段：本接口固定流式返回，传 {@code false} 会被明确拒绝 */
     private Boolean stream;
 }
