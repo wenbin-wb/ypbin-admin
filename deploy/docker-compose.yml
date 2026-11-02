@@ -149,6 +149,8 @@ services:
     environment:
       NACOS_ADDR: nacos:8848
       SENTINEL_ADDR: sentinel-dashboard:8858
+      # 平台超管初始口令（可选）：非空时由 system 启动引导写入种子账号，并强制首登改密
+      SUPER_ADMIN_INIT_PASSWORD: ${SUPER_ADMIN_INIT_PASSWORD:-}
       # Nacos 服务端已开启鉴权：配置拉取依赖这组账号（缺值 compose 直接报错）
       NACOS_USERNAME: ${NACOS_USERNAME:?请在deploy/.env设置NACOS_USERNAME}
       NACOS_PASSWORD: ${NACOS_PASSWORD:?请在deploy/.env设置NACOS_PASSWORD}

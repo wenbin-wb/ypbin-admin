@@ -61,6 +61,7 @@ public final class UserViewConverter {
         dto.setTenantId(user.getTenantId());
         dto.setDeptId(user.getDeptId());
         dto.setStatus(user.getStatus());
+        dto.setPwdChangeRequired(user.getPwdChangeRequired());
         return dto;
     }
 

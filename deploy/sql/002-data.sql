@@ -28,20 +28,22 @@ VALUES (1, 1, 0, '长沙词云信息科技', 1, '张伟', '0731-88888888', 'hr@c
 
 -- 用户（平台用户：admin/approver 密码统一 pt5aQ5E6t8dkVkMp（与前端演示登录默认一致）；
 --      租户测试用户密码统一 123456）
+-- pwd_change_required=1：平台账号首次登录必须先改密（网关只放行改密/登出）；
+-- install.sh 部署时还会用 SUPER_ADMIN_INIT_PASSWORD 覆盖 admin 的这条演示口令。
 INSERT INTO sys_user (id, tenant_id, username, user_type, password, real_name, nickname, dept_id, phone, email, gender,
-                      remark, pwd_reset_time, create_user, create_time, status, is_deleted)
+                      remark, pwd_reset_time, pwd_change_required, create_user, create_time, status, is_deleted)
 VALUES (1, 1, 'admin', 'PLATFORM', '$2a$10$4Yo3GSCsw0TwHl9xYrvPyO0iEu97Fov2uX8hHz3Z1Izfb6ETFKyFO',
-        '超级管理员', '超级管理员', 1, NULL, NULL, 1, '系统内置超级管理员', NOW(), NULL, NOW(), 1, 0),
+        '超级管理员', '超级管理员', 1, NULL, NULL, 1, '系统内置超级管理员', NOW(), 1, NULL, NOW(), 1, 0),
        (6, 1, 'approver', 'PLATFORM', '$2a$10$4Yo3GSCsw0TwHl9xYrvPyO0iEu97Fov2uX8hHz3Z1Izfb6ETFKyFO',
-        '授权审批员', '审批员', 1, NULL, NULL, 1, '授权双人复核的第二审批人', NOW(), 1, NOW(), 1, 0),
+        '授权审批员', '审批员', 1, NULL, NULL, 1, '授权双人复核的第二审批人', NOW(), 1, 1, NOW(), 1, 0),
        (2, 1, 'lilei', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '李强', '强哥', 2, '13900000001', 'liqiang@ciyun.com', 1, '研发中心负责人', NOW(), 1, NOW(), 1, 0),
+        '李强', '强哥', 2, '13900000001', 'liqiang@ciyun.com', 1, '研发中心负责人', NOW(), 0, 1, NOW(), 1, 0),
        (3, 1, 'wangfang', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '王芳', '芳芳', 3, '13900000002', 'wangfang@ciyun.com', 2, '产品中心负责人', NOW(), 1, NOW(), 1, 0),
+        '王芳', '芳芳', 3, '13900000002', 'wangfang@ciyun.com', 2, '产品中心负责人', NOW(), 0, 1, NOW(), 1, 0),
        (4, 1, 'liuyang', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '刘洋', '洋洋', 6, '13900000003', 'liuyang@ciyun.com', 1, '后端组开发', NOW(), 1, NOW(), 1, 0),
+        '刘洋', '洋洋', 6, '13900000003', 'liuyang@ciyun.com', 1, '后端组开发', NOW(), 0, 1, NOW(), 1, 0),
        (5, 1, 'zhoutao', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '周涛', '涛哥', 8, '13900000004', 'zhoutao@ciyun.com', 1, '测试组', NOW(), 1, NOW(), 0, 0);
+        '周涛', '涛哥', 8, '13900000004', 'zhoutao@ciyun.com', 1, '测试组', NOW(), 0, 1, NOW(), 0, 0);
 
 -- 角色（平台超级管理员 super，其余为租户角色）
 INSERT INTO sys_role (id, tenant_id, name, code, role_type, data_scope, sort, remark, create_user, create_time, status, is_deleted)

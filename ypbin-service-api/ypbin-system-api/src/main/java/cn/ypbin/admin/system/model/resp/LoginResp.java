@@ -48,4 +48,11 @@ public class LoginResp {
 
     /** 头像地址 */
     private String avatarUrl;
+
+    /**
+     * 是否必须先修改密码。
+     *
+     * <p>为 {@code true} 时前端应直接进入改密页；网关也会拦截除改密/登出等白名单外的请求。</p>
+     */
+    private Boolean mustChangePassword;
 }

@@ -13,6 +13,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.http.useragent.UserAgent;
 import cn.hutool.http.useragent.UserAgentUtil;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.common.support.PwdChangeKeys;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.enums.UserStatusEnum;
@@ -94,6 +95,9 @@ public class LoginSupport {
         }
         // 登录态写入 sa-token 会话（网关从会话读身份信息签发身份头）
         StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
+        boolean mustChangePassword = Integer.valueOf(PwdChangeKeys.REQUIRED_YES)
+            .equals(user.getPwdChangeRequired());
+        StpUtil.getSession().set(PwdChangeKeys.REQUIRED, mustChangePassword);
         recordLoginTerminal(ip, userAgent);
         updateLastLoginTime(user.getId());
         // 先取令牌再上报：埋点真出问题时（如取令牌本身失败）不会先产出一条「登录成功」事件，
@@ -105,6 +109,7 @@ public class LoginSupport {
         resp.setUserId(user.getId());
         resp.setNickname(StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getRealName());
         resp.setAvatarUrl(user.getAvatar());
+        resp.setMustChangePassword(mustChangePassword);
         loginEventTracker.recordLogin(user, authType, ip, userAgent);
         return resp;
     }

@@ -20,6 +20,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import cn.ypbin.admin.common.support.PwdChangeKeys;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
@@ -375,6 +376,37 @@ class LoginSupportTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("取令牌失败");
             verify(tracker, never()).recordLogin(any(), any(), any(), any());
+        }
+    }
+
+    /**
+     * 强制改密：登录响应必须带标记，并把同一标记写入会话供网关拦截。
+     *
+     * <p>只返回标记不写会话，网关就拦不住直接调接口的客户端；只写会话不返回标记，
+     * 前端无法在登录后直接跳到改密页。</p>
+     */
+    @Test
+    void completeLoginShouldExposeAndPersistPwdChangeFlag() {
+        ISystemClient systemClient = mock(ISystemClient.class);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        SysUserDto user = buildUser();
+        user.setPwdChangeRequired(1);
+
+        try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
+            MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
+            MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+
+            loginHelper.when(() -> LoginHelper.login(any(), any(), any())).thenAnswer(inv -> null);
+            loginHelper.when(LoginHelper::getTokenValue).thenReturn("mock-token");
+            sysCache.when(() -> SysCache.getUserRoleCodes(42L)).thenReturn(List.of());
+            SaSession session = mock(SaSession.class);
+            stpUtil.when(StpUtil::getSession).thenReturn(session);
+            stpUtil.when(StpUtil::getTokenSession).thenReturn(mock(SaSession.class));
+
+            LoginResp resp = support.completeLogin(user, "ACCOUNT", "10.0.0.8", CHROME_UA);
+
+            assertThat(resp.getMustChangePassword()).isTrue();
+            verify(session).set(PwdChangeKeys.REQUIRED, true);
         }
     }
 }
