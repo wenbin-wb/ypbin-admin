@@ -11,12 +11,15 @@ package cn.ypbin.admin.modules.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.modules.system.annotation.PlatformAccess;
+import cn.ypbin.admin.modules.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.service.SysUserService;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.security.online.OnlineUserService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,8 +45,8 @@ public class OnlineUserController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:online-user:list")
-    public R<List<OnlineUserResp>> list(@RequestParam(required = false) String keyword) {
-        return R.ok(userService.listOnlineUsers(keyword));
+    public R<PageResult<OnlineUserResp>> list(@Valid OnlineUserQuery query) {
+        return R.ok(userService.pageOnlineUsers(query));
     }
 
     @Idempotent

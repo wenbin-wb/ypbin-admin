@@ -48,6 +48,15 @@ public class SysNoticeController {
         return R.ok(noticeService.pageNotices(query));
     }
 
+    /**
+     * 公告详情（含正文）：列表不返回 content，编辑/预览前先取详情。
+     */
+    @GetMapping("/{id}")
+    @SaCheckPermission("system:notice:list")
+    public R<NoticeResp> detail(@PathVariable Long id) {
+        return R.ok(noticeService.getNotice(id));
+    }
+
     @Idempotent
     @Log(value = "新增公告", module = "公告管理")
     @PostMapping

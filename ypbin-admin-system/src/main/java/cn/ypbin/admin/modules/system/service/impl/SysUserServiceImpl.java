@@ -23,6 +23,7 @@ import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.modules.system.model.query.UserQuery;
+import cn.ypbin.admin.modules.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.modules.system.model.req.UserSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
@@ -448,17 +449,34 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     }
 
     @Override
-    public List<OnlineUserResp> listOnlineUsers(String keyword) {
-        List<OnlineUser> users = StringUtils.hasText(keyword)
-            ? onlineUserService.list(keyword)
-            : onlineUserService.list();
-        if (users.isEmpty()) {
-            return List.of();
+    public PageResult<OnlineUserResp> pageOnlineUsers(OnlineUserQuery query) {
+        long page = query.getPage();
+        long pageSize = query.getPageSize();
+        if (page < 1 || pageSize < 1) {
+            throw new BusinessException("页码与每页条数必须大于 0");
         }
-        List<Long> ids = users.stream().map(OnlineUser::getUserId).filter(Objects::nonNull).distinct().toList();
+        List<OnlineUser> users = StringUtils.hasText(query.getKeyword())
+            ? onlineUserService.list(query.getKeyword())
+            : onlineUserService.list();
+        long total = users.size();
+        // 先算页边界再取数据：越界页直接返回空列表，不做任何多余的会话补充查询
+        long fromIndex = (page - 1) * pageSize;
+        List<OnlineUser> pageUsers = fromIndex >= total ? List.of()
+            : users.subList((int) fromIndex, (int) Math.min(fromIndex + pageSize, total));
+        if (pageUsers.isEmpty()) {
+            return PageResult.of(List.of(), total, page, pageSize);
+        }
+        List<Long> ids = pageUsers.stream()
+            .map(OnlineUser::getUserId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        // 姓名回填必须忽略租户过滤：在线会话本身是跨租户的（本接口挂在 @PlatformAccess 下），
+        // 否则只有本租户用户能回填到姓名，他租户行的 realName 静默为 null
         Map<Long, String> realNameById = ids.isEmpty() ? Map.of()
-            : listByIds(ids).stream().collect(Collectors.toMap(SysUser::getId, SysUser::getRealName, (a, b) -> a));
-        return users.stream().map(u -> {
+            : TenantContext.executeIgnore(() -> listByIds(ids)).stream()
+                .collect(Collectors.toMap(SysUser::getId, SysUser::getRealName, (a, b) -> a));
+        List<OnlineUserResp> items = pageUsers.stream().map(u -> {
             OnlineUserResp r = new OnlineUserResp();
             BeanUtils.copyProperties(u, r, "token");
             r.setRealName(realNameById.get(u.getUserId()));
@@ -466,6 +484,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             r.setTokenHash(OnlineTokenFingerprint.hash(u.getToken()));
             return r;
         }).toList();
+        return PageResult.of(items, total, page, pageSize);
     }
 
     @Override
