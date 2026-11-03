@@ -62,6 +62,12 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     }
 
     @Override
+    public NoticeResp getNotice(Long id) {
+        // 详情必须带正文：列表查询已排除 content，编辑/预览依赖这里补齐
+        return toResp(requireNotice(id));
+    }
+
+    @Override
     @SensitiveWordFilter
     @Transactional(rollbackFor = Exception.class)
     public void createNotice(NoticeSaveReq req) {
