@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.service;
 
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.model.query.UserQuery;
+import cn.ypbin.admin.modules.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.modules.system.model.req.UserSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
@@ -57,7 +58,7 @@ public interface SysUserService extends BaseService<SysUser> {
 
     UserImportResult importUsers(MultipartFile file);
 
-    List<OnlineUserResp> listOnlineUsers(String keyword);
+    PageResult<OnlineUserResp> pageOnlineUsers(OnlineUserQuery query);
 
     /**
      * 按会话令牌指纹强制下线（列表不再回传 token 原文，踢人只能凭指纹反查）。
