@@ -15,11 +15,8 @@ import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.auth.service.SmsCodeService;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
-import cn.ypbin.starter.core.blocklist.BlocklistProperties;
-import cn.ypbin.starter.core.blocklist.BlocklistStore;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
-import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -38,8 +35,6 @@ public class PhoneLoginStrategy implements LoginStrategy {
     private final SysConfigService configService;
     private final PasswordAttemptLimiter attemptLimiter;
     private final LoginSupport loginSupport;
-    private final BlocklistStore blocklistStore;
-    private final BlocklistProperties blocklistProperties;
 
     @Override
     public String authType() {
@@ -58,15 +53,14 @@ public class PhoneLoginStrategy implements LoginStrategy {
         try {
             smsCodeService.verify(phone, phoneReq.getCode());
         } catch (BusinessException e) {
+            // starter 的 PasswordAttemptLimiter 已把失败计入 IP 自动封禁，这里不要重复计数
             attemptLimiter.recordFailure(phone, clientIp);
-            recordBlocklistViolation(clientIp);
             throw e;
         }
 
         SysUser user = userService.getByPhone(phone);
         if (user == null) {
             attemptLimiter.recordFailure(phone, clientIp);
-            recordBlocklistViolation(clientIp);
             throw new BusinessException("手机号未注册");
         }
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
@@ -75,15 +69,5 @@ public class PhoneLoginStrategy implements LoginStrategy {
         attemptLimiter.reset(phone, clientIp);
 
         return loginSupport.completeLogin(user, authType());
-    }
-
-    private void recordBlocklistViolation(String clientIp) {
-        if (clientIp == null || clientIp.isBlank() || !blocklistProperties.isEnabled()
-            || !blocklistProperties.getAutoBan().isEnabled()) {
-            return;
-        }
-        BlocklistProperties.AutoBan autoBan = blocklistProperties.getAutoBan();
-        blocklistStore.recordViolation(clientIp, Duration.ofSeconds(autoBan.getWindowSeconds()),
-            autoBan.getThreshold(), Duration.ofSeconds(autoBan.getBanSeconds()), "login failure");
     }
 }

@@ -23,13 +23,10 @@ import cn.ypbin.admin.modules.system.service.SysMenuService;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.captcha.core.CaptchaService;
-import cn.ypbin.starter.core.blocklist.BlocklistProperties;
-import cn.ypbin.starter.core.blocklist.BlocklistStore;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
-import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,8 +48,6 @@ public class AuthServiceImpl implements AuthService {
     private final LoginSupport loginSupport;
     private final CaptchaService captchaService;
     private final SysConfigService configService;
-    private final BlocklistStore blocklistStore;
-    private final BlocklistProperties blocklistProperties;
 
     @Override
     public LoginResp login(LoginReq req, String ip) {
@@ -72,8 +67,8 @@ public class AuthServiceImpl implements AuthService {
         SysUser user = userService.getByUsername(username);
         // 2. 校验用户存在与密码
         if (user == null || !PasswordEncoderUtil.matches(req.getPassword(), user.getPassword())) {
+            // starter 的 PasswordAttemptLimiter 已把失败计入 IP 自动封禁，这里不要重复计数
             attemptLimiter.recordFailure(username, ip);
-            recordBlocklistViolation(ip);
             throw new BusinessException("用户名或密码错误");
         }
         // 3. 校验账号状态
@@ -85,20 +80,6 @@ public class AuthServiceImpl implements AuthService {
 
         // 5. 统一登录收尾：写入上下文（含客户端信息）+ 记录登录时间 + 返回令牌
         return loginSupport.completeLogin(user, AdminConstants.AUTH_TYPE_ACCOUNT);
-    }
-
-    /**
-     * 登录失败计入 IP 维度自动封禁。登录失败按 HTTP 200 + R.fail 返回，过滤器看不到 401，
-     * 故在业务失败点直接记录；App 启用黑名单时生效。
-     */
-    private void recordBlocklistViolation(String ip) {
-        if (ip == null || ip.isBlank() || !blocklistProperties.isEnabled()
-            || !blocklistProperties.getAutoBan().isEnabled()) {
-            return;
-        }
-        BlocklistProperties.AutoBan autoBan = blocklistProperties.getAutoBan();
-        blocklistStore.recordViolation(ip, Duration.ofSeconds(autoBan.getWindowSeconds()),
-            autoBan.getThreshold(), Duration.ofSeconds(autoBan.getBanSeconds()), "login failure");
     }
 
     @Override
