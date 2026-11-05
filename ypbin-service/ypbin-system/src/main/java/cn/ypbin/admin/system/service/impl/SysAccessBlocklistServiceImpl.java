@@ -17,6 +17,7 @@ import cn.ypbin.admin.system.model.req.AccessBlocklistSaveReq;
 import cn.ypbin.admin.system.model.resp.AccessBlocklistResp;
 import cn.ypbin.admin.system.model.resp.AutoBanResp;
 import cn.ypbin.admin.system.service.SysAccessBlocklistService;
+import cn.ypbin.admin.system.service.event.BlocklistRulesChangedEvent;
 import cn.ypbin.starter.core.blocklist.AutoBanEntry;
 import cn.ypbin.starter.core.blocklist.BlocklistMatchType;
 import cn.ypbin.starter.core.blocklist.BlocklistRule;
@@ -37,9 +38,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
 
 /**
@@ -59,6 +63,8 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
     private static final Logger log = LoggerFactory.getLogger(SysAccessBlocklistServiceImpl.class);
 
     private final BlocklistStore blocklistStore;
+
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public PageResult<AccessBlocklistResp> pageBlocklists(AccessBlocklistQuery query) {
@@ -87,7 +93,7 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
         if (!save(entity)) {
             throw new BusinessException("黑名单规则新增失败");
         }
-        publishRules();
+        markRulesChanged();
     }
 
     @Override
@@ -111,7 +117,7 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
             .set(SysAccessBlocklist::getExpireTime, req.getExpireTime()))) {
             throw new BusinessException("黑名单规则修改失败");
         }
-        publishRules();
+        markRulesChanged();
     }
 
     @Override
@@ -123,12 +129,18 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
         if (!removeById(id)) {
             throw new BusinessException("黑名单规则删除失败");
         }
-        publishRules();
+        markRulesChanged();
     }
 
     @Override
     public List<AutoBanResp> listAutoBans() {
-        return blocklistStore.autoBans().stream().map(this::toResp).toList();
+        try {
+            return blocklistStore.autoBans().stream().map(this::toResp).toList();
+        } catch (RuntimeException ex) {
+            // 列表是只读展示，Redis 抖动时降级为空列表，避免管理页整页 500；写操作仍上抛
+            log.warn("[ypbin-admin] 读取自动封禁列表失败，返回空列表", ex);
+            return List.of();
+        }
     }
 
     @Override
@@ -156,20 +168,42 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
     }
 
     /**
+     * 规则写事务提交后再下发，避免「Redis 已生效、数据库回滚」的窗口。
+     *
+     * @param event 规则变更事件
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onRulesChanged(BlocklistRulesChangedEvent event) {
+        publishSafely("规则已提交但下发失败，等待手动重新下发或下次保存自愈");
+    }
+
+    /**
      * 应用就绪后同步一次规则；Redis 暂不可用不应阻止应用启动（过滤器会沿用空规则并记录告警）。
      */
     @EventListener(ApplicationReadyEvent.class)
     public void syncRulesOnStartup() {
+        publishSafely("启动同步访问黑名单规则失败，等待下次保存或手动刷新");
+    }
+
+    private void markRulesChanged() {
+        eventPublisher.publishEvent(new BlocklistRulesChangedEvent());
+    }
+
+    private void publishSafely(String message) {
         try {
             publishRules();
         } catch (RuntimeException ex) {
-            log.warn("[ypbin-admin] 启动同步访问黑名单规则失败，等待下次保存或手动刷新", ex);
+            log.warn("[ypbin-admin] " + message, ex);
         }
     }
 
     private void publishRules() {
+        LocalDateTime now = LocalDateTime.now();
         List<SysAccessBlocklist> list = list(new LambdaQueryWrapper<SysAccessBlocklist>()
-            .eq(SysAccessBlocklist::getStatus, 1));
+            .eq(SysAccessBlocklist::getStatus, 1)
+            .and(wrapper -> wrapper.isNull(SysAccessBlocklist::getExpireTime)
+                .or()
+                .gt(SysAccessBlocklist::getExpireTime, now)));
         List<BlocklistRule> rules = list.stream().map(this::toRule).toList();
         blocklistStore.replaceRules(rules);
         log.debug("[ypbin-admin] 访问黑名单规则已下发：{} 条", rules.size());

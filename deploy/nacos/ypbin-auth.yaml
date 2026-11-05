@@ -25,6 +25,20 @@ ypbin:
     identity:
       enabled: false
     interceptor: true
+    # ---------- 访问黑名单（登录失败计数入口）----------
+    # 必须显式开启：starter 的 BlocklistProperties.enabled 默认 false，未开启时
+    # PasswordAttemptLimiter 仍会调用记录器，但记录器第一行就短路，IP 计数恒为 0，
+    # 网关侧只剩 429 一条自动封禁触发路径。
+    # 不配 trusted-proxies：auth 正常只被网关调用，转发头由网关清洗/签发；
+    # 登录计数用的客户端 IP 由 auth 的请求解析取得，不依赖 AccessBlocklistFilter 的 remoteAddress。
+    # auth 内的过滤器属于纵深防御，规则主要仍由网关在入口执行。
+    blocklist:
+      enabled: true
+      auto-ban:
+        enabled: true
+        threshold: 20
+        window-seconds: 60
+        ban-seconds: 600
     excludes:
       - /login
       - /sms/send
