@@ -12,6 +12,7 @@ package cn.ypbin.admin.modules.system.service.impl;
 import cn.ypbin.admin.modules.system.entity.SysAccessBlocklist;
 import cn.ypbin.admin.modules.system.mapper.SysAccessBlocklistMapper;
 import cn.ypbin.admin.modules.system.model.query.AccessBlocklistQuery;
+import cn.ypbin.admin.modules.system.model.req.AccessBlocklistBanReq;
 import cn.ypbin.admin.modules.system.model.req.AccessBlocklistSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.AccessBlocklistResp;
 import cn.ypbin.admin.modules.system.model.resp.AutoBanResp;
@@ -26,6 +27,7 @@ import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -136,6 +138,16 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
             throw new BusinessException("IP 格式不正确");
         }
         blocklistStore.unban(clientIp);
+    }
+
+    @Override
+    public void ban(AccessBlocklistBanReq req) {
+        String clientIp = req.getClientIp().trim();
+        if (!IpAddress.isValidIp(clientIp)) {
+            throw new BusinessException("IP 格式不正确");
+        }
+        blocklistStore.ban(IpAddress.normalize(clientIp), Duration.ofSeconds(req.getBanSeconds()),
+            StringUtils.hasText(req.getReason()) ? req.getReason() : "管理端手动封禁");
     }
 
     @Override
