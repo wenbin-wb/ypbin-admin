@@ -78,6 +78,18 @@ ypbin:
   # ---------- 安全（登录拦截） ----------
   security:
     interceptor: true
+    # 访问黑名单：IP/CIDR、User-Agent、路径前缀；管理端「安全防护 → 访问黑名单」
+    blocklist:
+      enabled: true
+      # 直连地址命中可信代理时才采信 X-Forwarded-For；部署在 nginx/LB 后按实际网段配置
+      trusted-proxies: []
+      # 登录失败由 PasswordAttemptLimiter 在业务失败点按客户端 IP 计数（登录失败为 HTTP 200 + R.code=401，
+      # 过滤器看不到 401）；过滤器默认只把真实 429 计入自动封禁，401/403 需显式配置 status-codes 才会计数
+      auto-ban:
+        enabled: true
+        threshold: 20
+        window-seconds: 60
+        ban-seconds: 600
     excludes:                   # 放行路径（无需登录）
       - /auth/login
       - /auth/sms/send
@@ -119,6 +131,7 @@ ypbin:
       - sys_auth_template
       - sys_template_menu
       - sys_license
+      - sys_access_blocklist
 
   # ---------- 接口签名 ----------
   sign:
