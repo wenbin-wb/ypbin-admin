@@ -93,6 +93,12 @@ ypbin:
   downstream:
     security-interceptor-disabled: true
   security:
+    # 访问黑名单：本服务负责把数据库规则下发到 Redis；实际拦截在网关。
+    # 本地过滤器保留纵深防御，但不按 IP 自动计数（登录失败计数在 auth 侧由 starter 处理）。
+    blocklist:
+      enabled: true
+      auto-ban:
+        enabled: false
     excludes:
       - /open/license/**
       - /open-api/**

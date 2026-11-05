@@ -414,6 +414,33 @@ VALUES
 (5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'page.ai.role.title',         4, NOW(), 1, 0);
 
 -- =============================================================
+-- 安全防护 → 访问黑名单（平台专用）
+-- =============================================================
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort,
+                      create_time, status, is_deleted)
+VALUES (6000, 0, 'SecurityManage', 'catalog', 1, '/system/security', 'BasicLayout',
+        'system.blocklist.title', 'carbon:security-services', 8, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon,
+                      sort, create_time, status, is_deleted)
+VALUES (6001, 6000, 'SystemAccessBlocklist', 'menu', 1, '/system/security/blocklist',
+        '/system/security/blocklist/index', 'system:blocklist:list', 'system.blocklist.list',
+        'carbon:firewall', 1, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort,
+                      create_time, status, is_deleted)
+VALUES (600101, 6001, 'SystemAccessBlocklistAdd', 'button', 1, 'system:blocklist:add',
+        'common.create', 1, NOW(), 1, 0),
+       (600102, 6001, 'SystemAccessBlocklistEdit', 'button', 1, 'system:blocklist:edit',
+        'common.edit', 2, NOW(), 1, 0),
+       (600103, 6001, 'SystemAccessBlocklistDelete', 'button', 1, 'system:blocklist:delete',
+        'common.delete', 3, NOW(), 1, 0),
+       (600104, 6001, 'SystemAccessBlocklistBan', 'button', 1, 'system:blocklist:ban',
+        'system.blocklist.ban', 4, NOW(), 1, 0),
+       (600105, 6001, 'SystemAccessBlocklistUnban', 'button', 1, 'system:blocklist:unban',
+        'system.blocklist.unban', 5, NOW(), 1, 0);
+
+-- =============================================================
 -- 菜单授权
 -- =============================================================
 -- 全部权限模板只授权租户可见菜单
