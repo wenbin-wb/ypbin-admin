@@ -67,6 +67,7 @@ public class AuthServiceImpl implements AuthService {
         SysUser user = userService.getByUsername(username);
         // 2. 校验用户存在与密码
         if (user == null || !PasswordEncoderUtil.matches(req.getPassword(), user.getPassword())) {
+            // starter 的 PasswordAttemptLimiter 已把失败计入 IP 自动封禁，这里不要重复计数
             attemptLimiter.recordFailure(username, ip);
             throw new BusinessException("用户名或密码错误");
         }

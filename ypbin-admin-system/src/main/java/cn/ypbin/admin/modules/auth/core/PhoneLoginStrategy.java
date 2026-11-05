@@ -53,6 +53,7 @@ public class PhoneLoginStrategy implements LoginStrategy {
         try {
             smsCodeService.verify(phone, phoneReq.getCode());
         } catch (BusinessException e) {
+            // starter 的 PasswordAttemptLimiter 已把失败计入 IP 自动封禁，这里不要重复计数
             attemptLimiter.recordFailure(phone, clientIp);
             throw e;
         }
