@@ -49,6 +49,17 @@ spring:
 
 # 统一鉴权：校验 token 后清洗外部头、签发内部身份头
 ypbin:
+  # 访问黑名单：规则由 system 服务写库后下发到 Redis，网关在鉴权前拦截
+  security:
+    blocklist:
+      enabled: true
+      # 网关直接暴露或经可信 LB 时，按实际入口网段配置；为空则按直连地址判断
+      trusted-proxies: []
+      auto-ban:
+        enabled: true
+        threshold: 20
+        window-seconds: 60
+        ban-seconds: 600
   gateway:
     auth:
       enabled: true

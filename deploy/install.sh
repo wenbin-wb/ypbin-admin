@@ -879,8 +879,17 @@ export JAVA_HOME
 ok "环境就绪：$(java -version 2>&1 | head -1)，Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
 
 # --- Maven 阿里云镜像（国内服务器访问 Central 常 403/超时，与单体脚本一致）---
-if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null; then
-  info "配置 Maven 阿里云镜像（国内加速）"
+# 只镜像 central；另加 ypbin-central 直连仓库作为 cn.ypbin 的兜底：
+# 阿里云对刚发布的第三方制品同步有延迟（4.3.0 实测部分模块 404，Central 齐全），
+# 单一镜像会让构建报「依赖不存在」，难以判断是发布缺失还是镜像滞后。
+if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null \
+  || ! grep -q "ypbin-central" "$HOME/.m2/settings.xml" 2>/dev/null; then
+  if [ -f "$HOME/.m2/settings.xml" ] && ! grep -q "ypbin-central" "$HOME/.m2/settings.xml" 2>/dev/null; then
+    backup="$HOME/.m2/settings.xml.bak.$(date +%s)"
+    cp "$HOME/.m2/settings.xml" "$backup"
+    info "旧 settings.xml 已备份到 $backup"
+  fi
+  info "配置 Maven 阿里云镜像（国内加速）+ cn.ypbin 的 Central 兜底仓库"
   mkdir -p "$HOME/.m2"
   cat > "$HOME/.m2/settings.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -895,9 +904,35 @@ if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/
       <url>https://maven.aliyun.com/repository/public</url>
     </mirror>
   </mirrors>
+  <profiles>
+    <profile>
+      <id>ypbin-central</id>
+      <repositories>
+        <repository>
+          <id>ypbin-central</id>
+          <name>Maven Central (cn.ypbin fallback)</name>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>ypbin-central</id>
+          <name>Maven Central (cn.ypbin fallback)</name>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>ypbin-central</activeProfile>
+  </activeProfiles>
 </settings>
 EOF
-  ok "Maven 阿里云镜像已配置"
+  ok "Maven 阿里云镜像与 cn.ypbin 兜底仓库已配置"
 fi
 
 # ---------- [2/7] 拉取代码 ----------
