@@ -12,6 +12,7 @@ package cn.ypbin.admin.modules.system.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.admin.modules.system.annotation.PlatformAccess;
 import cn.ypbin.admin.modules.system.model.query.AccessBlocklistQuery;
+import cn.ypbin.admin.modules.system.model.req.AccessBlocklistBanReq;
 import cn.ypbin.admin.modules.system.model.req.AccessBlocklistSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.AccessBlocklistResp;
 import cn.ypbin.admin.modules.system.model.resp.AutoBanResp;
@@ -83,6 +84,15 @@ public class SysAccessBlocklistController {
     @SaCheckPermission("system:blocklist:list")
     public R<List<AutoBanResp>> autoBans() {
         return R.ok(blocklistService.listAutoBans());
+    }
+
+    @Idempotent
+    @Log(value = "临时封禁 IP", module = "安全防护")
+    @PostMapping("/ban")
+    @SaCheckPermission("system:blocklist:ban")
+    public R<Void> ban(@Valid @RequestBody AccessBlocklistBanReq req) {
+        blocklistService.ban(req);
+        return R.ok();
     }
 
     @Idempotent

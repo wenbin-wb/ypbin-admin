@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.service;
 
 import cn.ypbin.admin.modules.system.entity.SysAccessBlocklist;
 import cn.ypbin.admin.modules.system.model.query.AccessBlocklistQuery;
+import cn.ypbin.admin.modules.system.model.req.AccessBlocklistBanReq;
 import cn.ypbin.admin.modules.system.model.req.AccessBlocklistSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.AccessBlocklistResp;
 import cn.ypbin.admin.modules.system.model.resp.AutoBanResp;
@@ -69,6 +70,13 @@ public interface SysAccessBlocklistService extends BaseService<SysAccessBlocklis
      * @param clientIp 客户端 IP
      */
     void unban(String clientIp);
+
+    /**
+     * 临时封禁一个 IP（带 TTL，与长期规则区分）。
+     *
+     * @param req 请求
+     */
+    void ban(AccessBlocklistBanReq req);
 
     /**
      * 重新下发数据库中的全部规则。
