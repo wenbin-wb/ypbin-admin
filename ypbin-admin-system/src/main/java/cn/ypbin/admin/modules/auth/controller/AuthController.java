@@ -17,6 +17,7 @@ import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.modules.auth.service.AuthService;
+import cn.ypbin.starter.core.blocklist.ClientIpResolver;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.limiter.RateLimit;
@@ -41,6 +42,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final MiniappLoginService miniappLoginService;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 账号密码登录。
@@ -49,7 +51,7 @@ public class AuthController {
     @RateLimit(key = "#req.username", count = 10, window = 60, message = "登录过于频繁，请稍后再试")
     @PostMapping("/auth/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
-        return R.ok(authService.login(req, WebRequestUtils.ip()));
+        return R.ok(authService.login(req, WebRequestUtils.clientIp(clientIpResolver)));
     }
 
     /**
