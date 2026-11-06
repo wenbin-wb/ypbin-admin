@@ -53,8 +53,10 @@ ypbin:
   security:
     blocklist:
       enabled: true
-      # 网关直接暴露或经可信 LB 时，按实际入口网段配置；为空则按直连地址判断
-      trusted-proxies: []
+      # 只信入口 nginx（compose 固定 172.20.0.40）；网关据此从 X-Forwarded-For 右起取真实客户端地址。
+      # 直接用宿主机 OpenResty 反代到网关时，对端会是 compose 网桥地址 172.20.0.1，需追加该项。
+      trusted-proxies:
+        - 172.20.0.40/32
       auto-ban:
         enabled: true
         threshold: 20

@@ -29,15 +29,16 @@ ypbin:
     # 必须显式开启：starter 的 BlocklistProperties.enabled 默认 false，未开启时
     # PasswordAttemptLimiter 仍会调用记录器，但记录器第一行就短路，IP 计数恒为 0，
     # 网关侧只剩 429 一条自动封禁触发路径。
-    # 不配 trusted-proxies：auth 正常只被网关调用，转发头由网关清洗/签发；
-    # 登录计数用的客户端 IP 由 auth 的请求解析取得，不依赖 AccessBlocklistFilter 的 remoteAddress。
-    # 注意：不配 trusted-proxies 时，过滤器按 remoteAddress 判断，即所有请求都落到网关地址上；
-    # 若不排除网关网段，20 个 429 就能把网关 IP 自动封禁，auth 随即对所有经网关请求返回 403。
-    # 因此把容器私网整段排除：auth 内的过滤器放弃对真实客户端 IP 的规则匹配（拦截由网关负责），
-    # 换取“永不封网关地址”；登录失败计数仍按 WebRequestUtils 解析出的真实客户端 IP 进行。
-    # 自定义 Docker 网络时按实际网段调整。
+    # trusted-proxies：auth 只被网关调用（compose 固定 172.20.0.20），故只信任网关这一个地址。
+    # 配了它之后 ClientIpResolver 才会从右往左跳过可信代理、取到真实客户端 IP——登录失败计数、
+    # 审计/埋点 IP 与日志（starter 4.4.0 起统一走 ClientIpResolver）都靠这一项，未配会退化成网关地址。
+    # 刻意不用 10.0.0.0/8 之类大网段：那会把内网调用方也当成可信代理，转发头可被内网伪造。
+    # 自定义 Docker 网络/网关地址时按实际值调整。
     blocklist:
       enabled: true
+      trusted-proxies:
+        - 172.20.0.20/32
+      # 纵深防御：即使解析退化回直连地址（网关），也不会因 429 计数把网关自己写进封禁表
       exclude-ips:
         - 172.16.0.0/12
         - 10.0.0.0/8
@@ -104,5 +105,9 @@ ypbin:
   # 单个脚本即可把短信发送额度刷满并让全站 429。两个 trust-forwarded 必须一起开。
   # 前提：入口（nginx/网关）必须**覆盖** X-Forwarded-For，不能追加，否则客户端可伪造来源。
   tools:
+    # 与 blocklist.trusted-proxies 同值：限流取 IP 也走 ClientIpResolver（starter 4.4.0），
+    # 保证「限流按谁计数」与「黑名单封谁」是同一个地址，避免两套口径分叉
+    trusted-proxies:
+      - 172.20.0.20/32
     rate-limit:
       trust-forwarded: true
