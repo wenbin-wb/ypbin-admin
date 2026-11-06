@@ -14,6 +14,7 @@ import cn.ypbin.admin.auth.service.SocialLoginService;
 import cn.ypbin.admin.auth.support.SocialOAuthStateSupport;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.starter.core.blocklist.ClientIpResolver;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.log.enums.Include;
@@ -47,6 +48,7 @@ public class SocialAuthController {
     private final SocialLoginService socialLoginService;
     private final SocialAuthRegistryInitializer registryInitializer;
     private final SocialOAuthStateSupport stateSupport;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 已注册的第三方平台列表。未配置任何平台时返回空集合。
@@ -77,7 +79,7 @@ public class SocialAuthController {
             HttpServletResponse response) {
         // state 与浏览器 Cookie 绑定：缺少/不符直接拒绝（防登录 CSRF 与重放）
         stateSupport.verify(source, req.getState(), response);
-        return R.ok(socialLoginService.login(source, req, WebRequestUtils.ip(),
+        return R.ok(socialLoginService.login(source, req, WebRequestUtils.clientIp(clientIpResolver),
             WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 

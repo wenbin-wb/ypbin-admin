@@ -32,6 +32,11 @@ ypbin:
   security:
     excludes:
       - /actuator/**
+    # 本服务不启用访问黑名单（enabled 未开），但 ClientIpResolver 仍读这一段：
+    # 日志 IP 与分享口令失败计数都要拿到真实客户端地址，未配会退化成网关地址（同 auth/system 口径）
+    blocklist:
+      trusted-proxies:
+        - 172.20.0.20/32
   ai:
     model-config:
       secret-key: ${AI_MODEL_SECRET_KEY:}
@@ -40,5 +45,8 @@ ypbin:
   # 分享/挂件是匿名入口：按 IP 限流若不信任转发头，所有访客共用「网关地址」这一个桶，
   # 单个访客即可让全站问答 429。前提：入口必须**覆盖** X-Forwarded-For（不能追加）。
   tools:
+    # 限流取 IP 走 ClientIpResolver（信任网关地址），与分享口令失败计数、日志同口径
+    trusted-proxies:
+      - 172.20.0.20/32
     rate-limit:
       trust-forwarded: true

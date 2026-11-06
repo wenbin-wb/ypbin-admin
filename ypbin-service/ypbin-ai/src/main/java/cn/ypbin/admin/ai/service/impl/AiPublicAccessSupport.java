@@ -145,8 +145,9 @@ public class AiPublicAccessSupport {
      * <p><b>失败计数按「令牌 + 客户端 IP」隔离</b>：令牌就是分享链接本身，对所有访问者公开。
      * 若只按令牌计数，任何人拿到链接后提交 5 次错误密码，就能把真正的访问者全部锁在
      * 「请 10 分钟后再试」之外（针对公开入口的拒绝服务）。按 IP 隔离后，锁定只影响
-     * 发起爆破的那个来源。IP 与 {@code @RateLimit} 同源（{@code WebRequestUtils.ip()}，
-     * 信任网关注入的转发头），不另立一套取值口径。</p>
+     * 发起爆破的那个来源。IP 由 Controller 经 {@code WebRequestUtils.clientIp(ClientIpResolver)}
+     * 解析：仅当直连地址命中 {@code ypbin.security.blocklist.trusted-proxies} 时才采信转发头，
+     * 并从右往左取第一个不可信地址，与黑名单过滤器、日志同口径。</p>
      *
      * @param token     分享/挂件令牌（用于隔离失败计数）
      * @param clientIp  调用方客户端 IP（由 Controller 从请求上下文取，可空）
