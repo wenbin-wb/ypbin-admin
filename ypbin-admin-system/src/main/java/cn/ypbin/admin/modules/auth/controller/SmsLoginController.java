@@ -14,6 +14,7 @@ import cn.ypbin.admin.modules.auth.core.PhoneLoginReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.auth.service.SmsCodeService;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
+import cn.ypbin.starter.core.blocklist.ClientIpResolver;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
@@ -39,6 +40,7 @@ public class SmsLoginController {
     private final SmsCodeService smsCodeService;
     private final SysConfigService configService;
     private final LoginStrategyFactory loginStrategyFactory;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 发送验证码。每 IP 60 秒最多 5 次。
@@ -59,6 +61,6 @@ public class SmsLoginController {
     @Log(value = "手机验证码登录", module = "认证")
     @PostMapping("/auth/sms/login")
     public R<LoginResp> smsLogin(@Valid @RequestBody PhoneLoginReq req) {
-        return R.ok(loginStrategyFactory.get("PHONE").login(req, WebRequestUtils.ip()));
+        return R.ok(loginStrategyFactory.get("PHONE").login(req, WebRequestUtils.clientIp(clientIpResolver)));
     }
 }
