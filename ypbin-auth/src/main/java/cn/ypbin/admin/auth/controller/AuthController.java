@@ -16,6 +16,7 @@ import cn.ypbin.admin.auth.service.MiniappLoginService;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
+import cn.ypbin.starter.core.blocklist.ClientIpResolver;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.web.util.WebRequestUtils;
@@ -40,6 +41,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final MiniappLoginService miniappLoginService;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 账号密码登录。
@@ -51,7 +53,7 @@ public class AuthController {
     @Log(value = "账号密码登录", module = "认证")
     @PostMapping("/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
-        return R.ok(authService.login(req, WebRequestUtils.ip(),
+        return R.ok(authService.login(req, WebRequestUtils.clientIp(clientIpResolver),
             WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 
@@ -60,7 +62,7 @@ public class AuthController {
      */
     @PostMapping("/miniapp/login")
     public R<LoginResp> miniappLogin(@RequestBody MiniappLoginReq req) {
-        return R.ok(miniappLoginService.login(req, WebRequestUtils.ip(),
+        return R.ok(miniappLoginService.login(req, WebRequestUtils.clientIp(clientIpResolver),
             WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 
@@ -72,7 +74,8 @@ public class AuthController {
      */
     @PostMapping("/logout")
     public R<Void> logout() {
-        authService.logout(WebRequestUtils.ip(), WebRequestUtils.header(HttpHeaders.USER_AGENT));
+        authService.logout(WebRequestUtils.clientIp(clientIpResolver),
+            WebRequestUtils.header(HttpHeaders.USER_AGENT));
         return R.ok();
     }
 

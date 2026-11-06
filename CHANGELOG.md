@@ -6,6 +6,23 @@
 
 ## [未发布]
 
+### 变更（2026-11-06）· starter 升级至 4.4.0
+
+- `ypbin-starter.version` `4.2.1` → `4.4.0`：补齐 4.3.0 的访问黑名单/自动封禁、网关限流原子计数、
+  CORS 安全默认等修复，以及 4.4.0 的审查修复（租户子查询、数据权限表别名、AI 客户端超时、
+  `@PlatformAccess` 接口注解织入、RefText 预加载装配等）。本分支此前停在 4.2.1，缺整整一个次版本的
+  安全修复。
+- 登录/登出入口的客户端 IP 改用 `WebRequestUtils.clientIp(ClientIpResolver)`：`WebRequestUtils.ip()`
+  在 4.4.0 已标记 `@Deprecated`——它无条件信任 `X-Forwarded-For` 首段，入口未清洗转发头时可被伪造，
+  登录审计/埋点会记录假 IP。涉及 `AuthController`（登录/小程序登录/登出）、`SmsLoginController`、
+  `SocialAuthController` 共 5 处。
+  - **部署侧配套**：多个前置代理（OpenResty → 网关）场景需把 `ypbin.security.blocklist.trusted-proxies`
+    配为代理网段，解析器才会从右往左跳过可信代理取真实客户端地址；不配则退化为直连地址（即代理 IP），
+    与 4.3.0 起日志模块的口径一致。
+- 升级后无需业务代码改动的部分（starter 侧行为修复，admin 当前用法均兼容）：`@PlatformAccess` 保持类级
+  注解写法即可；Dict/RefText 绑定与预加载增强在已有 `DbDictProvider`/`DbRefTextProviders` 下自动生效；
+  `SignResult` 保留原访问器与三参构造；AES 密钥走 `byte[]` 重载不受新增长度校验影响。
+
 ### 变更（2026-11-02）· 平台超管初始口令与强制首登改密
 
 - **种子超管口令不再直接用于安装脚本部署**：`install.sh` 随机生成 `SUPER_ADMIN_INIT_PASSWORD`
