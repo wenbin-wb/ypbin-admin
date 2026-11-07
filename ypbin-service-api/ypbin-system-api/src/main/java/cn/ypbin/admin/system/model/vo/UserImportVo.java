@@ -36,6 +36,6 @@ public class UserImportVo implements Serializable {
     @ExcelProperty("电子邮箱")
     private String email;
 
-    @ExcelProperty("初始密码（留空默认 123456）")
+    @ExcelProperty("初始密码（必填）")
     private String password;
 }

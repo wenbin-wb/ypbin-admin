@@ -112,7 +112,10 @@ public class SocialLoginService {
     public void unbind(String source) {
         Long userId = currentUserId();
         String normalizedSource = normalizeSource(source);
-        systemClient.unbindSocial(userId, normalizedSource);
+        R<Void> resp = systemClient.unbindSocial(userId, normalizedSource);
+        if (resp == null || !resp.isSuccess()) {
+            throw new BusinessException("第三方账号解绑失败，请稍后重试");
+        }
         SysCache.evictSocialBinding(userId, normalizedSource, null);
     }
 

@@ -15,7 +15,6 @@ import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
-import java.util.List;
 
 /**
  * 公告服务。

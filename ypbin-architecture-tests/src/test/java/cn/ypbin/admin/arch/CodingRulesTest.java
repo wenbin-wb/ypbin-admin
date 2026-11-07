@@ -88,18 +88,30 @@ class CodingRulesTest {
      * ai-api 三个非 fat jar 模块可见。</p>
      *
      * <p>取实测值而非「留余量的估值」：少一个类都说明导入范围被削。因业务代码删除导致合法下降时，
-     * 必须<b>同步下调本常量并在此写明理由</b>，不得靠放宽断言蒙混过去。</p>
+     * 必须<b>同步下调本常量并在此写明理由</b>，不得靠放宽断言蒙混过关。</p>
+     *
+     * <p><b>2026-10-18 下调 392 → 387（−5，合法下降）</b>：内部凭证守卫与租户来源下沉到 starter 4.0.0，
+     * 删除的正是这些类——{@code system/config/InternalTokenGuardInterceptor}、{@code InternalTokenGuardWebConfig}、
+     * {@code system-api/.../InternalTokenConstants}、{@code system-api/.../InternalTokenFeignConfiguration}、
+     * {@code common/config/InternalProperties}、{@code common/provider/MicroserviceTenantProvider}、
+     * {@code common/provider/MicroserviceTenantAutoConfiguration}（7 个文件；其中 common 两个属 {@code ..provider..}）。
+     * <b>这不是导入范围被削</b>：{@code SourceScan.sourceModuleRoots()} 与 {@code moduleClassesDirs()} 一行未改，
+     * 各模块 {@code target/classes} 均存在（缺一个都会显式失败）。同批把覆盖下界③一并下调（15 → 13，理由同）。</p>
      */
-    private static final int MIN_IMPORTED_CLASSES = 392;
+    private static final int MIN_IMPORTED_CLASSES = 387;
 
-    /** 覆盖下界②：{@code ..service.impl..} 类数（同上实测 40；fat jar 形态下为 0，即事故靶心）。 */
+    /** 覆盖下界②：{@code ..service.impl..} 类数（实测 40；fat jar 形态下为 0，即事故靶心）。本批未改动。 */
     private static final int MIN_SERVICE_IMPL_CLASSES = 40;
 
     /**
-     * 覆盖下界③：{@code ..provider..} 类数（同上实测 15；fat jar 形态下仅剩 2，即 {@code ypbin-common}
+     * 覆盖下界③：{@code ..provider..} 类数（fat jar 形态下仅剩 2，即 {@code ypbin-common}
      * 的那两个——绝大多数适配实现都藏在 fat jar 里）。规则的目标侧漏了，规则就恒真（永远绿）。
+     *
+     * <p><b>2026-10-18 下调 15 → 13</b>：{@code common/provider/MicroserviceTenantProvider} 与
+     * {@code MicroserviceTenantAutoConfiguration} 随租户来源下沉删除（starter 4.0.0 的 {@code IdentityTenantProvider}
+     * 已提供等价能力）；其余 13 个 {@code ..provider..} 类均保留。同一批同步下调了上界①。</p>
      */
-    private static final int MIN_PROVIDER_CLASSES = 15;
+    private static final int MIN_PROVIDER_CLASSES = 13;
 
     /**
      * 规则：{@code service/impl} 不得依赖 {@code provider}。

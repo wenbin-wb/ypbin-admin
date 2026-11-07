@@ -10,10 +10,9 @@
 package cn.ypbin.admin.ai.core;
 
 import cn.ypbin.admin.system.api.cache.SysCache;
+import cn.ypbin.starter.security.core.AbstractPermissionProvider;
 import cn.ypbin.starter.security.core.PermissionProvider;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,18 +24,22 @@ import org.springframework.stereotype.Component;
  * （见 {@code deploy/nacos/ypbin-ai.yaml} 无 {@code ypbin.tenant.ignore-tables}，直连会被租户插件
  * 追加 {@code tenant_id} 条件而查不到），故经 {@link SysCache} 复用 system 的唯一一份判定实现。</p>
  *
+ * <p><strong>继承 {@link AbstractPermissionProvider} 的理由</strong>：{@code loginId → userId} 的解析
+ * 与 fail-closed 骨架是框架契约而非业务语义，曾在本仓 3 个服务里各抄一份（加 iot 共 4 份）。
+ * 现在统一由 starter 基类承担，本类只剩两个数据源方法。</p>
+ *
  * <p><strong>为什么走 SysCache 而不是每次直接 Feign</strong>：{@code @SaCheckPermission} 在
  * **每个请求**上都要取权限码，直连 Feign 会把鉴权变成每次一次 RPC（且 system 抖动即全站鉴权失败）；
  * {@code SysCache} 命中 Redis 即返回，未命中才回源 system 并回填。缓存**永不过期**，一致性由 system 写
  * 路径的主动失效保证（角色授权/菜单权限码/租户权限模板变更后清 {@code sys:perm:user:*}）；
  * 该失效链路见 {@code SysRoleServiceImpl}/{@code SysMenuServiceImpl}/{@code SysAuthTemplateServiceImpl}。</p>
  *
- * <p><strong>失败语义（fail-closed，禁静默降级）</strong>：
+ * <p><strong>失败语义（fail-closed，禁静默降级）</strong>：<br>
  * ① system 不可达或业务失败：{@code SysCache} 内部经 {@code FeignResponses.dataOrThrow} 抛
- * {@code BusinessException}，本类**不捕获**，异常向上抛出 ⇒ 鉴权不通过（拒绝）且错误在响应与日志中显式可见，
- * 不会被伪装成「无权限 403」或「放行」；<br>
- * ② 响应成功但权限码缺失（null）：记 ERROR 后返回空集合（拒绝），不放行也不抛错；<br>
- * ③ loginId 缺失或非法：记 WARN 后返回空集合（拒绝），不发起 RPC。</p>
+ * {@code BusinessException}，本类**不捕获**（基类也不捕获数据源异常），异常向上抛出 ⇒ 鉴权不通过
+ * （拒绝）且错误在响应与日志中显式可见，不会被伪装成「无权限 403」或「放行」；<br>
+ * ② 响应成功但权限码缺失（null）：基类记 ERROR 后返回空集合（拒绝），不放行也不抛错；<br>
+ * ③ loginId 缺失或非法：基类记 WARN 后返回空集合（拒绝），不发起 RPC。</p>
  *
  * <p>本类与 auth 服务的同名实现刻意各留一份：两者是不同的部署单元，需要各自的宿主 Bean；
  * 判定语义只有 system 一份实现，这里只是薄适配，不含任何权限规则。</p>
@@ -45,70 +48,27 @@ import org.springframework.stereotype.Component;
  * @since 2026-09-16
  */
 @Component
-public class AiPermissionProvider implements PermissionProvider {
-
-    private static final Logger log = LoggerFactory.getLogger(AiPermissionProvider.class);
+public class AiPermissionProvider extends AbstractPermissionProvider {
 
     /**
-     * 查询账号的权限码集合。
+     * 查询指定用户的权限码（经 {@link SysCache} 复用 system 的判定，缺缓存时回源 Feign 并回填）。
      *
-     * @param loginId   登录账号标识（{@code IdentityContext} 口径下的 userId 十进制字符串）
-     * @param loginType 账号体系类型
-     * @return 权限码列表；无法确定权限时为空集合（拒绝）
+     * @param userId 用户 ID
+     * @return 权限码列表
      */
     @Override
-    public List<String> getPermissions(Object loginId, String loginType) {
-        Long userId = resolveUserId(loginId, loginType);
-        if (userId == null) {
-            return List.of();
-        }
-        List<String> permissions = SysCache.getUserPermissions(userId);
-        if (permissions == null) {
-            log.error("[ai] 权限码查询结果缺失，按拒绝处理（未放行）：userId={}", userId);
-            return List.of();
-        }
-        return permissions;
+    protected List<String> permissionsOf(long userId) {
+        return SysCache.getUserPermissions(userId);
     }
 
     /**
-     * 查询账号的角色码集合。
+     * 查询指定用户的角色码。
      *
-     * @param loginId   登录账号标识
-     * @param loginType 账号体系类型
-     * @return 角色码列表；无法确定身份时为空集合（拒绝）
+     * @param userId 用户 ID
+     * @return 角色码列表
      */
     @Override
-    public List<String> getRoles(Object loginId, String loginType) {
-        Long userId = resolveUserId(loginId, loginType);
-        if (userId == null) {
-            return List.of();
-        }
-        List<String> roleCodes = SysCache.getUserRoleCodes(userId);
-        if (roleCodes == null) {
-            log.error("[ai] 角色码查询结果缺失，按无角色处理（未放行）：userId={}", userId);
-            return List.of();
-        }
-        return roleCodes;
-    }
-
-    /**
-     * 把 Sa-Token 的 loginId 解析为用户 ID；解析失败返回 {@code null}，由调用方转成拒绝。
-     *
-     * @param loginId   登录账号标识
-     * @param loginType 账号体系类型
-     * @return 用户 ID；无法解析时为 {@code null}
-     */
-    private Long resolveUserId(Object loginId, String loginType) {
-        if (loginId == null) {
-            log.warn("[ai] 权限查询缺少 loginId，按无权限处理：loginType={}", loginType);
-            return null;
-        }
-        try {
-            return Long.valueOf(loginId.toString().trim());
-        } catch (NumberFormatException ex) {
-            log.warn("[ai] 权限查询的 loginId 不是合法用户 ID，按无权限处理：loginType={}, loginId={}",
-                loginType, loginId);
-            return null;
-        }
+    protected List<String> rolesOf(long userId) {
+        return SysCache.getUserRoleCodes(userId);
     }
 }

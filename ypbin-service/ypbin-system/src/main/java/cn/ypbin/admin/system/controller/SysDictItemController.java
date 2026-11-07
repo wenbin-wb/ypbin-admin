@@ -53,8 +53,17 @@ public class SysDictItemController {
     }
 
     /**
-     * 按字典编码查询字典项（下拉/标签渲染用），仅需登录，走 starter 字典缓存。
+     * 按字典编码查询字典项（平台用户兼容入口）。
+     *
+     * <p><b>注意</b>：本控制器带类级 {@code @PlatformAccess}，该端点实际<b>仅平台用户可用</b>；
+     * 租户用户请走 {@code GET /dict-item-options/{dictCode}}（{@code DictOptionController}，
+     * 仅要求登录）。保留本端点只为兼容既有平台前端调用。</p>
+     *
+     * @param dictCode 字典编码
+     * @return 字典项列表
+     * @deprecated 请改用 {@code /dict-item-options/{dictCode}}，本端点仅作兼容保留
      */
+    @Deprecated
     @GetMapping("/options/{dictCode}")
     public R<List<DictItem>> options(@PathVariable String dictCode) {
         return R.ok(DictUtils.getItems(dictCode));

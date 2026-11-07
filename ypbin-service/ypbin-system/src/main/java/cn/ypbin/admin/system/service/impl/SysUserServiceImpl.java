@@ -32,6 +32,7 @@ import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
 import cn.ypbin.admin.system.model.vo.UserImportResult;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.DataScopeResolver;
 import cn.ypbin.admin.system.service.support.OnlineTokenFingerprint;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
@@ -73,6 +74,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> implements SysUserService {
+
+    /** 空间关联的对象类型码（字典 space_target_type 的项值，user）。 */
+    private static final String SPACE_TARGET_USER = "user";
+
+    private final SysSpaceRelationService spaceRelationService;
 
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
@@ -124,16 +130,42 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     }
 
     @Override
-    public long countUsers() {
-        return TenantContext.executeIgnore(this::count);
+    public long countUsers(Long tenantId) {
+        if (tenantId == null) {
+            throw new BusinessException("统计用户数必须指定租户");
+        }
+        return TenantContext.executeIgnore(() -> count(new LambdaQueryWrapper<SysUser>()
+            .eq(SysUser::getTenantId, tenantId)));
     }
 
+    /**
+     * 按用户名或真实姓名模糊搜索（内部端点 / AI 工具用）。
+     *
+     * <p><b>租户边界</b>：调用方显式传入租户，服务端只搜该租户。AI 工具运行在
+     * Reactor 工作线程，Feign 请求既没有登录态也没有租户身份头，服务端若自行
+     * 「尽力解析租户」，要么直接失败（工具不可用），要么在解析失败时退化成全局
+     * 搜索（跨租户泄露）。因此租户由调用方从自身上下文取，并在此强制校验非空。</p>
+     *
+     * <p><b>OR 必须分组</b>：不包一层 {@code and(...)} 时，后续任何追加条件都会
+     * 变成 {@code a LIKE ? OR b LIKE ? AND c = ?}，语义与预期不符。</p>
+     *
+     * @param keyword  关键词
+     * @param tenantId 租户 ID（必填）
+     * @return 匹配用户（最多 10 条）
+     */
     @Override
-    public List<SysUser> searchUsers(String keyword) {
+    public List<SysUser> searchUsers(String keyword, Long tenantId) {
+        if (tenantId == null) {
+            throw new BusinessException("搜索用户必须指定租户");
+        }
+        // 关闭的是租户插件（改用显式条件），不是隔离本身：租户条件由下面显式加上，
+        // 且缺失租户时上面已直接失败，不会退化成全租户搜索。
         return TenantContext.executeIgnore(() -> list(new LambdaQueryWrapper<SysUser>()
-            .like(SysUser::getUsername, keyword)
-            .or()
-            .like(SysUser::getRealName, keyword)
+            .eq(SysUser::getTenantId, tenantId)
+            .and(wrapper -> wrapper
+                .like(SysUser::getUsername, keyword)
+                .or()
+                .like(SysUser::getRealName, keyword))
             .last("LIMIT 10")));
     }
 
@@ -309,6 +341,10 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         SysCache.evictUserByPhone(existing.getPhone());
         SysCache.evictUserAuth(id);
         onlineUserService.kickoutByUserId(id);
+        // 清理「人员 ↔ 空间」关联：多态关联无数据库外键，不清理会留下指向已删用户的幽灵行
+        // （空间关联数虚高 + 该空间永远删不掉）。放在最后：前面的清理/缓存失效即使某步失败
+        // 也不该让关联先丢，导致重试时状态不一致。
+        spaceRelationService.removeByTarget(SPACE_TARGET_USER, id);
     }
 
     @Override

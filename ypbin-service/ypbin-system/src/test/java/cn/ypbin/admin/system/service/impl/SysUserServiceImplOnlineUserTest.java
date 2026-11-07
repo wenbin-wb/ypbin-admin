@@ -35,6 +35,7 @@ import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.provider.AdminDataScopeHandler;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -71,6 +72,7 @@ class SysUserServiceImplOnlineUserTest {
     void setUp() {
         onlineUserService = mock(OnlineUserService.class);
         userService = spy(new SysUserServiceImpl(
+            mock(SysSpaceRelationService.class),
             mock(SysUserRoleMapper.class),
             mock(SysUserPostMapper.class),
             mock(SysUserSocialMapper.class),

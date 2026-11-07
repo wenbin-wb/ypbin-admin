@@ -11,7 +11,7 @@
 #   （gitee.com/wenbin_wb 下 ypbin-starter / ypbin-admin / ypbin-admin-ui，请先在 Gitee 建镜像并开启自动同步）；
 #   两者都不可达时按下方 YPBIN_REPO 手工指定镜像/代理前缀后重跑。
 #
-# 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 5 服务）：
+# 无 Docker 环境（本机/轻量服务器，直接用 java -jar 启动 4 服务）：
 #   NO_DOCKER=1 bash deploy/install.sh
 #   注意：无 Docker 模式要求外部已有 Nacos/Redis/MySQL，用环境变量指定地址
 #
@@ -19,7 +19,7 @@
 #   [1/7] 环境准备   —— 检查并安装依赖（系统/Docker/JDK21/Maven，Maven 走阿里云镜像）
 #   [2/7] 拉取代码   —— starter + admin（main 分支）+ admin-ui（main），源自动探测/降级
 #   [3/7] 构建 starter —— mvn install（微服务依赖 starter 2.2.3 及新能力）
-#   [4/7] 构建后端   —— Maven 打包 5 个服务可执行 jar
+#   [4/7] 构建后端   —— Maven 打包 4 个服务可执行 jar
 #   [5/7] 生成配置   —— .env 凭据 + Nacos 共享配置提示
 #   [6/7] 启动服务   —— Docker: compose up（含基础设施）；NO_DOCKER: java -jar 逐个启动
 #   [7/7] 健康检查   —— 验证网关/各服务注册，输出访问地址
@@ -44,7 +44,7 @@
 #                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
 #                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
 #   NACOS_USERNAME= NACOS_PASSWORD=
-#                                  Nacos 控制台管理员账号（服务端已开启鉴权；各服务
+#                                  Nacos 控制台管理员账号（服务端已开启鉴权；四个服务
 #                                  拉配置复用同一账号，自动随机生成口令，一般无需手传）
 #   INTERNAL_TOKEN=                /internal/** 服务间 Feign 调用凭证（守卫校验，自动随机生成，
 #                                  auth/system/ai 共享一致值，一般无需手传）
@@ -52,6 +52,8 @@
 #                                  auth/system/ai 校验，一般无需手传）
 #   SUPER_ADMIN_INIT_PASSWORD=     平台超管 admin 初始口令（自动随机生成并写入 .env；
 #                                  非空时由 system 启动写入种子账号，首次登录强制改密）
+#   XXL_JOB_ADMIN_PASSWORD=        XXL-Job 调度中心 admin 初始口令（自动随机生成并写入 .env，
+#                                  不复用 MYSQL_ROOT_PASSWORD；SQL 导入前按口令替换哈希占位符）
 #   REBUILD_FRONTEND=1             强制重新构建前端。默认：产物比源码新则复用、否则自动重建
 #                                  （改了前端源码或 apps/web-antd/.env* 后重跑即可，无需先删 admin-ui-dist）；
 #                                  SKIP_FRONTEND=1 则永不构建（必须已有产物）
@@ -878,8 +880,17 @@ export JAVA_HOME
 ok "环境就绪：$(java -version 2>&1 | head -1)，Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
 
 # --- Maven 阿里云镜像（国内服务器访问 Central 常 403/超时，与单体脚本一致）---
-if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null; then
-  info "配置 Maven 阿里云镜像（国内加速）"
+# 只镜像 central；另加 ypbin-central 直连仓库作为 cn.ypbin 的兜底：
+# 阿里云对刚发布的第三方制品同步有延迟（4.3.0 实测部分模块 404，Central 齐全），
+# 单一镜像会让构建报「依赖不存在」，难以判断是发布缺失还是镜像滞后。
+if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null \
+  || ! grep -q "ypbin-central" "$HOME/.m2/settings.xml" 2>/dev/null; then
+  if [ -f "$HOME/.m2/settings.xml" ] && ! grep -q "ypbin-central" "$HOME/.m2/settings.xml" 2>/dev/null; then
+    backup="$HOME/.m2/settings.xml.bak.$(date +%s)"
+    cp "$HOME/.m2/settings.xml" "$backup"
+    info "旧 settings.xml 已备份到 $backup"
+  fi
+  info "配置 Maven 阿里云镜像（国内加速）+ cn.ypbin 的 Central 兜底仓库"
   mkdir -p "$HOME/.m2"
   cat > "$HOME/.m2/settings.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -894,9 +905,35 @@ if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/
       <url>https://maven.aliyun.com/repository/public</url>
     </mirror>
   </mirrors>
+  <profiles>
+    <profile>
+      <id>ypbin-central</id>
+      <repositories>
+        <repository>
+          <id>ypbin-central</id>
+          <name>Maven Central (cn.ypbin fallback)</name>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>ypbin-central</id>
+          <name>Maven Central (cn.ypbin fallback)</name>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>ypbin-central</activeProfile>
+  </activeProfiles>
 </settings>
 EOF
-  ok "Maven 阿里云镜像已配置"
+  ok "Maven 阿里云镜像与 cn.ypbin 兜底仓库已配置"
 fi
 
 # ---------- [2/7] 拉取代码 ----------
@@ -1006,12 +1043,12 @@ else
 fi
 fi
 
-# ---------- [4/7] 构建后端 5 服务 ----------
+# ---------- [4/7] 构建后端 4 服务 ----------
 if [ "${SKIP_BUILD:-0}" = "1" ]; then
   info "[4/7] 跳过构建（restart 模式，复用已有 jar）"
   JAR_DIR="$ROOT/ypbin-admin/target/microservice-jars"
 else
-info "[4/7] 构建后端 5 个服务"
+info "[4/7] 构建后端 4 个服务"
 cd "$ROOT/ypbin-admin"
 # 完整输出错误（不吞日志）
 if ! mvn -DskipTests clean package 2>&1 | tee /tmp/admin-build.log | tail -20; then
@@ -1108,6 +1145,9 @@ if [ ! -f "$ENV_FILE" ]; then
   else
     REDIS_PASSWORD="${REDIS_PASSWORD:-$(rand_hex 16)}"
   fi
+  # XXL-JOB 调度中心初始口令：随机生成（不复用 MYSQL_ROOT_PASSWORD），登录时与库内 sha256 哈希比对。
+  # 明文仅写入 .env（600）并在部署日志一次性提示；SQL 模板里的占位符由导入前 sed 替换为哈希（见 import_xxl_job_sql）。
+  XXL_JOB_ADMIN_PASSWORD="${XXL_JOB_ADMIN_PASSWORD:-$(rand_hex 16)}"
   # 平台超管初始口令：随机生成（不再使用仓库内公开的演示口令）。由 system 服务启动时
   # 用 BCrypt 写入种子账号（SQL 模板保持占位哈希），并强制首登改密——明文不进 SQL。
   SUPER_ADMIN_INIT_PASSWORD="${SUPER_ADMIN_INIT_PASSWORD:-$(rand_hex 16)}"
@@ -1123,7 +1163,10 @@ NACOS_PASSWORD=$NACOS_PASSWORD
 INTERNAL_TOKEN=$INTERNAL_TOKEN
 GATEWAY_SIGN_TOKEN=$GATEWAY_SIGN_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
+XXL_JOB_ADMIN_PASSWORD=$XXL_JOB_ADMIN_PASSWORD
 SUPER_ADMIN_INIT_PASSWORD=$SUPER_ADMIN_INIT_PASSWORD
+# 留空：模板要求时 install.sh 会 fail-fast（值须与 xxl-job-admin 里 ypbin-system 执行器一致）
+XXL_JOB_ACCESS_TOKEN=
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
 SENTINEL_ADDR=${SENTINEL_ADDR:-sentinel-dashboard:8858}
 ADMIN_UI_PORT=$ADMIN_UI_PORT
@@ -1132,6 +1175,7 @@ EOF
   chmod 600 "$ENV_FILE"
   ok "已生成 .env（凭据已写入，见 $ENV_FILE；不再在日志回显 MySQL 密码）"
   warn ">>> Nacos 控制台管理员口令已随机生成：$NACOS_USERNAME / $NACOS_PASSWORD（见 .env 的 NACOS_PASSWORD）"
+  warn ">>> XXL-Job 控制台初始口令已生成：admin / $XXL_JOB_ADMIN_PASSWORD（已写入 $ENV_FILE 的 XXL_JOB_ADMIN_PASSWORD，请妥善保存）"
   warn ">>> 平台超管初始口令已生成：admin / $SUPER_ADMIN_INIT_PASSWORD（已写入 $ENV_FILE 的 SUPER_ADMIN_INIT_PASSWORD；首次登录必须修改）"
 else
   warn "复用已有 .env"
@@ -1316,46 +1360,117 @@ NACOS_TOKEN=$(curl -fsS --connect-timeout 5 --max-time 30 -X POST "$NACOS_CONSOL
   --data-urlencode "username=$NACOS_USERNAME" \
   --data-urlencode "password=$NACOS_PASSWORD" 2>/dev/null | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' || true)
 
-# 发布 Nacos 配置（共 5 个：ypbin-common + 4 服务；幂等：已存在则覆盖；使用 Nacos 3 Console 新 API）
+# 发布 Nacos 配置（自动枚举 deploy/nacos/*.yaml；幂等：已存在则覆盖；使用 Nacos 3 Console 新 API）
 if [ -n "$NACOS_TOKEN" ]; then
-  info "导入 Nacos 配置中心（ypbin-common + 4 服务）"
-  NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
-  for cfg in ypbin-common ypbin-gateway ypbin-auth ypbin-system ypbin-ai ypbin-miniapp; do
-    if [ -f "$NACOS_DIR/$cfg.yaml" ]; then
-      # 占位符替换：仓库 nacos yaml 不提交真实密码/凭证，导入前用 .env 实际值填充
-      # （仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}/${REDIS_PASSWORD}/${INTERNAL_TOKEN}；
-      #   替换键名与 yaml 占位符完全一致）
-      TMP_CFG="/tmp/nacos-${cfg}.yaml"
-      if [ -n "${REDIS_PASSWORD:-}" ]; then
-        sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
-            -e "s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
-            -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
-            -e "s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
-            -e "s|\${WECHAT_MINIAPP_APPID:}|${WECHAT_MINIAPP_APPID:-}|g" \
-            -e "s|\${WECHAT_MINIAPP_SECRET:}|${WECHAT_MINIAPP_SECRET:-}|g" \
-            "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
-      else
-        # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除 password 行，等价不配置密码；
-        # INTERNAL_TOKEN 仍无条件替换（缺失/为空时 system 守卫 fail-closed，见 ypbin.internal.token 注释）
-        # 小程序凭据同理无条件替换：空值即"未配置"，服务侧 fail-closed 拒绝小程序登录（不静默 Mock）。
-        sed -e "s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
-            -e "s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
-            -e "s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
-            -e "s|\${WECHAT_MINIAPP_APPID:}|${WECHAT_MINIAPP_APPID:-}|g" \
-            -e "s|\${WECHAT_MINIAPP_SECRET:}|${WECHAT_MINIAPP_SECRET:-}|g" \
-            -e "/password: \${REDIS_PASSWORD}/d" \
-            "$NACOS_DIR/$cfg.yaml" > "$TMP_CFG"
-      fi
-      curl -fsS --connect-timeout 5 --max-time 60 -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
+  # NACOS_DIR 按脚本自身位置解析（与检出目录名解耦：fork 如 ypbin-iot 也能找到自己的模板）；
+  # bash <(curl ...) 远程执行时 BASH_SOURCE 不可用（/dev/fd），回退 $ROOT/ypbin-admin/deploy/nacos
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+  if [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/nacos" ]; then
+    NACOS_DIR="$SCRIPT_DIR/nacos"
+  else
+    NACOS_DIR="$ROOT/ypbin-admin/deploy/nacos"
+  fi
+  NACOS_CFG_COUNT="$(ls "$NACOS_DIR"/*.yaml 2>/dev/null | wc -l)"
+  # XXL_JOB_ACCESS_TOKEN：xxl-job 3.5.0 起执行器 AccessToken 必填且须与 admin 一致，无法自动生成
+  # （生成了 admin 也不认），故只做「模板用了就必须由运维提供」的前置校验（fail-fast，
+  # 不让 system 拖到启动期才报 access-token 未配置）。
+  if grep -qE '\$\{XXL_JOB_ACCESS_TOKEN(:[^}]*)?}' "$NACOS_DIR"/*.yaml 2>/dev/null; then
+    [ -n "${XXL_JOB_ACCESS_TOKEN:-}" ] || die "Nacos 模板里有 \${XXL_JOB_ACCESS_TOKEN} 占位符但 deploy/.env 未设置：请填成 xxl-job-admin 里「ypbin-system」执行器的 AccessToken（生成：openssl rand -hex 16，再同步填进 admin），或把模板里 ypbin.xxl-job.enabled 改为 false"
+  fi
+  info "导入 Nacos 配置中心（目录 $NACOS_DIR，$NACOS_CFG_COUNT 份配置）"
+  # ---- live-only 键检查（与 iot 同源机制）------------------------------------
+  # Nacos 导入是**整份覆盖**：线上有、模板无的键会被静默删除。历史上已因此丢过
+  # auth 的 identity.enabled（→ 平台无法登录、CI 不红、启动无告警）。
+  # 每次 POST 之前先 GET 线上内容，与渲染后内容逐叶子键比对：默认告警；
+  # NACOS_IMPORT_STRICT=1 时直接失败。缺 python3 / 取不到线上内容时**显式告警跳过**（禁静默）。
+  NACOS_LIVE_ONLY_DIFF="$ROOT/tools/nacos-live-only-diff.py"
+  NACOS_LIVE_ONLY_ALLOWLIST="$NACOS_DIR/../nacos-live-only-allowlist.txt"
+  if ! command -v python3 >/dev/null 2>&1; then
+    warn "未找到 python3 ⇒ 跳过「live-only 键」检查（导入是整份覆盖，线上独有键会被删除；请人工核对）"
+    NACOS_LIVE_ONLY_CHECK=0
+  elif [ ! -f "$NACOS_LIVE_ONLY_DIFF" ]; then
+    warn "缺少 $NACOS_LIVE_ONLY_DIFF ⇒ 跳过「live-only 键」检查"
+    NACOS_LIVE_ONLY_CHECK=0
+  else
+    NACOS_LIVE_ONLY_CHECK=1
+  fi
+  declare -a NACOS_TMP_FILES=()
+  trap 'rm -f "${NACOS_TMP_FILES[@]:-}" 2>/dev/null || true' EXIT
+  for cfg_file in "$NACOS_DIR"/*.yaml; do
+    if [ ! -f "$cfg_file" ]; then
+      # 模板缺失不再静默：明确给出期望路径，避免「重跑 install.sh 就能生效」在 fork 上变成假承诺
+      warn "未找到 Nacos 配置模板（期望 $NACOS_DIR/*.yaml），跳过配置导入"
+      continue
+    fi
+    cfg="$(basename "$cfg_file" .yaml)"
+    # 占位符替换：仓库 nacos yaml 不提交真实密码/凭证，导入前用 .env 实际值填充。
+    # 所有替换以 /^[[:space:]]*#/! 限定「非注释行」——注释里的占位符保持 ${...} 原样，
+    # 真实凭据不进配置存储的注释文本（也不进 dump/备份/导出截图）。
+    # （仅 ypbin-common.yaml 使用 ${MYSQL_ROOT_PASSWORD}/${REDIS_PASSWORD}/${INTERNAL_TOKEN}；
+    #   替换键名与 yaml 占位符完全一致）
+    TMP_CFG="$(mktemp)"   # 600 权限，渲染出的明文凭据不落 644 的 /tmp 文件
+    NACOS_TMP_FILES+=("$TMP_CFG")
+    if [ -n "${REDIS_PASSWORD:-}" ]; then
+      sed -e "/^[[:space:]]*#/! s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+          -e "/^[[:space:]]*#/! s/\${REDIS_PASSWORD}/${REDIS_PASSWORD}/g" \
+          -e "/^[[:space:]]*#/! s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
+          -e "/^[[:space:]]*#/! s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
+          -e "/^[[:space:]]*#/! s/\${XXL_JOB_ACCESS_TOKEN\(:[^}]*\)\?}/${XXL_JOB_ACCESS_TOKEN:-}/g" \
+          -e "/^[[:space:]]*#/! s|\${WECHAT_MINIAPP_APPID:}|${WECHAT_MINIAPP_APPID:-}|g" \
+          -e "/^[[:space:]]*#/! s|\${WECHAT_MINIAPP_SECRET:}|${WECHAT_MINIAPP_SECRET:-}|g" \
+          "$cfg_file" > "$TMP_CFG"
+    else
+      # REDIS_PASSWORD 为空（NO_DOCKER 外部 Redis 不认证）→ 删除非注释的 password 行，等价不配置密码；
+      # INTERNAL_TOKEN 仍无条件替换（缺失/为空时 system 守卫 fail-closed，见 ypbin.security.internal-token 注释）
+      sed -e "/^[[:space:]]*#/! s/\${MYSQL_ROOT_PASSWORD}/${MYSQL_ROOT_PASSWORD}/g" \
+          -e "/^[[:space:]]*#/! s/\${INTERNAL_TOKEN}/${INTERNAL_TOKEN}/g" \
+          -e "/^[[:space:]]*#/! s/\${GATEWAY_SIGN_TOKEN}/${GATEWAY_SIGN_TOKEN}/g" \
+          -e "/^[[:space:]]*#/! s/\${XXL_JOB_ACCESS_TOKEN\(:[^}]*\)\?}/${XXL_JOB_ACCESS_TOKEN:-}/g" \
+          -e "/^[[:space:]]*#/! s|\${WECHAT_MINIAPP_APPID:}|${WECHAT_MINIAPP_APPID:-}|g" \
+          -e "/^[[:space:]]*#/! s|\${WECHAT_MINIAPP_SECRET:}|${WECHAT_MINIAPP_SECRET:-}|g" \
+          -e "/^[[:space:]]*#/! /password: \${REDIS_PASSWORD}/d" \
+          "$cfg_file" > "$TMP_CFG"
+    fi
+    # live-only 键检查：GET 线上当前内容 → 与渲染后内容比对（见上方说明）
+    if [ "${NACOS_LIVE_ONLY_CHECK:-0}" = "1" ]; then
+      LIVE_RAW="$(mktemp)"
+      LIVE_CFG="$(mktemp)"
+      NACOS_TMP_FILES+=("$LIVE_RAW" "$LIVE_CFG")
+      if curl -fsS --connect-timeout 5 --max-time 60 -G "$NACOS_CONSOLE_URL/v3/console/cs/config" \
         -H "accessToken: $NACOS_TOKEN" \
         --data-urlencode "dataId=$cfg.yaml" \
         --data-urlencode "groupName=DEFAULT_GROUP" \
-        --data-urlencode "type=yaml" \
         --data-urlencode "namespaceId=" \
-        --data-urlencode "content@$TMP_CFG" \
-        >/dev/null 2>&1 && ok "已导入 $cfg.yaml" || warn "$cfg.yaml 导入失败"
+        -o "$LIVE_RAW" 2>/dev/null \
+        && python3 "$NACOS_LIVE_ONLY_DIFF" --unwrap "$LIVE_RAW" > "$LIVE_CFG" 2>/dev/null \
+        && [ -s "$LIVE_CFG" ]; then
+        STRICT_FLAG=""
+        [ "${NACOS_IMPORT_STRICT:-0}" = "1" ] && STRICT_FLAG="--strict"
+        # shellcheck disable=SC2086  # STRICT_FLAG 需按空格拆分
+        if ! python3 "$NACOS_LIVE_ONLY_DIFF" --live "$LIVE_CFG" --template "$TMP_CFG" \
+            --allowlist "$NACOS_LIVE_ONLY_ALLOWLIST" $STRICT_FLAG; then
+          die "$cfg.yaml 存在白名单外的 live-only 键（NACOS_IMPORT_STRICT=1）——本次导入会删除线上配置，已中止。详见上方 ::error:: 行"
+        fi
+      else
+        warn "$cfg.yaml 未取到线上内容（首次导入 / 接口不可用 / 内容为空）⇒ 跳过 live-only 检查"
+      fi
+      rm -f "$LIVE_RAW" "$LIVE_CFG"
     fi
+    if curl -fsS --connect-timeout 5 --max-time 60 -X POST "$NACOS_CONSOLE_URL/v3/console/cs/config" \
+      -H "accessToken: $NACOS_TOKEN" \
+      --data-urlencode "dataId=$cfg.yaml" \
+      --data-urlencode "groupName=DEFAULT_GROUP" \
+      --data-urlencode "type=yaml" \
+      --data-urlencode "namespaceId=" \
+      --data-urlencode "content@$TMP_CFG" \
+      >/dev/null 2>&1; then
+      ok "已导入 $cfg.yaml"
+    else
+      warn "$cfg.yaml 导入失败"
+    fi
+    rm -f "$TMP_CFG"
   done
+  trap - EXIT
 else
   # 复现一次登录请求只为拿到「HTTP 状态 + 响应正文」这一手判据；token 一律脱敏后再打印。
   # ⚠️ 此处**刻意不用 `| head -c` 截断**：head 读够就退出会让上游 sed 拿到 EPIPE（Broken pipe）并返回 4，
@@ -1389,6 +1504,32 @@ fi
 
 # 初始化 MySQL 库表（仅在数据库不存在表时执行；使用 deploy/sql 下的 V1-V4 等价脚本）
 if [ "$NO_DOCKER" != "1" ]; then
+  # ---------- XXL-Job 调度中心初始口令 ----------
+  # 随机生成（不复用 MYSQL_ROOT_PASSWORD），明文只写一次 .env（600）并在部署日志提示；
+  # SQL 模板里的 ${XXL_JOB_ADMIN_PASSWORD_HASH} 占位符由 import_xxl_job_sql 导入前替换（仅非注释行）。
+  if [ -z "${XXL_JOB_ADMIN_PASSWORD:-}" ]; then
+    # 兼容旧 .env/环境变量缺失：兜底生成并追加到 .env，避免升级部署后丢口令
+    XXL_JOB_ADMIN_PASSWORD="$(rand_hex 16)"
+    if [ -f "$ENV_FILE" ]; then
+      # 幂等：已有键则不重复追加
+      grep -q "^XXL_JOB_ADMIN_PASSWORD=" "$ENV_FILE" || printf 'XXL_JOB_ADMIN_PASSWORD=%s\n' "$XXL_JOB_ADMIN_PASSWORD" >> "$ENV_FILE" || true
+    fi
+    warn ">>> 已生成 XXL-Job 初始口令：admin / $XXL_JOB_ADMIN_PASSWORD（已写入 $ENV_FILE 的 XXL_JOB_ADMIN_PASSWORD）"
+  fi
+  XXL_JOB_ADMIN_PASSWORD_HASH="$(printf '%s' "$XXL_JOB_ADMIN_PASSWORD" | sha256sum | awk '{print $1}')"
+
+  # 导入 005-xxl-job.sql：先把口令哈希占位符渲染进临时 SQL（mktemp 600，仅非注释行），再 docker cp 执行
+  import_xxl_job_sql() { # $1 = 源 SQL 路径
+    local src="$1" tmp
+    tmp="$(mktemp)"
+    # 排除 YAML 的 # 与 SQL 的 -- 两类注释行：注释里的占位符保持原样，真实凭据不进 SQL 注释
+    sed -e "/^[[:space:]]*\(#\|--\)/! s/\${XXL_JOB_ADMIN_PASSWORD_HASH}/${XXL_JOB_ADMIN_PASSWORD_HASH}/g" \
+        "$src" > "$tmp"
+    docker cp "$tmp" ypbin-mysql:/tmp/init-xxl.sql
+    docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" < /tmp/init-xxl.sql"
+    rm -f "$tmp"
+  }
+
   info "初始化 MySQL 库表（如已初始化会自动跳过）"
   # 等待 MySQL 健康
   for i in $(seq 1 30); do
@@ -1407,8 +1548,7 @@ if [ "$NO_DOCKER" != "1" ]; then
     for sql in "$ROOT/ypbin-admin/deploy/sql/"*.sql; do
       # xxl-job 初始化脚本自带 CREATE DATABASE xxl_job + use，不指定库执行
       if [ "$(basename "$sql")" = "005-xxl-job.sql" ]; then
-        docker cp "$sql" ypbin-mysql:/tmp/init-xxl.sql
-        docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" < /tmp/init-xxl.sql"
+        import_xxl_job_sql "$sql"
       else
         docker cp "$sql" ypbin-mysql:/tmp/init.sql
         docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" ypbin_admin < /tmp/init.sql"
@@ -1420,8 +1560,7 @@ if [ "$NO_DOCKER" != "1" ]; then
     # ypbin_admin 已存在时仍确保 xxl_job 库（xxl-job-admin 独立库）就绪
     XXL_TABLE_COUNT=$(docker exec ypbin-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='xxl_job';" 2>/dev/null || echo 0)
     if [ "${XXL_TABLE_COUNT:-0}" = "0" ] && [ -f "$ROOT/ypbin-admin/deploy/sql/005-xxl-job.sql" ]; then
-      docker cp "$ROOT/ypbin-admin/deploy/sql/005-xxl-job.sql" ypbin-mysql:/tmp/init-xxl.sql
-      docker exec ypbin-mysql sh -c "mysql --default-character-set=utf8mb4 -uroot -p\"$MYSQL_ROOT_PASSWORD\" < /tmp/init-xxl.sql"
+      import_xxl_job_sql "$ROOT/ypbin-admin/deploy/sql/005-xxl-job.sql"
       ok "已执行 005-xxl-job.sql（xxl_job 库初始化）"
     fi
   fi
@@ -1483,7 +1622,7 @@ fi
 
 # ---------- [6/7] 启动服务 ----------
 if [ "$NO_DOCKER" = "1" ]; then
-  info "[6/7] 无 Docker 模式：java -jar 启动 5 服务（需外部 Nacos/Redis/MySQL）"
+  info "[6/7] 无 Docker 模式：java -jar 启动 4 服务（需外部 Nacos/Redis/MySQL）"
   [ -n "${NACOS_ADDR:-}" ] || die "NO_DOCKER 模式需设置 NACOS_ADDR"
   mkdir -p "$ROOT/logs"
   # 时区必须显式传给 JVM：Docker 模式靠镜像 ENV TZ=Asia/Shanghai 生效，java -jar 直启没有这层保障，
@@ -1584,7 +1723,7 @@ echo "  部署目录:        $ROOT"
 if [ "$NO_DOCKER" = "1" ]; then
   echo "  服务日志:        $ROOT/logs/*.log"
 else
-  echo "  XXL-Job 控制台:  http://$ACCESS_HOST:18085/xxl-job-admin （默认 admin/123456）"
+  echo "  XXL-Job 控制台:  http://$ACCESS_HOST:18085/xxl-job-admin （初始口令见 $ENV_FILE 的 XXL_JOB_ADMIN_PASSWORD）"
   echo "  管理:            cd $ROOT/ypbin-admin/deploy && docker compose -f docker-compose.yml logs -f"
 fi
 echo "================================================"

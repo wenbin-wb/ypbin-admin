@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
  *       <b>userId</b> 全为空。登录事件没有 userId 就无法按人做漏斗，等于白采。</li>
  *   <li><strong>注解在消费者线程外无落点</strong>：auth 没有埋点落库实现，注解与门面都要靠
  *       {@code TrackEventSink} 决定去向；本仓的落库实现在 system 服务，故两者都需要
- *       {@code RemoteTrackEventSink} 上报（见 {@code RemoteTrackAutoConfiguration}）。</li>
+ *       starter 的远端事件落点上报（由 starter tracking 的自动配置装配）。</li>
  * </ol>
  *
  * <p><strong>请求上下文必须在请求线程上捕获</strong>（{@code TrackRequestContext} 的说明）：

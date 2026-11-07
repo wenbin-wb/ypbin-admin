@@ -9,6 +9,8 @@
  */
 package cn.ypbin.admin.common.constant;
 
+import cn.ypbin.starter.security.satoken.StpPermissionAdapter;
+
 /**
  * 系统通用常量。
  *
@@ -26,26 +28,23 @@ public final class AdminConstants {
     /** 租户用户类型 */
     public static final String USER_TYPE_TENANT = "TENANT";
 
-    /** 平台超级管理员角色类型 */
-    public static final String ROLE_TYPE_PLATFORM_SUPER = "PLATFORM_SUPER";
-
     /** 租户角色类型 */
     public static final String ROLE_TYPE_TENANT = "TENANT_ROLE";
-
-    /** 默认租户 ID */
-    public static final Long DEFAULT_TENANT_ID = 1L;
 
     /** 顶级节点父 ID（菜单/部门根节点） */
     public static final Long ROOT_PARENT_ID = 0L;
 
-    /** 通配权限码：拥有该权限视为拥有全部权限 */
-    public static final String ALL_PERMISSION = "*:*:*";
+    /**
+     * 通配权限码：拥有该权限视为拥有全部权限。
+     *
+     * <p><strong>不再是本仓的字面量定义</strong>：该契约由 starter 单点定义
+     * （{@code cn.ypbin.starter.security.satoken.StpPermissionAdapter#SUPER_ADMIN}），本仓只做引用，
+     * 避免同一份契约两个定义点、漂移时静默越权/漏权。iot 侧已改为引用 starter 常量，本仓跟随。</p>
+     */
+    public static final String ALL_PERMISSION = StpPermissionAdapter.SUPER_ADMIN;
 
     /** 后台管理登录客户端 ID */
     public static final String CLIENT_WEB_ADMIN = "web-admin";
-
-    /** 账号密码认证方式 */
-    public static final String AUTH_TYPE_ACCOUNT = "ACCOUNT";
 
     private AdminConstants() {
     }

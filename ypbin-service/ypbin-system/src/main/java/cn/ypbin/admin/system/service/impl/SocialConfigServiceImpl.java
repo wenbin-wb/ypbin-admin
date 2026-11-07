@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.model.req.SocialConfigUpdateReq;
 import cn.ypbin.admin.system.model.resp.SocialConfigResp;
@@ -16,7 +17,7 @@ import cn.ypbin.admin.system.service.SocialConfigService;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.social.SocialAuthRequestFactory;
 import cn.ypbin.admin.system.social.SocialConfigChangedEvent;
-import cn.ypbin.starter.cache.annotation.CacheEvict;
+import cn.ypbin.admin.system.social.SocialConfigKeys;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -24,7 +25,6 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -37,23 +37,15 @@ import org.springframework.util.StringUtils;
 /**
  * 第三方登录平台配置服务实现。
  *
+ * <p>配置键与解析规则统一由 {@link SocialConfigKeys} 提供，避免与内部读取侧
+ * {@code SocialConfigReader} 各写一份后漂移。</p>
+ *
  * @author wenbin
  * @since 2026-08-08
  */
 @Service
 @RequiredArgsConstructor
 public class SocialConfigServiceImpl implements SocialConfigService {
-
-    private static final String SOCIAL_GROUP = "social";
-    private static final String SOCIAL_PREFIX = "SOCIAL_";
-    private static final String ENABLED_SUFFIX = "_ENABLED";
-    private static final String CLIENT_ID_SUFFIX = "_CLIENT_ID";
-    private static final String CLIENT_SECRET_SUFFIX = "_CLIENT_SECRET";
-    private static final String REDIRECT_URI_SUFFIX = "_REDIRECT_URI";
-    private static final String PUBLIC_KEY_SUFFIX = "_PUBLIC_KEY";
-
-    /** 支付宝平台标识（需公钥配置的平台） */
-    private static final String ALIPAY_SOURCE = "alipay";
 
     private final SysConfigService configService;
     private final SocialAuthRequestFactory requestFactory;
@@ -69,22 +61,29 @@ public class SocialConfigServiceImpl implements SocialConfigService {
 
     @Override
     public SocialConfigResp getConfig(String source) {
-        String normalizedSource = normalizeSource(source);
+        String normalizedSource = SocialConfigKeys.normalizeSource(source);
         return toResp(normalizedSource, loadSocialConfigs());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(keys = {"'sys:social:config:' + #source", "'sys:social:configs'"})
     public void updateConfig(String source, SocialConfigUpdateReq req) {
-        String normalizedSource = normalizeSource(source);
+        String normalizedSource = SocialConfigKeys.normalizeSource(source);
+        if (!SocialAuthRequestFactory.SOURCES.contains(normalizedSource)) {
+            throw new BusinessException("不支持的第三方登录平台：" + source);
+        }
+        if (req.getEnabled() == null) {
+            throw new BusinessException("启用状态不能为空：" + normalizedSource);
+        }
         Map<String, SysConfig> configs = loadPlatformConfigs(normalizedSource);
-        String prefix = keyPrefix(normalizedSource);
-        String oldSecret = value(configs, prefix + CLIENT_SECRET_SUFFIX);
-        String clientSecret = StringUtils.hasText(req.getClientSecret()) ? req.getClientSecret().trim() : oldSecret;
-        String clientId = trimToEmpty(req.getClientId());
-        String redirectUri = trimToEmpty(req.getRedirectUri());
-        String publicKey = ALIPAY_SOURCE.equals(normalizedSource) ? trimToEmpty(req.getPublicKey()) : "";
+        String prefix = SocialConfigKeys.keyPrefix(normalizedSource);
+        String oldSecret = value(configs, prefix + SocialConfigKeys.CLIENT_SECRET_SUFFIX);
+        String clientSecret = StringUtils.hasText(req.getClientSecret())
+            ? req.getClientSecret().trim() : oldSecret;
+        String clientId = SocialConfigKeys.trimToEmpty(req.getClientId());
+        String redirectUri = SocialConfigKeys.trimToEmpty(req.getRedirectUri());
+        String publicKey = SocialConfigKeys.ALIPAY_SOURCE.equals(normalizedSource)
+            ? SocialConfigKeys.trimToEmpty(req.getPublicKey()) : "";
 
         validateRedirectUri(redirectUri);
         AuthRequest request = null;
@@ -94,21 +93,23 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         }
 
         Map<String, String> updates = new HashMap<>();
-        updates.put(prefix + ENABLED_SUFFIX, req.getEnabled().toString());
-        updates.put(prefix + CLIENT_ID_SUFFIX, clientId);
-        updates.put(prefix + CLIENT_SECRET_SUFFIX, clientSecret);
-        updates.put(prefix + REDIRECT_URI_SUFFIX, redirectUri);
-        if (ALIPAY_SOURCE.equals(normalizedSource)) {
-            updates.put(prefix + PUBLIC_KEY_SUFFIX, publicKey);
+        updates.put(prefix + SocialConfigKeys.ENABLED_SUFFIX, req.getEnabled().toString());
+        updates.put(prefix + SocialConfigKeys.CLIENT_ID_SUFFIX, clientId);
+        updates.put(prefix + SocialConfigKeys.CLIENT_SECRET_SUFFIX, clientSecret);
+        updates.put(prefix + SocialConfigKeys.REDIRECT_URI_SUFFIX, redirectUri);
+        if (SocialConfigKeys.ALIPAY_SOURCE.equals(normalizedSource)) {
+            updates.put(prefix + SocialConfigKeys.PUBLIC_KEY_SUFFIX, publicKey);
         }
         updates.forEach((key, configValue) -> updateRequired(configs.get(key), configValue));
         eventPublisher.publishEvent(new SocialConfigChangedEvent(
             normalizedSource, Boolean.TRUE.equals(req.getEnabled()), request));
+        // 读侧 key 使用归一后的 source；这里必须同口径清理，否则 "GitHub" 只会清掉一个永不命中的键
+        SysCache.evictSocialConfig(normalizedSource);
     }
 
     private Map<String, SysConfig> loadSocialConfigs() {
         List<SysConfig> configs = configService.list(new LambdaQueryWrapper<SysConfig>()
-            .eq(SysConfig::getConfigGroup, SOCIAL_GROUP));
+            .eq(SysConfig::getConfigGroup, SocialConfigKeys.GROUP));
         Map<String, SysConfig> result = new HashMap<>();
         for (SysConfig config : configs) {
             result.put(config.getConfigKey(), config);
@@ -117,10 +118,9 @@ public class SocialConfigServiceImpl implements SocialConfigService {
     }
 
     private Map<String, SysConfig> loadPlatformConfigs(String source) {
-        String prefix = keyPrefix(source);
-        Set<String> keys = platformKeys(source, prefix);
+        Set<String> keys = SocialConfigKeys.platformKeys(source);
         List<SysConfig> configs = configService.list(new LambdaQueryWrapper<SysConfig>()
-            .eq(SysConfig::getConfigGroup, SOCIAL_GROUP)
+            .eq(SysConfig::getConfigGroup, SocialConfigKeys.GROUP)
             .in(SysConfig::getConfigKey, keys));
         if (configs.size() != keys.size()) {
             throw new BusinessException("第三方登录平台配置项不完整：" + source);
@@ -136,15 +136,18 @@ public class SocialConfigServiceImpl implements SocialConfigService {
     }
 
     private SocialConfigResp toResp(String source, Map<String, SysConfig> configs) {
-        String prefix = keyPrefix(source);
-        ensureKeysExist(source, configs, platformKeys(source, prefix));
+        String prefix = SocialConfigKeys.keyPrefix(source);
+        ensureKeysExist(source, configs, SocialConfigKeys.platformKeys(source));
         SocialConfigResp resp = new SocialConfigResp();
         resp.setSource(source);
-        resp.setEnabled(parseEnabled(value(configs, prefix + ENABLED_SUFFIX), source));
-        resp.setClientId(value(configs, prefix + CLIENT_ID_SUFFIX));
-        resp.setClientSecretConfigured(StringUtils.hasText(value(configs, prefix + CLIENT_SECRET_SUFFIX)));
-        resp.setRedirectUri(value(configs, prefix + REDIRECT_URI_SUFFIX));
-        resp.setPublicKey(ALIPAY_SOURCE.equals(source) ? value(configs, prefix + PUBLIC_KEY_SUFFIX) : "");
+        resp.setEnabled(SocialConfigKeys.parseStoredEnabled(
+            value(configs, prefix + SocialConfigKeys.ENABLED_SUFFIX), source));
+        resp.setClientId(value(configs, prefix + SocialConfigKeys.CLIENT_ID_SUFFIX));
+        resp.setClientSecretConfigured(StringUtils.hasText(
+            value(configs, prefix + SocialConfigKeys.CLIENT_SECRET_SUFFIX)));
+        resp.setRedirectUri(value(configs, prefix + SocialConfigKeys.REDIRECT_URI_SUFFIX));
+        resp.setPublicKey(SocialConfigKeys.ALIPAY_SOURCE.equals(source)
+            ? value(configs, prefix + SocialConfigKeys.PUBLIC_KEY_SUFFIX) : "");
         return resp;
     }
 
@@ -154,7 +157,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         }
         boolean updated = configService.update(new LambdaUpdateWrapper<SysConfig>()
             .eq(SysConfig::getId, config.getId())
-            .eq(SysConfig::getConfigGroup, SOCIAL_GROUP)
+            .eq(SysConfig::getConfigGroup, SocialConfigKeys.GROUP)
             .eq(SysConfig::getConfigKey, config.getConfigKey())
             .set(SysConfig::getConfigValue, configValue));
         if (!updated) {
@@ -183,7 +186,7 @@ public class SocialConfigServiceImpl implements SocialConfigService {
             throw new BusinessException("回调地址不能为空：" + source);
         }
         validateRedirectUri(redirectUri);
-        if (ALIPAY_SOURCE.equals(source) && !StringUtils.hasText(publicKey)) {
+        if (SocialConfigKeys.ALIPAY_SOURCE.equals(source) && !StringUtils.hasText(publicKey)) {
             throw new BusinessException("支付宝公钥不能为空");
         }
     }
@@ -204,41 +207,8 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         }
     }
 
-    private static boolean parseEnabled(String enabled, String source) {
-        if ("true".equalsIgnoreCase(enabled)) {
-            return true;
-        }
-        if ("false".equalsIgnoreCase(enabled)) {
-            return false;
-        }
-        throw new BusinessException("第三方登录启用配置必须为 true 或 false：" + source);
-    }
-
-    private static String normalizeSource(String source) {
-        if (!StringUtils.hasText(source)) {
-            throw new BusinessException("第三方登录平台不能为空");
-        }
-        String normalized = source.trim().toLowerCase(Locale.ROOT);
-        if (!SocialAuthRequestFactory.SOURCES.contains(normalized)) {
-            throw new BusinessException("不支持的第三方登录平台：" + source);
-        }
-        return normalized;
-    }
-
-    private static String keyPrefix(String source) {
-        return SOCIAL_PREFIX + source.toUpperCase(Locale.ROOT);
-    }
-
-    private static Set<String> platformKeys(String source, String prefix) {
-        if (ALIPAY_SOURCE.equals(source)) {
-            return Set.of(prefix + ENABLED_SUFFIX, prefix + CLIENT_ID_SUFFIX, prefix + CLIENT_SECRET_SUFFIX,
-                prefix + REDIRECT_URI_SUFFIX, prefix + PUBLIC_KEY_SUFFIX);
-        }
-        return Set.of(prefix + ENABLED_SUFFIX, prefix + CLIENT_ID_SUFFIX,
-            prefix + CLIENT_SECRET_SUFFIX, prefix + REDIRECT_URI_SUFFIX);
-    }
-
-    private static void ensureKeysExist(String source, Map<String, SysConfig> configs, Set<String> keys) {
+    private static void ensureKeysExist(String source, Map<String, SysConfig> configs,
+            Set<String> keys) {
         if (!configs.keySet().containsAll(keys)) {
             throw new BusinessException("第三方登录平台配置项不完整：" + source);
         }
@@ -249,10 +219,6 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         if (config == null) {
             throw new BusinessException("系统参数不存在：" + key);
         }
-        return trimToEmpty(config.getConfigValue());
-    }
-
-    private static String trimToEmpty(String value) {
-        return value == null ? "" : value.trim();
+        return SocialConfigKeys.trimToEmpty(config.getConfigValue());
     }
 }

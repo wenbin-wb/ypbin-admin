@@ -158,8 +158,9 @@ public class AiKnowledgeSearchComponent {
             logEntry.setCreateTime(LocalDateTime.now());
             queryLogMapper.insert(logEntry);
         } catch (Exception e) {
-            log.warn("[ypbin-ai] 记录检索日志失败: kbId={} query={} err={}",
-                knowledgeBaseId, LogSanitizer.sanitize(query), LogSanitizer.sanitize(e.getMessage()));
+            // 统计旁路失败不阻断主流程，但属于「静默丢数据」，必须 ERROR + 完整堆栈
+            log.error("[ypbin-ai] 记录检索日志失败: kbId={} query={}",
+                knowledgeBaseId, LogSanitizer.sanitize(query), e);
         }
     }
 
@@ -172,7 +173,7 @@ public class AiKnowledgeSearchComponent {
         try {
             return supplier.get();
         } catch (IllegalStateException e) {
-            log.warn("[ypbin-ai] 检索执行失败: {}", e.getMessage());
+            log.warn("[ypbin-ai] 检索执行失败: {}", e.getMessage(), e);
             throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加向量化模型");
         }
     }

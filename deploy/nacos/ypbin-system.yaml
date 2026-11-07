@@ -7,10 +7,12 @@
 ypbin:
   tenant:
     enabled: true
-    # fail-closed：无租户上下文时拒绝执行（而非放行跨租户查询）。
+    # 不写 fail-on-missing-tenant：starter 4.1.0 的 DownstreamDefaultsEnvironmentPostProcessor
+    # 会以**最低优先级属性源**为下游服务注入 fail-on-missing-tenant=true（租户模块自身默认值也是 true），
+    # 与这里显式写一遍效果相同；去掉重复项后「下游形态」的语义只在 starter 一处维护。
+    # 语义不变（fail-closed）：无租户上下文时拒绝执行（而非放行跨租户查询）。
     # 登录、匿名分享、定时任务等本无租户上下文的路径已用 @TenantIgnore / TenantContext.executeIgnore 显式放行，
     # 若上线后出现「缺少租户上下文」报错，说明该路径漏了显式忽略声明，应补声明而非关闭本开关。
-    fail-on-missing-tenant: true
     # 不做租户隔离的全局表（与单体版对齐）
     ignore-tables:
       - sys_menu
@@ -76,6 +78,9 @@ ypbin:
   # 同样在网关之后：按 IP 限流若不信任转发头，所有请求会共用「网关地址」这一个桶，
   # 匿名方可低成本让正常上报全部 429。两个 trust-forwarded 必须一起开（装配期有错配告警）。
   tools:
+    # 与 blocklist.trusted-proxies 同值：限流取 IP 走 ClientIpResolver，与黑名单/日志同口径
+    trusted-proxies:
+      - 172.20.0.20/32
     rate-limit:
       trust-forwarded: true
   # 本应用是授权签发端，不启用 starter License 自保护
@@ -83,10 +88,29 @@ ypbin:
     enabled: false
 
 # ---------- 安全（开放接口与内部 Feign 端点免登录拦截）----------
+  # system 为下游业务服务，登录态由网关校验并注入身份头：
+  # 声明 starter 4.1.0 的**下游 opt-in 开关**，由 DownstreamDefaultsEnvironmentPostProcessor 注入
+  # ypbin.security.interceptor=false（关闭本地 Sa-Token 全局拦截，避免 system 直读 Redis 会话导致 token 无效）。
+  # 这是显式 opt-in：starter 不会默认为任何宿主关掉安全拦截（auth 有真实用户会话，
+  # 默认关闭会让它的端点静默失去登录校验）；注解鉴权（annotation-check）不受本开关影响。
+  downstream:
+    security-interceptor-disabled: true
   security:
-    # system 为下游业务服务，登录态由网关校验并注入身份头；
-    # 关闭本地 Sa-Token 全局拦截，避免 system 直读 Redis 会话导致 token 无效。
-    interceptor: false
+    # 访问黑名单：本服务负责把数据库规则下发到 Redis；实际拦截在网关。
+    # 本地过滤器保留纵深防御，但不按 IP 自动计数（登录失败计数在 auth 侧由 starter 处理）。
+    blocklist:
+      enabled: true
+      # 只信网关（compose 固定 172.20.0.20）。未配时 ClientIpResolver 返回直连地址=网关地址，
+      # 每个请求都会拿网关 IP 查封禁表，一旦该 IP 进表 system 整体 403（issue #125）。
+      trusted-proxies:
+        - 172.20.0.20/32
+      # 纵深防御：解析退化回直连地址时也不会把网关写进封禁表
+      exclude-ips:
+        - 172.16.0.0/12
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+      auto-ban:
+        enabled: false
     excludes:
       - /open/license/**
       - /open-api/**
@@ -107,6 +131,13 @@ ypbin:
   xxl-job:
     enabled: true
     admin-addresses: http://xxl-job-admin:8080
-    access-token: ""
+    # ⚠️ 不能留空：starter 的 XxlJobAutoConfiguration 在 enabled=true 且 access-token 为空时
+    # **fail-fast 抛 IllegalStateException**（xxl-job 3.5.0 起 AccessToken 为执行器维度且不可为空）。
+    # 取值必须与调度中心 admin 中同名 appname（ypbin-system）的 access_token 一致；
+    # install.sh 从 deploy/.env 的 XXL_JOB_ACCESS_TOKEN 渲染，未设置则部署期直接失败（不让它拖到启动期）。
+    # 写法必须是**裸占位符**（不带 `:默认值` 后缀）：install.sh 的 grep/sed 精确匹配
+    # `${XXL_JOB_ACCESS_TOKEN}`，带后缀会「既不替换、也不触发前置校验」⇒ Nacos 留字面占位符、
+    # system 启动期绑定失败（2026-10-20 第二轮 dev 部署实测踩到，iot 侧同源）。
+    access-token: "${XXL_JOB_ACCESS_TOKEN}"
     appname: ypbin-system
     port: 9999

@@ -10,37 +10,27 @@
 package cn.ypbin.admin.ai.support;
 
 import java.util.concurrent.atomic.AtomicReference;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
 
 /**
- * AI 对话 SSE 流式辅助工具。
+ * AI 对话 SSE 流式辅助工具（本仓仅保留 starter 未提供的那一个能力）。
  *
- * <p>承载 SSE 错误帧构造、订阅释放与根异常提取三个纯函数，
- * 从 {@code AiChatServiceImpl} 拆分，供流式对话主流程复用。</p>
+ * <p><strong>为什么只剩 {@code disposeQuietly}</strong>：SSE 错误帧构造与根因提取属通用传输能力，
+ * starter 的 {@code SseStreamBridge}（{@code ypbin-starter-messaging}）已提供同语义的
+ * {@code errorEmitter}/{@code rootMessage}，本仓原有的两份副本是与 starter 逐行重复的实现，
+ * 且会随 starter 演进漂移（starter 版带参数校验与可定制选项，副本没有）。故二者已删除，
+ * 调用方改为直接使用 {@link cn.ypbin.starter.messaging.sse.SseStreamBridge}。</p>
+ *
+ * <p>而 {@code disposeQuietly} 保留在业务侧：starter 的流式桥接用 {@code Disposable.Swap} 管理订阅，
+ * 本仓手工 {@code subscribe()} 的路径持有的是 {@code AtomicReference<Disposable>}，类型不同；
+ * 为统一它需要在 starter 补一个重载（新增 API，属独立评估项），不在本次改动范围。</p>
  *
  * @author wenbin
  * @since 2026-08-28
  */
 public final class AiChatSseSupport {
 
-    private static final Logger log = LoggerFactory.getLogger(AiChatSseSupport.class);
-
     private AiChatSseSupport() {
-    }
-
-    /** 构造只携带错误信息的 SSE 响应（立即发送并完成）。 */
-    public static SseEmitter errorEmitter(String message) {
-        SseEmitter emitter = new SseEmitter(0L);
-        try {
-            emitter.send(SseEmitter.event().name("error").data(message));
-        } catch (Exception e) {
-            log.warn("[ypbin-ai] 发送错误提示失败", e);
-        }
-        emitter.complete();
-        return emitter;
     }
 
     /** 释放流式订阅（幂等）。 */
@@ -49,15 +39,5 @@ public final class AiChatSseSupport {
         if (d != null) {
             d.dispose();
         }
-    }
-
-    /** 提取异常链最深层原因的消息文本。 */
-    public static String rootMessage(Throwable e) {
-        Throwable cur = e;
-        while (cur.getCause() != null) {
-            cur = cur.getCause();
-        }
-        String msg = cur.getMessage();
-        return msg == null || msg.isBlank() ? cur.getClass().getSimpleName() : msg;
     }
 }

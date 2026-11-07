@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.ai.core.AiKeyCipher;
 import cn.ypbin.admin.ai.entity.AiModelConfig;
@@ -48,6 +49,35 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     public static final String MODEL_TYPE_CHAT = "CHAT";
     /** 向量化模型 */
     public static final String MODEL_TYPE_EMBEDDING = "EMBEDDING";
+
+    /** 连接超时（秒） */
+    static final int CONNECT_TIMEOUT_SECONDS = 5;
+    /** 请求超时（秒） */
+    static final int READ_TIMEOUT_SECONDS = 15;
+    /** 连接超时 */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS);
+    /** 请求超时 */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(READ_TIMEOUT_SECONDS);
+
+    /**
+     * 连接测试复用同一客户端：每次 new 会丢掉连接池与线程资源。
+     *
+     * <p>显式指定 HTTP/1.1：JDK 默认 HTTP/2，而该方法总是「新连接 + 带体 POST」，
+     * 对仅支持 h2c 探测的服务会出现 {@code EOF reached while reading}（IoT 仓实测）。</p>
+     */
+    private static final HttpClient httpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
+        .connectTimeout(CONNECT_TIMEOUT)
+        .build();
+
+    /**
+     * 取共享客户端（包级可见，仅供测试断言「单例 + 协议版本 + 超时」配置，不做真实网络调用）。
+     *
+     * @return 进程内共享的 {@link HttpClient}
+     */
+    static HttpClient httpClient() {
+        return httpClient;
+    }
 
     private final AiModelConfigMapper modelConfigMapper;
     private final AiKeyCipher keyCipher;
@@ -95,7 +125,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         config.setIsDefault(0);
         // API Key AES-GCM 加密后存储，禁止明文落库
         config.setApiKey(keyCipher.encrypt(req.getApiKey()));
-        modelConfigMapper.insert(config);
+        if (modelConfigMapper.insert(config) != 1) {
+            throw new BusinessException("模型配置创建失败");
+        }
     }
 
     @Override
@@ -112,7 +144,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         if (req.getApiKey() != null && !req.getApiKey().isBlank()) {
             config.setApiKey(keyCipher.encrypt(req.getApiKey()));
         }
-        modelConfigMapper.updateById(config);
+        if (modelConfigMapper.updateById(config) != 1) {
+            throw new BusinessException("模型配置更新失败");
+        }
     }
 
     @Override
@@ -122,7 +156,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         if (existing.getIsDefault() != null && existing.getIsDefault() == 1) {
             throw new BusinessException("默认模型不能删除，请先更换默认模型");
         }
-        modelConfigMapper.deleteById(id);
+        if (modelConfigMapper.deleteById(id) != 1) {
+            throw new BusinessException("模型配置删除失败");
+        }
     }
 
     @Override
@@ -138,10 +174,13 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
                 .eq(AiModelConfig::getModelType, modelType)
                 .set(AiModelConfig::getIsDefault, 0));
         // 设置新默认
-        modelConfigMapper.update(null,
+        int affected = modelConfigMapper.update(null,
             new LambdaUpdateWrapper<AiModelConfig>()
                 .eq(AiModelConfig::getId, id)
                 .set(AiModelConfig::getIsDefault, 1));
+        if (affected != 1) {
+            throw new BusinessException("默认模型设置失败");
+        }
     }
 
     @Override
@@ -155,7 +194,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         AiModelConfig update = new AiModelConfig();
         update.setId(id);
         update.setStatus(status);
-        modelConfigMapper.updateById(update);
+        if (modelConfigMapper.updateById(update) != 1) {
+            throw new BusinessException("模型状态更新失败");
+        }
     }
 
     @Override
@@ -169,7 +210,9 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         copy.setIsDefault(0);
         copy.setStatus(EntityStatus.ENABLED.getCode());
         // API Key 密文可直接复用（同一把密钥加密，解密语义不变）
-        modelConfigMapper.insert(copy);
+        if (modelConfigMapper.insert(copy) != 1) {
+            throw new BusinessException("模型复制失败");
+        }
         return copy.getId();
     }
 
@@ -186,14 +229,12 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
         String apiKey = keyCipher.decrypt(config.getApiKey());
         long start = System.currentTimeMillis();
         try {
-            HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+            // 模型名来自用户输入，直接拼进 JSON 会被引号/反斜杠破坏报文（甚至注入字段）
             String payload = """
                 {"model":"%s","messages":[{"role":"user","content":"ping"}],"max_tokens":5}
-                """.formatted(config.getModelName());
+                """.formatted(escapeJson(config.getModelName()));
             HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .timeout(Duration.ofSeconds(15))
+                .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8));
             if (apiKey != null && !apiKey.isBlank()) {
@@ -204,7 +245,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
             for (String url : candidates) {
                 // 候选地址由 baseUrl 派生，仍逐个校验（防止拼接后指向非预期主机）
                 urlSafetyGuard.requireSafeUrl(url, "模型接口地址");
-                resp = client.send(builder.copy().uri(URI.create(url)).build(),
+                resp = httpClient.send(builder.copy().uri(URI.create(url)).build(),
                     HttpResponse.BodyHandlers.ofString());
                 // 404 时尝试下一个候选地址，其余错误码直接返回
                 if (resp.statusCode() != 404) {
@@ -303,8 +344,7 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
     private static Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        return TenantSupport.currentTenantId();
     }
 
     private AiModelConfig requireModel(Long id) {

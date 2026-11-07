@@ -137,9 +137,13 @@ class AuthPermissionProviderTest {
 
     /**
      * 模拟缓存未命中：直接执行 loader，从而让 SysCache 内部的 Feign 调用真实发生。
+     *
+     * <p><b>2026-10-19 更新</b>：starter 4.2.0 给 {@code getOrLoad} 补了「无 Class 参数」重载，
+     * {@code SysCache} 的角色码/权限码（列表载荷）已改用它 ⇒ 这里桩<b>三参</b>签名
+     * （key + supplier + ttl，supplier 是第 <b>1</b> 个参数）。</p>
      */
     private void stubCacheMiss(MockedStatic<CacheUtils> cacheUtils, String expectedKey) {
-        cacheUtils.when(() -> CacheUtils.getOrLoad(eq(expectedKey), any(), any(), isNull()))
-            .thenAnswer(invocation -> invocation.getArgument(2, Supplier.class).get());
+        cacheUtils.when(() -> CacheUtils.getOrLoad(eq(expectedKey), any(), isNull()))
+            .thenAnswer(invocation -> invocation.getArgument(1, Supplier.class).get());
     }
 }

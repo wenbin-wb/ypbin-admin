@@ -10,10 +10,12 @@
 package cn.ypbin.admin.auth;
 
 import cn.ypbin.admin.auth.config.WechatMiniappProperties;
+import cn.ypbin.admin.common.ingest.RemoteIngestClientConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -23,6 +25,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @since 2026-09-01
  */
 @SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.auth", "cn.ypbin.admin.system.api"})
+@Import(RemoteIngestClientConfiguration.class)
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
 @EnableConfigurationProperties(WechatMiniappProperties.class)
 @EnableScheduling
