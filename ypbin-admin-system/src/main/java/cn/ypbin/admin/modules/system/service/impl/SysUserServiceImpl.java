@@ -28,6 +28,7 @@ import cn.ypbin.admin.modules.system.model.req.UserSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
+import cn.ypbin.admin.modules.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.admin.modules.system.service.support.OnlineTokenFingerprint;
 import cn.ypbin.admin.modules.system.service.support.UserAccountSupport;
@@ -69,6 +70,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> implements SysUserService {
 
+    /** 空间关联的目标类型：用户。 */
+    private static final String SPACE_TARGET_USER = "user";
+
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
     private final SysRoleMapper roleMapper;
@@ -76,6 +80,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     private final OnlineUserService onlineUserService;
     private final UserExcelComponent userExcelComponent;
     private final UserAccountSupport accountSupport;
+    /** 用户删除时清理空间关联，避免留下指向已删用户的孤儿关联。 */
+    private final SysSpaceRelationService spaceRelationService;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -227,6 +233,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
+        // 空间是多态关联：用户删除后清理其空间归属，避免关联表指向已删用户
+        spaceRelationService.removeByTarget(SPACE_TARGET_USER, id);
     }
 
     @Override
