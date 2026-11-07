@@ -28,6 +28,7 @@ import cn.ypbin.admin.modules.system.model.req.UserSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
+import cn.ypbin.admin.modules.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.admin.modules.system.service.support.OnlineTokenFingerprint;
 import cn.ypbin.admin.modules.system.service.support.UserAccountSupport;
@@ -75,6 +76,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     /** 小程序用户首次登录且未带昵称时的默认展示名 */
     private static final String DEFAULT_MINIAPP_NICKNAME = "微信用户";
+    /** 空间关联的目标类型：用户。 */
+    private static final String SPACE_TARGET_USER = "user";
 
     private final SysUserRoleMapper userRoleMapper;
     private final SysUserPostMapper userPostMapper;
@@ -83,6 +86,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     private final OnlineUserService onlineUserService;
     private final UserExcelComponent userExcelComponent;
     private final UserAccountSupport accountSupport;
+    /** 用户删除时清理空间关联，避免留下指向已删用户的孤儿关联。 */
+    private final SysSpaceRelationService spaceRelationService;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -316,6 +321,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         }
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getUserId, id));
         userPostMapper.delete(new LambdaQueryWrapper<SysUserPost>().eq(SysUserPost::getUserId, id));
+        // 空间是多态关联：用户删除后清理其空间归属，避免关联表指向已删用户
+        spaceRelationService.removeByTarget(SPACE_TARGET_USER, id);
     }
 
     @Override
