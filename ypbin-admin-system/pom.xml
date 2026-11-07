@@ -124,5 +124,11 @@
             <artifactId>rome</artifactId>
             <version>2.1.0</version>
         </dependency>
+        <!-- 本模块的单元测试（空间等纯逻辑）直接放本模块，与代码同仓：JUnit5 + AssertJ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
