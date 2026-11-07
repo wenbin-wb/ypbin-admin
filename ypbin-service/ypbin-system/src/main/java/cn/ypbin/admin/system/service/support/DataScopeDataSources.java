@@ -53,7 +53,7 @@ import org.springframework.beans.factory.ObjectProvider;
 @RequiredArgsConstructor
 class DataScopeDataSources {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(DataScopeDataSources.class);
     private final ObjectProvider<SysRoleMapper> roleMapperProvider;
     private final ObjectProvider<SysRoleDeptMapper> roleDeptMapperProvider;
     private final ObjectProvider<SysDeptMapper> deptMapperProvider;

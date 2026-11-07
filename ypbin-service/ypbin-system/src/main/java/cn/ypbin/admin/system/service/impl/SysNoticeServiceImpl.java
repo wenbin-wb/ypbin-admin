@@ -307,7 +307,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
      */
     private LambdaQueryWrapper<SysNotice> publishedWrapper() {
         return new LambdaQueryWrapper<SysNotice>()
-            .eq(SysNotice::getPublishStatus, PUBLISHED)
+            .eq(SysNotice::getPublishStatus, NoticePublishStatusEnum.PUBLISHED.getCode())
             .and(w -> w.isNull(SysNotice::getExpireTime)
                 .or().gt(SysNotice::getExpireTime, LocalDateTime.now()))
             .orderByDesc(SysNotice::getIsTop)

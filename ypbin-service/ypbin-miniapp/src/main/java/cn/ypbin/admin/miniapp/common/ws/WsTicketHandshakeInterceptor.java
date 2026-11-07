@@ -64,7 +64,7 @@ public class WsTicketHandshakeInterceptor implements HandshakeInterceptor {
             return true;
         } catch (BusinessException e) {
             // 凭据问题只记 WARN（属可预期的拒绝，不是系统故障），但必须留痕
-            log.warn("WS 握手鉴权失败，拒绝连接；roomId={}，原因={}", roomId, e.getMessage());
+            log.warn("WS 握手鉴权失败，拒绝连接；roomId={}，原因={}", roomId, e.getMessage(), e);
             return false;
         }
     }

@@ -20,6 +20,7 @@ import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.provider.DbLogProviders;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
+import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.mapper.SysMessageMapper;
 import cn.ypbin.starter.messaging.mail.MailService;
@@ -70,7 +71,8 @@ class SystemClientImplConfigMaskTest {
         mock(MailService.class),
         mock(ObjectProvider.class),
         new DbLogProviders.DbLogDao(mock(SysLogMapper.class)),
-        providerOfTrackRecorder());
+        providerOfTrackRecorder(),
+        mock(SysNoticeService.class));
 
     @SuppressWarnings("unchecked")
     private static ObjectProvider<TrackRecorder> providerOfTrackRecorder() {

@@ -79,7 +79,6 @@ public class UserExcelComponent {
     private static final long EXPORT_LIMIT = 20_000L;
 
     /** 单次导出上限：与日志/埋点导出口径一致，超限显式报错而不是把堆打满 */
-    private static final long EXPORT_LIMIT = 20_000L;
 
     /** 导出列时间格式 */
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
