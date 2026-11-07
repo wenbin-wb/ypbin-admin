@@ -25,9 +25,9 @@ import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUserHelper;
 import cn.ypbin.starter.security.online.OnlineUserHelper.Terminal;
+import cn.ypbin.starter.core.util.UserAgentFormatter;
 import cn.ypbin.starter.tools.support.RequestUtils;
 import cn.hutool.http.useragent.UserAgent;
-import cn.hutool.http.useragent.UserAgentUtil;
 import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -94,11 +94,9 @@ public class LoginSupport {
     }
 
     private String extractBrowser() {
-        UserAgent ua = parseUa();
-        if (ua == null || ua.getBrowser() == null) {
-            return "unknown";
-        }
-        return ua.getBrowser().getName() + (ua.getVersion() == null ? "" : " " + ua.getVersion());
+        // 口径统一由 starter 的 UserAgentFormatter 提供（与操作日志共用同一实现）
+        String browser = UserAgentFormatter.formatBrowser(parseUa());
+        return browser == null ? "unknown" : browser;
     }
 
     private String extractOs() {
@@ -111,6 +109,6 @@ public class LoginSupport {
         if (ua == null || ua.isBlank() || "unknown".equals(ua)) {
             return null;
         }
-        return UserAgentUtil.parse(ua);
+        return UserAgentFormatter.parse(ua);
     }
 }
