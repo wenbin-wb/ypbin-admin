@@ -13,11 +13,13 @@ import cn.ypbin.admin.modules.system.entity.SysAuthTemplate;
 import cn.ypbin.admin.modules.system.entity.SysDept;
 import cn.ypbin.admin.modules.system.entity.SysPost;
 import cn.ypbin.admin.modules.system.entity.SysRole;
+import cn.ypbin.admin.modules.system.entity.SysSpace;
 import cn.ypbin.admin.modules.system.entity.SysTenant;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.mapper.SysDeptMapper;
 import cn.ypbin.admin.modules.system.mapper.SysPostMapper;
 import cn.ypbin.admin.modules.system.mapper.SysRoleMapper;
+import cn.ypbin.admin.modules.system.mapper.SysSpaceMapper;
 import cn.ypbin.admin.modules.system.mapper.SysTenantMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
 import cn.ypbin.admin.modules.system.model.req.TenantSaveReq;
@@ -56,6 +58,7 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
     private final SysDeptMapper deptMapper;
     private final SysPostMapper postMapper;
     private final OnlineUserService onlineUserService;
+    private final SysSpaceMapper spaceMapper;
 
     @Override
     public List<TenantResp> listTenants() {
@@ -138,8 +141,9 @@ public class SysTenantServiceImpl extends BaseServiceImpl<SysTenantMapper, SysTe
         long roleCount = roleMapper.selectCount(new LambdaQueryWrapper<SysRole>().eq(SysRole::getTenantId, id));
         long deptCount = deptMapper.selectCount(new LambdaQueryWrapper<SysDept>().eq(SysDept::getTenantId, id));
         long postCount = postMapper.selectCount(new LambdaQueryWrapper<SysPost>().eq(SysPost::getTenantId, id));
-        if (userCount + roleCount + deptCount + postCount > 0) {
-            throw new BusinessException("该租户下存在用户/角色/部门/岗位数据，请先清空后再删除");
+        long spaceCount = spaceMapper.selectCount(new LambdaQueryWrapper<SysSpace>().eq(SysSpace::getTenantId, id));
+        if (userCount + roleCount + deptCount + postCount + spaceCount > 0) {
+            throw new BusinessException("该租户下存在用户/角色/部门/岗位/空间数据，请先清空后再删除");
         }
         if (!removeById(id)) {
             throw new BusinessException("租户删除失败");

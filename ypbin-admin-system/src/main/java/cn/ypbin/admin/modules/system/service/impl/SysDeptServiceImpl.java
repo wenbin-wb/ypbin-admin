@@ -15,11 +15,13 @@ import cn.ypbin.admin.modules.system.mapper.SysDeptMapper;
 import cn.ypbin.admin.modules.system.model.req.DeptSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.DeptResp;
 import cn.ypbin.admin.modules.system.service.SysDeptService;
+import cn.ypbin.admin.modules.system.service.SysSpaceRelationService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +33,14 @@ import org.springframework.transaction.annotation.Transactional;
  * @since 2026-08-01
  */
 @Service
+@RequiredArgsConstructor
 public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> implements SysDeptService {
+
+    /** 空间关联的目标类型：部门。 */
+    private static final String SPACE_TARGET_DEPT = "dept";
+
+    /** 部门删除时清理空间关联，避免留下指向已删部门的孤儿关联。 */
+    private final SysSpaceRelationService spaceRelationService;
 
     @Override
     public List<DeptResp> tree() {
@@ -76,6 +85,8 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
             throw new BusinessException("存在子部门，不能删除");
         }
         removeById(id);
+        // 空间是多态关联：部门删除后清理其空间归属，避免关联表指向已删部门
+        spaceRelationService.removeByTarget(SPACE_TARGET_DEPT, id);
     }
 
     private List<DeptResp> buildTree(List<SysDept> depts, Long pid) {
