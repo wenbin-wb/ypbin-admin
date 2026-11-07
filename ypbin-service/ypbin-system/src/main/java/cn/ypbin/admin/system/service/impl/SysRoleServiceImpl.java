@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.api.cache.SysCache;
@@ -134,7 +135,9 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         SysRole role = new SysRole();
         BeanUtils.copyProperties(req, role, "permissions", "deptIds");
         role.setRoleType(AdminConstants.ROLE_TYPE_TENANT);
-        save(role);
+        if (!save(role)) {
+            throw new BusinessException("角色创建失败");
+        }
         assignMenus(role.getId(), req.getPermissions());
         assignDepartments(role.getId(), req.getDeptIds());
     }
@@ -154,7 +157,9 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         SysRole role = new SysRole();
         BeanUtils.copyProperties(req, role, "permissions", "deptIds");
         role.setId(id);
-        updateById(role);
+        if (!updateById(role)) {
+            throw new BusinessException("角色更新失败");
+        }
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getRoleId, id));
         roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, id));
         assignMenus(id, req.getPermissions());
@@ -188,7 +193,9 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
             throw new BusinessException("角色不存在");
         }
         checkTenantRole(role);
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("角色删除失败");
+        }
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getRoleId, id));
         roleDeptMapper.delete(new LambdaQueryWrapper<SysRoleDept>().eq(SysRoleDept::getRoleId, id));
         userRoleMapper.delete(new LambdaQueryWrapper<SysUserRole>().eq(SysUserRole::getRoleId, id));
@@ -296,21 +303,14 @@ public class SysRoleServiceImpl extends BaseServiceImpl<SysRoleMapper, SysRole> 
         roleDeptMapper.insertBatch(rows);
     }
 
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 
     private RoleResp toResp(SysRole role) {
         RoleResp resp = new RoleResp();
         BeanUtils.copyProperties(role, resp);
         return resp;
-    }
-
-    private RoleResp toRespWithMenus(SysRole role) {
-        return toRespWithMenus(role,
-            roleMenuMapper.selectMenuIdsByRoleId(role.getId()),
-            roleDeptMapper.selectDeptIdsByRoleId(role.getId()));
     }
 
     private RoleResp toRespWithMenus(SysRole role, List<Long> menuIds, List<Long> deptIds) {

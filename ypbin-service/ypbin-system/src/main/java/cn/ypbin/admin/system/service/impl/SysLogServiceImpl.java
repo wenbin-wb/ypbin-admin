@@ -50,31 +50,29 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
     /** 导出状态文案：失败 */
     private static final String STATUS_FAIL_TEXT = "失败";
 
+    /**
+     * 单次导出条数上限。
+     *
+     * <p>超过即显式报错而不是静默截断（与埋点导出同口径）：日志表是全量审计表，
+     * 无上限导出会在大表上把应用内存打满。</p>
+     */
+    private static final long EXPORT_LIMIT = 20000L;
+
     @Override
     public PageResult<LogResp> pageLogs(LogQuery query) {
-        PageResult<SysLog> source = page(query, new LambdaQueryWrapper<SysLog>()
-            .eq(StringUtils.hasText(query.getModule()), SysLog::getModule, query.getModule())
-            .like(StringUtils.hasText(query.getDescription()), SysLog::getDescription, query.getDescription())
-            .eq(query.getSuccess() != null, SysLog::getSuccess, query.getSuccess())
-            .eq(query.getOperateUserId() != null, SysLog::getOperateUserId, query.getOperateUserId())
-            .ge(StringUtils.hasText(query.getStartTime()), SysLog::getOperateTime, query.getStartTime())
-            .le(StringUtils.hasText(query.getEndTime()), SysLog::getOperateTime, query.getEndTime())
-            .orderByDesc(SysLog::getOperateTime));
+        PageResult<SysLog> source = page(query, buildQueryWrapper(query));
         List<LogResp> items = source.getItems().stream().map(this::toResp).toList();
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
     }
 
     @Override
     public void exportLogs(LogQuery query, HttpServletResponse response) {
-        LambdaQueryWrapper<SysLog> wrapper = new LambdaQueryWrapper<SysLog>()
-            .eq(StringUtils.hasText(query.getModule()), SysLog::getModule, query.getModule())
-            .like(StringUtils.hasText(query.getDescription()), SysLog::getDescription, query.getDescription())
-            .eq(query.getSuccess() != null, SysLog::getSuccess, query.getSuccess())
-            .eq(query.getOperateUserId() != null, SysLog::getOperateUserId, query.getOperateUserId())
-            .ge(StringUtils.hasText(query.getStartTime()), SysLog::getOperateTime, query.getStartTime())
-            .le(StringUtils.hasText(query.getEndTime()), SysLog::getOperateTime, query.getEndTime())
-            .orderByDesc(SysLog::getOperateTime);
-
+        LambdaQueryWrapper<SysLog> wrapper = buildQueryWrapper(query);
+        long total = count(wrapper);
+        if (total > EXPORT_LIMIT) {
+            throw new BusinessException("导出条数为 " + total + "，超过上限 " + EXPORT_LIMIT
+                + "，请缩小时间范围或补充筛选条件");
+        }
         List<SysLog> logs = list(wrapper);
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         List<LogExportVo> list = logs.stream().map(l -> {
@@ -125,6 +123,23 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
             result.add(item);
         }
         return result;
+    }
+
+    /**
+     * 列表与导出共用的筛选条件（收在一处：任何新增筛选都同步作用于两者）。
+     *
+     * @param query 查询条件
+     * @return 查询包装器
+     */
+    private LambdaQueryWrapper<SysLog> buildQueryWrapper(LogQuery query) {
+        return new LambdaQueryWrapper<SysLog>()
+            .eq(StringUtils.hasText(query.getModule()), SysLog::getModule, query.getModule())
+            .like(StringUtils.hasText(query.getDescription()), SysLog::getDescription, query.getDescription())
+            .eq(query.getSuccess() != null, SysLog::getSuccess, query.getSuccess())
+            .eq(query.getOperateUserId() != null, SysLog::getOperateUserId, query.getOperateUserId())
+            .ge(StringUtils.hasText(query.getStartTime()), SysLog::getOperateTime, query.getStartTime())
+            .le(StringUtils.hasText(query.getEndTime()), SysLog::getOperateTime, query.getEndTime())
+            .orderByDesc(SysLog::getOperateTime);
     }
 
     private LogResp toResp(SysLog log) {

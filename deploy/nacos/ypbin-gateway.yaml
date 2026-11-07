@@ -69,6 +69,19 @@ spring:
 
 # 统一鉴权：校验 token 后清洗外部头、签发内部身份头
 ypbin:
+  # 访问黑名单：规则由 system 服务写库后下发到 Redis，网关在鉴权前拦截
+  security:
+    blocklist:
+      enabled: true
+      # 只信入口 nginx（compose 固定 172.20.0.40）；网关据此从 X-Forwarded-For 右起取真实客户端地址。
+      # 直接用宿主机 OpenResty 反代到网关时，对端会是 compose 网桥地址 172.20.0.1，需追加该项。
+      trusted-proxies:
+        - 172.20.0.40/32
+      auto-ban:
+        enabled: true
+        threshold: 20
+        window-seconds: 60
+        ban-seconds: 600
   gateway:
     auth:
       enabled: true

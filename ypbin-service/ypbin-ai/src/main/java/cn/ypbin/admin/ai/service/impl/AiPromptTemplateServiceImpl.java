@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.ai.entity.AiPromptTemplate;
 import cn.ypbin.admin.ai.mapper.AiPromptTemplateMapper;
@@ -61,7 +62,9 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl);
         tpl.setTenantId(tenantId);
-        templateMapper.insert(tpl);
+        if (templateMapper.insert(tpl) != 1) {
+            throw new BusinessException("模板创建失败");
+        }
     }
 
     @Override
@@ -83,7 +86,9 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteTemplate(Long id) {
         requireTemplate(id);
-        templateMapper.deleteById(id);
+        if (templateMapper.deleteById(id) != 1) {
+            throw new BusinessException("模板删除失败");
+        }
     }
 
     @Override
@@ -91,11 +96,13 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     public void updateStatus(Long id, Integer status) {
         AiPromptTemplate tpl = requireTemplate(id);
         tpl.setStatus(status);
-        templateMapper.updateById(tpl);
+        if (templateMapper.updateById(tpl) != 1) {
+            throw new BusinessException("模板状态更新失败");
+        }
     }
 
     /**
-     * 查询模板并校验归属当前租户。
+     * 实体 → 响应视图。
      *
      * @param tpl 模板实体
      * @return 响应视图
@@ -122,7 +129,6 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
     private static Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        return TenantSupport.currentTenantId();
     }
 }

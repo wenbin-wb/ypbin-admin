@@ -7,6 +7,47 @@
 # 注意：网关 StripPrefix 已剥掉短名段，此处为服务实际收到的路径（纯资源路径）
 ypbin:
   security:
+    # 显式声明登录拦截开启（starter 默认值也是 true，此处**刻意写出**）。
+    # 理由：starter 的默认值方向已经变过一次（4.1.0 把「下游默认注入 false」
+    # 改为「不注入，只注入 fail-closed 的租户项」）；auth 是登录发牌方，/user/info、/codes、
+    # /menu/all、/check、/social/* 等端点未逐个标 @SaCheckLogin，全靠这个全局拦截器兜底。
+    # 依赖默认值意味着 starter 再改默认值就会**静默改变 auth 的安全边界**。
+    # 判据：安全边界的开关一律显式，不用默认值。
+    # ---------- 身份头账号体系：auth 必须关闭（2026-10-20 dev 实测）----------
+    # auth 是「登录发 token / 建会话」的一方：口令校验通过后 LoginSupport 走 LoginHelper.login +
+    # StpUtil.getSession().set(...)。若继承 ypbin-common.yaml 的 identity.enabled=true，starter 会把
+    # IdentityStpLogic 注册为 StpUtil 的账号体系——它的 token 值来自**网关签发的身份头**，而
+    # /auth/login 请求本身没有身份头 ⇒ 建会话阶段抛 NotLoginException ⇒ 正确口令登录返回
+    # 401「登录状态无效，请重新登录」（前台表现为登录失败）。
+    # 该键 2026-09-25 起只存在于线上 live 配置、未入模板；2026-10-20 首轮按模板整份覆盖后丢失，
+    # 导致平台无法登录。本轮显式写进模板，避免再次被覆盖。
+    # 判据：identity 只给「位于可信网关之后、不自己签发会话」的下游服务（system/ai/iot）。
+    identity:
+      enabled: false
+    interceptor: true
+    # ---------- 访问黑名单（登录失败计数入口）----------
+    # 必须显式开启：starter 的 BlocklistProperties.enabled 默认 false，未开启时
+    # PasswordAttemptLimiter 仍会调用记录器，但记录器第一行就短路，IP 计数恒为 0，
+    # 网关侧只剩 429 一条自动封禁触发路径。
+    # trusted-proxies：auth 只被网关调用（compose 固定 172.20.0.20），故只信任网关这一个地址。
+    # 配了它之后 ClientIpResolver 才会从右往左跳过可信代理、取到真实客户端 IP——登录失败计数、
+    # 审计/埋点 IP 与日志（starter 4.4.0 起统一走 ClientIpResolver）都靠这一项，未配会退化成网关地址。
+    # 刻意不用 10.0.0.0/8 之类大网段：那会把内网调用方也当成可信代理，转发头可被内网伪造。
+    # 自定义 Docker 网络/网关地址时按实际值调整。
+    blocklist:
+      enabled: true
+      trusted-proxies:
+        - 172.20.0.20/32
+      # 纵深防御：即使解析退化回直连地址（网关），也不会因 429 计数把网关自己写进封禁表
+      exclude-ips:
+        - 172.16.0.0/12
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+      auto-ban:
+        enabled: true
+        threshold: 20
+        window-seconds: 60
+        ban-seconds: 600
     excludes:
       - /login
       # 小程序登录：网关白名单已放行 /auth/miniapp/login，但网关 StripPrefix 后
@@ -21,6 +62,12 @@ ypbin:
       - /captcha
       - /captcha/verify
       - /actuator/**
+
+# ---------- Feign 身份来源校验（与 system/ai 同口径）----------
+  cloud:
+    feign:
+      trusted-source-token: ${GATEWAY_SIGN_TOKEN}
+      require-trusted-source: true
 
 # ---------- 微信小程序登录 ----------
 # appid/secret 是小程序登录换取 openid 的唯一凭证，必须由服务端配置提供：
@@ -73,5 +120,9 @@ ypbin:
   # 单个脚本即可把短信发送额度刷满并让全站 429。两个 trust-forwarded 必须一起开。
   # 前提：入口（nginx/网关）必须**覆盖** X-Forwarded-For，不能追加，否则客户端可伪造来源。
   tools:
+    # 与 blocklist.trusted-proxies 同值：限流取 IP 也走 ClientIpResolver（starter 4.4.0），
+    # 保证「限流按谁计数」与「黑名单封谁」是同一个地址，避免两套口径分叉
+    trusted-proxies:
+      - 172.20.0.20/32
     rate-limit:
       trust-forwarded: true

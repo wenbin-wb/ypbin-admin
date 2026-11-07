@@ -75,6 +75,13 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-log</artifactId>
         </dependency>
+        <!-- SSE 流式桥接（SseStreamBridge：Flux → SseEmitter 的错误帧/订阅释放/上下文传播）。
+             仅该类需要本依赖，不会启用 SSE 订阅端点与 Redis 扇出（那需要 ypbin.sse.enabled=true，
+             ai 的 Nacos 配置里刻意没有该键，走默认 false）。 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-messaging</artifactId>
+        </dependency>
         <!-- 异步执行（@EnableAsync 自动装配 + 统一线程池）：本服务的 @Log 经 /internal/log-ingest 上报 system，
              且 AiDocumentVectorizer.vectorizeAsync 早已标了 @Async（此前无本依赖被静默忽略、实为同步向量化） -->
         <dependency>
@@ -113,6 +120,15 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!-- 配置元数据生成器（编译期注解处理器，optional ⇒ 不进运行期类路径）：
+             让 @ConfigurationProperties(AiModelConfigProperties) 生成
+             META-INF/spring-configuration-metadata.json，使 ypbin.ai.model-config.* 在 IDE/配置中心
+             有补全与文档、并能在配置写错键时被发现（starter #103 的「强类型化」收益之一）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
         </dependency>
         <!-- 测试 -->
         <dependency>

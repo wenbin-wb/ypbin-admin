@@ -39,5 +39,10 @@ jobs:
         run: mvn -B clean install -DskipTests -Djacoco.skip=true
         working-directory: ypbin-starter
 
+      - name: Nacos 导入前「live-only 键」检查工具自测
+        # 与 iot 同源机制：install.sh 导入前比对新旧键，防「整份覆盖静默删除线上独有键」。
+        # 工具纯标准库实现（不依赖 PyYAML），自测覆盖嵌套键/注释/序列/白名单/JSON 解包等。
+        run: python3 tools/nacos-live-only-diff.py --self-test
+
       - name: 编译、代码风格校验与测试
         run: mvn -B clean verify

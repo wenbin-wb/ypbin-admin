@@ -45,7 +45,9 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         app.setAccessKey(generateKey());
         String secretKey = generateKey();
         app.setSecretKey(secretKey);
-        save(app);
+        if (!save(app)) {
+            throw new BusinessException("开放应用创建失败");
+        }
         return new AppCredentialResp(app.getAccessKey(), secretKey);
     }
 
@@ -60,7 +62,9 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         SysApp update = new SysApp();
         update.setId(id);
         update.setSecretKey(secretKey);
-        updateById(update);
+        if (!updateById(update)) {
+            throw new BusinessException("密钥重置失败");
+        }
         return new AppCredentialResp(app.getAccessKey(), secretKey);
     }
 
@@ -73,7 +77,9 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         SysApp app = new SysApp();
         BeanUtils.copyProperties(req, app);
         app.setId(id);
-        updateById(app);
+        if (!updateById(app)) {
+            throw new BusinessException("开放应用更新失败");
+        }
     }
 
     @Override
@@ -82,7 +88,9 @@ public class SysAppServiceImpl extends BaseServiceImpl<SysAppMapper, SysApp> imp
         if (getById(id) == null) {
             throw new BusinessException("开放应用不存在");
         }
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("开放应用删除失败");
+        }
     }
 
     private AppResp toResp(SysApp app) {

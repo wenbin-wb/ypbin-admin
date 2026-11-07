@@ -55,4 +55,15 @@ public class LoginResp {
      * <p>为 {@code true} 时前端应直接进入改密页；网关也会拦截除改密/登出等白名单外的请求。</p>
      */
     private Boolean mustChangePassword;
+
+    /**
+     * 登录收尾的快捷构造（令牌 + 是否必须改密），其余身份字段由调用方按需补充。
+     *
+     * @param accessToken      访问令牌
+     * @param mustChangePassword 是否必须先修改密码
+     */
+    public LoginResp(String accessToken, Boolean mustChangePassword) {
+        this.accessToken = accessToken;
+        this.mustChangePassword = mustChangePassword;
+    }
 }

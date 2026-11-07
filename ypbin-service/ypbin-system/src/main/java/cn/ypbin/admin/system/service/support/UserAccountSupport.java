@@ -88,6 +88,19 @@ public class UserAccountSupport {
     }
 
     /**
+     * 批量记录历史密码（Excel 批量导入等一次建一批用户的场景）。
+     *
+     * <p>与 {@link #recordPasswordHistory} 语义完全一致，只是改为单条多值 INSERT；
+     * 调用方负责按固定大小切块，避免一行 SQL 过长。</p>
+     *
+     * @param rows 待记录的历史密码行（调用方保证非空）
+     * @return 影响行数
+     */
+    public int recordPasswordHistoryBatch(List<SysUserPasswordHistory> rows) {
+        return passwordHistoryMapper.insertBatch(rows);
+    }
+
+    /**
      * 手机号全局唯一查重（手机号跨租户唯一）。
      *
      * <p>与用户名查重同源，<b>必须在数据范围之外查</b>：{@code updateUser} 带 {@code @DataPermission}，

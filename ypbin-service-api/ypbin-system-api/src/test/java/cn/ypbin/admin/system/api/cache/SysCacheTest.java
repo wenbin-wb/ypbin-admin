@@ -14,17 +14,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.system.api.feign.ISystemClient;
+import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.core.util.SpringUtils;
 import java.lang.reflect.Field;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -120,8 +119,10 @@ class SysCacheTest {
         try (MockedStatic<SpringUtils> springUtils = mockStatic(SpringUtils.class);
             MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
             springUtils.when(() -> SpringUtils.getBean(ISystemClient.class)).thenReturn(client);
-            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:role:user:42"), any(), any(), org.mockito.ArgumentMatchers.isNull()))
-                .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
+            // 列表类缓存改走「无 Class 参数」重载（消除双重强转）：Supplier 是第 1 个参数
+            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:role:user:42"), any(),
+                    org.mockito.ArgumentMatchers.isNull()))
+                .thenAnswer(inv -> inv.getArgument(1, java.util.function.Supplier.class).get());
 
             // 铁律3 禁止静默降级：Feign 失败必须抛异常暴露错误，而非返回空列表假装正常
             assertThatThrownBy(() -> SysCache.getUserRoleCodes(42L))
@@ -181,6 +182,40 @@ class SysCacheTest {
     }
 
     @Test
+    void socialConfigShouldNormalizeSourceInCacheKeyAndFeignParam() {
+        ISystemClient client = org.mockito.Mockito.mock(ISystemClient.class);
+        SocialAuthConfig config = new SocialAuthConfig();
+        config.setSource("github");
+        config.setEnabled(true);
+        when(client.getSocialAuthConfig("github")).thenReturn(R.ok(config));
+
+        try (MockedStatic<SpringUtils> springUtils = mockStatic(SpringUtils.class);
+            MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
+            springUtils.when(() -> SpringUtils.getBean(ISystemClient.class)).thenReturn(client);
+            cacheUtils.when(() -> CacheUtils.getOrLoad(eq("sys:social:config:github"),
+                eq(SocialAuthConfig.class), any(), org.mockito.ArgumentMatchers.isNull()))
+                .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
+
+            // URL 里的平台标识可能是 " GitHub "：读写两侧必须同一口径，否则写侧失效清不掉这份永久缓存
+            SysCache.getSocialAuthConfig(" GitHub ");
+
+            assertThat(config.isEnabled()).isTrue();
+        }
+        org.mockito.Mockito.verify(client).getSocialAuthConfig("github");
+    }
+
+    @Test
+    void evictSocialConfigShouldDeleteNormalizedKey() {
+        try (MockedStatic<CacheUtils> cacheUtils = mockStatic(CacheUtils.class)) {
+            cacheUtils.when(() -> CacheUtils.delete(any(String.class))).thenReturn(true);
+
+            SysCache.evictSocialConfig(" GitHub ");
+
+            cacheUtils.verify(() -> CacheUtils.delete("sys:social:config:github"));
+        }
+    }
+
+    @Test
     void getOrLoadShouldPassNullTtlForPermanentCache() {
         ISystemClient client = org.mockito.Mockito.mock(ISystemClient.class);
         when(client.getUserByUsername("alice")).thenReturn(R.ok(buildUser()));
@@ -198,5 +233,27 @@ class SysCacheTest {
                 eq("sys:user:v2:username:alice"), eq(SysUserDto.class), any(),
                 org.mockito.ArgumentMatchers.isNull()));
         }
+    }
+
+    /**
+     * 护栏：{@code SysCache} 不得再出现 {@code (Class<List<T>>) (Class<?>)} 双重强转。
+     *
+     * <p>starter 4.2.0 给 {@code CacheService#getOrLoad} 补了「无 Class 参数」重载后，
+     * 本仓 3 处列表缓存已改用它。这条源码级断言防止后来人「顺手」改回双重强转
+     * （会重新引入 unchecked 警告与类型安全假象）。</p>
+     */
+    @Test
+    void sourceMustNotContainDoubleClassCast() throws Exception {
+        java.nio.file.Path source = java.nio.file.Path.of(
+            "src/main/java/cn/ypbin/admin/system/api/cache/SysCache.java");
+        String content = java.nio.file.Files.readString(source);
+        // 必须**剥掉注释**再判：类注释里会描述「此前的双重强转」这段历史，直接 grep 会误伤
+        // （本用例第一版就踩了这个坑——注释里的历史说明让护栏自己失败）
+        String codeOnly = content.replaceAll("(?s)/\\*.*?\\*/", "")
+            .replaceAll("(?m)^\\s*//.*$", "");
+        assertThat(codeOnly)
+            .as("SysCache 代码中不应再出现 (Class<List<...>>) (Class<?>) 双重强转；"
+                + "应改用 getOrLoad(key, supplier, ttl)（注释里的历史说明不算）")
+            .doesNotContain("(Class<?>) List.class");
     }
 }

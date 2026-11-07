@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.admin.ai.mapper.AiUsageLogMapper;
 import cn.ypbin.admin.ai.service.AiUsageService;
 import cn.ypbin.starter.ai.chat.usage.AiUsageOutcome;
@@ -99,8 +100,7 @@ public class AiUsageServiceImpl implements AiUsageService {
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
     private static Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        return TenantSupport.currentTenantId();
     }
 
     /**

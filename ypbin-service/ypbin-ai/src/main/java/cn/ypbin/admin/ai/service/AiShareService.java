@@ -54,9 +54,11 @@ public interface AiShareService {
      * @param token    分享令牌
      * @param query    分页参数
      * @param password 访问密码（未设置密码时传 null）
+     * @param clientIp 客户端 IP（用于按来源隔离访问密码失败计数，由 Controller 取，可空）
      * @return 文档分页结果
      */
-    PageResult<AiDocumentVO> listDocuments(String token, PageQuery query, String password);
+    PageResult<AiDocumentVO> listDocuments(String token, PageQuery query, String password,
+        String clientIp);
 
     /**
      * 读取分享文档原文内容。
@@ -64,9 +66,10 @@ public interface AiShareService {
      * @param token    分享令牌
      * @param docId    文档 ID
      * @param password 访问密码（未设置密码时传 null）
+     * @param clientIp 客户端 IP（用于按来源隔离访问密码失败计数，由 Controller 取，可空）
      * @return 文档原文
      */
-    String getDocumentContent(String token, Long docId, String password);
+    String getDocumentContent(String token, Long docId, String password, String clientIp);
 
     /**
      * 对分享知识库提问（非流式，RAG 增强）。
@@ -74,7 +77,8 @@ public interface AiShareService {
      * @param token    分享令牌
      * @param question 问题
      * @param password 访问密码（未设置密码时传 null）
+     * @param clientIp 客户端 IP（用于按来源隔离访问密码失败计数，由 Controller 取，可空）
      * @return AI 回答文本
      */
-    String ask(String token, String question, String password);
+    String ask(String token, String question, String password, String clientIp);
 }

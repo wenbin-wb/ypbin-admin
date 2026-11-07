@@ -57,7 +57,9 @@ public class SysDictServiceImpl extends BaseServiceImpl<SysDictMapper, SysDict> 
         checkCodeUnique(req.getCode(), null);
         SysDict dict = new SysDict();
         BeanUtils.copyProperties(req, dict);
-        save(dict);
+        if (!save(dict)) {
+            throw new BusinessException("字典新增失败");
+        }
     }
 
     @Override
@@ -70,7 +72,9 @@ public class SysDictServiceImpl extends BaseServiceImpl<SysDictMapper, SysDict> 
         SysDict dict = new SysDict();
         BeanUtils.copyProperties(req, dict);
         dict.setId(id);
-        updateById(dict);
+        if (!updateById(dict)) {
+            throw new BusinessException("字典更新失败");
+        }
         // 编码可能变更，刷新字典缓存
         DictUtils.refresh();
     }
@@ -78,7 +82,9 @@ public class SysDictServiceImpl extends BaseServiceImpl<SysDictMapper, SysDict> 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteDict(Long id) {
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("字典删除失败");
+        }
         dictItemMapper.delete(new LambdaQueryWrapper<SysDictItem>().eq(SysDictItem::getDictId, id));
         DictUtils.refresh();
     }

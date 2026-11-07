@@ -9,20 +9,26 @@
  */
 package cn.ypbin.admin.system.api.feign;
 
-import cn.ypbin.admin.system.api.feign.config.InternalTokenFeignConfiguration;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysSpaceDto;
+import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
+import cn.ypbin.admin.system.model.req.MailSendReq;
 import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
 import cn.ypbin.admin.system.model.req.SmsSendReq;
 import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
+import cn.ypbin.admin.system.model.req.SpaceSyncReq;
+import jakarta.validation.Valid;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.model.LogRecord;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import java.util.List;
+import java.util.Map;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,7 +47,6 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @since 2026-09-01
  */
 @FeignClient(name = "ypbin-system", path = "/internal",
-    configuration = InternalTokenFeignConfiguration.class,
     fallback = ISystemClientFallback.class)
 public interface ISystemClient {
 
@@ -103,18 +108,40 @@ public interface ISystemClient {
 
     /**
      * 按关键词搜索用户（AI 工具用，限制 10 条）。
+     *
+     * <p><b>租户必须显式传入</b>：AI 工具运行在 Reactor 工作线程，Feign 请求不会携带
+     * 登录态与租户身份头，服务端隐式读取租户会退化成全局搜索（跨租户泄露）或直接失败。
+     * 调用方从自身上下文取租户后显式传递，服务端再以该值做行级过滤。</p>
+     *
+     * @param keyword  用户名或真实姓名关键词
+     * @param tenantId 租户 ID（必填）
+     * @return 匹配用户（最多 10 条）
      */
     @GetMapping("/search-users")
-    R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword);
+    R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword,
+        @RequestParam("tenantId") Long tenantId);
 
     /**
      * 用户计数（AI 工具统计用）。
+     *
+     * @param tenantId 租户 ID（必填，语义同 {@link #searchUsers}）
+     * @return 该租户的用户数
      */
     @GetMapping("/user-count")
-    R<Long> countUsers();
+    R<Long> countUsers(@RequestParam("tenantId") Long tenantId);
 
     /**
      * 按参数键读取系统参数（auth 读取登录开关/短信配置用）。
+     *
+     * <p><strong>脱敏契约（跨服务可见行为）</strong>：键名命中敏感后缀（{@code _SECRET} /
+     * {@code _PASSWORD} / {@code _TOKEN} / {@code _ACCESS_KEY} / {@code _PRIVATE_KEY} /
+     * {@code _API_KEY}，忽略大小写）时，返回值<strong>不是原文</strong>，而是
+     * {@code ****} + 末 4 位（长度 ≤ 4 时整体为 {@code ****}）；与 system 管理面列表页同一判据、
+     * 同一形态。需要 Key 原文的调用方（如短信/邮件发送）必须走系统服务内部通道，不得经本接口获取。
+     * 判据与形态的完整说明与选择理由见 system 模块的 {@code ConfigValueMasker}。</p>
+     *
+     * @param configKey 参数键
+     * @return 参数取值（敏感键为脱敏形态）
      */
     @GetMapping("/config-by-key")
     R<ConfigValue> getConfigByKey(@RequestParam("configKey") String configKey);
@@ -238,14 +265,199 @@ public interface ISystemClient {
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone);
 
+    // ---------- 站内信 / 邮件（业务域投递通知用） ----------
+
+    /**
+     * 写一条普通站内信（供业务域投递站内通知用）。
+     *
+     * <p>复用 {@code sys_message} 表与既有落库口径，不新造站内信链路；调用方显式声明租户，
+     * 服务端进入该租户上下文写入（内部端点信任模型见 {@code InboxMessageSendReq}）。</p>
+     *
+     * <p>失败语义：system 不可达或落库失败时返回失败 {@code R}，调用方必须据
+     * {@code R.success}/{@code R.code} 判定并记完整堆栈——<b>禁止</b>把它当成功
+     * （否则通知会在无人知晓的情况下丢失）。</p>
+     *
+     * @param req 站内信请求（租户/接收人/标题/正文）
+     * @return 统一响应体
+     */
+    @PostMapping("/inbox-message-send")
+    R<Void> sendInboxMessage(@Valid @RequestBody InboxMessageSendReq req);
+
+    /**
+     * 发一封纯文本邮件（复用 system 侧既有的 JavaMail 能力）。
+     *
+     * <p>失败语义同上：返回失败 {@code R} 时调用方必须如实记为投递失败并按其重试策略退避。</p>
+     *
+     * @param req 邮件请求（收件人/主题/正文）
+     * @return 统一响应体
+     */
+    @PostMapping("/mail-send")
+    R<Void> sendMail(@Valid @RequestBody MailSendReq req);
+
+    // ---------- 空间（基础主数据的跨服务只读/写入通道） ----------
+
+    /**
+     * 按 ID 查询单个空间（含完整路径与类型中文名）。
+     *
+     * <p><b>为什么业务服务必须走这里而不是直连 {@code sys_space}</b>：空间是基础模块的主数据，
+     * 跨服务禁止访问对方表（本仓既有约定，见 {@code docs/microservice-deployment.md}）。
+     * IoT 设备详情要显示「设备在 A栋 1F 101室」时，调本端点即可，不需要理解空间表结构。</p>
+     *
+     * <p>失败语义：空间不存在时返回<b>失败</b> {@code R}（不是成功 + null）——
+     * 调用方据此区分「查询失败」与「确实没有空间」，不得静默降级成「无位置」。</p>
+     *
+     * @param spaceId 空间 ID
+     * @return 空间摘要
+     */
+    @GetMapping("/space-by-id")
+    R<SysSpaceDto> getSpaceById(@RequestParam("spaceId") Long spaceId);
+
+    /**
+     * 查询全部空间（树形拍平，含完整路径），供业务服务做本地下拉/筛选。
+     *
+     * <p><b>返回全量而非分页</b>：空间是典型的小集合（一个租户几十到几百个），
+     * 业务侧要按空间筛选设备时需要完整列表做下拉；分页会让调用方必须自己循环拉取。</p>
+     *
+     * <p>调用方应<b>缓存</b>结果（空间变更频率低），不要每次页面请求都调。</p>
+     *
+     * @return 空间摘要列表（按父子顺序）
+     */
+    @GetMapping("/space-list")
+    R<List<SysSpaceDto>> listSpaces();
+
+    /**
+     * 按业务对象反查其所在空间。
+     *
+     * @param targetType 关联对象类型（dept/user/device/asset…）
+     * @param targetId   关联对象 ID
+     * @return 关联列表（含空间完整路径）
+     */
+    /**
+     * **批量**反查：一次取多个业务对象各自的空间关联（列表页展示「所在空间」用）。
+     *
+     * <p><b>为什么必须批量</b>：列表一页几十条设备，逐条调单对象反查就是 N 次跨服务 HTTP。
+     * 本端点一次返回，调用方按 targetId 取值。</p>
+     *
+     * @param targetType 关联对象类型
+     * @param targetIds  关联对象 ID 列表
+     * @return 对象 ID → 空间关联列表（无关联的对象不出现在结果里）
+     */
+    /**
+     * 整体设置某业务对象的空间集合（**单事务语义**：算差集后批量增删）。
+     *
+     * <p><b>为什么需要它而不是让调用方 bind+unbind</b>：设备换位置时若由调用方自己做
+     * 「先解绑旧的、再绑新的」，两步之间失败就留下不一致状态（两头都不在，或都在）。
+     * 本端点在一个事务里完成整体替换。</p>
+     *
+     * @param req 同步请求（targetType + targetId + 目标 spaceIds）
+     * @return 实际变更的关联条数
+     */
+    @PostMapping("/space-relations-sync")
+    R<Integer> syncSpaceRelations(@RequestBody SpaceSyncReq req);
+
+    @PostMapping("/space-relations-batch")
+    R<Map<Long, List<SysSpaceRelationDto>>> listSpaceRelationsByTargets(
+        @RequestParam("targetType") String targetType,
+        @RequestBody List<Long> targetIds);
+
+    @GetMapping("/space-relations-by-target")
+    R<List<SysSpaceRelationDto>> listSpaceRelationsByTarget(
+        @RequestParam("targetType") String targetType,
+        @RequestParam("targetId") Long targetId);
+
+    /**
+     * 取指定空间及其全部后代 ID（供业务侧「按空间筛选」实现含子树语义）。
+     *
+     * <p>业务侧（如 IoT）需要「选 A栋 时看到其下所有设备」，而设备挂在最末级房间；
+     * 业务服务没有空间表，也不该自己递归查 system 的表——故由 system 一次算好。</p>
+     *
+     * @param spaceId 根空间 ID
+     * @return 该空间及全部后代 ID（含自身；不存在时为空列表）
+     */
+    @GetMapping("/space-subtree-ids")
+    R<List<Long>> listSpaceSubtreeIds(@RequestParam("spaceId") Long spaceId);
+
+    /**
+     * 按空间（**含全部后代**）取挂在其上的业务对象 ID。
+     *
+     * <p>供业务侧「空间视角看设备」用：设备挂在末级房间，用户在空间页点「A栋」
+     * 要看到其下所有设备，故必须含子树。</p>
+     *
+     * @param spaceId    根空间 ID
+     * @param targetType 关联对象类型（可空：不限定类型）
+     * @return 业务对象 ID 列表（去重）
+     */
+    @GetMapping("/space-target-ids-by-space")
+    R<List<Long>> listSpaceTargetIdsBySpace(@RequestParam("spaceId") Long spaceId,
+        @RequestParam(value = "targetType", required = false) String targetType);
+
+    /**
+     * 按空间（含后代）统计各类型业务对象数量（供空间列表「设备数」列）。
+     *
+     * @param spaceIds 根空间 ID 列表
+     * @return 空间 ID → (对象类型 → 数量)
+     */
+    @PostMapping("/space-relation-counts")
+    R<Map<Long, Map<String, Long>>> countSpaceRelationsBySpaceTrees(
+        @RequestBody List<Long> spaceIds);
+
+    /**
+     * 把一批业务对象绑定到指定空间（幂等：已存在的关联会被更新而不是重复插入）。
+     *
+     * <p><b>写入为什么也走本端点</b>：{@code sys_space_relation} 属基础模块的表，
+     * 业务服务直写它等于绕过租户插件与唯一键校验。走本端点由 system 统一做
+     * 「空间存在性 + 租户隔离 + 主空间唯一 + 类型合法性」四项校验。</p>
+     *
+     * @param spaceId     空间 ID
+     * @param targetType  关联对象类型
+     * @param targetIds   关联对象 ID 列表（逗号分隔由 Feign 序列化为多个参数，
+     *                    故用 List 由 Spring 默认转换成 {@code targetIds=1&targetIds=2}）
+     * @param isPrimary   是否主空间：1 是 0 否（null 视为 0）
+     * @param clearOthers 是否先清空这些对象在其他空间的同类关联（设备挪位置=true）
+     * @param remark      关联备注（可空）
+     * @return 实际生效的关联条数
+     */
+    @PostMapping("/space-bind")
+    R<Integer> bindSpaceRelations(@RequestParam("spaceId") Long spaceId,
+        @RequestParam("targetType") String targetType,
+        @RequestParam("targetIds") List<Long> targetIds,
+        @RequestParam(value = "isPrimary", required = false) Integer isPrimary,
+        @RequestParam(value = "clearOthers", required = false) Boolean clearOthers,
+        @RequestParam(value = "remark", required = false) String remark);
+
+    /**
+     * 把一批业务对象从指定空间解绑。
+     *
+     * <p>业务侧删除对象（如删除设备）时<b>必须</b>调本端点清理关联：多态关联没有数据库外键，
+     * 不清理会留下指向已删对象的幽灵行——表现为空间关联数虚高、且该空间永远删不掉。</p>
+     *
+     * @param spaceId    空间 ID
+     * @param targetType 关联对象类型
+     * @param targetIds  关联对象 ID 列表
+     * @return 实际删除条数
+     */
+    @PostMapping("/space-unbind")
+    R<Integer> unbindSpaceRelations(@RequestParam("spaceId") Long spaceId,
+        @RequestParam("targetType") String targetType,
+        @RequestParam("targetIds") List<Long> targetIds);
+
+    /**
+     * 经 system 的短信厂商配置代发短信。
+     *
+     * <p>sms4j 在 starter 中是可选依赖，厂商配置也只注册在 system 进程内。auth 等
+     * 无短信厂商依赖的服务必须走本端点；失败信息由 system 返回，调用方不得当作成功。</p>
+     *
+     * @param req 手机号、模板与变量
+     * @return 发送结果（厂商返回失败时为失败 R）
+     */
+    @PostMapping("/sms-send")
+    R<Void> sendSms(@RequestBody SmsSendReq req);
+
     /**
      * 查询对外可见（已发布且未过期）的公告列表。
      *
      * <p>端侧服务禁止直连 system 的表，故小程序侧展示公告一律经本端点读取；
      * 「哪些公告对外可见」的口径收口在 system 的公告服务一处，不在调用方重写筛选条件。</p>
-     *
-     * <p>失败语义：system 不可达时走 {@link ISystemClientFallback} 返回失败 {@code R}，
-     * 调用方必须据 {@code R.success} 判定——公告属展示型降级数据，可回退为空列表，但须记日志暴露。</p>
      *
      * @return 有效公告列表（置顶优先、发布时间倒序）
      */
@@ -260,16 +472,4 @@ public interface ISystemClient {
      */
     @GetMapping("/notice-published-detail")
     R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id);
-
-    /**
-     * 经 system 的短信厂商配置代发短信。
-     *
-     * <p>sms4j 在 starter 中是可选依赖，厂商配置也只注册在 system 进程内。auth 等
-     * 无短信厂商依赖的服务必须走本端点；失败信息由 system 返回，调用方不得当作成功。</p>
-     *
-     * @param req 手机号、模板与变量
-     * @return 发送结果（厂商返回失败时为失败 R）
-     */
-    @PostMapping("/sms-send")
-    R<Void> sendSms(@RequestBody SmsSendReq req);
 }

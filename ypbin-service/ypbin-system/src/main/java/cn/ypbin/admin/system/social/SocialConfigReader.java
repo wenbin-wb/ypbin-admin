@@ -14,11 +14,10 @@ import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 /**
  * 第三方登录平台配置读取（内部 Feign 契约侧）。
@@ -26,36 +25,15 @@ import org.springframework.util.StringUtils;
  * <p>从系统参数（sys_config 的 SOCIAL_* 键）组装含密钥明文的 {@link SocialAuthConfig}，
  * 供 auth-svc 经内部端点拉取后构建 JustAuth 授权请求。密钥明文仅限内部传递。</p>
  *
+ * <p>配置键与解析规则由 {@link SocialConfigKeys} 提供（与管理面同一份），
+ * 本类只负责「组装」。</p>
+ *
  * @author wenbin
  * @since 2026-08-08
  */
 @Component
 @RequiredArgsConstructor
 public class SocialConfigReader {
-
-    /** 平台配置分组 */
-    private static final String SOCIAL_GROUP = "social";
-
-    /** 配置键前缀 */
-    private static final String SOCIAL_PREFIX = "SOCIAL_";
-
-    /** 启用后缀 */
-    private static final String ENABLED_SUFFIX = "_ENABLED";
-
-    /** ClientId 后缀 */
-    private static final String CLIENT_ID_SUFFIX = "_CLIENT_ID";
-
-    /** ClientSecret 后缀 */
-    private static final String CLIENT_SECRET_SUFFIX = "_CLIENT_SECRET";
-
-    /** 回调地址后缀 */
-    private static final String REDIRECT_URI_SUFFIX = "_REDIRECT_URI";
-
-    /** 公钥后缀（支付宝专用） */
-    private static final String PUBLIC_KEY_SUFFIX = "_PUBLIC_KEY";
-
-    /** 支付宝平台标识（需公钥配置的平台） */
-    private static final String ALIPAY_SOURCE = "alipay";
 
     private final SysConfigService configService;
 
@@ -66,22 +44,23 @@ public class SocialConfigReader {
      * @return 授权配置
      */
     public SocialAuthConfig read(String source) {
-        String normalizedSource = normalizeSource(source);
+        String normalizedSource = SocialConfigKeys.normalizeSource(source);
         List<SysConfig> configs = loadPlatformConfigs(normalizedSource);
-        String prefix = keyPrefix(normalizedSource);
+        String prefix = SocialConfigKeys.keyPrefix(normalizedSource);
         SocialAuthConfig config = new SocialAuthConfig();
         config.setSource(normalizedSource);
-        config.setEnabled(parseEnabled(value(configs, prefix + ENABLED_SUFFIX), normalizedSource));
-        config.setClientId(value(configs, prefix + CLIENT_ID_SUFFIX));
-        config.setClientSecret(value(configs, prefix + CLIENT_SECRET_SUFFIX));
-        config.setRedirectUri(value(configs, prefix + REDIRECT_URI_SUFFIX));
-        config.setPublicKey(ALIPAY_SOURCE.equals(normalizedSource)
-            ? value(configs, prefix + PUBLIC_KEY_SUFFIX) : "");
+        config.setEnabled(SocialConfigKeys.parseStoredEnabled(
+            value(configs, prefix + SocialConfigKeys.ENABLED_SUFFIX), normalizedSource));
+        config.setClientId(value(configs, prefix + SocialConfigKeys.CLIENT_ID_SUFFIX));
+        config.setClientSecret(value(configs, prefix + SocialConfigKeys.CLIENT_SECRET_SUFFIX));
+        config.setRedirectUri(value(configs, prefix + SocialConfigKeys.REDIRECT_URI_SUFFIX));
+        config.setPublicKey(SocialConfigKeys.ALIPAY_SOURCE.equals(normalizedSource)
+            ? value(configs, prefix + SocialConfigKeys.PUBLIC_KEY_SUFFIX) : "");
         return config;
     }
 
     /**
-     * 读取全部已启用平台的授权配置（不含密钥的平台标识集合另见 {@link #enabledSources()}）。
+     * 读取全部已启用平台的授权配置。
      *
      * @return 已启用平台的授权配置列表，无启用平台时返回空集合
      */
@@ -96,20 +75,29 @@ public class SocialConfigReader {
      */
     public List<String> enabledSources() {
         List<SysConfig> configs = configService.list(new LambdaQueryWrapper<SysConfig>()
-            .eq(SysConfig::getConfigGroup, SOCIAL_GROUP));
-        return configs.stream()
-            .filter(config -> config.getConfigKey() != null
-                && config.getConfigKey().endsWith(ENABLED_SUFFIX))
-            .filter(config -> parseEnabledQuietly(config.getConfigValue()))
-            .map(config -> sourceOf(config.getConfigKey()))
-            .filter(StringUtils::hasText)
-            .toList();
+            .eq(SysConfig::getConfigGroup, SocialConfigKeys.GROUP));
+        List<String> sources = new ArrayList<>();
+        for (SysConfig config : configs) {
+            if (config.getConfigKey() == null
+                || !config.getConfigKey().endsWith(SocialConfigKeys.ENABLED_SUFFIX)) {
+                continue;
+            }
+            String source = SocialConfigKeys.sourceOf(config.getConfigKey());
+            if (source.isEmpty()) {
+                continue;
+            }
+            // 与 read() 共用同一解析口：选中后必定读得出来（历史值 1/0 也兼容）
+            if (SocialConfigKeys.parseStoredEnabled(config.getConfigValue(), source)) {
+                sources.add(source);
+            }
+        }
+        return sources;
     }
 
     private List<SysConfig> loadPlatformConfigs(String source) {
-        String prefix = keyPrefix(source);
+        String prefix = SocialConfigKeys.keyPrefix(source);
         List<SysConfig> configs = configService.list(new LambdaQueryWrapper<SysConfig>()
-            .eq(SysConfig::getConfigGroup, SOCIAL_GROUP)
+            .eq(SysConfig::getConfigGroup, SocialConfigKeys.GROUP)
             .likeRight(SysConfig::getConfigKey, prefix));
         if (configs.isEmpty()) {
             throw new BusinessException("第三方登录平台配置不存在：" + source);
@@ -117,42 +105,10 @@ public class SocialConfigReader {
         return configs;
     }
 
-    private static String sourceOf(String configKey) {
-        String body = configKey.substring(SOCIAL_PREFIX.length());
-        return body.endsWith(ENABLED_SUFFIX)
-            ? body.substring(0, body.length() - ENABLED_SUFFIX.length()).toLowerCase(Locale.ROOT)
-            : "";
-    }
-
-    private static boolean parseEnabledQuietly(String value) {
-        return "true".equalsIgnoreCase(value) || "1".equals(value);
-    }
-
-    private static boolean parseEnabled(String enabled, String source) {
-        if ("true".equalsIgnoreCase(enabled)) {
-            return true;
-        }
-        if ("false".equalsIgnoreCase(enabled)) {
-            return false;
-        }
-        throw new BusinessException("第三方登录启用配置必须为 true 或 false：" + source);
-    }
-
-    private static String normalizeSource(String source) {
-        if (!StringUtils.hasText(source)) {
-            throw new BusinessException("第三方登录平台不能为空");
-        }
-        return source.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static String keyPrefix(String source) {
-        return SOCIAL_PREFIX + source.toUpperCase(Locale.ROOT);
-    }
-
     private static String value(List<SysConfig> configs, String key) {
         for (SysConfig config : configs) {
             if (key.equals(config.getConfigKey())) {
-                return config.getConfigValue() == null ? "" : config.getConfigValue().trim();
+                return SocialConfigKeys.trimToEmpty(config.getConfigValue());
             }
         }
         return "";

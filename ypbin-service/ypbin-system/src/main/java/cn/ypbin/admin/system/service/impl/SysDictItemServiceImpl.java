@@ -55,7 +55,9 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
         checkValueUnique(req.getDictId(), req.getValue(), null);
         SysDictItem item = new SysDictItem();
         BeanUtils.copyProperties(req, item);
-        save(item);
+        if (!save(item)) {
+            throw new BusinessException("字典项新增失败");
+        }
         refreshDict(req.getDictId());
     }
 
@@ -99,7 +101,9 @@ public class SysDictItemServiceImpl extends BaseServiceImpl<SysDictItemMapper, S
         if (item == null) {
             throw new BusinessException("字典项不存在");
         }
-        removeById(id);
+        if (!removeById(id)) {
+            throw new BusinessException("字典项删除失败");
+        }
         refreshDict(item.getDictId());
     }
 

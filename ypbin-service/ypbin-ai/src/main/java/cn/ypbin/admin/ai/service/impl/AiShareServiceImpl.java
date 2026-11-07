@@ -17,7 +17,6 @@ import cn.ypbin.admin.ai.mapper.AiKnowledgeBaseMapper;
 import cn.ypbin.admin.ai.model.req.AiShareSettingReq;
 import cn.ypbin.admin.ai.model.resp.AiDocumentVO;
 import cn.ypbin.admin.ai.service.AiShareService;
-import cn.ypbin.starter.ai.chat.AiChatService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageQuery;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -29,12 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
-import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.Map;
@@ -42,7 +36,6 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,20 +49,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AiShareServiceImpl implements AiShareService {
 
-    /** 复用同一 SecureRandom：每次 new 既浪费熵源，也可能产生相关性 */
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
-
     private static final Logger log = LoggerFactory.getLogger(AiShareServiceImpl.class);
-
-    private static final int TOKEN_BYTES = 16;
-
-    /** 匿名问答同步等待上限：远程模型无响应时及时失败，避免请求线程无限阻塞 */
-    private static final Duration ANSWER_BLOCK_TIMEOUT = Duration.ofSeconds(120);
 
     private final AiKnowledgeBaseMapper kbMapper;
     private final AiDocumentMapper documentMapper;
-    private final ObjectProvider<AiChatService> aiChatServiceProvider;
+    private final AiPublicAccessSupport publicAccessSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -85,11 +69,12 @@ public class AiShareServiceImpl implements AiShareService {
         String token = null;
         if (Boolean.TRUE.equals(req.getEnabled())) {
             // 已有令牌则保留（轮换需先关闭再开启）；无则生成
-            token = kb.getShareToken() != null ? kb.getShareToken() : generateToken();
+            token = kb.getShareToken() != null ? kb.getShareToken() : publicAccessSupport.generateToken();
             uw.set(AiKnowledgeBase::getShareToken, token);
             uw.set(AiKnowledgeBase::getShareEnabled, 1);
             uw.set(AiKnowledgeBase::getShareExpireTime, req.getExpireTime());
-            uw.set(AiKnowledgeBase::getSharePassword, encodePassword(req.getPassword()));
+            uw.set(AiKnowledgeBase::getSharePassword,
+                publicAccessSupport.encodePassword(req.getPassword()));
         } else {
             uw.set(AiKnowledgeBase::getShareToken, null);
             uw.set(AiKnowledgeBase::getShareEnabled, 0);
@@ -97,7 +82,9 @@ public class AiShareServiceImpl implements AiShareService {
             uw.set(AiKnowledgeBase::getSharePassword, null);
         }
         uw.set(AiKnowledgeBase::getUpdateTime, LocalDateTime.now());
-        kbMapper.update(null, uw);
+        if (kbMapper.update(null, uw) != 1) {
+            throw new BusinessException("分享设置保存失败");
+        }
         return token;
     }
 
@@ -118,8 +105,8 @@ public class AiShareServiceImpl implements AiShareService {
 
     @Override
     public PageResult<AiDocumentVO> listDocuments(String token, PageQuery query,
-            String password) {
-        AiKnowledgeBase kb = requireValidShare(token, password);
+            String password, String clientIp) {
+        AiKnowledgeBase kb = requireValidShare(token, password, clientIp);
         // 匿名请求无租户上下文：显式绑定知识库所属租户执行文档查询，否则租户插件
         // 自动追加 tenant_id=NULL 导致查不到任何记录
         return TenantContext.executeWithTenant(kb.getTenantId(), () -> {
@@ -136,8 +123,8 @@ public class AiShareServiceImpl implements AiShareService {
     }
 
     @Override
-    public String getDocumentContent(String token, Long docId, String password) {
-        AiKnowledgeBase kb = requireValidShare(token, password);
+    public String getDocumentContent(String token, Long docId, String password, String clientIp) {
+        AiKnowledgeBase kb = requireValidShare(token, password, clientIp);
         // 匿名请求无租户上下文：显式绑定知识库所属租户查询文档，保证租户隔离完整保留
         AiDocument doc = TenantContext.executeWithTenant(kb.getTenantId(),
             () -> documentMapper.selectById(docId));
@@ -160,28 +147,12 @@ public class AiShareServiceImpl implements AiShareService {
     }
 
     @Override
-    public String ask(String token, String question, String password) {
-        AiKnowledgeBase kb = requireValidShare(token, password);
-        AiChatService aiChatService = aiChatServiceProvider.getIfAvailable();
-        if (aiChatService == null) {
-            throw new BusinessException("AI 对话服务未配置，请先配置对话模型");
-        }
-        try {
-            // 每次访问独立 conversationId：固定成 share-{kbId} 会让所有匿名访客共享 Memory 历史
-            String conversationId = "share-" + kb.getId() + "-" + UUID.randomUUID();
-            // 匿名请求无登录上下文：显式绑定知识库所属租户，保证 RAG 检索与 AI 调用在正确租户内
-            List<String> tokens = TenantContext.executeWithTenant(kb.getTenantId(),
-                () -> aiChatService.chatWithKnowledge(
-                        conversationId, question, String.valueOf(kb.getId()))
-                    .collectList()
-                    .block(ANSWER_BLOCK_TIMEOUT));
-            return tokens == null ? "" : String.join("", tokens);
-        } catch (IllegalStateException e) {
-            // 模型未配置/密钥缺失等环境问题：记录日志并向调用方暴露明确的业务错误（非静默降级）
-            // 不记录 token：它是访问该分享的凭据，落日志等于泄露；改用知识库 ID 关联排查
-            log.warn("[ypbin-ai] 分享问答失败: kbId={} err={}", kb.getId(), e.getMessage());
-            throw new BusinessException("AI 模型未配置，请在【AI 配置】中添加对话模型");
-        }
+    public String ask(String token, String question, String password, String clientIp) {
+        AiKnowledgeBase kb = requireValidShare(token, password, clientIp);
+        // 每次访问使用独立 conversationId：固定成 share-{kbId} 会让所有匿名访客共享一份
+        // Memory 历史（A 的提问会进入 B 的上下文）。该接口是单轮问答，无需跨请求记忆。
+        String conversationId = "share-" + kb.getId() + "-" + UUID.randomUUID();
+        return publicAccessSupport.answer(kb, conversationId, question, "分享");
     }
 
     /**
@@ -213,17 +184,14 @@ public class AiShareServiceImpl implements AiShareService {
      *
      * @param token    分享令牌
      * @param password 访问密码（无密码保护时忽略）
+     * @param clientIp 客户端 IP（用于按来源隔离密码失败计数）
      */
-    private AiKnowledgeBase requireValidShare(String token, String password) {
+    private AiKnowledgeBase requireValidShare(String token, String password, String clientIp) {
         AiKnowledgeBase kb = requireShareKb(token);
         if (isExpired(kb)) {
             throw new BusinessException("分享链接已过期，请联系分享者");
         }
-        String stored = kb.getSharePassword();
-        if (stored != null && !stored.isBlank()
-                && !constantTimeEquals(stored, encodePassword(password))) {
-            throw new BusinessException("访问密码错误");
-        }
+        publicAccessSupport.verifyPassword(token, clientIp, kb.getSharePassword(), password);
         return kb;
     }
 
@@ -232,32 +200,4 @@ public class AiShareServiceImpl implements AiShareService {
             && kb.getShareExpireTime().isBefore(LocalDateTime.now());
     }
 
-    /** 访问密码 SHA-256 哈希（Hex）；NULL 或空返回 null（不设置密码） */
-    private static String encodePassword(String password) {
-        if (password == null || password.isBlank()) {
-            return null;
-        }
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 算法不可用", e);
-        }
-    }
-
-    /** 常量时间比较，避免时序侧信道（用于密码哈希比对） */
-    private static boolean constantTimeEquals(String a, String b) {
-        if (a == null || b == null) {
-            return false;
-        }
-        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8),
-            b.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private String generateToken() {
-        byte[] bytes = new byte[TOKEN_BYTES];
-        SECURE_RANDOM.nextBytes(bytes);
-        return HexFormat.of().formatHex(bytes);
-    }
 }

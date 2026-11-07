@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.admin.system.entity.SysPost;
 import cn.ypbin.admin.system.entity.SysUserPost;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
@@ -46,7 +47,7 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createPost(PostSaveReq req) {
+    public Long createPost(PostSaveReq req) {
         checkNameUnique(req.getName(), null);
         checkCodeUnique(req.getCode(), null);
         SysPost post = new SysPost();
@@ -55,6 +56,8 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
         if (!save(post)) {
             throw new BusinessException("岗位创建失败");
         }
+        // 返回新 ID：前端据此绑定「工作地点（空间）」，否则新建时选的会被静默丢弃
+        return post.getId();
     }
 
     @Override
@@ -102,9 +105,8 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
         }
     }
 
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 
     private PostResp toResp(SysPost post) {

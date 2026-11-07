@@ -6,22 +6,37 @@
 ypbin:
   tenant:
     enabled: true
-    # fail-closed：无租户上下文时拒绝执行；匿名分享/挂件问答已用
-    # TenantContext.executeWithTenant 显式绑定知识库所属租户，SSE/异步链路已用 executeIgnore 放行。
-    fail-on-missing-tenant: true
+    # 不写 fail-on-missing-tenant：starter 4.1.0 的 DownstreamDefaultsEnvironmentPostProcessor
+    # 会以**最低优先级属性源**为下游服务注入 fail-on-missing-tenant=true（租户模块自身默认值也是 true），
+    # 与这里显式写一遍效果相同；去掉重复项后「下游形态」的语义只在 starter 一处维护。
+    # 语义不变：无租户上下文时仍拒绝执行；匿名分享/挂件问答已用 TenantContext.executeWithTenant
+    # 显式绑定知识库所属租户，SSE/异步链路已用 executeIgnore 放行。
   # 身份头来源校验：仅信任带网关签名标记的身份头；未配置密钥则拒绝启动（fail-fast）
   cloud:
     feign:
       trusted-source-token: ${GATEWAY_SIGN_TOKEN}
       require-trusted-source: true
-  data-permission:
-    enabled: true
-  # ai 为下游业务服务，登录态由网关校验并注入身份头；
-  # 关闭本地 Sa-Token 全局拦截，避免 ai 直读 Redis 会话导致 token 无效。
+  # 数据权限：此处刻意不配任何数据权限开关（曾经配过 enabled: true，但完全无效、属死键）。
+  # ai 既无 datapermission 扩展依赖、也无 @DataPermission 使用点，对应自动配置因
+  # @ConditionalOnClass/@ConditionalOnBean 双重不满足而静默不装配；且 ai_* 表没有 dept_id 列，
+  # 即使补齐依赖也无数据范围可过滤。将来要用必须同时满足：加 pom 依赖 + 加 @DataPermission 使用点
+  # + 表上确有部门列，三件事缺一不可，届时再在本文件加回开关。
+  # ai 为下游业务服务，登录态由网关校验并注入身份头：
+  # 声明 starter 4.1.0 的**下游 opt-in 开关**，由 DownstreamDefaultsEnvironmentPostProcessor 注入
+  # ypbin.security.interceptor=false（关闭本地 Sa-Token 全局拦截，避免 ai 直读 Redis 会话导致 token 无效）。
+  # 注意这是**显式 opt-in**：starter 不会默认为任何宿主关掉安全拦截（auth 有真实用户会话，
+  # 默认关闭会让它的端点静默失去登录校验）；注解鉴权（annotation-check）不受本开关影响。
+  # 下游服务形态还需要 cloud.feign.trusted-source-token（见上）与 tenant.fail-on-missing-tenant（默认注入）。
+  downstream:
+    security-interceptor-disabled: true
   security:
-    interceptor: false
     excludes:
       - /actuator/**
+    # 本服务不启用访问黑名单（enabled 未开），但 ClientIpResolver 仍读这一段：
+    # 日志 IP 与分享口令失败计数都要拿到真实客户端地址，未配会退化成网关地址（同 auth/system 口径）
+    blocklist:
+      trusted-proxies:
+        - 172.20.0.20/32
   ai:
     model-config:
       secret-key: ${AI_MODEL_SECRET_KEY:}
@@ -30,5 +45,8 @@ ypbin:
   # 分享/挂件是匿名入口：按 IP 限流若不信任转发头，所有访客共用「网关地址」这一个桶，
   # 单个访客即可让全站问答 429。前提：入口必须**覆盖** X-Forwarded-For（不能追加）。
   tools:
+    # 限流取 IP 走 ClientIpResolver（信任网关地址），与分享口令失败计数、日志同口径
+    trusted-proxies:
+      - 172.20.0.20/32
     rate-limit:
       trust-forwarded: true

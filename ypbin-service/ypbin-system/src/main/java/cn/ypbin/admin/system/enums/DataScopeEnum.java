@@ -15,6 +15,7 @@
  */
 package cn.ypbin.admin.system.enums;
 
+import cn.ypbin.starter.datapermission.core.DataScopeCalculator.ScopeType;
 import java.util.Optional;
 
 /**
@@ -60,7 +61,12 @@ public enum DataScopeEnum {
     }
 
     /**
-     * 按编码解析数据范围。
+     * 按编码解析数据范围（<b>委托 starter 的 {@link ScopeType#fromCode}</b>，码值口径单一来源）。
+     *
+     * <p><strong>为什么保留本枚举</strong>：{@code sys_role.data_scope} 的 1–5 码值被 DDL 注释、前端字典与
+     * 迁移脚本引用，属<b>对外数据契约</b>；上收的是「算法与码值的单一来源」，不是把枚举类型搬走。
+     * 故 {@code fromCode} 的<b>判据</b>交给 starter（{@link ScopeType#fromCode}），本枚举只负责
+     * 「范围类型 → 本仓枚举」的映射，避免两处各写一份码值表、漂移时静默错判。</p>
      *
      * <p>未匹配（含 {@code null} 与库中脏值）返回空。空值对调用方是「该角色不贡献任何数据范围」，
      * 属收窄而非放大，调用方须记日志暴露脏值而不是静默忽略。</p>
@@ -69,14 +75,19 @@ public enum DataScopeEnum {
      * @return 数据范围枚举，未匹配时为空
      */
     public static Optional<DataScopeEnum> fromCode(Integer code) {
-        if (code == null) {
+        ScopeType type = ScopeType.fromCode(code);
+        if (type == ScopeType.UNKNOWN) {
             return Optional.empty();
         }
-        for (DataScopeEnum item : values()) {
-            if (item.code.equals(code)) {
-                return Optional.of(item);
-            }
-        }
-        return Optional.empty();
+        return Optional.of(valueOf(type.name()));
+    }
+
+    /**
+     * 本枚举对应的 starter 范围类型（供数据范围算法使用；码值解析已委托 starter）。
+     *
+     * @return starter 的范围类型
+     */
+    public ScopeType scopeType() {
+        return ScopeType.fromCode(code);
     }
 }

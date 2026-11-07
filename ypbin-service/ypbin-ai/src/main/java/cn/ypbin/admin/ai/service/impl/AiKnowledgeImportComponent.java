@@ -129,8 +129,7 @@ public class AiKnowledgeImportComponent {
                             urlFetcher.fetchIgnoringContentType(sub.text());
                         locs.addAll(subResponse.parse().select("urlset > url > loc"));
                     } catch (Exception e) {
-                        log.warn("[ypbin-ai] sitemap 子文件解析失败: url={} err={}",
-                            sub.text(), e.getMessage());
+                        log.error("[ypbin-ai] sitemap 子文件解析失败: url={}", sub.text(), e);
                     }
                 }
             }
@@ -149,8 +148,7 @@ public class AiKnowledgeImportComponent {
             try {
                 results.add(importSingleUrl(knowledgeBaseId, u, null));
             } catch (Exception e) {
-                log.warn("[ypbin-ai] Sitemap 导入跳过 URL 失败: url={} err={}", u,
-                    e.getMessage());
+                log.error("[ypbin-ai] Sitemap 导入跳过 URL 失败: url={}", u, e);
             }
         }
         return results;
@@ -204,8 +202,7 @@ public class AiKnowledgeImportComponent {
                     results.add(importSingleUrl(knowledgeBaseId, entryUrl, entryTitle));
                 }
             } catch (Exception e) {
-                log.warn("[ypbin-ai] RSS entry 导入失败: title={} err={}",
-                    entry.getTitle(), e.getMessage());
+                log.error("[ypbin-ai] RSS entry 导入失败: title={}", entry.getTitle(), e);
             }
         }
         return results;

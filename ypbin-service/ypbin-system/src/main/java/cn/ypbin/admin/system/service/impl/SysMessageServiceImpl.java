@@ -34,6 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class SysMessageServiceImpl extends BaseServiceImpl<SysMessageMapper, SysMessage>
     implements SysMessageService {
 
+    /** 消息已读状态：未读 */
+    private static final int READ_STATUS_UNREAD = 0;
+    /** 消息已读状态：已读 */
+    private static final int READ_STATUS_READ = 1;
+
     @Override
     public PageResult<MessageResp> pageMessages(Long userId, MessageQuery query) {
         PageResult<SysMessage> source = page(query, new LambdaQueryWrapper<SysMessage>()
@@ -49,7 +54,7 @@ public class SysMessageServiceImpl extends BaseServiceImpl<SysMessageMapper, Sys
     public long unreadCount(Long userId) {
         return count(new LambdaQueryWrapper<SysMessage>()
             .eq(SysMessage::getReceiverUserId, userId)
-            .eq(SysMessage::getReadStatus, 0));
+            .eq(SysMessage::getReadStatus, READ_STATUS_UNREAD));
     }
 
     @Override
@@ -75,7 +80,7 @@ public class SysMessageServiceImpl extends BaseServiceImpl<SysMessageMapper, Sys
         int affected = baseMapper.update(null, new LambdaUpdateWrapper<SysMessage>()
             .eq(SysMessage::getId, id)
             .eq(SysMessage::getReceiverUserId, userId)
-            .set(SysMessage::getReadStatus, 1));
+            .set(SysMessage::getReadStatus, READ_STATUS_READ));
         if (affected == 0) {
             throw new BusinessException("消息不存在或无权操作");
         }
@@ -97,7 +102,7 @@ public class SysMessageServiceImpl extends BaseServiceImpl<SysMessageMapper, Sys
     public void markAllRead(Long userId) {
         baseMapper.update(null, new LambdaUpdateWrapper<SysMessage>()
             .eq(SysMessage::getReceiverUserId, userId)
-            .eq(SysMessage::getReadStatus, 0)
-            .set(SysMessage::getReadStatus, 1));
+            .eq(SysMessage::getReadStatus, READ_STATUS_UNREAD)
+            .set(SysMessage::getReadStatus, READ_STATUS_READ));
     }
 }

@@ -187,7 +187,9 @@ VALUES (1, 1, '示例任务01', now(), now(), 'XXL', '', 'CRON', '0 0 0 * * ? *'
         now(), '');
 
 INSERT INTO `xxl_job_user`(`id`, `username`, `password`, `role`, `permission`)
-VALUES (1, 'admin', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', 1, NULL);
+-- password 为部署期占位符：install.sh 导入前替换为随机口令的 sha256 哈希（见 import_xxl_job_sql），
+-- 仓库不内置明文/哈希默认口令，避免「默认 admin/123456」此类公开凭据随代码分发。
+VALUES (1, 'admin', '${XXL_JOB_ADMIN_PASSWORD_HASH}', 1, NULL);
 
 INSERT INTO `xxl_job_lock` (`lock_name`)
 VALUES ('schedule_lock');

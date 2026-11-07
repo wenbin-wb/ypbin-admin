@@ -11,7 +11,7 @@ package cn.ypbin.admin.auth.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.http.useragent.UserAgent;
-import cn.hutool.http.useragent.UserAgentUtil;
+import cn.ypbin.starter.core.util.UserAgentFormatter;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.common.support.PwdChangeKeys;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
@@ -42,8 +42,8 @@ import org.springframework.util.StringUtils;
  *
  * <p><strong>为什么必须写终端信息：</strong>在线用户接口的 IP/归属地/浏览器/操作系统四个字段
  * <strong>只</strong>来自 {@link OnlineUserHelper#record} 写入 Token-Session 的记录
- * （starter 3.3.0 {@code DefaultOnlineUserService.java:163-170} 经 {@code OnlineUserHelper.getByToken}
- * 读取）；此前本仓无任何一处调用 {@code record}，因此这四个字段恒为空。写入方在 auth、
+ * （starter 的 {@code DefaultOnlineUserService} 经 {@code OnlineUserHelper.getByToken} 读取）；
+ * 此前本仓无任何一处调用 {@code record}，因此这四个字段恒为空。写入方在 auth、
  * 读取方在 ypbin-system，两者共用 {@code sa-token-redis-template} 会话存储（见 {@code ypbin-common}
  * 的依赖注释），跨服务可读。</p>
  *
@@ -102,14 +102,12 @@ public class LoginSupport {
         updateLastLoginTime(user.getId());
         // 先取令牌再上报：埋点真出问题时（如取令牌本身失败）不会先产出一条「登录成功」事件，
         // 事件与业务结果保持同源；上报侧自身已保证不抛（见 LoginEventTracker）
-        LoginResp resp = new LoginResp();
-        resp.setAccessToken(LoginHelper.getTokenValue());
+        LoginResp resp = new LoginResp(LoginHelper.getTokenValue(), mustChangePassword);
         // 回带端侧渲染所需的最小身份信息：避免端侧登录后再发一次「取当前用户」，
         // 也就不存在「已登录但无身份」的空窗态（该空窗会让端侧缓存判空误判为未登录而重复登录）
         resp.setUserId(user.getId());
         resp.setNickname(StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getRealName());
         resp.setAvatarUrl(user.getAvatar());
-        resp.setMustChangePassword(mustChangePassword);
         loginEventTracker.recordLogin(user, authType, ip, userAgent);
         return resp;
     }
@@ -127,29 +125,24 @@ public class LoginSupport {
         UserAgent ua = parseUserAgent(userAgent);
         try {
             OnlineUserHelper.record(ip,
-                ua == null || ua.getBrowser() == null ? null : formatBrowser(ua),
+                UserAgentFormatter.formatBrowser(ua),
                 ua == null || ua.getOs() == null ? null : ua.getOs().getName());
         } catch (RuntimeException e) {
             log.error("登录后记录终端信息失败，在线用户的 IP/浏览器/操作系统将为空，ip={}", ip, e);
         }
     }
 
+    /**
+     * 解析 User-Agent；口径统一由 starter 的 {@link UserAgentFormatter} 提供。
+     *
+     * @param userAgent 原始 UA
+     * @return 解析结果；入参为空时 {@code null}
+     */
     @Nullable
     private UserAgent parseUserAgent(@Nullable String userAgent) {
-        return userAgent == null || userAgent.isBlank() ? null : UserAgentUtil.parse(userAgent);
+        return UserAgentFormatter.parse(userAgent);
     }
 
-    /**
-     * 浏览器「名称 + 版本」格式化，与 starter 操作日志的写法保持一致（版本缺失只留名称）。
-     */
-    private String formatBrowser(UserAgent ua) {
-        String name = ua.getBrowser().getName();
-        String version = ua.getVersion();
-        if (version == null || version.isBlank() || "Unknown".equalsIgnoreCase(version)) {
-            return name;
-        }
-        return name + " " + version;
-    }
 
     /**
      * 回写最后登录时间（经 Feign 调 system-svc）。回写失败不影响登录成功，记录日志暴露问题。

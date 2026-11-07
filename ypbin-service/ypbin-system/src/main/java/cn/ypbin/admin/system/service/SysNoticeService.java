@@ -13,9 +13,9 @@ import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.model.query.NoticeQuery;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
+import java.util.List;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
-import java.util.List;
 
 /**
  * 公告服务。

@@ -1,15 +1,14 @@
 # ypbin-admin 微服务版部署指南
 
-> 微服务版：网关 + 认证 + 系统 + AI + 小程序 服务架构，
+> 微服务版（main 分支）：网关 + 认证 + 系统 + AI + 小程序 五服务架构，
 > 基于 Spring Cloud Alibaba（Nacos 注册/配置中心 + Sentinel 限流 + OpenFeign 服务调用）。
-> 定时任务由 XXL-JOB 调度中心承载（`ypbin-system` 作为执行器），不是独立业务服务。
 
 ## 架构
 
 | 服务 | 端口 | 说明 |
 |---|---|---|
 | `ypbin-gateway` | 18080 | Spring Cloud Gateway，统一鉴权（sa-token 无状态校验 + 签发内部身份头） |
-| `ypbin-auth` | 18081 | 认证服务：账号/手机验证码/第三方/微信小程序登录、验证码、sa-token 登录态 |
+| `ypbin-auth` | 18081 | 认证服务：账号/手机验证码/第三方登录、验证码、sa-token 登录态 |
 | `ypbin-system` | 18082 | 系统服务：用户/角色/菜单/部门/岗位/字典/文件/日志/任务/通知/租户等 |
 | `ypbin-ai` | 18083 | AI 服务：知识库/对话/模型/统计 |
 | `ypbin-miniapp` | 18084 | 小程序服务：牌账清（CardTab）与家庭菜单（FamilyMenu） |
@@ -18,6 +17,247 @@
 | `mysql` | 3306 | 共享数据库（所有服务共用 `ypbin_admin` 库） |
 | `redis` | 6379 | 缓存（验证码/会话/多级缓存） |
 
+## 服务间调用约定
+
+- **auth/ai 不直连共享库**：用户/权限/社交绑定等数据一律经 `ISystemClient` Feign 调 `ypbin-system`
+- **身份头模式**：网关校验 token 后签发 `X-User-Id/X-User-Name/X-Tenant-Id/X-Dept-Id/X-Roles`，
+  下游服务经 `IdentityContext` 读取当前用户（非 sa-token 会话）
+- **Feign 目录规范**：
+  - api 模块 `ypbin-system-api/.../api/feign/`：`ISystemClient`（接口）+ `ISystemClientFallback`（降级）
+  - service 模块 `ypbin-system/.../feign/`：`SystemClientImpl`（`@RestController` 实现）
+
+## 前置条件
+
+- Ubuntu/Debian 服务器，root 权限
+- Docker + Docker Compose
+- 网络可访问 GitHub、Maven Central、Docker Hub
+
+## 一键部署（推荐）
+
+**方式一：一键脚本**（自动完成环境检查→拉取 starter/admin→构建 starter→打包 4 个服务→启动→健康检查）：
+
+```bash
+# Docker 模式（生产服务器，含 Nacos/Redis/MySQL 基础设施）
+# GitHub 可直连时：
+bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
+# 国内服务器（GitHub 不可达，自动降级 Gitee 同名镜像，需先在 Gitee 建 ypbin-* 三镜像并开启自动同步）：
+bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
+# 仓库源策略：默认探测 GitHub（3s 快超时）→ 不可达切 Gitee → 均不可达请显式指定
+# YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；
+# 镜像源：默认用机器默认（Docker 守护进程 registry-mirrors，无配置即官方 Docker Hub），脚本不做镜像源探测；
+# 拉基础镜像困难时显式 export REGISTRY_PREFIX=docker.m.daocloud.io/（作用于基础设施与 xxl-job/nginx 镜像）
+
+# 无 Docker 模式（本机/轻量服务器，java -jar 直接启动；需外部 Nacos/Redis/MySQL）
+NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD=xxx \
+  bash deploy/install.sh
+```
+
+自定义参数：
+- 命令行参数：`-b, --branch <分支名>`（指定代码分支）、`--root <目录>`（指定部署目录）、`-y, --yes`（免确认自动运行）；
+- 目录自动隔离：未指定 `--root` 时按分支名隔离目录（`feature/<name>` → `/opt/ypbin/feature-<name>`，主分支 → `/opt/ypbin/main`），多分支可共存、互不污染；
+- 环境变量覆盖：`YPBIN_ROOT`、`BRANCH`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
+
+**分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
+
+> ⚠️ **`system` 与 `auth` 必须同批发布**：两者之间存在内部 Feign 契约（`/internal/user-*`）。
+> 本脚本是 docker-compose 全量重建，**不存在滚动发布**，因此当前不会撞上版本错配；
+> 但若将来改用 k8s 滚动更新/分批升级，旧 `auth` 调新 `system`（或反之）会 **404** 并导致登录失败。
+> 届时必须保留旧路径双映射或明确升级次序。
+
+**网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
+
+**初始口令**：平台超管 `admin` 的初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `SUPER_ADMIN_INIT_PASSWORD`，system 服务启动时用 BCrypt 写入种子账号（SQL 里只有演示占位哈希）；首次登录响应带 `mustChangePassword=true`，网关只放行改密/登出等少数路径，改密成功后解除。手工 compose 未提供该变量时保留种子演示口令（`pt5aQ5E6t8dkVkMp`），同样强制首登改密。MySQL/Redis/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos 已开启服务端鉴权，控制台账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`（`gateway/auth/system/ai` 拉配置复用同一账号），XXL-JOB 控制台初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `XXL_JOB_ADMIN_PASSWORD`（不再内置 `admin/123456`）。
+
+**方式二：手动**：
+
+```bash
+# 拉取 main 分支
+git clone -b main https://github.com/wenbin-wb/ypbin-admin.git
+cd ypbin-admin/deploy
+
+# 配置环境变量
+cp .env.example .env   # 修改敏感项（MYSQL_ROOT_PASSWORD 等）
+
+# 启动（基础设施 + 4 个服务）
+docker compose -f docker-compose.yml up -d --build
+```
+
+> **Nacos 已开启服务端鉴权**：手工 compose 首次部署需先初始化管理员（`install.sh` 会自动完成），
+> 否则五个服务拉不到配置。可先起基础设施、初始化管理员，再启动业务服务：
+>
+> ```bash
+> docker compose -f docker-compose.yml up -d nacos redis mysql
+> curl -X POST http://localhost:8080/v3/auth/user/admin \
+>   -H "Content-Type: application/x-www-form-urlencoded" \
+>   --data-urlencode "username=$NACOS_USERNAME" --data-urlencode "password=$NACOS_PASSWORD"
+> docker compose -f docker-compose.yml up -d --build
+> ```
+
+> 手工部署未设置 `SUPER_ADMIN_INIT_PASSWORD` 时，超管初始口令为种子演示值 `pt5aQ5E6t8dkVkMp`；
+> 登录响应会带 `mustChangePassword=true`，必须先改密才能访问其它接口。
+
+> 各服务 Dockerfile 位于服务目录内（`ypbin-gateway/Dockerfile` 等），compose 构建自动使用。
+
+### Nacos 配置中心（必需）
+
+各服务本地 yml 只保留端口、服务名、Nacos 地址与少量业务开关；**网关路由与共享配置都在 Nacos 模板里**：
+
+- `deploy/nacos/ypbin-common.yaml`：限流、租户、数据权限等共享配置
+- `deploy/nacos/ypbin-gateway.yaml`：网关路由、鉴权白名单、Sa-Token 配置
+
+`install.sh` 会自动渲染并导入这些模板；手工部署时需先在 Nacos 控制台按同名 Data ID / `DEFAULT_GROUP` 逐份创建，
+并把模板内的 `${...}` 占位符（如 `GATEWAY_SIGN_TOKEN`）替换为 `deploy/.env` 中的真实值。
+**缺少 `ypbin-gateway.yaml` 时网关没有任何路由**——`optional:` 前缀只保证启动不报错，不会补默认路由。
+
+各服务通过 `spring.config.import: optional:nacos:...` 引入；Nacos 不可达时进程仍可启动，但无法注册/发现服务。
+
+## 手动构建部署
+
+```bash
+# 1. 构建（需要 JDK 21 + Maven）
+export JAVA_HOME=/path/to/jdk21
+mvn -DskipTests clean package
+
+# 2. 打镜像（每个服务）
+docker build -t ypbin/ypbin-gateway:local ypbin-gateway/
+docker build -t ypbin/ypbin-auth:local ypbin-auth/
+docker build -t ypbin/ypbin-system:local ypbin-service/ypbin-system/
+docker build -t ypbin/ypbin-ai:local ypbin-service/ypbin-ai/
+docker build -t ypbin/ypbin-miniapp:local ypbin-service/ypbin-miniapp/
+
+# 3. 编排启动
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+## 验证
+
+```bash
+# 网关健康检查
+curl http://localhost:18080/actuator/health
+
+# 登录（经网关）
+curl -X POST http://localhost:18080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"pt5aQ5E6t8dkVkMp"}'
+# 返回 { code:200, data:{ tokenValue:"..." } }
+# 口令来自 deploy/sql/002-data.sql 的种子账号，仅供初始化；登录后立即改密。
+
+# 带 token 访问业务接口（网关校验后签发身份头转发）
+curl http://localhost:18080/system/user/list \
+  -H "Authorization: Bearer <token>"
+
+# Nacos 控制台确认 5 个服务已注册（gateway/auth/system/ai/miniapp）
+# http://localhost:8848/nacos → 服务管理 → 服务列表
+```
+
+## 关键配置说明
+
+### 各服务 application.yml（已精简）
+
+公共段（sentinel/tenant/data-permission）已从各服务 yml 移除，统一放 Nacos 共享配置
+（`deploy/nacos/ypbin-common.yaml`）或由各服务默认值兜底。各服务 yml 只保留：
+
+- `server.port`：服务端口
+- `spring.application.name`：服务名（Nacos 注册名，与 `@FeignClient(name=...)` 对应）
+- `spring.cloud.nacos.server-addr`：Nacos 地址（`${NACOS_ADDR:localhost:8848}`）
+- `ypbin.*`：业务开关（auth 的 sa-token/security excludes、system 的 tenant/data-permission 等）
+
+### 身份头账号体系（`ypbin.security.identity`）：auth 是唯一例外
+
+`ypbin-common.yaml` 打开了身份头解析（`ypbin.security.identity.enabled: true`）——它把
+starter 的 `IdentityStpLogic` 注册为 `StpUtil` 的账号体系，**token 值取自网关注入的身份头**。
+这对「位于可信网关之后、不自己签发会话」的下游服务（system/ai/iot）是正确形态。
+
+**但 `ypbin-auth` 必须显式关掉**：
+
+```yaml
+# deploy/nacos/ypbin-auth.yaml
+ypbin:
+  security:
+    identity:
+      enabled: false     # 必须显式写；不写就会继承 common 的 true
+```
+
+原因：auth 是「校验口令 → 发 token → 建会话」的一方，口令通过后走
+`LoginHelper.login` + `StpUtil.getSession().set(...)`；而 `/auth/login` 请求**本身没有身份头**
+⇒ 建会话阶段抛 `NotLoginException` ⇒ **正确口令登录也返回 `401 登录状态无效，请重新登录`**
+（错误口令反而返回 `409`，故障形态很迷惑）。
+
+> 该键 2026-09-25 起曾只存在于线上 live 配置、未入仓内模板；一次「按模板整份重导 Nacos」就把它抹掉了，
+> 导致平台无法登录（2026-10-20 DEV 实测）。现已在模板里显式声明，并由
+> `DeployNacosPlaceholderTest#authMustExplicitlyDisableIdentityAccountSystem` 钉住——
+> 删掉该声明 `mvn test` 即变红。
+
+判据一句话：**identity 只给「不自己签发会话」的下游服务；自己签发会话的那一个必须关。**
+
+### Nacos 导入是整份覆盖：改配置前先看 live-only 键
+
+`deploy/install.sh` 导入 `deploy/nacos/*.yaml` 到 Nacos 是**整份 POST（覆盖）**。
+任何「只在线上存在、没进模板」的键都会被这次覆盖**静默删除**——历史上已因此丢过
+`ypbin.security.identity.enabled`，直接导致平台无法登录（见上文「身份头账号体系」一节）。
+
+现在导入前会自动检查（与 `ypbin-iot` 同源机制）：
+
+```
+GET 线上当前 Data ID → 与渲染后的待导入内容逐叶子键比对 → 差异逐条告警
+NACOS_IMPORT_STRICT=1 时：发现白名单外差异即中止导入
+```
+
+- 工具：`tools/nacos-live-only-diff.py`（纯标准库，无 PyYAML 依赖；CI 会跑其自测）
+- 白名单：`deploy/nacos-live-only-allowlist.txt`（每行一个键路径 + **必须写理由**）
+- 判据：部署日志应出现 `[ok] 无 live-only 键` 或明确的 `::warning::`；
+  若出现「跳过 live-only 检查」，说明 python3 缺失或线上内容取不到——**属降级，需人工核对**
+
+> 优先做法永远是「把键补进模板」；白名单只用于确实无法进模板的配置。
+
+### 网关路由
+
+```yaml
+spring.cloud.gateway.server.webflux.routes:
+  - id: auth    uri: lb://ypbin-auth    predicates: Path=/auth/**,/auth/social/**
+  - id: system  uri: lb://ypbin-system  predicates: Path=/system/**
+  - id: ai      uri: lb://ypbin-ai      predicates: Path=/ai/**
+```
+
+白名单路径（无需登录）：`/auth/login`、`/auth/sms/**`、`/auth/captcha/**`、`/auth/social/**`、`/system/open-api/**`、`/ai/share/**`、`/ai/widget/**`、`/system/ypbin/sse/subscribe`、`/system/tracking/ingest` 等，见 gateway 模板 `ypbin.gateway.auth.exclude-paths`。
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `NACOS_ADDR` | `localhost:8848` | Nacos 地址 |
+| `NACOS_USERNAME` | `nacos` | Nacos 鉴权账号（服务端已开启鉴权，五个服务共用） |
+| `NACOS_PASSWORD` | — | Nacos 鉴权口令（install.sh 随机生成；手工部署必填） |
+| `SENTINEL_ADDR` | `localhost:8858` | Sentinel 控制台地址 |
+| `DB_HOST/DB_PORT/DB_NAME` | `localhost/3306/ypbin_admin` | 共享数据库（system 服务用） |
+| `DB_USER/DB_PASSWORD` | `root/空` | 数据库凭据 |
+| `REDIS_HOST/REDIS_PORT` | `localhost/6379` | Redis |
+| `MYSQL_ROOT_PASSWORD` | — | compose 内建 MySQL 密码（必填） |
+| `SUPER_ADMIN_INIT_PASSWORD` | 空 | 平台超管初始口令（install.sh 随机生成；为空保留种子演示口令，均强制首登改密） |
+
+## 常见问题
+
+1. **服务起不来，报 Nacos 连接失败** → 确认 `NACOS_ADDR` 可达；本地开发可先起 Nacos 容器
+2. **登录返回 401** → 分两种，先看**错误口令**是否返回 `409`：
+   - 错误口令也 401 ⇒ 网关白名单未包含该路径；检查 gateway 的 `ypbin.gateway.auth.exclude-paths`；
+   - **错误口令返回 409、正确口令 401 `登录状态无效`** ⇒ auth 的 `ypbin.security.identity.enabled`
+     被继承成了 `true`（见上文「身份头账号体系」一节），auth 日志会出现 `SaTokenExceptionHandler [未认证] type=-1`。
+3. **auth 报"系统服务暂不可用"** → `ypbin-system` 未注册到 Nacos；检查 system 服务日志
+4. **接口 403** → 当前用户非平台用户（`@PlatformAccess` 限制）或权限码不足
+5. **改配置不生效** → 共享配置在 Nacos 修改后，服务需 `refresh`（`spring.config.import` 支持自动刷新）或重启
+6. **服务日志报 Nacos 403 / 用户名密码错误** → 服务端已开启鉴权，确认 `.env` 的
+   `NACOS_USERNAME/NACOS_PASSWORD` 与控制台一致（改了控制台口令要同步改 `.env` 并重启五个服务）
+
+## 单体版 vs 微服务版
+
+| 维度 | 单体版（boot 分支） | 微服务版（main） |
+|---|---|---|
+| 架构 | 单应用（8080） | 网关 + 5 服务（gateway/auth/system/ai/miniapp） |
+| 注册中心 | 无 | Nacos |
+| 服务调用 | 本地 Bean | OpenFeign + 身份头 |
+| 当前用户 | `UserContext`（sa-token 会话） | `IdentityContext`（身份头） |
+| 部署 | docker-compose（单容器） | docker-compose.yml（多容器） |
+| 数据 | 单库单应用 | 单库多应用（system 服务独享写，auth/ai 经 Feign） |
 ## 小程序登录（部署必读）
 
 `ypbin-auth` 的微信小程序登录依赖 **服务端配置** 的 `WECHAT_MINIAPP_APPID` / `WECHAT_MINIAPP_SECRET`
@@ -63,191 +303,3 @@ Bearer 鉴权，改为：
 **降级行为**：牌账清在 WS 失败时自动降级为 3 秒轮询；家庭菜单依赖 `onShow` 与下拉刷新
 （无轮询），实时性缺失时不会报错，仅表现为"要手动刷新"。
 
-## 服务间调用约定
-
-- **auth/ai 不直连共享库**：用户/权限/社交绑定等数据一律经 `ISystemClient` Feign 调 `ypbin-system`
-- **身份头模式**：网关校验 token 后签发 `X-User-Id/X-User-Name/X-Tenant-Id/X-Dept-Id/X-Roles`，
-  下游服务经 `IdentityContext` 读取当前用户（非 sa-token 会话）
-- **Feign 目录规范**：
-  - api 模块 `ypbin-system-api/.../api/feign/`：`ISystemClient`（接口）+ `ISystemClientFallback`（降级）
-  - service 模块 `ypbin-system/.../feign/`：`SystemClientImpl`（`@RestController` 实现）
-
-## 前置条件
-
-- Ubuntu/Debian 服务器，root 权限
-- Docker + Docker Compose
-- 网络可访问 GitHub、Maven Central、Docker Hub
-
-## 一键部署（推荐）
-
-**方式一：一键脚本**（自动完成环境检查→拉取 starter/admin→构建 starter→打包 5 服务→启动→健康检查）：
-
-```bash
-# Docker 模式（生产服务器，含 Nacos/Redis/MySQL 基础设施）
-# GitHub 可直连时：
-bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/deploy/install.sh)
-# 国内服务器（GitHub 不可达，自动降级 Gitee 同名镜像，需先在 Gitee 建 ypbin-* 三镜像并开启自动同步）：
-bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
-# 仓库源策略：默认探测 GitHub（3s 快超时）→ 不可达切 Gitee → 均不可达请显式指定
-# YPBIN_REPO=...（如 ghproxy 代理前缀）重跑；
-# 镜像源：默认用机器默认（Docker 守护进程 registry-mirrors，无配置即官方 Docker Hub），脚本不做镜像源探测；
-# 拉基础镜像困难时显式 export REGISTRY_PREFIX=docker.m.daocloud.io/（作用于基础设施与 xxl-job/nginx 镜像）
-
-# 无 Docker 模式（本机/轻量服务器，java -jar 直接启动；需外部 Nacos/Redis/MySQL）
-NO_DOCKER=1 NACOS_ADDR=localhost:8848 DB_HOST=localhost DB_USER=root DB_PASSWORD=xxx \
-  bash deploy/install.sh
-```
-
-自定义参数：
-- 命令行参数：`-b, --branch <分支名>`（指定代码分支）、`--root <目录>`（指定部署目录）、`-y, --yes`（免确认自动运行）；
-- 目录自动隔离：未指定 `--root` 时按分支名隔离目录（`feature/<name>` → `/opt/ypbin/feature-<name>`，主分支 → `/opt/ypbin/main`），多分支可共存、互不污染；
-- 环境变量覆盖：`YPBIN_ROOT`、`BRANCH`、`NACOS_ADDR`、`DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`、`REDIS_HOST/REDIS_PORT`、`MYSQL_ROOT_PASSWORD`（Docker 模式内建 MySQL 密码）。
-
-**分支部署**：`-b <branch>` / `--branch`（自动隔离目录 `/opt/ypbin/<分支>`，多分支可共存；`--root` 显式覆盖）。
-
-> ⚠️ **`system` 与 `auth` 必须同批发布**：两者之间存在内部 Feign 契约（`/internal/user-*`）。
-> 本脚本是 docker-compose 全量重建，**不存在滚动发布**，因此当前不会撞上版本错配；
-> 但若将来改用 k8s 滚动更新/分批升级，旧 `auth` 调新 `system`（或反之）会 **404** 并导致登录失败。
-> 届时必须保留旧路径双映射或明确升级次序。
-
-**网络受限 / 镜像拉取**：GitHub 不可达自动降级 Gitee 镜像；公共镜像加速全部不可用时，在能拉镜像的机器 `docker save <5 个基础镜像> | gzip | ssh <服务器> 'gunzip | docker load'` 后重跑脚本即可（业务镜像基于本地已导入的 `eclipse-temurin:21-jre` legacy 构建，不联网）。
-
-**初始口令**：平台超管 `admin` 的初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `SUPER_ADMIN_INIT_PASSWORD`，system 服务启动时用 BCrypt 写入种子账号（SQL 里只有演示占位哈希）；首次登录响应带 `mustChangePassword=true`，网关只放行改密/登出等少数路径，改密成功后解除。手工 compose 未提供该变量时保留种子演示口令（`pt5aQ5E6t8dkVkMp`），同样强制首登改密。MySQL/Redis/INTERNAL 等由 install.sh 随机生成存入 `deploy/.env`（600）；Nacos 已开启服务端鉴权，控制台账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`（gateway/auth/system/ai/miniapp 拉配置复用同一账号）；XXL-JOB 控制台初始口令由 install.sh 随机生成并写入 `deploy/.env` 的 `XXL_JOB_ADMIN_PASSWORD`。
-
-**方式二：手动**：
-
-```bash
-# 拉取 microservice 分支
-git clone -b main https://github.com/wenbin-wb/ypbin-admin.git
-cd ypbin-admin/deploy
-
-# 配置环境变量
-cp .env.example .env   # 修改敏感项（MYSQL_ROOT_PASSWORD 等）
-
-# 启动（基础设施 + 5 微服务）
-docker compose -f docker-compose.yml up -d --build
-```
-
-> **Nacos 已开启服务端鉴权**：手工 compose 首次部署需先初始化管理员（`install.sh` 会自动完成），
-> 否则各服务拉不到配置。可先起基础设施、初始化管理员，再启动业务服务：
->
-> ```bash
-> docker compose -f docker-compose.yml up -d nacos redis mysql
-> curl -X POST http://localhost:8080/v3/auth/user/admin \
->   -H "Content-Type: application/x-www-form-urlencoded" \
->   --data-urlencode "username=$NACOS_USERNAME" --data-urlencode "password=$NACOS_PASSWORD"
-> docker compose -f docker-compose.yml up -d --build
-> ```
-
-> 手工部署未设置 `SUPER_ADMIN_INIT_PASSWORD` 时，超管初始口令为种子演示值 `pt5aQ5E6t8dkVkMp`；
-> 登录响应会带 `mustChangePassword=true`，必须先改密才能访问其它接口。
-
-> 各服务 Dockerfile 位于服务目录内（`ypbin-gateway/Dockerfile` 等），compose 构建自动使用。
-
-### Nacos 配置中心（可选，推荐）
-
-默认各服务本地 yml 已含全部配置（nacos 地址/限流/租户开关），无 Nacos 配置中心也可运行。
-生产建议创建共享配置统一管理：
-
-1. 登录 Nacos 控制台（`http://<host>:8848/nacos`，账号见 `deploy/.env` 的 `NACOS_USERNAME/NACOS_PASSWORD`）
-2. 新建配置：Data ID `ypbin-common.yaml`、Group `DEFAULT_GROUP`、格式 YAML
-3. 内容见 `deploy/nacos/ypbin-common.yaml`（限流 dashboard 地址等，可覆盖各服务默认值）
-
-各服务通过 `spring.config.import: optional:nacos:ypbin-common.yaml` 引入，
-本地开发无该配置时静默跳过（optional 前缀），不影响启动。
-
-## 手动构建部署
-
-```bash
-# 1. 构建（需要 JDK 21 + Maven）
-export JAVA_HOME=/path/to/jdk21
-mvn -DskipTests clean package
-
-# 2. 打镜像（每个服务）
-docker build -t ypbin/ypbin-gateway:local ypbin-gateway/
-docker build -t ypbin/ypbin-auth:local ypbin-auth/
-docker build -t ypbin/ypbin-system:local ypbin-service/ypbin-system/
-docker build -t ypbin/ypbin-ai:local ypbin-service/ypbin-ai/
-docker build -t ypbin/ypbin-miniapp:local ypbin-service/ypbin-miniapp/
-
-# 3. 编排启动
-docker compose -f deploy/docker-compose.yml up -d
-```
-
-## 验证
-
-```bash
-# 网关健康检查
-curl http://localhost:18080/actuator/health
-
-# 登录（经网关）
-curl -X POST http://localhost:18080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123456"}'
-# 返回 { code:200, data:{ tokenValue:"..." } }
-
-# 带 token 访问业务接口（网关校验后签发身份头转发）
-curl http://localhost:18080/system/user/list \
-  -H "Authorization: Bearer <token>"
-
-# Nacos 控制台确认 5 个服务已注册（gateway/auth/system/ai/miniapp）
-# http://localhost:8848/nacos → 服务管理 → 服务列表
-```
-
-## 关键配置说明
-
-### 各服务 application.yml（已精简）
-
-公共段（sentinel/tenant/data-permission）已从各服务 yml 移除，统一放 Nacos 共享配置
-（`deploy/nacos/ypbin-common.yaml`）或由各服务默认值兜底。各服务 yml 只保留：
-
-- `server.port`：服务端口
-- `spring.application.name`：服务名（Nacos 注册名，与 `@FeignClient(name=...)` 对应）
-- `spring.cloud.nacos.server-addr`：Nacos 地址（`${NACOS_ADDR:localhost:8848}`）
-- `ypbin.*`：业务开关（auth 的 sa-token/security excludes、system 的 tenant/data-permission 等）
-
-### 网关路由
-
-```yaml
-spring.cloud.gateway.server.webflux.routes:
-  - id: auth    uri: lb://ypbin-auth    predicates: Path=/auth/**,/captcha/**,/user/**,/open-api/**
-  - id: system  uri: lb://ypbin-system  predicates: Path=/system/**
-  - id: ai      uri: lb://ypbin-ai      predicates: Path=/ai/**,/share/**,/widget/**
-```
-
-白名单路径（无需登录）：`/auth/login`、`/captcha/**`、`/open-api/**` 等，见 gateway yml `ypbin.gateway.auth.whitelist`。
-
-## 环境变量
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `NACOS_ADDR` | `localhost:8848` | Nacos 地址 |
-| `NACOS_USERNAME` | `nacos` | Nacos 鉴权账号（服务端已开启鉴权，各服务共用） |
-| `NACOS_PASSWORD` | — | Nacos 鉴权口令（install.sh 随机生成；手工部署必填） |
-| `SENTINEL_ADDR` | `localhost:8858` | Sentinel 控制台地址 |
-| `DB_HOST/DB_PORT/DB_NAME` | `localhost/3306/ypbin_admin` | 共享数据库（system 服务用） |
-| `DB_USER/DB_PASSWORD` | `root/空` | 数据库凭据 |
-| `REDIS_HOST/REDIS_PORT` | `localhost/6379` | Redis |
-| `MYSQL_ROOT_PASSWORD` | — | compose 内建 MySQL 密码（必填） |
-| `SUPER_ADMIN_INIT_PASSWORD` | 空 | 平台超管初始口令（install.sh 随机生成；为空保留种子演示口令，均强制首登改密） |
-
-## 常见问题
-
-1. **服务起不来，报 Nacos 连接失败** → 确认 `NACOS_ADDR` 可达；本地开发可先起 Nacos 容器
-2. **登录返回 401** → 网关白名单未包含该路径，或 token 过期；检查 gateway yml `whitelist`
-3. **auth 报"系统服务暂不可用"** → `ypbin-system` 未注册到 Nacos；检查 system 服务日志
-4. **接口 403** → 当前用户非平台用户（`@PlatformAccess` 限制）或权限码不足
-5. **改配置不生效** → 共享配置在 Nacos 修改后，服务需 `refresh`（`spring.config.import` 支持自动刷新）或重启
-6. **服务日志报 Nacos 403 / 用户名密码错误** → 服务端已开启鉴权，确认 `.env` 的
-   `NACOS_USERNAME/NACOS_PASSWORD` 与控制台一致（改了控制台口令要同步改 `.env` 并重启各服务）
-
-## 单体版 vs 微服务版
-
-| 维度 | 单体版（boot 分支） | 微服务版（main） |
-|---|---|---|
-| 架构 | 单应用（8080） | 网关 + 5 服务（gateway/auth/system/ai/miniapp） |
-| 注册中心 | 无 | Nacos |
-| 服务调用 | 本地 Bean | OpenFeign + 身份头 |
-| 当前用户 | `UserContext`（sa-token 会话） | `IdentityContext`（身份头） |
-| 部署 | docker-compose（单容器） | docker-compose.yml（多容器） |
-| 数据 | 单库单应用 | 单库多应用（system 服务独享写，auth/ai 经 Feign） |

@@ -14,22 +14,44 @@ import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.entity.SysUserSocial;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
+import cn.ypbin.admin.system.feign.support.SpaceViewConverter;
+import java.time.LocalDateTime;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import cn.ypbin.starter.tenant.core.TenantContext;
+import cn.ypbin.starter.messaging.mail.MailService;
+import cn.ypbin.starter.messaging.sms.SmsService;
+import cn.ypbin.starter.data.core.EntityStatus;
+import cn.ypbin.admin.system.model.req.MailSendReq;
+import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
+import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
+import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
+import cn.ypbin.admin.system.mapper.SysMessageMapper;
+import cn.ypbin.admin.system.entity.SysMessage;
 import cn.ypbin.admin.system.feign.support.UserViewConverter;
 import cn.ypbin.admin.system.mapper.SysConfigMapper;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
+import cn.ypbin.admin.system.model.dto.SysSpaceDto;
+import cn.ypbin.admin.system.model.dto.SysSpaceRelationDto;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
-import cn.ypbin.admin.system.model.req.PasswordVerifyReq;
+import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
 import cn.ypbin.admin.system.model.req.SmsSendReq;
-import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
+import cn.ypbin.admin.system.model.req.SpaceBindReq;
+import cn.ypbin.admin.system.model.req.SpaceSyncReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
+import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
+import cn.ypbin.admin.system.model.resp.SpaceResp;
 import cn.ypbin.admin.system.service.SocialBindService;
 import cn.ypbin.admin.system.service.SysMenuService;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.admin.system.service.SysPermissionService;
+import cn.ypbin.admin.system.service.SysSpaceRelationService;
+import cn.ypbin.admin.system.service.SysSpaceService;
 import cn.ypbin.admin.system.service.SysUserService;
+import cn.ypbin.admin.system.service.support.ConfigValueMasker;
 import cn.ypbin.admin.system.social.SocialConfigReader;
 import cn.ypbin.starter.cache.util.CacheUtils;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -37,7 +59,6 @@ import cn.ypbin.starter.core.exception.GlobalErrorCode;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.dao.LogDao;
 import cn.ypbin.starter.log.model.LogRecord;
-import cn.ypbin.starter.messaging.sms.SmsService;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
@@ -46,8 +67,13 @@ import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
+import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -83,12 +109,11 @@ public class SystemClientImpl implements ISystemClient {
     /** 密码校验限频窗口时长 */
     private static final Duration VERIFY_PASSWORD_WINDOW = Duration.ofMinutes(1);
 
-    /** 整键命中即脱敏的系统参数（与列表页掩码口径一致，防密钥经 internal 出网） */
-    private static final List<String> SENSITIVE_CONFIG_SUFFIXES = List.of(
-        "_SECRET", "_PASSWORD", "_TOKEN", "_ACCESS_KEY", "_PRIVATE_KEY", "_API_KEY");
+    /** 站内信消息类型：1 = 系统通知（与公告站内信同一口径，见 NoticePublishServiceImpl） */
+    private static final int MESSAGE_TYPE_SYSTEM_NOTICE = 1;
 
-    /** 打码符 */
-    private static final String MASK_PREFIX = "****";
+    /** 站内信未读状态 */
+    private static final int MESSAGE_STATUS_UNREAD = 0;
 
     private final SysPermissionService permissionService;
     private final SysUserService userService;
@@ -96,13 +121,22 @@ public class SystemClientImpl implements ISystemClient {
     private final SocialConfigReader socialConfigReader;
     private final SocialBindService socialBindService;
     private final SysMenuService menuService;
-    private final SysNoticeService noticeService;
+
+    private final SysSpaceService spaceService;
+
+    private final SysSpaceRelationService spaceRelationService;
+
+    /** 站内信落库（复用既有 sys_message，不新造通知存储） */
+    private final SysMessageMapper messageMapper;
+
+    /** 邮件发送（复用既有 JavaMail 能力与既有超时配置） */
+    private final MailService mailService;
+
     /**
      * 短信发送（可选）：sms4j 是 starter 的可选依赖，未引入或厂商未配置时 Bean 不存在。
      * 用 {@link ObjectProvider} 允许 system 在未配置短信时正常启动，但取不到时不静默成功。
      */
     private final ObjectProvider<SmsService> smsServiceProvider;
-
     /** 日志落库端口：system 侧由 {@code DbLogProviders.DbLogDao} 提供，本类只做路由不做映射 */
     private final LogDao logDao;
 
@@ -114,6 +148,9 @@ public class SystemClientImpl implements ISystemClient {
      * 但取不到时也<b>不能静默丢弃</b>事件——那样上报方会以为成功，故显式失败返回（见方法体）。</p>
      */
     private final ObjectProvider<TrackRecorder> trackRecorderProvider;
+
+    /** 公告只读端点（端侧不直连 system 表）：可见性口径收口在 {@code SysNoticeService}。 */
+    private final SysNoticeService noticeService;
 
     @Override
     @GetMapping("/permissions")
@@ -188,14 +225,15 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/search-users")
-    public R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword) {
-        return R.ok(UserViewConverter.toUserDtoList(userService.searchUsers(keyword)));
+    public R<List<SysUserDto>> searchUsers(@RequestParam("keyword") String keyword,
+            @RequestParam("tenantId") Long tenantId) {
+        return R.ok(UserViewConverter.toUserDtoList(userService.searchUsers(keyword, tenantId)));
     }
 
     @Override
     @GetMapping("/user-count")
-    public R<Long> countUsers() {
-        return R.ok(userService.countUsers());
+    public R<Long> countUsers(@RequestParam("tenantId") Long tenantId) {
+        return R.ok(userService.countUsers(tenantId));
     }
 
     @Override
@@ -205,11 +243,17 @@ public class SystemClientImpl implements ISystemClient {
         value.setConfigKey(configKey);
         SysConfig config = configMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
             .eq(SysConfig::getConfigKey, configKey), false);
+        if (config == null) {
+            // 参数缺失是合法的读侧默认值（调用方据此走缺省），但配置键写错时表现完全相同，
+            // 留一条 debug 便于定位「开关怎么都不生效」
+            log.debug("内部读取系统参数不存在，按空值返回：configKey={}", configKey);
+        }
         String rawValue = config == null ? "" : config.getConfigValue();
         // 密钥/口令类参数禁止经 internal 出网（纵深防御：即使凭证被泄露，密钥也不得明文返回）。
+        // 判据与形态统一由 ConfigValueMasker 提供，与列表页完全一致（详见该类注释的选择理由）。
         // 已核验 auth 经本接口仅读取非敏感键（LOGIN_*/SMS_CODE_*/SMS_TEMPLATE_ID），不受影响；
         // 短信/邮件等密钥由 system 本地缓存直读，不走本接口。
-        value.setConfigValue(maskIfSensitive(configKey, rawValue));
+        value.setConfigValue(ConfigValueMasker.mask(configKey, rawValue));
         return R.ok(value);
     }
 
@@ -237,26 +281,6 @@ public class SystemClientImpl implements ISystemClient {
             throw new BusinessException(GlobalErrorCode.TOO_MANY_REQUESTS,
                 "密码校验过于频繁，请稍后重试");
         }
-    }
-
-    /**
-     * 系统参数键命中敏感后缀时对值脱敏（仅保留末 4 位，其余打码）。
-     *
-     * @param configKey 参数键
-     * @param rawValue  原始值
-     * @return 脱敏后的值（非敏感键原样返回）
-     */
-    private static String maskIfSensitive(String configKey, String rawValue) {
-        if (configKey == null || rawValue == null || rawValue.isBlank()) {
-            return rawValue;
-        }
-        String upperKey = configKey.toUpperCase(Locale.ROOT);
-        boolean sensitive = SENSITIVE_CONFIG_SUFFIXES.stream().anyMatch(upperKey::endsWith);
-        if (!sensitive) {
-            return rawValue;
-        }
-        return rawValue.length() <= 4 ? MASK_PREFIX
-            : MASK_PREFIX + rawValue.substring(rawValue.length() - 4);
     }
 
     @Override
@@ -365,8 +389,9 @@ public class SystemClientImpl implements ISystemClient {
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam("userType") String userType,
         @RequestParam("defaultRealName") String defaultRealName) {
-        SysUser user = userService.getOne(new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getUsername, username));
+        // 内部链路无租户身份头：显式忽略租户过滤，否则插件 fail-closed 会直接抛「缺少租户上下文」
+        SysUser user = TenantContext.executeIgnore(() -> userService.getOne(
+            new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username)));
         if (user == null) {
             // 端侧标识与展示名必须由调用方显式给出：**不做静默默认**。
             // 理由（2026-09-18 复核教训）：默认值会静默决定落库语义，调用方漏传时表现为
@@ -385,12 +410,17 @@ public class SystemClientImpl implements ISystemClient {
             user.setAvatar(avatar);
             user.setUserType(userType);
             user.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
-            user.setStatus(1);
-            userService.save(user);
+            user.setStatus(UserStatusEnum.ENABLED.getCode());
+            // 写入同样必须忽略租户：sys_user 不在 ignore-tables，匿名内部链路没有身份头，
+            // 漏掉这一层会在 INSERT 时被租户插件 fail-closed 拒绝（查询成功、写入失败）
+            SysUser created = user;
+            if (!TenantContext.executeIgnore(() -> userService.save(created))) {
+                throw new BusinessException("用户创建失败：username=" + username);
+            }
             // 内部直插绕过 SysUserServiceImpl 的写路径，必须自行失效永久缓存（含「不存在」哨兵）
-            SysCache.evictUser(user.getId(), username);
-            if (StringUtils.hasText(user.getPhone())) {
-                SysCache.evictUserByPhone(user.getPhone());
+            SysCache.evictUser(created.getId(), username);
+            if (StringUtils.hasText(created.getPhone())) {
+                SysCache.evictUserByPhone(created.getPhone());
             }
         } else {
             boolean updated = false;
@@ -403,8 +433,9 @@ public class SystemClientImpl implements ISystemClient {
                 user.setAvatar(avatar);
                 updated = true;
             }
-            if (updated) {
-                userService.updateById(user);
+            SysUser changed = user;
+            if (updated && !TenantContext.executeIgnore(() -> userService.updateById(changed))) {
+                throw new BusinessException("用户资料更新失败：userId=" + user.getId());
             }
             if (updated) {
                 SysCache.evictUser(user.getId(), user.getUsername());
@@ -422,7 +453,8 @@ public class SystemClientImpl implements ISystemClient {
         @RequestParam(value = "nickname", required = false) String nickname,
         @RequestParam(value = "avatar", required = false) String avatar,
         @RequestParam(value = "phone", required = false) String phone) {
-        SysUser user = userService.getById(userId);
+        // 同上：内部链路无租户上下文，必须显式忽略租户过滤
+        SysUser user = TenantContext.executeIgnore(() -> userService.getById(userId));
         if (user == null) {
             return R.fail("用户不存在");
         }
@@ -442,7 +474,9 @@ public class SystemClientImpl implements ISystemClient {
             updated = true;
         }
         if (updated) {
-            userService.updateById(user);
+            if (!TenantContext.executeIgnore(() -> userService.updateById(user))) {
+                return R.fail("用户资料更新失败");
+            }
             // 内部更新绕过 SysUserServiceImpl 的写路径：旧/新手机号与用户快照都必须失效
             SysCache.evictUser(user.getId(), user.getUsername());
             if (StringUtils.hasText(oldPhone)) {
@@ -455,17 +489,162 @@ public class SystemClientImpl implements ISystemClient {
         return R.ok(UserViewConverter.toDto(user));
     }
 
+    // ---------- 空间：跨服务只读/写入通道 ----------
+    //
+    // 这几个端点的职责边界：**只做投影与参数装配**，业务校验全部由 spaceService /
+    // spaceRelationService 承担（空间存在性、租户隔离、类型合法性、主空间唯一、防成环）。
+    // 内部端点重复一遍校验会形成第二套口径——两处漂移后「管理页能建、内部调用能越界」。
+
     @Override
-    @GetMapping("/notice-published-list")
-    public R<List<NoticeResp>> listPublishedNotices() {
-        // 可见性口径（已发布 + 未过期）收口在 SysNoticeService，本端点只做路由，不重写筛选条件
-        return R.ok(noticeService.listPublishedNotices());
+    public R<SysSpaceDto> getSpaceById(Long spaceId) {
+        if (spaceId == null) {
+            return R.fail("空间 ID 不能为空");
+        }
+        SpaceResp space;
+        try {
+            space = spaceService.getSpace(spaceId);
+        } catch (BusinessException e) {
+            // 空间不存在按失败返回（调用方要能区分「查询失败」与「确实没有空间」）
+            return R.fail(e.getMessage());
+        }
+        return R.ok(SpaceViewConverter.toDto(space));
     }
 
     @Override
-    @GetMapping("/notice-published-detail")
-    public R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id) {
-        return R.ok(noticeService.getPublishedNotice(id));
+    public R<List<SysSpaceDto>> listSpaces() {
+        return R.ok(flattenTree(spaceService.tree()).stream()
+            .map(SpaceViewConverter::toDto)
+            .toList());
+    }
+
+    @Override
+    public R<Integer> syncSpaceRelations(SpaceSyncReq req) {
+        if (req == null || req.getTargetId() == null) {
+            return R.fail("同步请求缺少业务对象 ID");
+        }
+        return R.ok(spaceRelationService.syncTargetSpaces(req));
+    }
+
+    @Override
+    public R<Map<Long, List<SysSpaceRelationDto>>> listSpaceRelationsByTargets(String targetType,
+        List<Long> targetIds) {
+        // 复用 service 的批量分组结果，再逐条转 DTO（转换只做字段投影，不再查库）
+        Map<Long, List<SpaceRelationResp>> grouped =
+            spaceRelationService.listByTargets(targetType, targetIds);
+        Map<Long, List<SysSpaceRelationDto>> result = new LinkedHashMap<>();
+        grouped.forEach((targetId, list) -> result.put(targetId,
+            list.stream().map(SpaceViewConverter::toDto).toList()));
+        return R.ok(result);
+    }
+
+    @Override
+    public R<List<SysSpaceRelationDto>> listSpaceRelationsByTarget(String targetType,
+        Long targetId) {
+        SpaceRelationQuery query = new SpaceRelationQuery();
+        query.setTargetType(targetType);
+        query.setTargetId(targetId);
+        try {
+            List<SpaceRelationResp> relations = spaceRelationService.listByTarget(query);
+            return R.ok(relations.stream().map(SpaceViewConverter::toDto).toList());
+        } catch (BusinessException e) {
+            return R.fail(e.getMessage());
+        }
+    }
+
+    @Override
+    public R<List<Long>> listSpaceSubtreeIds(Long spaceId) {
+        if (spaceId == null) {
+            return R.fail("空间 ID 不能为空");
+        }
+        return R.ok(spaceService.listSubtreeIds(spaceId));
+    }
+
+    @Override
+    public R<List<Long>> listSpaceTargetIdsBySpace(Long spaceId, String targetType) {
+        if (spaceId == null) {
+            return R.fail("空间 ID 不能为空");
+        }
+        return R.ok(spaceRelationService.listTargetIdsBySpaceTree(spaceId, targetType));
+    }
+
+    @Override
+    public R<Map<Long, Map<String, Long>>> countSpaceRelationsBySpaceTrees(List<Long> spaceIds) {
+        return R.ok(spaceRelationService.countBySpaceTrees(spaceIds));
+    }
+
+    @Override
+    public R<Void> sendInboxMessage(InboxMessageSendReq req) {
+        // 收件人必须是**该租户下真实存在的用户**：否则站内信会写进库而收件人永远看不到
+        // （投递记录却标成 SENT）——那是「静默失效」。这里显式校验并返回失败 R，由调用方记为失败。
+        SysUser receiver = TenantContext.executeWithTenant(req.getTenantId(),
+            () -> userService.getById(req.getReceiverUserId()));
+        if (receiver == null) {
+            log.warn("站内信收件人不存在（或被逻辑删除）：tenantId={} receiverUserId={}",
+                req.getTenantId(), req.getReceiverUserId());
+            return R.fail("收件人不存在或不属于该租户：userId=" + req.getReceiverUserId());
+        }
+        SysMessage message = new SysMessage();
+        message.setId(IdWorker.getId());
+        message.setTenantId(req.getTenantId());
+        message.setReceiverUserId(req.getReceiverUserId());
+        message.setTitle(req.getTitle());
+        message.setContent(req.getContent());
+        message.setMessageType(MESSAGE_TYPE_SYSTEM_NOTICE);
+        message.setReadStatus(MESSAGE_STATUS_UNREAD);
+        LocalDateTime now = LocalDateTime.now();
+        message.setCreateTime(now);
+        message.setUpdateTime(now);
+        message.setStatus(EntityStatus.ENABLED.getCode());
+        message.setIsDeleted(0);
+        try {
+            TenantContext.runWithTenant(req.getTenantId(),
+                () -> messageMapper.insertNoticeMessage(message));
+        } catch (RuntimeException ex) {
+            // 记完整堆栈：否则「站内信一直收不到」只能靠猜
+            log.error("站内信写入失败：tenantId={} receiverUserId={} title={}",
+                req.getTenantId(), req.getReceiverUserId(), req.getTitle(), ex);
+            return R.fail("站内信写入失败：" + ex.getMessage());
+        }
+        return R.ok();
+    }
+
+    @Override
+    public R<Void> sendMail(MailSendReq req) {
+        try {
+            mailService.sendText(req.getTo(), req.getSubject(), req.getContent());
+        } catch (RuntimeException ex) {
+            // 邮件网关 500 / SMTP 超时等：原样把原因带回给调用方（它是唯一知道重试策略的一方），
+            // 这里仍记完整堆栈——两处都要留痕，否则排障时只能看到「投递失败了」而不知道为什么
+            log.error("邮件发送失败：to={} subject={}", req.getTo(), req.getSubject(), ex);
+            return R.fail("邮件发送失败：" + ex.getMessage());
+        }
+        return R.ok();
+    }
+
+    @Override
+    public R<Integer> bindSpaceRelations(Long spaceId, String targetType, List<Long> targetIds,
+        Integer isPrimary, Boolean clearOthers, String remark) {
+        SpaceBindReq req = new SpaceBindReq();
+        req.setTargetType(targetType);
+        req.setTargetIds(targetIds);
+        req.setIsPrimary(isPrimary);
+        req.setClearOthers(clearOthers);
+        req.setRemark(remark);
+        try {
+            return R.ok(spaceRelationService.bind(spaceId, req));
+        } catch (BusinessException e) {
+            return R.fail(e.getMessage());
+        }
+    }
+
+    @Override
+    public R<Integer> unbindSpaceRelations(Long spaceId, String targetType,
+        List<Long> targetIds) {
+        try {
+            return R.ok(spaceRelationService.unbind(spaceId, targetType, targetIds));
+        } catch (BusinessException e) {
+            return R.fail(e.getMessage());
+        }
     }
 
     @Override
@@ -501,5 +680,58 @@ public class SystemClientImpl implements ISystemClient {
     private static String maskPhone(String phone) {
         return phone.length() <= 7 ? "****"
             : phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+    }
+
+    /**
+     * 把空间树拍平成列表（父在前、子在后，**先序**）。
+     *
+     * <p><b>为什么用显式栈而不是递归</b>：递归版本每次调用都新建一个 {@code ArrayList}
+     * 再 {@code addAll}，深层树上是 O(n²) 的拷贝；且一旦数据异常成环会直接
+     * {@code StackOverflowError}（基座 {@code TreeUtils.flatten} 的注释正是为此改用迭代）。
+     * 这里用显式栈 + 逆序入栈保证先序输出，与基座口径一致。</p>
+     *
+     * @param roots 树的根节点列表
+     * @return 拍平后的列表（父在前、子在后）
+     */
+    private List<SpaceResp> flattenTree(List<SpaceResp> roots) {
+        List<SpaceResp> result = new ArrayList<>();
+        if (roots == null || roots.isEmpty()) {
+            return result;
+        }
+        Deque<SpaceResp> stack = new ArrayDeque<>();
+        // 逆序入栈：保证出栈顺序与 roots 原序一致
+        for (int i = roots.size() - 1; i >= 0; i--) {
+            stack.push(roots.get(i));
+        }
+        Set<Long> visited = new HashSet<>();
+        while (!stack.isEmpty()) {
+            SpaceResp node = stack.pop();
+            // 防成环：树理论上不成环，但脏数据下也不能让本方法死循环
+            if (node == null || (node.getId() != null && !visited.add(node.getId()))) {
+                continue;
+            }
+            result.add(node);
+            List<SpaceResp> children = node.getChildren();
+            if (children == null || children.isEmpty()) {
+                continue;
+            }
+            for (int i = children.size() - 1; i >= 0; i--) {
+                stack.push(children.get(i));
+            }
+        }
+        return result;
+    }
+
+    @Override
+    @GetMapping("/notice-published-list")
+    public R<List<NoticeResp>> listPublishedNotices() {
+        // 可见性口径（已发布 + 未过期）收口在 SysNoticeService，本端点只做路由，不重写筛选条件
+        return R.ok(noticeService.listPublishedNotices());
+    }
+
+    @Override
+    @GetMapping("/notice-published-detail")
+    public R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id) {
+        return R.ok(noticeService.getPublishedNotice(id));
     }
 }

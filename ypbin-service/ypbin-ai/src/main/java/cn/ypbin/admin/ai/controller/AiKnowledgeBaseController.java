@@ -157,7 +157,12 @@ public class AiKnowledgeBaseController {
         return R.ok();
     }
 
-    /** 知识库问答（非流式） */
+    /**
+     * 知识库问答（非流式）。
+     *
+     * <p>审计由 {@code ai_query_log} 承担（结构化记录 kbId/提问原文/操作人），故<b>不挂</b>
+     * starter 的操作日志注解（{@code Log}）——不要把这 5 个问答/检索端点当成审计遗漏。</p>
+     */
     @PostMapping("/{id}/query")
     @SaCheckPermission("ai:knowledge:list")
     public R<String> query(
@@ -166,7 +171,11 @@ public class AiKnowledgeBaseController {
         return R.ok(knowledgeBizService.query(id, req.getQuestion()));
     }
 
-    /** 检索测试：返回召回片段，供调优检索策略 */
+    /**
+     * 检索测试：返回召回片段，供调优检索策略。
+     *
+     * <p>审计由 {@code ai_query_log}（{@code source=SEARCH}）承担，故<b>不挂</b> starter 的操作日志注解（{@code Log}）。</p>
+     */
     @PostMapping("/{id}/search-test")
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchTest(
@@ -175,7 +184,11 @@ public class AiKnowledgeBaseController {
         return R.ok(knowledgeBizService.searchTest(id, req.getQuestion(), req.getTopK()));
     }
 
-    /** 关键词重叠重排测试 */
+    /**
+     * 关键词重叠重排测试。
+     *
+     * <p>审计由 {@code ai_query_log}（{@code source=RERANK}）承担，故<b>不挂</b> starter 的操作日志注解（{@code Log}）。</p>
+     */
     @PostMapping("/{id}/search-rerank-test")
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchRerankTest(
@@ -184,7 +197,11 @@ public class AiKnowledgeBaseController {
         return R.ok(knowledgeBizService.searchRerankTest(id, req.getQuestion(), req.getTopK()));
     }
 
-    /** 多知识库联合检索测试（跨库 RRF 合并） */
+    /**
+     * 多知识库联合检索测试（跨库 RRF 合并）。
+     *
+     * <p>审计由 {@code ai_query_log}（{@code source=MULTIPLE}）承担，故<b>不挂</b> starter 的操作日志注解（{@code Log}）。</p>
+     */
     @PostMapping("/search-multiple-test")
     @SaCheckPermission("ai:knowledge:list")
     public R<List<Map<String, Object>>> searchMultipleTest(
@@ -192,7 +209,12 @@ public class AiKnowledgeBaseController {
         return R.ok(knowledgeBizService.searchMultipleTest(req.getKnowledgeBaseIds(), req.getQuestion(), req.getTopKPerKb()));
     }
 
-    /** 带溯源的问答（答案 + 召回片段列表） */
+    /**
+     * 带溯源的问答（答案 + 召回片段列表）。
+     *
+     * <p>内部调用 {@code query(...)}，故审计同样由 {@code ai_query_log}（{@code source=QUERY}）承担，
+     * <b>不挂</b> starter 的操作日志注解（{@code Log}）。</p>
+     */
     @PostMapping("/{id}/query-with-sources")
     @SaCheckPermission("ai:knowledge:list")
     public R<KbQueryResult> queryWithSources(

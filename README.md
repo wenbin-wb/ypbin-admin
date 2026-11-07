@@ -12,7 +12,7 @@
 [![Coverage](https://img.shields.io/badge/Coverage-32%20Tests%20Passed-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Vue](https://img.shields.io/badge/Vue-3.5-42b883.svg)](https://vuejs.org/)
 
 [在线体验](https://admin.ypbin.cn) · [文档](https://ypbin.cn/guide/admin/) · [接口契约](https://ypbin.cn/guide/admin/api) · [架构](https://ypbin.cn/guide/admin/architecture)
@@ -124,25 +124,46 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/main/d
 bash <(curl -fsSL https://gitee.com/wenbin_wb/ypbin-admin/raw/main/deploy/install.sh)
 ```
 
-交互模式会询问：操作模式（完整部署 / 只更新后端 / 只更新前端 / 手动上传前端包）、端口（默认 MySQL 3307 / Redis 6380 / 后端 8080 / 前端 18080）、部署目录等；加 `-y` 全自动跳过所有询问（CI / 无头环境）。详细见 [部署文档](https://ypbin.cn/guide/admin/deployment)。
+交互模式会询问：操作模式（完整部署 / 只更新后端 / 只更新前端 / 手动上传前端包）、端口（默认 MySQL 3306 / Redis 6379 / 网关 18080 / 前端 19000）、部署目录等；加 `-y` 全自动跳过所有询问（CI / 无头环境）。详细见 [部署文档](https://ypbin.cn/guide/admin/deployment)。
 
-### 方式二：本地开发
+### 方式二：本地开发（微服务版）
+
+前置：JDK 21、Maven 3.9+，以及可用的 MySQL / Redis / Nacos。
 
 ```bash
-# 后端（默认 8080，Flyway 自动建表灌种子；连接信息用环境变量覆盖）
-mvn -f ypbin-admin-server/pom.xml spring-boot:run
+# 1. 起基础设施（也可直接用 deploy/install.sh 的 Docker 模式一键完成）
+cd deploy
+cp .env.example .env          # 必须替换 MYSQL_ROOT_PASSWORD、NACOS_AUTH_*、REDIS_PASSWORD 等占位值
+docker compose up -d nacos redis mysql
+cd ..
+
+# 首次还需导入 deploy/sql/001~005（按需）与 deploy/nacos/*.yaml
+#（见 docs/microservice-deployment.md 的「Nacos 配置中心」）；网关路由只在
+# Nacos 模板里，缺 ypbin-gateway.yaml 时网关没有路由。
+
+# 2. 安装内部模块到本地仓库
+mvn -DskipTests install
+
+# 3. 依次启动（IDE 中运行各 Application 类亦可）
+mvn -f ypbin-service/ypbin-system/pom.xml spring-boot:run
+mvn -f ypbin-auth/pom.xml spring-boot:run
+mvn -f ypbin-service/ypbin-ai/pom.xml spring-boot:run
+mvn -f ypbin-gateway/pom.xml spring-boot:run
 ```
 
-接口文档为 `http://localhost:8080/swagger-ui/index.html`。首次部署需通过 Bootstrap 环境变量（`ADMIN_BOOTSTRAP_ENABLED` / `ADMIN_BOOTSTRAP_USERNAME` / `ADMIN_BOOTSTRAP_PASSWORD`）创建平台管理员，成功后关闭 Bootstrap。开发种子数据预置 `admin / admin123` 可直接登录，仅供本地调试。
+网关入口 `http://localhost:18080`。环境变量见根目录 `.env.example`（`run.bat` 会加载 `.env`，命令行启动请自行 export）。开发种子账号 `admin / pt5aQ5E6t8dkVkMp`，仅供本地调试，上线前必须清理。
 
 前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 
 ## 📁 项目结构
 
 ```
-ypbin-admin-common    公共层：常量、starter 扩展点实现、基础配置
-ypbin-admin-system    业务层：实体 / mapper / service / controller
-ypbin-admin-server    启动层：主类、配置、数据库迁移（Flyway）
+ypbin-common          公共层：常量、starter 扩展点实现、跨服务日志/埋点上报
+ypbin-gateway         网关：路由、鉴权、内部身份头签发
+ypbin-auth            认证服务：登录、验证码、会话
+ypbin-service/        可部署业务服务：system（核心管理域）、ai（模型/知识库/对话）
+ypbin-service-api/    跨服务契约：Feign 接口 + 共享 DTO/实体视图
+deploy/               一键部署脚本、compose、Nacos 配置模板、建库脚本
 ```
 
 ## 📚 文档
