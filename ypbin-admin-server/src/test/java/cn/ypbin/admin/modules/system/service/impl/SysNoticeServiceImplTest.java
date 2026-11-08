@@ -59,6 +59,20 @@ class SysNoticeServiceImplTest {
     }
 
     @Test
+    void nullPublishStatusIsTreatedAsDraft() {
+        SysNotice notice = notice(0, 3L);
+        // 历史行：publish_status 列允许 NULL
+        notice.setPublishStatus(null);
+        when(noticeMapper.selectById(1L)).thenReturn(notice);
+        when(noticeMapper.publishCas(eq(1L), eq(0), eq(3L), eq(4L), any())).thenReturn(1);
+
+        service.publish(1L);
+
+        // 内存按草稿处理 ⇒ SQL 的 COALESCE(publish_status, 0) 与之同口径，NULL 状态的历史行才能发布
+        verify(noticeMapper).publishCas(eq(1L), eq(0), eq(3L), eq(4L), any());
+    }
+
+    @Test
     void casFailureDoesNotFreezeDeliveries() {
         SysNotice notice = notice(0, 3L);
         when(noticeMapper.selectById(1L)).thenReturn(notice);

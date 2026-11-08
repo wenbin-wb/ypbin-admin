@@ -23,12 +23,20 @@ import org.apache.ibatis.annotations.Update;
  */
 public interface SysNoticeMapper extends BaseMapper<SysNotice> {
 
+    /**
+     * 发布 CAS：仅当库内状态与版本仍等于期望值时，把公告置为已发布并递增版本。
+     *
+     * <p><b>NULL 必须按草稿参与比较</b>：{@code publish_status} 列允许 NULL，历史行可能没有状态，
+     * 服务层 {@code requireNotice} 在内存里把它们当草稿（0）；SQL 若直接
+     * {@code publish_status = #{expectedStatus}}，NULL 永远不匹配，这类行就再也发不出去，
+     * 报的却是「状态已变化」。</p>
+     */
     @Update("""
         UPDATE sys_notice
         SET publish_status = 2, publish_time = #{publishTime},
             publish_version = #{nextVersion}, update_time = #{publishTime}
         WHERE id = #{id}
-          AND publish_status = #{expectedStatus}
+          AND COALESCE(publish_status, 0) = #{expectedStatus}
           AND publish_version = #{expectedVersion}
           AND is_deleted = 0
         """)

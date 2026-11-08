@@ -12,15 +12,23 @@ package cn.ypbin.admin.modules.ai.tool;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.modules.ai.core.AiChatUserContext;
+import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import java.util.List;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * {@link AdminAiTools} 的「管理端会话准入」测试。
@@ -36,6 +44,13 @@ class AdminAiToolsTest {
     private final SysUserMapper userMapper = mock(SysUserMapper.class);
 
     private final AdminAiTools tools = new AdminAiTools(userMapper);
+
+    @BeforeAll
+    static void initTableInfo() {
+        // 断言 wrapper 的 SQL 片段时需要 MyBatis-Plus 的列名缓存（不启动 Spring）
+        TableInfoHelper.initTableInfo(
+            new MapperBuilderAssistant(new MybatisConfiguration(), "ai-tools"), SysUser.class);
+    }
 
     @AfterEach
     void clearContext() {
@@ -61,5 +76,23 @@ class AdminAiToolsTest {
 
         assertThat(tools.getSystemStats()).contains("正常用户数: 7");
         assertThat(tools.searchUser("nobody")).contains("未找到匹配用户");
+    }
+
+    @Test
+    @DisplayName("用户搜索的 OR 条件必须分组，否则租户插件追加的 tenant_id 会被 OR 短路")
+    @SuppressWarnings("unchecked")
+    void searchUserShouldGroupOrConditionForTenantFilter() {
+        AiChatUserContext.set(1L);
+        when(userMapper.selectList(any())).thenReturn(List.of());
+
+        tools.searchUser("nobody");
+
+        ArgumentCaptor<Wrapper<SysUser>> captor = ArgumentCaptor.forClass(Wrapper.class);
+        verify(userMapper).selectList(captor.capture());
+        String sql = captor.getValue().getSqlSegment();
+        // 分组后形如 AND (username LIKE ? OR real_name LIKE ?)；不分组则是 username LIKE ? OR real_name LIKE ?，
+        // 租户插件在末尾追加的 AND tenant_id = ? 只能约束到后一个 LIKE 上。
+        assertThat(sql).containsIgnoringCase("(username like");
+        assertThat(sql).containsIgnoringCase("or real_name like");
     }
 }
