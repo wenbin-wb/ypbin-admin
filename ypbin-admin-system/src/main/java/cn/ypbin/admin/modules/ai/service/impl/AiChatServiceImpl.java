@@ -10,6 +10,8 @@
 package cn.ypbin.admin.modules.ai.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
+import cn.ypbin.admin.modules.ai.core.AiChatUserContext;
+import cn.ypbin.admin.modules.ai.core.AiChatUserThreadLocalAccessor;
 import cn.ypbin.admin.modules.ai.entity.AiChatMessage;
 import cn.ypbin.admin.modules.ai.entity.AiChatRole;
 import cn.ypbin.admin.modules.ai.entity.AiChatSession;
@@ -276,13 +278,17 @@ public class AiChatServiceImpl implements AiChatSessionService {
         AtomicInteger messageCount = new AtomicInteger(0);
 
         AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
-        // contextWrite 将 tenantId 写入 Reactor Context；
-        // Hooks.enableAutomaticContextPropagation() + TenantThreadLocalAccessor 在每次
+        // contextWrite 将 tenantId 与登录用户写入 Reactor Context；
+        // Hooks.enableAutomaticContextPropagation() + 两个 ThreadLocalAccessor 在每次
         // Scheduler 线程切换时从 Context 取出快照并还原 ThreadLocal，无时序依赖。
+        // 用户上下文是管理端工具的准入门槛：公开分享/挂件复用同一批 @Tool，
+        // 不带该标记时工具拒绝执行（见 AiChatUserContext）。
         Disposable subscription = stream
             .contextWrite(ctx -> ctx.put(
-                TenantThreadLocalAccessor.KEY,
-                new TenantContext.ContextSnapshot(null, tenantId)))
+                    TenantThreadLocalAccessor.KEY,
+                    new TenantContext.ContextSnapshot(null, tenantId))
+                .put(AiChatUserThreadLocalAccessor.KEY,
+                    new AiChatUserContext.Snapshot(userId)))
             .doOnNext(token -> {
                 try {
                     emitter.send(token);
