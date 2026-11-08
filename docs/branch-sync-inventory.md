@@ -9,10 +9,29 @@
 
 | 目标 | 定位 | 与 main 的差距 | 同步方式 | 结论 |
 |---|---|---|---|---|
-| `boot` | 单体产品线（`ypbin-admin-system` + `ypbin-admin-server`） | main 领先 **300** 个提交（271 个 first-parent），boot 独有 49 个 | **不能整体合并**（架构不同）；按功能逐个回灌 | 需回灌；已有 2026-09～11 的连续回灌记录（§4） |
-| `boot-miniapp` | 单体 + 小程序 | main 领先 300，分支独有 62 | 同上 | 需回灌；比 boot 多 13 个自有提交，需先对齐两条单体线的差异 |
-| `feature/miniapp-backend` | 微服务（与 main 同构） | main 领先 **96**（67 个 first-parent），分支独有 44 | **可直接 merge main** | 可合并；dry-run 有 27 处冲突（§5） |
-| `iot`（独立仓 `ypbin-iot`） | admin 的 fork（微服务） | 已用 PR #318 合并 upstream 至 `69d5850`；其后仍缺 **#130 + 4.4.1 同步/回退** | `git merge upstream/main`（SYNC.md 纪律） | 待 #318、#319 合并后补 #130 |
+| `boot` | 单体产品线（`ypbin-admin-system` + `ypbin-admin-server`） | main 领先 **300** 个提交（271 个 first-parent），boot 独有 49 个 | **不能整体合并**（架构不同）；按功能逐个回灌 | ✅ 2026-11-08 已完成本轮适用项回灌（#138/#140/#142，见 §1.5）；其余为微服务专属/已等价/无数据链路 |
+| `boot-miniapp` | 单体 + 小程序 | 2026-11-08 起完整包含 `boot`（0 / 23，仅多自有提交） | 通过合并 `boot` 同步 | ✅ 已对齐（#139/#141/#143） |
+| `feature/miniapp-backend` | 微服务（与 main 同构） | ✅ 已合并 main（PR #137），`behind=0` | `merge main` | 已完成；后续按里程碑持续合并 |
+| `iot`（独立仓 `ypbin-iot`） | admin 的 fork（微服务） | ✅ 已与 `upstream/main` 齐平（`behind=0`，PR #318/#319） | `git merge upstream/main`（SYNC.md 纪律） | 已完成；4.4.1 发布后移除租户兼容层 |
+
+## 1.5 统一回灌进度（2026-11-08）
+
+| 批次 | PR | 内容 |
+|---|---|---|
+| iot 同步 | #318 / #319 | upstream 同步至 `69d5850`；回退 4.4.0 + 租户 INSERT 兼容层（Central 月度配额封锁，4.4.1 待 12-01 后按 SNAPSHOT 流程发布） |
+| 小程序分支 | #137 | `merge main`：29 处冲突全部按语义解决，`feature/miniapp-backend` 与 main 齐平 |
+| boot 空间域 | #138 / #139 | 空间管理域全量回灌（实体/Mapper/服务/导入导出/字典选项/Controller + Flyway V8 + 删除链路清理）；同步进 boot-miniapp |
+| boot 审查修复 | #140 / #141 | 部门层级校验（防成环 + 10 层 + 移动深子树，递归 CTE）、部门/岗位新增返回 ID、短信验证码失败上限、`UserAgentFormatter` 统一；同步进 boot-miniapp |
+| boot 安全修复 | #142 / #143 | AI 工具管理端会话准入（匿名分享/挂件不能借工具枚举租户用户）、社交启用值兼容历史 `1/0`；同步进 boot-miniapp |
+
+**核实为不适用的 main 提交（已记录理由，不再回灌）**
+
+- 部门树叶子 `children` 归一（`1f390dc`）：boot 的 `buildTree` 本就只在有子节点时写入 children，行为等价。
+- 站内信/邮件内部端点（`85e2f6f`）：单体没有跨服务调用方，业务可直接调服务。
+- 埋点日聚合（`SysTrackEventDaily`）：boot 无该数据链路。
+- 公告 CAS `COALESCE`、密码历史批量写入：boot 已有等价实现。
+
+**后续维护约定**：main 新增提交按 §3 增量核对；单体线维持「按功能回灌 + 每次回灌后同步 boot-miniapp」的节奏，不再积压到 90+ 提交。
 
 ## 2. 风险分级（回灌优先级）
 
@@ -439,7 +458,9 @@
 - `ec068d2` refactor(monolith): 合并 ypbin-admin-common 到 system 模块的 common 包
 - `c53b6cb` refactor(monolith): 按业务域提升 AI 包为 cn.ypbin.admin.ai
 
-## 5. feature/miniapp-backend —— 可直接合并 main
+## 5. feature/miniapp-backend —— 已完成合并（PR #137）
+
+> 2026-11-07 已通过 PR #137 合并 main（29 处冲突按语义解决），当前 `behind=0`。以下为当时的冲突预演记录，留作下次合并的参考。
 
 - 差距：main 领先 96 个提交（67 个 first-parent）；分支独有 44 个。
 - dry-run 合并（`git merge-tree --write-tree --messages origin/feature/miniapp-backend origin/main`）冲突 **27 个文件**：
@@ -471,23 +492,21 @@
 - `Merge conflict in ypbin-service/ypbin-system/src/test/java/cn/ypbin/admin/system/feign/SystemClientImplPlatformUserTest.java`
 - `Merge conflict in ypbin-service/ypbin-system/src/test/java/cn/ypbin/admin/system/feign/SystemClientImplUserByIdTest.java`
 
-## 6. iot 仓（`ypbin-iot`）
+## 6. iot 仓（`ypbin-iot`）—— 已与 upstream 齐平
 
 - 纪律：`SYNC.md` 规定只跟踪 `upstream/main`，`git fetch --no-tags upstream && git merge upstream/main`，冲突必须 ⊆ 白名单。
-- 当前：
-  - PR **#318**（`sync/admin-main-20261107`）已把 upstream 的 11 个提交合入（starter 4.4.0、访问黑名单管理端、auth 黑名单计数/自封修复等）；
-  - 其后仍缺 upstream 的 **3 组提交**：
-    - `043015c0` / `52d5602e`（#130 客户端 IP 口径统一 + `trusted-proxies`）；
-    - `690154f8`（starter 4.4.1 同步）与 `b2940b5d` / `73da93f1`（回退到 4.4.0）——由本仓「固定 4.4.0 + 租户兼容层」策略吸收，不需要跟。
-  - PR **#319**（回退 4.4.0 + `TenantInsertCompatibilityConfiguration` + IT 复用同款处理器）用于解除 4.4.0 的租户 INSERT 阻塞。
-- 行动顺序：#319 合并 → #318 合并（可能需再次 rebase/merge 解决 pom 冲突）→ 再 `merge upstream/main` 取 #130 → `mvn clean verify`。
+- 现状（2026-11-08）：`git rev-list HEAD..upstream/main` = **0**。
+  - PR **#318**（`sync/admin-main-20261107`）合入 upstream 的 11 个提交（starter 4.4.0、访问黑名单管理端、auth 黑名单计数/自封修复、客户端 IP 口径与 `trusted-proxies` 等）；
+  - PR **#319**（回退 4.4.0 + `TenantInsertCompatibilityConfiguration` + 5 个真库 IT 复用同款处理器）解除 4.4.0 的租户 INSERT 阻塞；
+  - upstream 中 4.4.1 的同步/回退提交由本仓「固定 4.4.0 + 租户兼容层」策略吸收，无需跟（合并时产生过冲突，已按上述策略解决）。
+- 后续：starter 4.4.1 正式发布后，删除 `TenantInsertCompatibilityConfiguration` 与 IT 里的 `CompatTenantLineHandler`，版本升到 4.4.1。
 
-## 7. 建议节奏
+## 7. 节奏约定（2026-11-08 起）
 
-1. **iot 先行**（线上阻塞最直接）：合 #319 → 合 #318 → 补 #130。
-2. **feature/miniapp-backend**：按 §5 冲突清单合并 main，解决后全量 verify；之后每次 starter 发版/安全修复后同步一次，避免再次积压到 90+ 提交。
-3. **boot / boot-miniapp**：以 §3 清单为工作项，按 P0→P1→P2 逐项回灌；两条单体线先互相对齐再回灌，避免同一功能在两条线上又分叉。
-4. **starter 4.4.1**：配额恢复（12-01）后按 `RELEASING.md` 的「先 SNAPSHOT 回归、再发正式版」发布；届时删除 iot/admin 的租户兼容层并升级。
+1. **已完成**：iot 与 upstream 齐平（#318/#319）；`feature/miniapp-backend` 合并 main（#137）；boot/boot-miniapp 完成本轮适用项回灌（#138–#143）。
+2. **持续维护**：main 每次合并后按 §3 增量核对，**不要积压**；`feature/miniapp-backend` 按里程碑合并 main（冲突清单见 §5）。
+3. **单体线**：新功能一律「先 main、再回灌 boot、回灌后立即同步 boot-miniapp」，保持 `boot-miniapp` 相对 `boot` 只有自有提交（当前 0 / 23）。
+4. **starter 4.4.1**：配额恢复（12-01）后按 `RELEASING.md` 的「先 SNAPSHOT 回归、再发正式版」发布；届时删除 iot/admin 的租户兼容层并升级。正式发布前，宿主继续使用 4.4.0 + 兼容层。
 
 ## 8. 复现与核对命令
 
