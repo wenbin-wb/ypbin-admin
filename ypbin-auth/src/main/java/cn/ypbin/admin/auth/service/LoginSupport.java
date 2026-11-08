@@ -12,6 +12,7 @@ package cn.ypbin.admin.auth.service;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.http.useragent.UserAgent;
 import cn.ypbin.starter.core.util.UserAgentFormatter;
+import cn.ypbin.starter.log.core.IpLocationResolver;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.common.support.PwdChangeKeys;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
@@ -24,6 +25,7 @@ import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUserHelper;
+import cn.ypbin.starter.security.online.OnlineUserHelper.Terminal;
 import java.util.HashSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +60,9 @@ public class LoginSupport {
     private final ISystemClient systemClient;
 
     private final LoginEventTracker loginEventTracker;
+
+    /** IP 归属地解析（ip2region 离线库，见 {@code IpLocationConfiguration}） */
+    private final IpLocationResolver ipLocationResolver;
 
     /**
      * 完成登录并返回令牌。
@@ -107,10 +112,11 @@ public class LoginSupport {
     }
 
     /**
-     * 记录登录终端信息（在线用户列表的 IP/浏览器/操作系统来源）。
+     * 记录登录终端信息（在线用户列表的 IP/归属地/浏览器/操作系统来源）。
      *
      * <p>与 {@link #updateLastLoginTime} 同策略：终端信息属展示型附加数据，写失败不应阻断登录成功，
-     * 但必须记录完整堆栈暴露问题（不静默吞掉）。归属地未接入离线 IP 库，交由读取侧留空，不在此臆造。</p>
+     * 但必须记录完整堆栈暴露问题（不静默吞掉）。归属地由 {@link IpLocationResolver}
+     * （ip2region 离线库）解析，解析失败时留空，与单体版同一口径。</p>
      *
      * @param ip        客户端 IP
      * @param userAgent 客户端 User-Agent 原始串，可空
@@ -118,11 +124,14 @@ public class LoginSupport {
     private void recordLoginTerminal(String ip, @Nullable String userAgent) {
         UserAgent ua = parseUserAgent(userAgent);
         try {
-            OnlineUserHelper.record(ip,
-                UserAgentFormatter.formatBrowser(ua),
-                ua == null || ua.getOs() == null ? null : ua.getOs().getName());
+            Terminal terminal = new Terminal();
+            terminal.setIp(ip);
+            terminal.setLocation(ipLocationResolver.resolve(ip));
+            terminal.setBrowser(UserAgentFormatter.formatBrowser(ua));
+            terminal.setOs(ua == null || ua.getOs() == null ? null : ua.getOs().getName());
+            OnlineUserHelper.record(terminal);
         } catch (RuntimeException e) {
-            log.error("登录后记录终端信息失败，在线用户的 IP/浏览器/操作系统将为空，ip={}", ip, e);
+            log.error("登录后记录终端信息失败，在线用户的 IP/归属地/浏览器/操作系统将为空，ip={}", ip, e);
         }
     }
 

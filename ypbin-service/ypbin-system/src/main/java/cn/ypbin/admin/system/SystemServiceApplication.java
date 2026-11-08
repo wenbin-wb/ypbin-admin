@@ -10,10 +10,12 @@
 package cn.ypbin.admin.system;
 
 import cn.ypbin.admin.common.config.LicenseIssuerProperties;
+import cn.ypbin.admin.common.provider.IpLocationConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Import;
 
 /**
  * System 服务启动器（微服务版）。
@@ -23,6 +25,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  */
 @SpringBootApplication
 @MapperScan("cn.ypbin.admin.**.mapper")
+@Import(IpLocationConfiguration.class)
 @EnableConfigurationProperties(LicenseIssuerProperties.class)
 public class SystemServiceApplication {
 

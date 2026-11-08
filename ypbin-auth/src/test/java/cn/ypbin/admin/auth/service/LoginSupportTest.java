@@ -29,6 +29,7 @@ import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUserHelper;
+import cn.ypbin.starter.log.core.IpLocationResolver;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import cn.dev33.satoken.session.SaSession;
@@ -52,6 +53,9 @@ class LoginSupportTest {
     /** 登录埋点上报器：本类只断言「被调用且不阻断」，事件构造细节由 LoginEventTrackerTest 覆盖 */
     private final LoginEventTracker loginEventTracker = mock(LoginEventTracker.class);
 
+    /** IP 归属地解析：本类只断言「解析结果被写入终端」，离线库口径由 Ip2regionLocationResolverTest 覆盖 */
+    private final IpLocationResolver ipLocationResolver = ip -> "广东省 深圳市 电信";
+
     /** 用于断言终端信息的 User-Agent（Chrome on Windows） */
     private static final String CHROME_UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -70,7 +74,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldWriteSessionAndReturnToken() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -98,7 +102,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldRecordTerminalInfoForOnlineUser() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -123,15 +127,15 @@ class LoginSupportTest {
             assertThat(terminal.getOs()).contains("Windows");
             // 登录时间由 OnlineUserHelper 自动补
             assertThat(terminal.getLoginTime()).isNotNull();
-            // 归属地未接入离线 IP 库，必须留空而不是臆造
-            assertThat(terminal.getLocation()).isNull();
+            // 归属地由注入的 IpLocationResolver 解析并写入终端（离线库口径见 Ip2regionLocationResolverTest）
+            assertThat(terminal.getLocation()).isEqualTo("广东省 深圳市 电信");
         }
     }
 
     @Test
     void shouldRecordTerminalWithoutUserAgent() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -162,7 +166,7 @@ class LoginSupportTest {
     @Test
     void terminalRecordFailureShouldNotBreakLogin() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -184,7 +188,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldFallbackEmptyRolesWhenCacheFails() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -208,7 +212,7 @@ class LoginSupportTest {
     @Test
     void updateLastLoginTimeFailureShouldNotBreakLogin() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -237,7 +241,7 @@ class LoginSupportTest {
     void completeLoginShouldReportLoginEventForEveryAuthType() {
         ISystemClient systemClient = mock(ISystemClient.class);
         LoginEventTracker tracker = mock(LoginEventTracker.class);
-        LoginSupport support = new LoginSupport(systemClient, tracker);
+        LoginSupport support = new LoginSupport(systemClient, tracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -269,7 +273,7 @@ class LoginSupportTest {
         doThrow(new IllegalStateException("埋点队列不可用")).when(recorder).record(any(TrackEvent.class));
         ObjectProvider<TrackRecorder> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(recorder);
-        LoginSupport support = new LoginSupport(systemClient, new LoginEventTracker(provider));
+        LoginSupport support = new LoginSupport(systemClient, new LoginEventTracker(provider), ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -296,7 +300,7 @@ class LoginSupportTest {
     void loginEventMustBeReportedOnlyAfterTokenIsResolved() {
         ISystemClient systemClient = mock(ISystemClient.class);
         LoginEventTracker tracker = mock(LoginEventTracker.class);
-        LoginSupport support = new LoginSupport(systemClient, tracker);
+        LoginSupport support = new LoginSupport(systemClient, tracker, ipLocationResolver);
 
         try (MockedStatic<LoginHelper> loginHelper = mockStatic(LoginHelper.class);
             MockedStatic<StpUtil> stpUtil = mockStatic(StpUtil.class);
@@ -325,7 +329,7 @@ class LoginSupportTest {
     @Test
     void completeLoginShouldExposeAndPersistPwdChangeFlag() {
         ISystemClient systemClient = mock(ISystemClient.class);
-        LoginSupport support = new LoginSupport(systemClient, loginEventTracker);
+        LoginSupport support = new LoginSupport(systemClient, loginEventTracker, ipLocationResolver);
         SysUserDto user = buildUser();
         user.setPwdChangeRequired(1);
 

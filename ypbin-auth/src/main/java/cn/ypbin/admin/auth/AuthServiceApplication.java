@@ -10,6 +10,7 @@
 package cn.ypbin.admin.auth;
 
 import cn.ypbin.admin.common.ingest.RemoteIngestClientConfiguration;
+import cn.ypbin.admin.common.provider.IpLocationConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -23,7 +24,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * @since 2026-09-01
  */
 @SpringBootApplication(scanBasePackages = {"cn.ypbin.admin.auth", "cn.ypbin.admin.system.api"})
-@Import(RemoteIngestClientConfiguration.class)
+@Import({RemoteIngestClientConfiguration.class, IpLocationConfiguration.class})
 @EnableFeignClients(basePackages = "cn.ypbin.admin.system.api.feign")
 @EnableScheduling
 public class AuthServiceApplication {

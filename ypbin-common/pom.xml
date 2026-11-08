@@ -49,6 +49,13 @@
             <artifactId>ypbin-starter-log</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- IP 归属地离线库（Ip2regionLocationResolver 的编译期依赖）：optional，避免把 ~46MB 的
+             xdb 推给不需要它的模块；auth/ai/system 各自显式声明（与 starter-log 同一取舍）。 -->
+        <dependency>
+            <groupId>net.dreamlu</groupId>
+            <artifactId>mica-ip2region</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- 埋点"跨服务上报"装配（RemoteTrackAutoConfiguration）编译期依赖：与 starter-log 同理
              必须 optional——否则每个 common 消费者都会被强推 starter-tracking（含其采集端点自动配置）。 -->
         <dependency>
