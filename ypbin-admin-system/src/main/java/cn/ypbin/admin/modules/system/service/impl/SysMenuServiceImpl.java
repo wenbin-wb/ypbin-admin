@@ -22,11 +22,11 @@ import cn.ypbin.admin.modules.system.service.SysAuthTemplateService;
 import cn.ypbin.admin.modules.system.service.SysMenuService;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.core.tree.TreeUtils;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.security.core.UserContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -279,34 +279,112 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
             .orderByAsc(SysMenu::getId);
     }
 
-    private List<RouteResp> buildRouteTree(List<SysMenu> menus, Long pid) {
-        List<RouteResp> tree = new ArrayList<>();
-        for (SysMenu menu : menus) {
-            if (pid.equals(menu.getPid())) {
-                RouteResp route = toRoute(menu);
-                List<RouteResp> children = buildRouteTree(menus, menu.getId());
-                if (!children.isEmpty()) {
-                    route.setChildren(children);
-                }
-                tree.add(route);
-            }
-        }
-        return tree;
+    /**
+     * 扁平菜单 → 路由树（用 starter 的 O(n) 函数式建树）。
+     *
+     * <p>原先手写递归在每一层都重新全量扫描入参列表（O(n²)）；{@code SysMenu} 的字段名是
+     * {@code pid}、实现不了 starter 的 {@code TreeNode} 接口（要求 {@code getParentId()}），
+     * 故用函数式重载——不必为「适配接口」在实体上加方法。</p>
+     *
+     * <p><b>为什么用内部 {@link RouteNode} 而不是直接对 {@link RouteResp} 建树</b>：
+     * {@code RouteResp} 是对外契约（路由表），没有 id/pid 字段；为建树而加字段会改变响应形态。
+     * 故在内部用携带「(id, pid) + RouteResp」的可变节点建树，对外形态不变。</p>
+     *
+     * <p><b>行为一致性</b>：根判定为「{@code pid} 等于 {@code rootParentId}」；同一父节点下的顺序 =
+     * 入参列表顺序（调用方已按 sort, id 升序查询）；迁移前也只在该节点有子节点时才 {@code setChildren}，
+     * 无子节点时 children 保持 {@code null}——与 {@code TreeUtils} 的「一律写回（可能为空集合）」不同，
+     * 故本方法在写回后把空集合归一为 {@code null}，保持响应不变（{@code @JsonInclude(NON_NULL)} 下
+     * null 不序列化）。</p>
+     *
+     * @param menus        扁平菜单（调用方保证已按 sort, id 升序）
+     * @param rootParentId 根节点的父 ID
+     * @return 路由树
+     */
+    private List<RouteResp> buildRouteTree(List<SysMenu> menus, Long rootParentId) {
+        List<RouteNode> flat = menus.stream()
+            .map(menu -> new RouteNode(menu.getId(), menu.getPid(), toRoute(menu)))
+            .toList();
+        return TreeUtils.build(flat, RouteNode::id, RouteNode::pid, RouteNode::setChildren,
+                rootParentId)
+            .stream()
+            .map(RouteNode::normalized)
+            .toList();
     }
 
-    private List<MenuResp> buildMenuTree(List<SysMenu> menus, Long pid) {
-        List<MenuResp> tree = new ArrayList<>();
-        for (SysMenu menu : menus) {
-            if (pid.equals(menu.getPid())) {
-                MenuResp node = toMenuResp(menu);
-                List<MenuResp> children = buildMenuTree(menus, menu.getId());
-                if (!children.isEmpty()) {
-                    node.setChildren(children);
-                }
-                tree.add(node);
-            }
+    /**
+     * 建树用中间节点：携带树结构所需的 (id, pid) 与对外的 {@link RouteResp}。
+     *
+     * <p><b>为什么是可变类而不是 record</b>：{@code TreeUtils.build} 的 {@code childrenSetter} 是
+     * {@link java.util.function.BiConsumer}——它丢弃返回值，只认「就地写回」。record 的 setter 式方法
+     * 会返回新实例、原地对象不变，children 将永远为 {@code null}（树退化成扁平列表，且不报错）。</p>
+     */
+    private static final class RouteNode {
+
+        private final Long id;
+
+        private final Long pid;
+
+        private final RouteResp resp;
+
+        private List<RouteNode> children;
+
+        RouteNode(Long id, Long pid, RouteResp resp) {
+            this.id = id;
+            this.pid = pid;
+            this.resp = resp;
         }
-        return tree;
+
+        Long id() {
+            return id;
+        }
+
+        Long pid() {
+            return pid;
+        }
+
+        /**
+         * 由 {@code TreeUtils} 回调写的 children（就地写回，必须返回值无关）。
+         *
+         * @param children 子节点
+         */
+        void setChildren(List<RouteNode> children) {
+            this.children = children;
+        }
+
+        /**
+         * 投影为对外节点：递归填充 children，并把「空集合」归一为 {@code null}
+         * （迁移前无子节点时 children 就是 null，响应形态必须一致）。
+         *
+         * @return 对外路由节点
+         */
+        RouteResp normalized() {
+            if (children == null || children.isEmpty()) {
+                resp.setChildren(null);
+            } else {
+                resp.setChildren(children.stream().map(RouteNode::normalized).toList());
+            }
+            return resp;
+        }
+    }
+
+    /**
+     * 扁平菜单 → 菜单树（同上：starter 的 O(n) 函数式建树，根判定/顺序与迁移前一致）。
+     *
+     * @param menus        扁平菜单（调用方保证已按 sort, id 升序）
+     * @param rootParentId 根节点的父 ID
+     * @return 菜单树
+     */
+    private List<MenuResp> buildMenuTree(List<SysMenu> menus, Long rootParentId) {
+        List<MenuResp> tree = menus.stream().map(this::toMenuResp).toList();
+        List<MenuResp> roots = TreeUtils.build(tree, MenuResp::getId, MenuResp::getPid,
+            MenuResp::setChildren, rootParentId);
+        // 与迁移前一致：无子节点时 children 保持 null（TreeUtils 一律写回空集合），响应形态不变
+        tree.forEach(node -> {
+            if (node.getChildren() != null && node.getChildren().isEmpty()) {
+                node.setChildren(null);
+            }
+        });
+        return roots;
     }
 
     private RouteResp toRoute(SysMenu menu) {
