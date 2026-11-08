@@ -24,12 +24,12 @@
         <spring-boot.version>4.1.2</spring-boot.version>
         <ypbin-starter.version>4.4.0</ypbin-starter.version>
         <sms4j.version>3.3.5</sms4j.version>
-        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
-        <lombok.version>1.18.46</lombok.version>
+        <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
+        <lombok.version>1.18.48</lombok.version>
         <!-- 必须显式管理：不写版本时 Maven 会退回内置的 surefire 2.12.4，
              而 2.12.4 无法发现 JUnit 5 测试 → `mvn test` 输出 "No tests to run" 并 BUILD SUCCESS，
              等于测试全部被静默跳过（本工程 12 个测试类此前从未真正执行）。 -->
-        <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -54,7 +54,7 @@
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
-                <version>2.0.0</version>
+                <version>2.0.2</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -123,7 +123,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <version>3.16.0</version>
                 <configuration>
                     <!-- 保留方法参数名：Spring MVC @PathVariable/@RequestParam 依赖参数名解析 -->
                     <parameters>true</parameters>
