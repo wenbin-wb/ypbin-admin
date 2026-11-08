@@ -16,6 +16,7 @@ import cn.ypbin.admin.modules.system.model.req.ConfigSaveReq;
 import cn.ypbin.admin.modules.system.model.req.ConfigUpdateBatchReq;
 import cn.ypbin.admin.modules.system.model.resp.ConfigResp;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
+import cn.ypbin.admin.modules.system.service.support.ConfigValueMasker;
 import cn.ypbin.admin.modules.system.social.ConfigChangedEvent;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.model.PageResult;
@@ -46,10 +47,9 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     /** 布尔真值集合 */
     private static final Set<String> TRUE_VALUES = Set.of("true", "1", "on", "yes");
 
-    /** 不允许通过查询接口返回的敏感参数 */
-    private static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of(
-        "SMS_ACCESS_KEY_SECRET",
-        "MAIL_PASSWORD");
+    /** 新增敏感配置时提交了脱敏占位值的拒绝文案（无原值可保留） */
+    private static final String MASKED_VALUE_REJECT_MESSAGE =
+        "敏感配置不允许提交脱敏占位值（****开头），请输入真实值或使用修改接口";
 
     /** configKey -> configValue 本地不可变快照 */
     private volatile Map<String, String> cache = Map.of();
@@ -110,6 +110,12 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     public void createConfig(ConfigSaveReq req) {
         rejectSocialConfig(req.getConfigGroup(), req.getConfigKey());
         checkKeyUnique(req.getConfigKey(), null);
+        // 新增时提交的是脱敏占位值 ⇒ 无原值可保留，只能显式拒绝（不能把 ****abcd 当真实密钥存库）。
+        // 必须先判「键敏感」：非敏感键的真实值可以合法地以 4 个星号开头，不能误拒。
+        if (ConfigValueMasker.isSensitive(req.getConfigKey())
+            && ConfigValueMasker.isMaskedValue(req.getConfigValue())) {
+            throw new BusinessException(MASKED_VALUE_REJECT_MESSAGE);
+        }
         SysConfig config = new SysConfig();
         BeanUtils.copyProperties(req, config);
         config.setBuiltIn(0);
@@ -138,6 +144,9 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
         SysConfig config = new SysConfig();
         BeanUtils.copyProperties(req, config);
         config.setId(id);
+        // 回显的是脱敏值：目标键敏感且提交值以 4 个星号开头 ⇒ 视为「未修改」，保留库内原值
+        config.setConfigValue(resolveSubmittedValue(req.getConfigKey(), req.getConfigValue(),
+            existing.getConfigValue()));
         if (!updateById(config)) {
             throw new BusinessException("参数更新失败");
         }
@@ -185,7 +194,9 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
             throw new BusinessException("包含未知参数或跨分组参数");
         }
         for (SysConfig config : configs) {
-            config.setConfigValue(req.getConfigs().get(config.getConfigKey()));
+            // 分组表单回显的也是脱敏值：敏感键提交 **** 开头视为「未修改」，保留库内原值
+            config.setConfigValue(resolveSubmittedValue(config.getConfigKey(),
+                req.getConfigs().get(config.getConfigKey()), config.getConfigValue()));
             if (!updateById(config)) {
                 throw new BusinessException("参数更新失败：" + config.getConfigKey());
             }
@@ -244,12 +255,31 @@ public class SysConfigServiceImpl extends BaseServiceImpl<SysConfigMapper, SysCo
     private ConfigResp toResp(SysConfig config) {
         ConfigResp resp = new ConfigResp();
         BeanUtils.copyProperties(config, resp);
-        String configKey = config.getConfigKey();
-        if (configKey != null
-            && (SENSITIVE_CONFIG_KEYS.contains(configKey)
-            || configKey.startsWith("SOCIAL_") && configKey.endsWith("_CLIENT_SECRET"))) {
-            resp.setConfigValue("");
-        }
+        // 统一口径：凭据类键（_SECRET/_PASSWORD/_TOKEN/_KEY/...）打码为 ****末4位，
+        // 非敏感键原样返回；写路径据此识别「未修改」（见 resolveSubmittedValue）
+        resp.setConfigValue(ConfigValueMasker.mask(config.getConfigKey(), config.getConfigValue()));
         return resp;
+    }
+
+    /**
+     * 解析提交值：<b>目标键敏感</b>且提交的是脱敏占位值（{@code ****末4位}）时，保留库内原值（视为「未修改」）。
+     *
+     * <p>列表页与分组表单回显的是脱敏值，管理员只改其它字段时会把掩码原样提交回来；若直接写库，
+     * 真实密钥会被 {@code ****abcd} 覆盖——既不报错、也无法从响应看出，是最难排查的一类静默损坏。</p>
+     *
+     * <p><b>为什么必须先判「键敏感」</b>：掩码识别只看值的形状。非敏感键的真实值完全可能以此开头，
+     * 若不判键就会把它当成「未修改」，用户的真实修改被静默丢弃。故非敏感键原样写库。</p>
+     *
+     * @param configKey      目标配置键
+     * @param submittedValue 请求提交的值
+     * @param existingValue  库内当前真实值
+     * @return 应当写库的值
+     */
+    private static String resolveSubmittedValue(String configKey, String submittedValue,
+            String existingValue) {
+        if (!ConfigValueMasker.isSensitive(configKey)) {
+            return submittedValue;
+        }
+        return ConfigValueMasker.isMaskedValue(submittedValue) ? existingValue : submittedValue;
     }
 }
