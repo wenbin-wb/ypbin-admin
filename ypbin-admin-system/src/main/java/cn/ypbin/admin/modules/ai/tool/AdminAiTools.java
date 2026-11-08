@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.modules.ai.tool;
 
+import cn.ypbin.admin.modules.ai.core.AiChatUserContext;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
@@ -50,6 +51,10 @@ public class AdminAiTools {
     @Tool(name = "searchUser",
         description = "按用户名或真实姓名搜索系统用户，返回用户基本信息，限制 10 条")
     public String searchUser(String keyword) {
+        String denied = adminOnlyHint();
+        if (denied != null) {
+            return denied;
+        }
         List<SysUser> users = userMapper.selectList(
             new LambdaQueryWrapper<SysUser>()
                 .like(SysUser::getUsername, keyword)
@@ -74,8 +79,27 @@ public class AdminAiTools {
     @Tool(name = "getSystemStats",
         description = "获取当前系统基础统计：注册用户总数")
     public String getSystemStats() {
+        String denied = adminOnlyHint();
+        if (denied != null) {
+            return denied;
+        }
         long userCount = userMapper.selectCount(
             new LambdaQueryWrapper<SysUser>().eq(SysUser::getStatus, UserStatusEnum.ENABLED.getCode()));
         return String.format("系统统计 - 正常用户数: %d", userCount);
+    }
+
+    /**
+     * 管理端会话校验。
+     *
+     * <p>公开分享/挂件问答不会写入 {@link AiChatUserContext}，这里据此拒绝，
+     * 避免匿名访客借 AI 枚举知识库所属租户的用户。</p>
+     *
+     * @return 拒绝提示；管理端会话返回 {@code null}
+     */
+    private static String adminOnlyHint() {
+        if (AiChatUserContext.getUserId().isEmpty()) {
+            return "该工具仅在管理端登录会话中可用";
+        }
+        return null;
     }
 }

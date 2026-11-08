@@ -219,14 +219,26 @@ public class SocialConfigServiceImpl implements SocialConfigService {
         }
     }
 
+    /**
+     * 解析库内「启用」值（选源与读取共用本方法）。
+     *
+     * <p>历史手工写入可能是 1/0 或带首尾空白；只认 true/false 会让这些平台的启停与密钥轮换
+     * 全部失效。除此以外的取值不是某种假值而是数据损坏，显式失败而不是静默按停用处理——
+     * 静默会把「配置写错了」伪装成「平台没启用」。</p>
+     *
+     * @param enabled 配置值
+     * @param source  平台标识（用于报错）
+     * @return 是否启用
+     */
     private static boolean parseEnabled(String enabled, String source) {
-        if ("true".equalsIgnoreCase(enabled)) {
+        String normalized = enabled == null ? "" : enabled.trim();
+        if ("true".equalsIgnoreCase(normalized) || "1".equals(normalized)) {
             return true;
         }
-        if ("false".equalsIgnoreCase(enabled)) {
+        if ("false".equalsIgnoreCase(normalized) || "0".equals(normalized)) {
             return false;
         }
-        throw new BusinessException("第三方登录启用配置必须为 true 或 false：" + source);
+        throw new BusinessException("第三方登录启用配置必须为 true/false（历史值 1/0 仍兼容）：" + source);
     }
 
     private static String normalizeSource(String source) {
