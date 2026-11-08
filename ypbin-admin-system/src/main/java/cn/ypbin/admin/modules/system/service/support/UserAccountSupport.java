@@ -89,6 +89,19 @@ public class UserAccountSupport {
     }
 
     /**
+     * 批量记录历史密码（单条多值 INSERT），供 Excel 批量导入等一次建一批用户的场景使用。
+     *
+     * @param rows 待插入行（调用方保证非空）
+     * @return 影响行数
+     */
+    public int recordPasswordHistoryBatch(List<SysUserPasswordHistory> rows) {
+        if (rows.isEmpty()) {
+            return 0;
+        }
+        return passwordHistoryMapper.insertBatch(rows);
+    }
+
+    /**
      * 手机号全局唯一查重（手机号跨租户唯一，查重时忽略租户过滤）。
      */
     public void checkPhoneUnique(String phone, Long excludeId) {

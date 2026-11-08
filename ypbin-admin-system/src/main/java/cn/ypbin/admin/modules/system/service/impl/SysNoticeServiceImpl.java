@@ -182,7 +182,9 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
         long affected = baseMapper.delete(new LambdaQueryWrapper<SysNotice>()
             .eq(SysNotice::getId, id)
-            .eq(SysNotice::getPublishStatus, notice.getPublishStatus())
+            // 内存里把 NULL 状态当草稿（见 requireNotice），SQL 必须同口径：
+            // 直接 eq 会因 NULL ≠ 0 而永远匹配不到，历史行既发不出去也删不掉
+            .apply("COALESCE(publish_status, 0) = {0}", notice.getPublishStatus())
             .eq(SysNotice::getPublishVersion, notice.getPublishVersion()));
         if (affected != 1) {
             throw new BusinessException("公告状态已变化，删除失败");
@@ -237,6 +239,11 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
         if (notice.getPublishVersion() == null) {
             notice.setPublishVersion(0L);
+        }
+        if (notice.getPublishStatus() == null) {
+            // 历史行可能没有状态（列允许 NULL）：按草稿处理，避免后续 Integer 拆箱比较抛 NPE；
+            // 同时与 SQL 的 COALESCE(publish_status, 0) 保持同口径
+            notice.setPublishStatus(DRAFT);
         }
         return notice;
     }

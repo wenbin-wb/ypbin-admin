@@ -12,6 +12,7 @@ package cn.ypbin.admin.modules.system.service.impl;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.modules.system.entity.SysDept;
 import cn.ypbin.admin.modules.system.entity.SysUser;
+import cn.ypbin.admin.modules.system.entity.SysUserPasswordHistory;
 import cn.ypbin.admin.modules.system.enums.GenderEnum;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.mapper.SysDeptMapper;
@@ -20,6 +21,7 @@ import cn.ypbin.admin.modules.system.model.query.UserQuery;
 import cn.ypbin.admin.modules.system.model.vo.UserExportVo;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
 import cn.ypbin.admin.modules.system.model.vo.UserImportVo;
+import cn.ypbin.admin.modules.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.datapermission.annotation.DataPermission;
 import cn.ypbin.starter.excel.util.ExcelUtils;
@@ -30,6 +32,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,8 +67,12 @@ public class UserExcelComponent {
     /** 单次导出上限：与日志/埋点导出口径一致，超限显式报错而不是把堆打满 */
     private static final long EXPORT_LIMIT = 20_000L;
 
+    /** 历史密码批量插入的批大小（单条多值 INSERT，避免超大语句） */
+    private static final int INSERT_BATCH_SIZE = 500;
+
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
+    private final UserAccountSupport accountSupport;
 
     @DataPermission
     public void exportUsers(UserQuery query, HttpServletResponse response) {
@@ -150,6 +157,8 @@ public class UserExcelComponent {
         // 记录本文件内已成功导入的用户名/手机号，拦截文件内重复
         Set<String> importedUsernames = new HashSet<>();
         Set<String> importedPhones = new HashSet<>();
+        // 导入用户的初始口令历史：攒够一批再单条多值 INSERT，避免逐行往返
+        List<SysUserPasswordHistory> passwordHistories = new ArrayList<>();
 
         for (UserImportVo vo : list) {
             rowNum++;
@@ -197,11 +206,24 @@ public class UserExcelComponent {
                 user.setEmail(vo.getEmail().trim());
             }
             userMapper.insert(user);
+            // 与 createUser 同口径补记初始口令：不记的话「新密码不得与最近 N 次重复」查不到初始口令，
+            // 用户可以把密码改回管理员下发的同一个；按批写避免导入行数放大成同等数量的数据库往返。
+            SysUserPasswordHistory history = new SysUserPasswordHistory();
+            history.setUserId(user.getId());
+            history.setPassword(user.getPassword());
+            passwordHistories.add(history);
+            if (passwordHistories.size() >= INSERT_BATCH_SIZE) {
+                accountSupport.recordPasswordHistoryBatch(passwordHistories);
+                passwordHistories.clear();
+            }
             importedUsernames.add(username);
             if (phone != null) {
                 importedPhones.add(phone);
             }
             result.setSuccessCount(result.getSuccessCount() + 1);
+        }
+        if (!passwordHistories.isEmpty()) {
+            accountSupport.recordPasswordHistoryBatch(passwordHistories);
         }
         return result;
     }

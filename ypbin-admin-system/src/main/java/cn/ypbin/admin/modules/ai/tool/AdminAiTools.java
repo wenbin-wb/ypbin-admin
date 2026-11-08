@@ -57,9 +57,13 @@ public class AdminAiTools {
         }
         List<SysUser> users = userMapper.selectList(
             new LambdaQueryWrapper<SysUser>()
-                .like(SysUser::getUsername, keyword)
-                .or()
-                .like(SysUser::getRealName, keyword)
+                // OR 必须分组：租户插件会在 WHERE 末尾追加 AND tenant_id = ?，
+                // 不包一层 and(...) 时会拼成 username LIKE ? OR (real_name LIKE ? AND tenant_id = ?)，
+                // 用户名的匹配就能越过租户边界（跨租户泄露）。
+                .and(wrapper -> wrapper
+                    .like(SysUser::getUsername, keyword)
+                    .or()
+                    .like(SysUser::getRealName, keyword))
                 .last("LIMIT 10"));
         if (users.isEmpty()) {
             return "未找到匹配用户：" + keyword;
