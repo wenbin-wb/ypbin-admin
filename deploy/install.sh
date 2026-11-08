@@ -498,6 +498,14 @@ else
   fi
 fi
 
+# 接口加解密密钥：历史 .env 可能留空；补一条非空密钥，避免 compose 的非空校验失败，
+# 同时保持「接口加解密」能力默认可用（starter 未配置密钥时不装配 Provider，等于能力关闭）。
+if [ -z "$(grep '^API_CRYPTO_KEY=' "$DEPLOY_DIR/.env" | cut -d= -f2)" ]; then
+  CRYPTO_KEY="$(openssl rand -hex 16)"
+  sed -i "s/^API_CRYPTO_KEY=.*/API_CRYPTO_KEY=$CRYPTO_KEY/" "$DEPLOY_DIR/.env"
+  ok "已补充接口加解密密钥（API_CRYPTO_KEY，16 字节随机）"
+fi
+
 # 端口参数无条件应用（新老 .env 都对齐当前值，避免残留旧端口导致冲突）
 sed -i "s/^MYSQL_PORT=.*/MYSQL_PORT=$MYSQL_PORT/" "$DEPLOY_DIR/.env"
 sed -i "s/^REDIS_PORT=.*/REDIS_PORT=$REDIS_PORT/" "$DEPLOY_DIR/.env"
