@@ -97,8 +97,8 @@ ypbin:
       - /auth/social/authorize/**
       - /auth/social/callback/**
       - /auth/social/platforms
-      - /captcha
-      - /captcha/verify
+      - /auth/captcha
+      - /auth/captcha/verify
       - /open/license/**
       - /actuator/health        # 健康检查放行（仅此低危端点，不放 env/beans 等）
       - /error
@@ -184,6 +184,10 @@ ypbin:
   # ---------- SSE 推送 ----------
   sse:
     enabled: true               # SSE 长连接推送（站内信实时通知等）
+    # 前端与微服务线共用，按网关前缀访问 /system/ypbin/sse/*；单体没有网关，端点直接暴露同名路径。
+    # 订阅端点由 starter 的 SecuritySseAutoConfiguration 按此路径自动放行；换票端点仍要求登录。
+    path: /system/ypbin/sse/subscribe
+    ticket-path: /system/ypbin/sse/ticket
 
   # ---------- 敏感词过滤 ----------
   sensitive-words:
