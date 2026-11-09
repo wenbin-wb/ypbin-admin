@@ -4,9 +4,9 @@
 
 **企业级后台管理系统 · Enterprise Admin Platform**
 
-> 基于 ypbin-starter 组装的生产就绪后台：RBAC、多租户、数据权限、任务调度、消息推送、License 商业授权、AI 对话，开箱即用。
+> 基于 ypbin-starter 组装的生产就绪后台：RBAC、多租户、数据权限、空间管理、安全防护、任务调度、消息推送、License 商业授权、AI 知识库与对话，开箱即用。
 
-**Java 21 · Spring Boot 4.1 · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue**
+**Java 21 · Spring Boot 4.1 · Spring Cloud Alibaba · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue**
 
 [![CI](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml/badge.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
@@ -62,7 +62,7 @@
 
 | 分支 | 形态 | 主要模块 | 说明 |
 |---|---|---|---|
-| `main` | 微服务版 | `ypbin-gateway` / `ypbin-auth` / `ypbin-service/{system,ai}` / `ypbin-common` | 主推形态；Spring Cloud Alibaba（Nacos / Sentinel / OpenFeign），配置集中在 Nacos |
+| `main` | 微服务版 | `ypbin-gateway` / `ypbin-auth` / `ypbin-service/{system,ai}` / `ypbin-common` | 主推形态；Spring Cloud Alibaba（Nacos / Sentinel / OpenFeign）+ XXL-JOB，配置集中在 Nacos |
 | `boot` | 单体版 | `ypbin-admin-system` / `ypbin-admin-server` | 单进程部署，Flyway 管理建表与种子；适合小规模/私有化 |
 | `boot-miniapp` | 单体 + 小程序 | 同 `boot` + 小程序业务模块 | 在 `boot` 基础上增量维护 |
 | `feature/miniapp-backend` | 微服务小程序线 | 同 `main` | 按里程碑合并 `main` |
@@ -87,41 +87,59 @@
 
 | 能力 | 说明 |
 |---|---|
-| RBAC 权限模型 | 用户 / 角色 / 部门 / 岗位 / 菜单，按钮级鉴权 |
-| 数据权限 | 注解驱动，按数据范围隔离（全部 / 本部门 / 本人等） |
+| RBAC 权限模型 | 用户 / 角色 / 部门 / 岗位 / 菜单，按钮级权限码；权限模板按租户复用 |
+| 数据权限 | 注解驱动（`@DataPermission`），多角色数据范围取并集，读/写路径同一口径 |
 | 多租户 | 行级租户隔离、租户管理与权限模板 |
-| 审计日志 | 操作日志、登录日志、在线用户管理 |
+| 空间管理 | 空间树（全量 / 懒加载）、空间与业务对象多态关联、CSV 导入导出、跨服务只读契约 |
+| 审计日志 | 操作日志、登录日志、在线用户，支持导出与趋势统计 |
 
 ### 🔐 认证与安全
 
 | 能力 | 说明 |
 |---|---|
-| 多方式登录 | 账密 + 行为验证码、短信登录、第三方登录 |
-| 登录防护 | 密码错误锁定、有效期策略、会话踢出 |
-| 商业授权 | License 签发、双人审批、国密加密、授权码/授权文件交付（[使用说明书](LICENSE-USAGE.md)） |
-| 接口安全 | 接口签名防重放、字段加密、数据脱敏 |
+| 多方式登录 | 账密 + 行为验证码、短信登录、第三方 OAuth 登录与绑定 / 解绑 |
+| 登录防护 | 密码错误锁定、登录客户端管理、会话踢出、平台超管强制首登改密 |
+| 访问黑名单 | 手动拉黑与触发式自动封禁，规则下发网关，支持按 IP 封禁 / 解封 |
+| 归属地识别 | 登录与操作日志记录 IP 归属地（ip2region 离线库，内网 / 外网统一口径） |
+| 商业授权 | License 签发、双人审批、国密 SM2 / SM4、授权码 / 授权文件交付（[使用说明书](LICENSE-USAGE.md)） |
+| 接口安全 | 接口签名防重放、字段加解密、数据脱敏、内部调用令牌校验 |
+
+### 🧩 平台治理
+
+| 能力 | 说明 |
+|---|---|
+| 应用与客户端 | 开放应用 AccessKey / SecretKey、登录客户端凭据与认证方式、密钥重置 |
+| 认证模板 | 权限模板维护，租户开通时复用 |
+| 系统配置 | 分组参数、批量更新、字典与字典项 |
+| 文件与个人中心 | 文件上传 / 列表 / 删除、头像上传、资料与自助改密 |
+| 仪表盘与埋点 | 运营概览、日志趋势；埋点事件目录、趋势 / 漏斗 / 留存与应用分布分析 |
 
 ### 📨 消息与任务
 
 | 能力 | 说明 |
 |---|---|
-| 消息中心 | 站内信 SSE 实时推送、未读提醒 |
-| 通知公告 | 富文本编辑、定时发布 |
-| 任务调度 | 动态定时任务（Cron）、执行日志、失败重试 |
+| 消息中心 | 站内信 SSE 实时推送、未读计数、批量已读 |
+| 通知公告 | 富文本编辑、定时发布、撤回；发布后驱动站内信投递 |
+| 任务调度 | XXL-JOB 分布式执行器：公告定时发布、埋点日聚合 |
+| 消息通道 | 邮件测试、短信登录与通知通道（sms4j），通道配置动态注册 |
 
 ### 🤖 AI 增强
 
 | 能力 | 说明 |
 |---|---|
-| AI 对话 | 模型配置表驱动（OpenAI 兼容接口），模型地址/密钥/型号后台配置，不写死在 yml |
-| 流式输出 | SSE 流式响应，多轮记忆持久化 |
-| 用量统计 | Token 用量记录与查询 |
+| AI 对话 | 模型配置表驱动（OpenAI 兼容接口），多轮会话、SSE 流式输出、重新生成、置顶 |
+| 知识库（RAG） | PDF / Markdown / TXT 上传与批量导入、URL / Sitemap / RSS 导入、异步向量化、检索与重排测试 |
+| 提示词与角色 | 提示词模板、对话角色维护与收藏 |
+| 分享与嵌入 | 知识库分享链接、可嵌入的 `embed.js` 网页问答挂件 |
+| 运营统计 | 对话量 / 热门问题 / 文档统计；Token 用量按日、按模型汇总，未回报的用量单独计为未知 |
 
 ## 🧱 技术栈
 
 | 层 | 技术 |
 |---|---|
-| 后端 | Java 21 · Spring Boot 4.1 · [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) · Sa-Token · MyBatis-Plus · MySQL · Redis |
+| 运行时 | Java 21 · Spring Boot 4.1.2 · Spring Cloud Alibaba（Nacos / Sentinel / OpenFeign） |
+| 基座 | [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) 4.4.0：统一响应、鉴权会话、多租户、数据权限、缓存、消息、任务、日志与埋点 |
+| 数据与安全 | Sa-Token 1.46 · MyBatis-Plus · MySQL · Redis · XXL-JOB · sms4j · ip2region |
 | 前端 | Vue 3.5 · TypeScript · Ant Design Vue 4 · Vite · Pinia |
 | 文档 | SpringDoc OpenAPI · Swagger UI |
 
@@ -154,6 +172,8 @@ cd ..
 # 首次还需导入 deploy/sql/001~005（按需）与 deploy/nacos/*.yaml
 #（见 docs/microservice-deployment.md 的「Nacos 配置中心」）；网关路由只在
 # Nacos 模板里，缺 ypbin-gateway.yaml 时网关没有路由。
+# 已有库升级：按变更顺序执行 deploy/sql/migration/*.sql（幂等）；
+# 漏执行可能因缺列/缺字典值直接报错。
 
 # 2. 安装内部模块到本地仓库
 mvn -DskipTests install
@@ -165,7 +185,9 @@ mvn -f ypbin-service/ypbin-ai/pom.xml spring-boot:run
 mvn -f ypbin-gateway/pom.xml spring-boot:run
 ```
 
-网关入口 `http://localhost:18080`。环境变量见根目录 `.env.example`（`run.bat` 会加载 `.env`，命令行启动请自行 export）。开发种子账号 `admin / pt5aQ5E6t8dkVkMp`，仅供本地调试，上线前必须清理。
+网关入口 `http://localhost:18080`。环境变量见根目录 `.env.example`（`run.bat` 会加载 `.env`，命令行启动请自行 export）。开发种子账号 `admin / pt5aQ5E6t8dkVkMp`，仅供本地调试，上线前必须清理；首次登录会被强制修改密码。使用 `deploy/install.sh` 部署时，超管初始口令由脚本随机生成并写入 `deploy/.env` 的 `SUPER_ADMIN_INIT_PASSWORD`。
+
+构建与门禁：`mvn clean verify`（单元测试 + 架构门禁）。
 
 前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 
@@ -182,12 +204,14 @@ mvn -f ypbin-admin-server/pom.xml spring-boot:run
 ## 📁 项目结构
 
 ```
-ypbin-common          公共层：常量、starter 扩展点实现、跨服务日志/埋点上报
-ypbin-gateway         网关：路由、鉴权、内部身份头签发
-ypbin-auth            认证服务：登录、验证码、会话
-ypbin-service/        可部署业务服务：system（核心管理域）、ai（模型/知识库/对话）
-ypbin-service-api/    跨服务契约：Feign 接口 + 共享 DTO/实体视图
-deploy/               一键部署脚本、compose、Nacos 配置模板、建库脚本
+ypbin-common              公共层：常量、starter 扩展点实现（IP 归属地等）、跨服务日志/埋点上报
+ypbin-gateway             网关：路由、鉴权、内部身份头签发、黑名单规则下发
+ypbin-auth                认证服务：登录、验证码、短信 / 第三方登录、会话
+ypbin-service/            可部署业务服务：system（权限 / 空间 / 消息 / 日志 / 平台治理）、ai（模型 / 知识库 / 对话）
+ypbin-service-api/        跨服务契约：Feign 接口 + 共享 DTO/实体视图（system-api / ai-api）
+ypbin-architecture-tests  架构门禁：分层依赖、命名与源码约定、starter 版本契约
+deploy/                   一键部署脚本、compose、Nacos 配置模板、建库与迁移脚本
+tools/                    部署辅助工具（如 Nacos 仅线上键 diff）
 ```
 
 > `boot` / `boot-miniapp` 为单体结构：`ypbin-admin-system`（业务 + 公共）、`ypbin-admin-server`（启动/装配 + Flyway 迁移），不使用 Nacos / Sentinel。
@@ -206,6 +230,7 @@ deploy/               一键部署脚本、compose、Nacos 配置模板、建库
 
 | 主题 | 文件 |
 |---|---|
+| 更新日志 | [CHANGELOG.md](CHANGELOG.md) |
 | 微服务部署 | [docs/microservice-deployment.md](docs/microservice-deployment.md) |
 | 数据权限 | [docs/data-permission.md](docs/data-permission.md) |
 | 权限灰度开启 | [docs/permission-rollout.md](docs/permission-rollout.md) |
@@ -215,11 +240,13 @@ deploy/               一键部署脚本、compose、Nacos 配置模板、建库
 
 - [x] 组织权限与 RBAC
 - [x] 多租户与数据权限
+- [x] 空间管理与多态关联
 - [x] 消息中心（SSE 推送）
-- [x] AI 对话（配置驱动 + 流式输出）
+- [x] 访问黑名单与 IP 归属地
+- [x] AI 对话与知识库（RAG / 分享 / 嵌入）
 - [x] License 商业授权
-- [ ] 消息推送链路深度完善（邮件 / 短信）
-- [ ] 用户中心打磨（重置密码、头像、通知偏好）
+- [ ] 消息推送链路深度完善（邮件 / 短信通知）
+- [ ] 用户中心打磨（通知偏好、安全设置）
 
 ## 🤝 贡献指南
 
