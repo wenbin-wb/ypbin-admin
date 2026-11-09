@@ -6,6 +6,13 @@
 
 ## [未发布]
 
+### 修复（2026-11-09）· 空间关联对象类型补充「岗位」
+
+- 字典 `space_target_type` 增加 `post`（岗位）：岗位管理复用空间关联面板时
+  `targetType=post` 不再返回 409。字典是取值单一来源，空间侧零代码。
+- **已有库升级需执行** `deploy/sql/migration/2026-11-09-space-target-type-post.sql`（幂等）；
+  全新安装已包含在 `002-data.sql`。
+
 ### 变更（2026-11-02）· 平台超管初始口令与强制首登改密
 
 - **种子超管口令不再直接用于安装脚本部署**：`install.sh` 随机生成 `SUPER_ADMIN_INIT_PASSWORD`

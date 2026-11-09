@@ -93,6 +93,7 @@ VALUES (41, 4, '部门', 'dept', 'processing', 1, 1, NOW(), 1, 0),
        (42, 4, '人员', 'user', 'processing', 2, 1, NOW(), 1, 0),
        (43, 4, '设备', 'device', 'success', 3, 1, NOW(), 1, 0),
        (44, 4, '资产', 'asset', 'default', 4, 1, NOW(), 1, 0),
+       (46, 4, '岗位', 'post', 'processing', 5, 1, NOW(), 1, 0),
        (45, 4, '其他', 'other', 'default', 99, 1, NOW(), 1, 0);
 
 -- 默认 Web 管理后台客户端
