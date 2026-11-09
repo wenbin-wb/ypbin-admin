@@ -10,7 +10,7 @@
 package cn.ypbin.admin.modules.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import cn.ypbin.admin.modules.system.annotation.PlatformAccess;
+import cn.ypbin.starter.security.platform.PlatformAccess;
 import cn.ypbin.admin.modules.system.entity.SysLicense;
 import cn.ypbin.admin.modules.system.model.query.LicenseQuery;
 import cn.ypbin.admin.modules.system.model.req.LicenseApproveReq;

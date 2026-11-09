@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.service.impl;
 
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.starter.security.platform.PlatformUserChecker;
 import cn.ypbin.admin.modules.system.entity.SysMenu;
 import cn.ypbin.admin.modules.system.entity.SysRole;
 import cn.ypbin.admin.modules.system.entity.SysUser;
@@ -29,12 +30,16 @@ import org.springframework.stereotype.Service;
 /**
  * 权限查询服务实现。
  *
+ * <p>同时实现 starter 的 {@link PlatformUserChecker} SPI：单体不再自建平台访问切面，
+ * 统一由 starter 的 {@code @PlatformAccess} + {@code PlatformAccessAspect} 拦截，
+ * 本类提供「是否平台用户」的业务判定（与 {@link SysPermissionService#isPlatformUser} 同口径）。</p>
+ *
  * @author wenbin
  * @since 2026-08-01
  */
 @Service
 @RequiredArgsConstructor
-public class SysPermissionServiceImpl implements SysPermissionService {
+public class SysPermissionServiceImpl implements SysPermissionService, PlatformUserChecker {
 
     private final SysRoleMapper roleMapper;
     private final SysMenuMapper menuMapper;
