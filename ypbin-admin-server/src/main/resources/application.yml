@@ -109,8 +109,8 @@ ypbin:
       - /auth/social/authorize/**
       - /auth/social/callback/**
       - /auth/social/platforms
-      - /captcha
-      - /captcha/verify
+      - /auth/captcha
+      - /auth/captcha/verify
       - /open/license/**
       - /miniapp/cardtab/rooms/code/**        # 小程序按口令查房间（只返回预览视图）
       - /miniapp/familymenu/preset-dish/list  # 全局预设菜字典（不隶属任何餐厅）
@@ -216,6 +216,10 @@ ypbin:
   # ---------- SSE 推送 ----------
   sse:
     enabled: true               # SSE 长连接推送（站内信实时通知等）
+    # 前端与微服务线共用，按网关前缀访问 /system/ypbin/sse/*；单体没有网关，端点直接暴露同名路径。
+    # 订阅端点由 starter 的 SecuritySseAutoConfiguration 按此路径自动放行；换票端点仍要求登录。
+    path: /system/ypbin/sse/subscribe
+    ticket-path: /system/ypbin/sse/ticket
 
   # ---------- 敏感词过滤 ----------
   sensitive-words:
@@ -260,8 +264,12 @@ ypbin:
     enabled: true               # 国际化，按请求参数 lang 或请求头 Accept-Language
 
   # ---------- 接口加解密 ----------
-  api-crypto:
-    key: ${API_CRYPTO_KEY:}     # 接口加解密 AES 密钥由部署环境注入（16/24/32 字节）
+  # AES 密钥由部署环境注入（环境变量 YPBIN_API_CRYPTO_KEY，UTF-8 编码后 16/24/32 字节）。
+  # 这里刻意不写 `key: ${API_CRYPTO_KEY:}`：占位符解析为空串时属性依然「存在」，starter 会
+  # 创建 Provider 并因 0 字节直接启动失败；不配置 key 时 starter 不装配 Provider（由
+  # ApiCryptoMissingProviderAutoConfiguration 给出 WARN），应用照常启动，需要该能力时注入密钥即可。
+  # api-crypto:
+  #   key: ...
 
   # ---------- API 文档（SpringDoc） ----------
   api-doc:
