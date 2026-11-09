@@ -14,7 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import cn.ypbin.admin.modules.system.annotation.PlatformAccess;
+import cn.ypbin.starter.security.platform.PlatformAccess;
 import cn.ypbin.admin.modules.system.service.SysFileService;
 import cn.ypbin.admin.modules.system.service.UserProfileService;
 import cn.ypbin.starter.core.model.R;
