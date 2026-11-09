@@ -9,10 +9,10 @@
 **Java 21 · Spring Boot 4.1 · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue**
 
 [![CI](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml/badge.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/Coverage-32%20Tests%20Passed-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Vue](https://img.shields.io/badge/Vue-3.5-42b883.svg)](https://vuejs.org/)
 
 [在线体验](https://admin.ypbin.cn) · [文档](https://ypbin.cn/guide/admin/) · [接口契约](https://ypbin.cn/guide/admin/api) · [架构](https://ypbin.cn/guide/admin/architecture)
@@ -56,8 +56,22 @@
 
 > 🚀 新项目从这里起步，第一天就站在生产就绪的地基上。
 
+## 🌿 分支说明
+
+本仓库同时维护两种部署形态，前端共用 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)：
+
+| 分支 | 形态 | 主要模块 | 说明 |
+|---|---|---|---|
+| `main` | 微服务版 | `ypbin-gateway` / `ypbin-auth` / `ypbin-service/{system,ai}` / `ypbin-common` | 主推形态；Spring Cloud Alibaba（Nacos / Sentinel / OpenFeign），配置集中在 Nacos |
+| `boot` | 单体版 | `ypbin-admin-system` / `ypbin-admin-server` | 单进程部署，Flyway 管理建表与种子；适合小规模/私有化 |
+| `boot-miniapp` | 单体 + 小程序 | 同 `boot` + 小程序业务模块 | 在 `boot` 基础上增量维护 |
+| `feature/miniapp-backend` | 微服务小程序线 | 同 `main` | 按里程碑合并 `main` |
+
+> 两种形态的启动/部署方式不同：`main` 见下方「本地开发（微服务版）」；`boot` / `boot-miniapp` 使用各自分支的 `deploy/install.sh`，无需 Nacos / Sentinel。
+
 ## 🧭 目录
 
+- [分支说明](#-分支说明)
 - [功能特性](#-功能特性)
 - [技术栈](#-技术栈)
 - [快速开始](#-快速开始)
@@ -155,6 +169,16 @@ mvn -f ypbin-gateway/pom.xml spring-boot:run
 
 前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
 
+### 方式三：本地开发（单体版，`boot` / `boot-miniapp` 分支）
+
+```bash
+git checkout boot          # 或 boot-miniapp
+mvn -DskipTests install
+mvn -f ypbin-admin-server/pom.xml spring-boot:run
+```
+
+单体版无网关/Nacos/Sentinel：后端端口 `8080`，Flyway 启动时自动建表并写入种子数据；前端仍用 `pnpm dev:antd`，将 `VITE_GLOB_API_URL` 指向单体后端。
+
 ## 📁 项目结构
 
 ```
@@ -166,6 +190,8 @@ ypbin-service-api/    跨服务契约：Feign 接口 + 共享 DTO/实体视图
 deploy/               一键部署脚本、compose、Nacos 配置模板、建库脚本
 ```
 
+> `boot` / `boot-miniapp` 为单体结构：`ypbin-admin-system`（业务 + 公共）、`ypbin-admin-server`（启动/装配 + Flyway 迁移），不使用 Nacos / Sentinel。
+
 ## 📚 文档
 
 | 主题 | 链接 |
@@ -175,6 +201,15 @@ deploy/               一键部署脚本、compose、Nacos 配置模板、建库
 | 架构与集成 | [ypbin.cn/guide/admin/architecture](https://ypbin.cn/guide/admin/architecture) |
 | 部署指南 | [ypbin.cn/guide/admin/deployment](https://ypbin.cn/guide/admin/deployment) |
 | AI 对话能力 | [ypbin.cn/guide/admin/ai](https://ypbin.cn/guide/admin/ai) |
+
+仓库内文档：
+
+| 主题 | 文件 |
+|---|---|
+| 微服务部署 | [docs/microservice-deployment.md](docs/microservice-deployment.md) |
+| 数据权限 | [docs/data-permission.md](docs/data-permission.md) |
+| 权限灰度开启 | [docs/permission-rollout.md](docs/permission-rollout.md) |
+| starter 4.4.0 升级回归 | [docs/starter-4.4.0-regression.md](docs/starter-4.4.0-regression.md) |
 
 ## 🗺️ 路线图
 
