@@ -442,6 +442,28 @@ VALUES (600101, 6001, 'SystemAccessBlocklistAdd', 'button', 1, 'system:blocklist
         'system.blocklist.unban', 5, NOW(), 1, 0);
 
 -- =============================================================
+-- 访问黑名单：常用规则种子
+-- 默认启用的是「明显恶意/探测」类规则；与业务路径冲突时可在管理端停用。
+-- =============================================================
+INSERT INTO sys_access_blocklist
+    (id, match_type, match_value, reason, expire_time, create_user, create_time, status, is_deleted)
+VALUES (7001, 'PATH', '/actuator/env', '探测 Spring Actuator 环境变量端点', NULL, 1, NOW(), 1, 0),
+       (7002, 'PATH', '/actuator/heapdump', '探测 Spring Actuator 堆转储端点', NULL, 1, NOW(), 1, 0),
+       (7003, 'PATH', '/actuator/configprops', '探测 Spring Actuator 配置属性端点', NULL, 1, NOW(), 1, 0),
+       (7004, 'PATH', '/actuator/beans', '探测 Spring Actuator Bean 列表端点', NULL, 1, NOW(), 1, 0),
+       (7005, 'PATH', '/.env', '探测 .env 环境变量文件', NULL, 1, NOW(), 1, 0),
+       (7006, 'PATH', '/.git/', '探测 Git 仓库目录', NULL, 1, NOW(), 1, 0),
+       (7007, 'PATH', '/wp-admin', '扫描 WordPress 后台', NULL, 1, NOW(), 1, 0),
+       (7008, 'PATH', '/phpmyadmin', '扫描 phpMyAdmin', NULL, 1, NOW(), 1, 0),
+       (7009, 'PATH', '/druid', '扫描 Druid 监控台', NULL, 1, NOW(), 1, 0),
+       (7010, 'USER_AGENT', 'sqlmap', 'SQL 注入扫描器', NULL, 1, NOW(), 1, 0),
+       (7011, 'USER_AGENT', 'nikto', 'Web 漏洞扫描器', NULL, 1, NOW(), 1, 0),
+       (7012, 'USER_AGENT', 'nmap', '端口/服务扫描器', NULL, 1, NOW(), 1, 0),
+       (7013, 'USER_AGENT', 'masscan', '高速端口扫描器', NULL, 1, NOW(), 1, 0),
+       (7014, 'USER_AGENT', 'acunetix', 'Web 漏洞扫描器', NULL, 1, NOW(), 1, 0),
+       (7015, 'USER_AGENT', 'gobuster', '目录爆破工具', NULL, 1, NOW(), 1, 0);
+
+-- =============================================================
 -- 菜单授权
 -- =============================================================
 -- 全部权限模板只授权租户可见菜单
