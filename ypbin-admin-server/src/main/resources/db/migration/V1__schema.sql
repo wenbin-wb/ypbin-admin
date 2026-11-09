@@ -1,8 +1,9 @@
 -- =============================================================
--- ypbin-admin 建表脚本（系统 + AI，全部表最终结构，唯一结构来源）
+-- ypbin-admin 建表脚本（系统 + AI + 空间/安全，全部表最终结构，唯一结构来源）
 -- 约定：BaseEntity 公共列 id / create_user / create_time / update_user / update_time / status / is_deleted
 --       TenantBaseEntity 额外含 tenant_id
--- 说明：小程序业务表单独在 V3__miniapp.sql（便于独立维护）。
+-- 说明：开发阶段整合为单文件（V1 结构 / V2 种子）；boot-miniapp 的小程序业务表在 V3__miniapp.sql。
+--       已有旧库（曾执行 V4-V9）直接重建数据库后重启，不要补跑历史增量。
 -- =============================================================
 
 -- 用户表
@@ -793,3 +794,297 @@ CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
     INDEX `SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX` (`conversation_id`, `timestamp`),
     INDEX `SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX` (`conversation_id`, `sequence_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 会话记忆（Spring AI JDBC 持久化）';
+
+
+-- =============================================================
+-- 结构合并（开发阶段整合）：逻辑删除唯一键（原 V4）
+-- =============================================================
+
+-- =============================================================
+-- 逻辑删除后的唯一键（Flyway V4，2026-11-01）
+--
+-- 背景：下列唯一键都不含 is_deleted，而删除走逻辑删除（UPDATE is_deleted=1）：
+--         sys_user.username、sys_role.code、sys_post.code、sys_tenant.code、
+--         sys_dict.code、sys_auth_template.code、sys_client.client_id、
+--         sys_user_social(platform, open_id)
+--       结果是「删除后的编码/用户名被永久占用」：查重 SQL 都带 is_deleted=0，
+--       预检说可用，插入却撞唯一键抛 1062；解绑第三方账号后再也绑不回去。
+--       方案与 sys_space 的 code_alive 一致：未删除时生成列取原值、删除后为 NULL。
+--
+-- 历史说明：该结构原为 V4 增量，开发阶段整合后已并入本文件。
+--             V1__schema.sql 已同步为最终结构；本文件只服务于「已存在的库」。
+-- 幂等：用 information_schema 判存在后 ALTER，重复执行安全（Flyway 只跑一次，
+--       人工补跑也不会报错）。
+--
+-- 回滚（手工执行；执行前先清理重复数据）：
+--   ALTER TABLE sys_user DROP INDEX uk_username, ADD UNIQUE KEY uk_username (username);
+--   ALTER TABLE sys_user DROP COLUMN username_alive;
+--   ……其余表同理把唯一键换回原列并 DROP 对应的 *_alive 列。
+-- =============================================================
+
+-- ---------- 1) sys_user.username ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_user' AND column_name = 'username_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_user ADD COLUMN username_alive VARCHAR(64) AS (IF(is_deleted = 0, username, NULL)) STORED COMMENT ''用户名唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_user'
+      AND index_name = 'uk_username' AND column_name = 'username');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_user DROP INDEX uk_username, ADD UNIQUE KEY uk_username (username_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 2) sys_role.code ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_role' AND column_name = 'code_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_role ADD COLUMN code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT ''编码唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_role'
+      AND index_name = 'uk_tenant_code' AND column_name = 'code');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_role DROP INDEX uk_tenant_code, ADD UNIQUE KEY uk_tenant_code (tenant_id, code_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 3) sys_post.code ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_post' AND column_name = 'code_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_post ADD COLUMN code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT ''编码唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_post'
+      AND index_name = 'uk_tenant_code' AND column_name = 'code');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_post DROP INDEX uk_tenant_code, ADD UNIQUE KEY uk_tenant_code (tenant_id, code_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 4) sys_tenant.code ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_tenant' AND column_name = 'code_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_tenant ADD COLUMN code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT ''编码唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_tenant'
+      AND index_name = 'uk_code' AND column_name = 'code');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_tenant DROP INDEX uk_code, ADD UNIQUE KEY uk_code (code_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 5) sys_dict.code ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_dict' AND column_name = 'code_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_dict ADD COLUMN code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT ''编码唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_dict'
+      AND index_name = 'uk_code' AND column_name = 'code');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_dict DROP INDEX uk_code, ADD UNIQUE KEY uk_code (code_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 6) sys_auth_template.code ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_auth_template' AND column_name = 'code_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_auth_template ADD COLUMN code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT ''编码唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_auth_template'
+      AND index_name = 'uk_code' AND column_name = 'code');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_auth_template DROP INDEX uk_code, ADD UNIQUE KEY uk_code (code_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 7) sys_client.client_id ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_client' AND column_name = 'client_id_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_client ADD COLUMN client_id_alive VARCHAR(64) AS (IF(is_deleted = 0, client_id, NULL)) STORED COMMENT ''客户端 ID 唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_client'
+      AND index_name = 'uk_client_id' AND column_name = 'client_id');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_client DROP INDEX uk_client_id, ADD UNIQUE KEY uk_client_id (client_id_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------- 8) sys_user_social(platform, open_id) ----------
+SET @has := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_user_social' AND column_name = 'open_id_alive');
+SET @stmt := IF(@has = 0,
+    'ALTER TABLE sys_user_social ADD COLUMN open_id_alive VARCHAR(128) AS (IF(is_deleted = 0, open_id, NULL)) STORED COMMENT ''openId 唯一性生成列（仅供唯一键，不读）''',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @has := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_user_social'
+      AND index_name = 'uk_platform_open' AND column_name = 'open_id');
+SET @stmt := IF(@has > 0,
+    'ALTER TABLE sys_user_social DROP INDEX uk_platform_open, ADD UNIQUE KEY uk_platform_open (platform, open_id_alive)',
+    'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+
+-- =============================================================
+-- 结构合并：访问黑名单表（原 V6 的建表部分）
+-- =============================================================
+
+-- =============================================================
+-- 访问黑名单（Flyway V6，2026-11-04）
+--
+-- 能力：按 IP/CIDR、User-Agent 关键字、路径前缀拦截恶意扫描/爬虫/暴力破解；
+-- 规则由管理端维护，写库后全量下发到 Redis（无 Redis 时退化为进程内存储），
+-- 由 starter 的 Servlet 过滤器（单体）或网关过滤器（微服务）执行。
+--
+-- 说明：sys_access_blocklist 是平台级全局表，不参与租户隔离（见 application.yml 的
+-- tenant.ignore-tables）；若遗漏该配置，租户上下文缺失时查询会直接失败。
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS sys_access_blocklist
+(
+    id          BIGINT       NOT NULL COMMENT '主键',
+    match_type  VARCHAR(32)  NOT NULL COMMENT '匹配维度：IP/CIDR/USER_AGENT/PATH',
+    match_value VARCHAR(255) NOT NULL COMMENT '匹配值',
+    reason      VARCHAR(255) NULL COMMENT '命中原因',
+    expire_time DATETIME     NULL COMMENT '到期时间；为空表示长期有效',
+    create_user BIGINT       NULL COMMENT '创建人',
+    create_time DATETIME     NULL COMMENT '创建时间',
+    update_user BIGINT       NULL COMMENT '更新人',
+    update_time DATETIME     NULL COMMENT '更新时间',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 启用 0 停用',
+    is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    PRIMARY KEY (id),
+    KEY idx_match (match_type, match_value)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '访问黑名单';
+
+
+
+-- =============================================================
+-- 结构合并：空间管理表（原 V8 的建表部分）
+-- =============================================================
+
+-- ---------- 1) 空间主表 ----------
+CREATE TABLE IF NOT EXISTS sys_space
+(
+    id          BIGINT         NOT NULL COMMENT '主键',
+    tenant_id   BIGINT         NULL COMMENT '租户 ID',
+    pid         BIGINT         NOT NULL DEFAULT 0 COMMENT '父空间 ID，顶级为 0',
+    name        VARCHAR(128)   NOT NULL COMMENT '空间名称',
+    code        VARCHAR(64)    NULL COMMENT '空间编码（租户内唯一，供业务侧按编码引用；为空则不参与唯一约束）',
+    space_type  VARCHAR(32)    NOT NULL COMMENT '空间类型（sys_dict: space_type）',
+    level       INT            NOT NULL DEFAULT 1 COMMENT '层级深度（根为 1，由服务端维护）',
+    sort        INT            NULL DEFAULT 0 COMMENT '同级排序',
+    address     VARCHAR(255)   NULL COMMENT '详细地址（园区/楼栋常用）',
+    longitude   DECIMAL(11, 7) NULL COMMENT '经度（WGS84）',
+    latitude    DECIMAL(10, 7) NULL COMMENT '纬度（WGS84）',
+    floor_no    VARCHAR(16)    NULL COMMENT '所在楼层号（如 1、-1、1F）',
+    room_no     VARCHAR(32)    NULL COMMENT '房间号（如 101）',
+    area        DECIMAL(12, 2) NULL COMMENT '面积（平方米）',
+    capacity    INT            NULL COMMENT '容纳人数/容量',
+    manager     VARCHAR(64)    NULL COMMENT '空间负责人',
+    phone       VARCHAR(20)    NULL COMMENT '联系电话',
+    status      TINYINT        NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
+    remark      VARCHAR(500)   NULL COMMENT '备注',
+    ext_json    TEXT           NULL COMMENT '扩展属性 JSON（业务自定义字段）',
+    create_user BIGINT         NULL COMMENT '创建人',
+    create_time DATETIME       NULL COMMENT '创建时间',
+    update_user BIGINT         NULL COMMENT '更新人',
+    update_time DATETIME       NULL COMMENT '更新时间',
+    is_deleted  TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    -- 编码唯一性生成列：未删除取 code，已删除取 NULL（唯一键对 NULL 不去重）
+    -- ⇒ 删掉的空间不再占用编码，可被复用。与 001-schema.sql 必须逐字一致。
+    code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED COMMENT '编码唯一性生成列（仅供唯一键，不读）',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_space_tenant_code (tenant_id, code_alive),
+    KEY idx_space_tenant_pid (tenant_id, pid),
+    KEY idx_space_tenant_type (tenant_id, space_type)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '空间（楼栋/楼层/房间/办公室/仓库等）';
+
+-- ---------- 2) 空间与业务对象的多态关联表 ----------
+CREATE TABLE IF NOT EXISTS sys_space_relation
+(
+    id          BIGINT       NOT NULL COMMENT '主键',
+    tenant_id   BIGINT       NULL COMMENT '租户 ID',
+    space_id    BIGINT       NOT NULL COMMENT '空间 ID（sys_space.id）',
+    target_type VARCHAR(32)  NOT NULL COMMENT '关联对象类型（sys_dict: space_target_type）',
+    target_id   BIGINT       NOT NULL COMMENT '关联对象 ID',
+    is_primary  TINYINT      NOT NULL DEFAULT 0 COMMENT '是否主空间：1 是（一个对象最多一个主空间）0 否',
+    -- 主空间唯一性生成列：只有「is_primary=1」取 1，其余取 NULL ⇒ 唯一键表达「一对象一主空间」。
+    -- 与 001-schema.sql 必须逐字一致。
+    primary_marker TINYINT   AS (IF(is_primary = 1, 1, NULL)) STORED COMMENT '主空间唯一性生成列（仅供唯一键，不读）',
+    remark      VARCHAR(255) NULL COMMENT '备注',
+    create_user BIGINT       NULL COMMENT '创建人',
+    create_time DATETIME     NULL COMMENT '创建时间',
+    update_user BIGINT       NULL COMMENT '更新人',
+    update_time DATETIME     NULL COMMENT '更新时间',
+    status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1 正常 0 停用',
+    is_deleted  TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删 1 已删',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_space_relation (tenant_id, space_id, target_type, target_id),
+    UNIQUE KEY uk_space_relation_primary (tenant_id, target_type, target_id, primary_marker),
+    KEY idx_space_relation_target (tenant_id, target_type, target_id),
+    KEY idx_space_relation_space (tenant_id, space_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '空间与业务对象的关联（多态）';
+
+-- ---------- 2b) 兼容旧版迁移：给已存在的表补生成列与唯一键 ----------
+-- 背景：本迁移的早期版本建表时没有 code_alive / primary_marker 两个生成列，
+-- 导致「升级库」缺少两个数据库级兜底：① 逻辑删除后编码不可复用；② 并发下可能出现两个主空间。
+-- 这里用 information_schema 判存在后 ALTER，**幂等**（重复执行不会报 Duplicate column/key）。
+-- 结构与 001-schema.sql 的最终状态逐字一致。
+SET @has_code_alive := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_space' AND column_name = 'code_alive');
+SET @stmt := IF(@has_code_alive = 0,
+    'ALTER TABLE sys_space ADD COLUMN code_alive VARCHAR(64) AS (IF(is_deleted = 0, code, NULL)) STORED',
+    'DO 0');
+PREPARE space_stmt FROM @stmt; EXECUTE space_stmt; DEALLOCATE PREPARE space_stmt;
+
+-- 唯一键从 (tenant_id, code) 换成 (tenant_id, code_alive)
+SET @has_old_code_idx := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_space'
+      AND index_name = 'uk_space_tenant_code' AND column_name = 'code');
+SET @stmt := IF(@has_old_code_idx > 0,
+    'ALTER TABLE sys_space DROP INDEX uk_space_tenant_code, ADD UNIQUE KEY uk_space_tenant_code (tenant_id, code_alive)',
+    'DO 0');
+PREPARE space_stmt FROM @stmt; EXECUTE space_stmt; DEALLOCATE PREPARE space_stmt;
+
+SET @has_primary_marker := (SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = 'sys_space_relation' AND column_name = 'primary_marker');
+SET @stmt := IF(@has_primary_marker = 0,
+    'ALTER TABLE sys_space_relation ADD COLUMN primary_marker TINYINT AS (IF(is_primary = 1, 1, NULL)) STORED',
+    'DO 0');
+PREPARE space_stmt FROM @stmt; EXECUTE space_stmt; DEALLOCATE PREPARE space_stmt;
+
+SET @has_primary_idx := (SELECT COUNT(*) FROM information_schema.statistics
+    WHERE table_schema = DATABASE() AND table_name = 'sys_space_relation'
+      AND index_name = 'uk_space_relation_primary');
+SET @stmt := IF(@has_primary_idx = 0,
+    'ALTER TABLE sys_space_relation ADD UNIQUE KEY uk_space_relation_primary (tenant_id, target_type, target_id, primary_marker)',
+    'DO 0');
+PREPARE space_stmt FROM @stmt; EXECUTE space_stmt; DEALLOCATE PREPARE space_stmt;
+
