@@ -1,9 +1,9 @@
 -- =============================================================
--- ypbin-admin 种子数据（系统 + AI，开发阶段整合版）
+-- ypbin-admin 种子数据（系统 + AI + 空间/安全，开发阶段整合版）
 -- 默认租户 1；admin/approver 为平台用户，其他为租户用户
 -- 固定 ID 便于关联，雪花 ID 从业务新增时生成
 -- 注意：开发阶段保留可登录演示账号，上线前必须清理默认凭据
--- 说明：小程序预设菜等数据单独在 V3__miniapp.sql。
+-- 说明：开发阶段整合为单文件（含演示用户/部门/岗位/空间）；boot-miniapp 的小程序种子在 V3__miniapp.sql。
 -- =============================================================
 
 -- 默认权限模板（全部权限）
@@ -395,3 +395,263 @@ VALUES
 (5, 0, '创意写作', '文案创作、故事生成、内容润色', NULL,
  '你是一位富有创意的作家，擅长各类文体创作。写作时：1) 语言生动、富有感染力 2) 结构清晰、逻辑连贯 3) 根据用户需求调整风格（正式/轻松/幽默）4) 必要时提供多个版本供选择。',
  'writer', 0.90, 1, 5, 1, 1, 0);
+
+
+-- =============================================================
+-- 种子合并：安全防护菜单与授权（原 V6/V7 的数据部分）
+-- =============================================================
+
+-- 安全防护菜单（平台专用）：目录 + 黑名单页面 + 按钮权限
+INSERT IGNORE INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort,
+                             create_time, status, is_deleted)
+VALUES (3009, 0, 'SecurityManage', 'catalog', 1, '/system/security', 'BasicLayout',
+        'system.blocklist.title', 'carbon:security-services', 7, NOW(), 1, 0);
+
+INSERT IGNORE INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon,
+                             sort, create_time, status, is_deleted)
+VALUES (3200, 3009, 'SystemAccessBlocklist', 'menu', 1, '/system/security/blocklist',
+        '/system/security/blocklist/index', 'system:blocklist:list', 'system.blocklist.list',
+        'carbon:firewall', 1, NOW(), 1, 0);
+
+INSERT IGNORE INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort,
+                             create_time, status, is_deleted)
+VALUES (320001, 3200, 'SystemAccessBlocklistAdd', 'button', 1, 'system:blocklist:add',
+        'common.create', 1, NOW(), 1, 0),
+       (320002, 3200, 'SystemAccessBlocklistEdit', 'button', 1, 'system:blocklist:edit',
+        'common.edit', 2, NOW(), 1, 0),
+       (320003, 3200, 'SystemAccessBlocklistDelete', 'button', 1, 'system:blocklist:delete',
+        'common.delete', 3, NOW(), 1, 0),
+       (320004, 3200, 'SystemAccessBlocklistUnban', 'button', 1, 'system:blocklist:unban',
+        'system.blocklist.unban', 4, NOW(), 1, 0);
+
+-- 平台超级管理员获得新增菜单（V2 的全量授权只覆盖当时已存在的菜单）
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
+VALUES (1, 3009),
+       (1, 3200),
+       (1, 320001),
+       (1, 320002),
+       (1, 320003),
+       (1, 320004);
+
+-- =============================================================
+-- 访问黑名单：临时封禁按钮权限（V7，2026-11-05）
+-- =============================================================
+
+INSERT IGNORE INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort,
+                             create_time, status, is_deleted)
+VALUES (320005, 3200, 'SystemAccessBlocklistBan', 'button', 1, 'system:blocklist:ban',
+        'system.blocklist.ban', 5, NOW(), 1, 0);
+
+INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
+VALUES (1, 320005);
+
+
+-- =============================================================
+-- 种子合并：空间字典/菜单/授权/自检（原 V8 的数据部分）
+-- =============================================================
+
+-- ---------- 3) 字典：空间类型 / 关联对象类型 ----------
+-- 用固定 ID（3 / 4）与 lib 内既有字典（1 系统状态、2 性别）连续，避免雪花 ID 让升级库与全新库不一致。
+-- ⚠️ 必须按 **code** 判存在，不能按 id：平台管理员可能已自建过同名/同 id 的字典。
+--     按 id 判会让 id 被别的字典占用时静默跳过 → dict_id=3 不存在、但下面的字典项照插 ⇒ 孤儿项（实测）。
+-- 也**不用 INSERT IGNORE**：IGNORE 会把守卫之外的冲突（主键/唯一键）一并吞掉，掩盖真实失败。
+INSERT INTO sys_dict (id, name, code, remark, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict),
+       '空间类型', 'space_type', '楼栋/楼层/房间/办公室/仓库/宿舍等', 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE code = 'space_type');
+INSERT INTO sys_dict (id, name, code, remark, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict),
+       '空间关联对象类型', 'space_target_type', '部门/人员/设备/资产等可挂到空间上的业务对象',
+       1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict WHERE code = 'space_target_type');
+
+-- 字典项：按 (dict_id, value) 存在性守卫 —— 不用 IGNORE 是因为唯一键只在 code 上，
+-- 重复插入 item 不会撞唯一键（没有该约束），只能显式判存在。
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '园区', 'park', 'processing', 1, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'park');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '楼栋', 'building', 'processing', 2, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'building');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '楼层', 'floor', 'processing', 3, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'floor');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '办公室', 'office', 'success', 4, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'office');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '仓库', 'warehouse', 'warning', 5, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'warehouse');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '宿舍', 'dormitory', 'default', 6, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'dormitory');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '会议室', 'meeting_room', 'default', 7, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'meeting_room');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '车间', 'workshop', 'default', 8, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'workshop');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '机房', 'server_room', 'error', 9, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'server_room');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_type'), '其他', 'other', 'default', 99, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.value = 'other');
+
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_target_type'), '部门', 'dept', 'processing', 1, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_target_type' AND i.value = 'dept');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_target_type'), '人员', 'user', 'processing', 2, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_target_type' AND i.value = 'user');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_target_type'), '设备', 'device', 'success', 3, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_target_type' AND i.value = 'device');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_target_type'), '资产', 'asset', 'default', 4, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_target_type' AND i.value = 'asset');
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_target_type'), '其他', 'other', 'default', 99, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_target_type' AND i.value = 'other');
+
+-- ---------- 4) 菜单与权限码 ----------
+-- 空间管理挂在「组织管理」（3001）下：空间与用户/部门/岗位同属基础主数据，
+-- 单开顶级目录会让它看起来像某个业务域的功能（IoT 的错觉正是要消除的）。
+--
+-- ⚠️ 判存在按 **auth_code**，不按 id：id 可能已被无关菜单占用（实测形态：id=2410 被占 ⇒
+--    原写法静默跳过插入、却仍给 2410 授权 ⇒ 把 system:space:list 白授给了别人的菜单）。
+-- 按钮的 pid 用 (SELECT id FROM sys_menu WHERE auth_code='...') 反查父页真实 id。
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_menu), 3001,
+       'SystemSpace', 'menu', 0, '/system/space', '/system/space/list',
+       'system:space:list', 'system.space.title', 'carbon:location', 5, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE auth_code = 'system:space:list');
+
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_menu),
+       (SELECT id FROM sys_menu WHERE auth_code = 'system:space:list'),
+       'SystemSpaceAdd', 'button', 0, 'system:space:add', 'common.create', 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE auth_code = 'system:space:add');
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_menu),
+       (SELECT id FROM sys_menu WHERE auth_code = 'system:space:list'),
+       'SystemSpaceEdit', 'button', 0, 'system:space:edit', 'common.edit', 2, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE auth_code = 'system:space:edit');
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_menu),
+       (SELECT id FROM sys_menu WHERE auth_code = 'system:space:list'),
+       'SystemSpaceDelete', 'button', 0, 'system:space:delete', 'common.delete', 3, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE auth_code = 'system:space:delete');
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_menu),
+       (SELECT id FROM sys_menu WHERE auth_code = 'system:space:list'),
+       'SystemSpaceBind', 'button', 0, 'system:space:bind', 'system.space.bind', 4, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE auth_code = 'system:space:bind');
+
+-- ---------- 5) 授权 ----------
+-- platform_only=0 的菜单不会被 002-data.sql 尾部那条「只授 platform_only=1」覆盖，必须显式双授：
+--   sys_role_menu     → 平台管理员在菜单树里看得到
+--   sys_template_menu → 租户可授菜单（新建/改角色时能被勾选）
+-- 缺任一张的表现不同：缺 role 表是管理员看不到，缺 template 表是租户侧保存角色时报
+-- 「角色授权包含租户权限模板之外的菜单」。
+--
+-- ⚠️ menu_id 一律按 **auth_code 反查真实 id**，不写死 2410/241xxx：
+--    菜单 id 被占用时插入会被守卫跳过，写死 id 就会把权限白授给别人的菜单（实测）。
+-- 用 INSERT ... SELECT WHERE NOT EXISTS（去掉 INSERT IGNORE）：守卫列就是主键两列，
+-- IGNORE 在此只是冗余，而它会掩盖守卫之外的冲突。
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 1, m.id FROM sys_menu m
+WHERE m.auth_code IN ('system:space:list', 'system:space:add', 'system:space:edit',
+                      'system:space:delete', 'system:space:bind')
+  AND m.is_deleted = 0
+  AND NOT EXISTS (SELECT 1 FROM sys_role_menu rm WHERE rm.role_id = 1 AND rm.menu_id = m.id);
+
+INSERT INTO sys_template_menu (template_id, menu_id)
+SELECT 1, m.id FROM sys_menu m
+WHERE m.auth_code IN ('system:space:list', 'system:space:add', 'system:space:edit',
+                      'system:space:delete', 'system:space:bind')
+  AND m.is_deleted = 0
+  AND NOT EXISTS (SELECT 1 FROM sys_template_menu tm WHERE tm.template_id = 1 AND tm.menu_id = m.id);
+
+-- ---------- 6) 自检：漏装即失败（不静默） ----------
+-- 迁移脚本最大的风险是「报了成功、实际没装上」。这里做最小完备性断言：
+-- 空间类型字典项必须 >= 10、空间菜单必须 = 5。任一不成立直接报错终止。
+-- （用 SIGNAL 而不是 SELECT 输出，是为了让 mysql 客户端以非零退出码结束，脚本能停。）
+
+SET @space_menu_cnt := (SELECT COUNT(*) FROM sys_menu
+    WHERE auth_code IN ('system:space:list', 'system:space:add', 'system:space:edit',
+                        'system:space:delete', 'system:space:bind') AND is_deleted = 0);
+SET @space_type_cnt := (SELECT COUNT(*) FROM sys_dict_item i
+    INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_type' AND i.is_deleted = 0);
+SET @space_target_cnt := (SELECT COUNT(*) FROM sys_dict_item i
+    INNER JOIN sys_dict d ON d.id = i.dict_id WHERE d.code = 'space_target_type' AND i.is_deleted = 0);
+
+-- 5 个菜单；空间类型 >= 10（允许管理员后续自行增删，所以是下界）；关联类型 >= 5
+SET @msg := CONCAT('空间迁移自检失败：menus=', @space_menu_cnt,
+                   ' space_type_items=', @space_type_cnt,
+                   ' target_type_items=', @space_target_cnt,
+                   '（期望 menus=5、space_type_items>=10、target_type_items>=5）');
+SET @fail := (@space_menu_cnt <> 5 OR @space_type_cnt < 10 OR @space_target_cnt < 5);
+-- 用动态 SQL 触发 SIGNAL：MySQL 的 SIGNAL 不能在普通 IF 里带变量文案，故拼语句
+SET @stmt := IF(@fail,
+    CONCAT("SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '", REPLACE(@msg, '''', ''), "'"),
+    'DO 0');
+PREPARE check_space FROM @stmt;
+EXECUTE check_space;
+DEALLOCATE PREPARE check_space;
+
+
+-- =============================================================
+-- 种子合并：空间关联对象类型补充「岗位」（原 V9）
+-- =============================================================
+
+-- 空间关联对象类型补充「岗位」（post）。
+--
+-- 背景：前端岗位管理（/system/post）复用空间关联面板，调用 targetType=post；
+-- 而 V8 的空间种子只写入了 dept/user/device/asset/other，
+-- SysSpaceRelationServiceImpl#normalizeTargetType 按字典 space_target_type 校验时
+-- 会把 post 判为非法（409「关联对象类型不合法」）。
+--
+-- 按「字典是取值单一来源」的设计，新增业务对象类型只需补字典项，空间侧零代码。
+-- 刻意不改 V8：已应用的迁移不能改校验和；新库也会按顺序执行本迁移。
+-- 幂等：重复执行时 WHERE NOT EXISTS 会跳过。
+
+INSERT INTO sys_dict_item (id, dict_id, label, value, color, sort, create_user, create_time, status, is_deleted)
+SELECT (SELECT IFNULL(MAX(id), 0) + 1 FROM sys_dict_item), (SELECT id FROM sys_dict WHERE code = 'space_target_type'),
+       '岗位', 'post', 'processing', 5, 1, NOW(), 1, 0 FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM sys_dict_item i INNER JOIN sys_dict d ON d.id = i.dict_id
+                  WHERE d.code = 'space_target_type' AND i.value = 'post');
+
+-- =============================================================
+-- 演示数据：空间管理（与上方演示用户/部门/岗位配套）
+-- 园区 → 楼栋 → 楼层 → 房间；固定 ID（9001+）便于关联与排查，tenant_id=1
+-- 仅开发/演示环境使用；生产部署请按需清理
+-- =============================================================
+INSERT INTO sys_space (id, tenant_id, pid, name, code, space_type, level, sort, address,
+                       floor_no, room_no, area, capacity, manager, phone, status, remark,
+                       create_user, create_time, is_deleted)
+VALUES
+(9001, 1, 0,    '总部园区', 'HQ-PARK',  'park',         1, 1, '北京市朝阳区望京街 1 号',
+ NULL, NULL,  NULL,    NULL, NULL,  NULL,          1, '演示园区', 1, NOW(), 0),
+(9002, 1, 9001, 'A栋',     'HQ-A',     'building',     2, 1, NULL,
+ NULL, NULL,  NULL,    NULL, NULL,  NULL,          1, NULL,     1, NOW(), 0),
+(9003, 1, 9002, 'A栋1F',   'HQ-A-1F',  'floor',        3, 1, NULL,
+ '1F', NULL,  NULL,    NULL, NULL,  NULL,          1, NULL,     1, NOW(), 0),
+(9004, 1, 9003, '101办公室', 'HQ-A-101', 'office',       4, 1, NULL,
+ NULL, '101', 60.00,   8,    '张三', '13800000001', 1, NULL,     1, NOW(), 0),
+(9005, 1, 9003, '102会议室', 'HQ-A-102', 'meeting_room', 4, 2, NULL,
+ NULL, '102', 80.00,   20,   NULL,   NULL,          1, NULL,     1, NOW(), 0),
+(9006, 1, 9003, '103机房',   'HQ-A-103', 'server_room',  4, 3, NULL,
+ NULL, '103', 30.00,   5,    NULL,   NULL,          1, NULL,     1, NOW(), 0),
+(9007, 1, 9001, '中心仓库', 'HQ-WH',    'warehouse',    2, 2, NULL,
+ NULL, NULL,  500.00,  NULL, NULL,   NULL,          1, NULL,     1, NOW(), 0),
+(9008, 1, 9001, '员工宿舍', 'HQ-DORM',  'dormitory',    2, 3, NULL,
+ NULL, NULL,  300.00,  40,   NULL,   NULL,          1, NULL,     1, NOW(), 0);
+
+-- 空间与业务对象关联：101 办公室挂研发中心 + 研发工程师岗位；102 会议室挂产品中心
+INSERT INTO sys_space_relation (id, tenant_id, space_id, target_type, target_id, is_primary,
+                                remark, create_user, create_time, status, is_deleted)
+VALUES
+(9101, 1, 9004, 'dept', 2,  1, '研发中心办公',   1, NOW(), 1, 0),
+(9102, 1, 9004, 'post', 13, 1, '研发工程师岗位', 1, NOW(), 1, 0),
+(9103, 1, 9005, 'dept', 3,  1, NULL,             1, NOW(), 1, 0);
