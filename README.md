@@ -4,12 +4,12 @@
 
 **企业级后台管理系统 · Enterprise Admin Platform**
 
-> 基于 ypbin-starter 组装的生产就绪后台：RBAC、多租户、数据权限、任务调度、消息推送、License 商业授权、AI 对话，开箱即用。
+> 基于 ypbin-starter 组装的生产就绪后台：RBAC、多租户、数据权限、空间管理、安全防护、任务调度、消息推送、License 商业授权、AI 知识库与对话，开箱即用。
 
 **Java 21 · Spring Boot 4.1 · Sa-Token · MyBatis-Plus · Vue 3 · Ant Design Vue**
 
 [![CI](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml/badge.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/Coverage-32%20Tests%20Passed-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen.svg)](https://github.com/wenbin-wb/ypbin-admin/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-brightgreen.svg)](https://spring.io/projects/spring-boot)
@@ -73,42 +73,59 @@
 
 | 能力 | 说明 |
 |---|---|
-| RBAC 权限模型 | 用户 / 角色 / 部门 / 岗位 / 菜单，按钮级鉴权 |
-| 数据权限 | 注解驱动，按数据范围隔离（全部 / 本部门 / 本人等） |
+| RBAC 权限模型 | 用户 / 角色 / 部门 / 岗位 / 菜单，按钮级权限码；权限模板按租户复用 |
+| 数据权限 | 注解驱动（`@DataPermission`），多角色数据范围取并集，读/写路径同一口径 |
 | 多租户 | 行级租户隔离、租户管理与权限模板 |
-| 审计日志 | 操作日志、登录日志、在线用户管理 |
+| 空间管理 | 空间树（全量 / 懒加载）、空间与业务对象多态关联、CSV 导入导出 |
+| 审计日志 | 操作日志、登录日志、在线用户，支持导出与趋势统计 |
 
 ### 🔐 认证与安全
 
 | 能力 | 说明 |
 |---|---|
-| 多方式登录 | 账密 + 行为验证码、短信登录、第三方登录 |
-| 登录防护 | 密码错误锁定、有效期策略、会话踢出 |
-| 商业授权 | License 签发、双人审批、国密加密、授权码/授权文件交付（[使用说明书](LICENSE-USAGE.md)） |
-| 接口安全 | 接口签名防重放、字段加密、数据脱敏 |
+| 多方式登录 | 账密 + 行为验证码、短信登录、第三方 OAuth 登录与绑定 / 解绑 |
+| 登录防护 | 密码错误锁定、登录客户端管理、会话踢出、平台超管强制首登改密 |
 | 访问黑名单 | IP/CIDR、User-Agent、路径规则拦截与违规自动封禁，支持人工解封与规则热下发 |
+| 归属地识别 | 登录与操作日志记录 IP 归属地（ip2region 离线库，内网 / 外网统一口径） |
+| 商业授权 | License 签发、双人审批、国密 SM2 / SM4、授权码 / 授权文件交付（[使用说明书](LICENSE-USAGE.md)） |
+| 接口安全 | 接口签名防重放、字段加解密、数据脱敏 |
+
+### 🧩 平台治理
+
+| 能力 | 说明 |
+|---|---|
+| 应用与客户端 | 开放应用 AccessKey / SecretKey、登录客户端凭据与认证方式、密钥重置 |
+| 认证模板 | 权限模板维护，租户开通时复用 |
+| 系统配置 | 分组参数、批量更新、字典与字典项 |
+| 文件与个人中心 | 文件上传 / 列表 / 删除、头像上传、资料与自助改密 |
+| 仪表盘 | 运营概览、最新日志与日志趋势 |
 
 ### 📨 消息与任务
 
 | 能力 | 说明 |
 |---|---|
-| 消息中心 | 站内信 SSE 实时推送、未读提醒 |
-| 通知公告 | 富文本编辑、定时发布 |
-| 任务调度 | 动态定时任务（Cron）、执行日志、失败重试 |
+| 消息中心 | 站内信 SSE 实时推送、未读计数、批量已读 |
+| 通知公告 | 富文本编辑、定时发布、撤回；发布后驱动站内信投递 |
+| 任务调度 | XXL-JOB 执行器：公告定时发布与可靠投递扫描 |
+| 消息通道 | 邮件测试、短信登录与通知通道（sms4j），通道配置动态注册 |
 
 ### 🤖 AI 增强
 
 | 能力 | 说明 |
 |---|---|
-| AI 对话 | 模型配置表驱动（OpenAI 兼容接口），模型地址/密钥/型号后台配置，不写死在 yml |
-| 流式输出 | SSE 流式响应，多轮记忆持久化 |
-| 用量统计 | Token 用量记录与查询 |
+| AI 对话 | 模型配置表驱动（OpenAI 兼容接口），多轮会话、SSE 流式输出、重新生成、置顶 |
+| 知识库（RAG） | PDF / Markdown / TXT 上传与批量导入、URL / Sitemap / RSS 导入、异步向量化、检索与重排测试 |
+| 提示词与角色 | 提示词模板、对话角色维护与收藏 |
+| 分享与嵌入 | 知识库分享链接、可嵌入的 `embed.js` 网页问答挂件 |
+| 运营统计 | 对话量 / 热门问题 / 文档统计；Token 用量按日、按模型汇总，未回报的用量单独计为未知 |
 
 ## 🧱 技术栈
 
 | 层 | 技术 |
 |---|---|
-| 后端 | Java 21 · Spring Boot 4.1 · [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) · Sa-Token · MyBatis-Plus · MySQL · Redis |
+| 运行时 | Java 21 · Spring Boot 4.1.2（单体部署，无 Nacos / Sentinel） |
+| 基座 | [ypbin-starter](https://github.com/wenbin-wb/ypbin-starter) 4.4.0：统一响应、鉴权会话、多租户、数据权限、缓存、消息、任务、日志 |
+| 数据与安全 | Sa-Token · MyBatis-Plus · MySQL · Redis · XXL-JOB · sms4j · ip2region |
 | 前端 | Vue 3.5 · TypeScript · Ant Design Vue 4 · Vite · Pinia |
 | 文档 | SpringDoc OpenAPI · Swagger UI |
 
@@ -148,9 +165,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/wenbin-wb/ypbin-admin/boot/d
 mvn -f ypbin-admin-server/pom.xml spring-boot:run
 ```
 
-接口文档为 `http://localhost:8080/swagger-ui/index.html`。首次部署需通过 Bootstrap 环境变量（`ADMIN_BOOTSTRAP_ENABLED` / `ADMIN_BOOTSTRAP_USERNAME` / `ADMIN_BOOTSTRAP_PASSWORD`）创建平台管理员，成功后关闭 Bootstrap。开发种子数据预置 `admin / admin123` 可直接登录，仅供本地调试。
+接口文档为 `http://localhost:8080/swagger-ui/index.html`。首次部署需通过 Bootstrap 环境变量（`ADMIN_BOOTSTRAP_ENABLED` / `ADMIN_BOOTSTRAP_USERNAME` / `ADMIN_BOOTSTRAP_PASSWORD`）创建平台管理员，成功后关闭 Bootstrap。开发种子数据预置 `admin / admin123` 可直接登录，仅供本地调试；首次登录须先修改密码。
 
 前端启动见 [ypbin-admin-ui](https://github.com/wenbin-wb/ypbin-admin-ui)。
+
+构建与验证：`mvn clean verify`。
 
 ## 📁 项目结构
 
@@ -183,11 +202,13 @@ modules/
 
 - [x] 组织权限与 RBAC
 - [x] 多租户与数据权限
+- [x] 空间管理与多态关联
 - [x] 消息中心（SSE 推送）
-- [x] AI 对话（配置驱动 + 流式输出）
+- [x] 访问黑名单与 IP 归属地
+- [x] AI 对话与知识库（RAG / 分享 / 嵌入）
 - [x] License 商业授权
-- [ ] 消息推送链路深度完善（邮件 / 短信）
-- [ ] 用户中心打磨（重置密码、头像、通知偏好）
+- [ ] 消息推送链路深度完善（邮件 / 短信通知）
+- [ ] 用户中心打磨（通知偏好、安全设置）
 
 ## 🤝 贡献指南
 
