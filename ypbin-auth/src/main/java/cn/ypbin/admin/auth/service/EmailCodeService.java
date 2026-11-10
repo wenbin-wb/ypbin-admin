@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -59,6 +61,8 @@ public class EmailCodeService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    private static final Logger log = LoggerFactory.getLogger(EmailCodeService.class);
+
     private final AuthConfigReader configReader;
     private final CacheService cacheService;
     private final ISystemClient systemClient;
@@ -87,9 +91,9 @@ public class EmailCodeService {
         String codeKey = CODE_PREFIX + target;
         try {
             cacheService.set(codeKey, code, Duration.ofSeconds(expireSeconds));
-            // 新验证码 = 新的尝试预算
-            cacheService.delete(VERIFY_FAIL_PREFIX + target);
             sendMail(target, code, expireSeconds);
+            // 发送成功后才重置尝试预算：发送失败时保留旧计数，避免失败重试期间被无限重置
+            cacheService.delete(VERIFY_FAIL_PREFIX + target);
         } catch (RuntimeException e) {
             // 发送失败不能留下一个用户永远收不到的验证码（否则冷却期内无法重发）
             cacheService.compareAndDelete(codeKey, code);
@@ -150,10 +154,11 @@ public class EmailCodeService {
             + " 分钟内有效。如非本人操作，请忽略本邮件。");
         R<Void> resp = systemClient.sendMail(req);
         if (resp == null || !resp.isSuccess()) {
-            // 不能把「邮件没发出去」当成功：调用方会因此等待一个永远收不到的验证码
-            String message = resp == null || !StringUtils.hasText(resp.getMessage())
-                ? "验证码邮件发送失败，请稍后重试" : resp.getMessage();
-            throw new BusinessException(message);
+            // 远程 message 可能包含 SMTP 主机/端口/认证细节，不能原样回给匿名调用方；
+            // 明细只进服务端日志，对外统一可读提示
+            log.error("注册验证码邮件发送失败，email={}, remoteMessage={}", maskEmail(email),
+                resp == null ? null : resp.getMessage());
+            throw new BusinessException("验证码邮件发送失败，请稍后重试");
         }
     }
 
@@ -178,5 +183,19 @@ public class EmailCodeService {
             throw new BusinessException("邮箱不能为空");
         }
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 日志脱敏：保留首字符与域名。
+     *
+     * @param email 邮箱
+     * @return 脱敏后的邮箱
+     */
+    private static String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return "****";
+        }
+        return email.charAt(0) + "****" + email.substring(at);
     }
 }

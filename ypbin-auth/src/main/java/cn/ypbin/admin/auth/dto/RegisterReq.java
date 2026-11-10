@@ -11,6 +11,7 @@ package cn.ypbin.admin.auth.dto;
 
 import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import cn.ypbin.admin.system.model.req.UserRegisterReq;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -35,5 +36,6 @@ public class RegisterReq extends UserRegisterReq {
     private ImageCaptchaTrack captchaTrack;
 
     /** 归属验证码（REGISTER_VERIFY_MODE=SMS 时为手机验证码，=EMAIL 时为邮箱验证码） */
+    @Size(max = 32, message = "验证码长度不能超过 32 个字符")
     private String verifyCode;
 }

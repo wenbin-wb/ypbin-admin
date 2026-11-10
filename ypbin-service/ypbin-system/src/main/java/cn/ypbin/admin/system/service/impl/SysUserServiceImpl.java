@@ -59,6 +59,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -353,7 +354,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         user.setRealName(realName);
         user.setNickname(StringUtils.hasText(req.getNickname()) ? req.getNickname().trim() : realName);
         user.setPhone(phone);
-        user.setEmail(StringUtils.hasText(req.getEmail()) ? req.getEmail().trim() : null);
+        // 邮箱统一小写落库：验证码按小写归一校验，若存原文会出现「验证的是 a@x、账号记的是 A@x」
+        user.setEmail(StringUtils.hasText(req.getEmail())
+            ? req.getEmail().trim().toLowerCase(Locale.ROOT) : null);
         user.setUserType(AdminConstants.USER_TYPE_TENANT);
         user.setTenantId(tenantId);
         String encoded = PasswordEncoderUtil.encode(req.getPassword());

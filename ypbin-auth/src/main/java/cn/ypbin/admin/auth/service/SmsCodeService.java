@@ -70,7 +70,12 @@ public class SmsCodeService {
             cacheService.set(codeKey, code, Duration.ofSeconds(expireSeconds));
             // 新验证码 = 新的尝试预算：不清旧计数的话，用户按提示「重新获取」后仍会被旧计数锁死
             cacheService.delete(VERIFY_FAIL_PREFIX + normalizedPhone);
-            SmsUtils.sendByTemplate(normalizedPhone, templateId, Map.of("code", code));
+            // 厂商返回 false 时必须失败：若当作成功，验证码留在缓存并设置了冷却，
+            // 用户永远收不到短信、且每次重试都「成功」，问题只能靠用户投诉才发现
+            boolean sent = SmsUtils.sendByTemplate(normalizedPhone, templateId, Map.of("code", code));
+            if (!sent) {
+                throw new BusinessException("短信发送失败，请检查短信厂商配置");
+            }
         } catch (RuntimeException e) {
             cacheService.compareAndDelete(codeKey, code);
             cacheService.compareAndDelete(cooldownKey, cooldownOwner);

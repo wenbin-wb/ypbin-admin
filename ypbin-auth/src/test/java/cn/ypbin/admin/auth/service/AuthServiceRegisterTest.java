@@ -195,6 +195,66 @@ class AuthServiceRegisterTest {
         verifyNoInteractions(emailCodeService);
     }
 
+    @Test
+    @DisplayName("短信验证模式：只给邮箱不给手机号 ⇒ 拒绝，不能换渠道绕过")
+    void shouldRejectSmsModeWithOnlyEmail() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("SMS");
+        RegisterReq req = request();
+        req.setEmail("alice@example.com");
+        req.setVerifyCode("123456");
+
+        assertThatThrownBy(() -> service().register(req, "10.0.0.8", null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("短信验证模式下手机号不能为空");
+        verifyNoInteractions(smsCodeService, emailCodeService);
+        verify(systemClient, never()).registerUser(any());
+    }
+
+    @Test
+    @DisplayName("邮箱验证模式：只给手机号不给邮箱 ⇒ 拒绝")
+    void shouldRejectEmailModeWithOnlyPhone() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("EMAIL");
+        RegisterReq req = request();
+        req.setPhone("13800000000");
+        req.setVerifyCode("123456");
+
+        assertThatThrownBy(() -> service().register(req, "10.0.0.8", null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("邮箱验证模式下邮箱不能为空");
+        verifyNoInteractions(smsCodeService, emailCodeService);
+        verify(systemClient, never()).registerUser(any());
+    }
+
+    @Test
+    @DisplayName("REGISTER_VERIFY_MODE 取值非法 ⇒ 显式失败，不静默降级为 NONE")
+    void shouldFailClosedOnInvalidVerifyMode() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("MAIL");
+
+        assertThatThrownBy(() -> service().register(request(), "10.0.0.8", null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("REGISTER_VERIFY_MODE 取值非法");
+        verify(systemClient, never()).registerUser(any());
+    }
+
+    @Test
+    @DisplayName("REGISTER_VERIFY_MODE 被清空 ⇒ 显式失败（清空不等于 NONE）")
+    void shouldFailClosedOnBlankVerifyMode() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("  ");
+
+        assertThatThrownBy(() -> service().register(request(), "10.0.0.8", null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("REGISTER_VERIFY_MODE 不能为空");
+        verify(systemClient, never()).registerUser(any());
+    }
+
     private void stubEnabled() {
         when(configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)).thenReturn(true);
         when(configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false)).thenReturn(false);

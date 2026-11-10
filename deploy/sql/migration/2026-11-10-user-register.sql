@@ -2,7 +2,7 @@
 -- 增量升级：用户自助注册（2026-11-10）
 --
 -- 适用对象：**已经在跑的库**。全新安装不需要执行本文件——
---           deploy/sql/002-data.sql 已含同样三条系统参数。
+--           deploy/sql/002-data.sql 已含同样六条系统参数。
 -- 为什么单独放子目录：install.sh 用 `deploy/sql/*.sql` 通配执行初始化脚本，
 --           本文件放在 migration/ 子目录内**不会**被自动执行（避免与 002 重复插入）。
 --
@@ -15,7 +15,7 @@
 --
 -- 回滚：deploy/sql/rollback/2026-11-10-user-register-rollback.sql
 --
--- 与 002-data.sql 的等价性：下面三条与 002-data.sql 的「系统参数」段**语义等价**
+-- 与 002-data.sql 的等价性：下面六条与 002-data.sql 的「系统参数」段**语义等价**
 --         （config_key / config_value / 内置标记一致）。改一边必须同步另一边。
 --
 -- 安全默认：

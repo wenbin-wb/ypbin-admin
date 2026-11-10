@@ -39,8 +39,13 @@ public enum RegisterVerifyMode {
      * @return 验证方式
      */
     public static RegisterVerifyMode from(String raw) {
-        if (raw == null || raw.isBlank()) {
+        // 仅「键不存在」才取默认 NONE；配置存在但被清空时视为非法，不能静默关闭验证
+        if (raw == null) {
             return NONE;
+        }
+        if (raw.isBlank()) {
+            throw new BusinessException(
+                "系统参数 REGISTER_VERIFY_MODE 不能为空，仅支持 NONE/SMS/EMAIL");
         }
         try {
             return valueOf(raw.trim().toUpperCase(Locale.ROOT));
