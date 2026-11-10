@@ -156,8 +156,8 @@ public class EmailCodeService {
         if (resp == null || !resp.isSuccess()) {
             // 远程 message 可能包含 SMTP 主机/端口/认证细节，不能原样回给匿名调用方；
             // 明细只进服务端日志，对外统一可读提示
-            log.error("注册验证码邮件发送失败，email={}, remoteMessage={}", maskEmail(email),
-                resp == null ? null : resp.getMessage());
+            log.error("注册验证码邮件发送失败，email={}, remoteCode={}", maskEmail(email),
+                resp == null ? null : resp.getCode());
             throw new BusinessException("验证码邮件发送失败，请稍后重试");
         }
     }
