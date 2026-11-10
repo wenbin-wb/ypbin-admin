@@ -10,6 +10,7 @@
 package cn.ypbin.admin.modules.auth.service;
 
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
@@ -31,6 +32,18 @@ public interface AuthService {
      * @return 登录结果（含 accessToken）
      */
     LoginResp login(LoginReq req, String ip);
+
+    /**
+     * 用户自助注册（公开入口，开关见系统参数 {@code REGISTER_ENABLED}）。
+     *
+     * <p>注册成功即建立登录态并返回令牌，与登录接口同一响应契约。开关关闭、验证码未通过、
+     * 用户名/手机号重复、密码不符合策略、默认租户或默认角色不可用时均返回明确的业务错误。</p>
+     *
+     * @param req 注册请求
+     * @param ip  客户端 IP（限频维度）
+     * @return 登录结果（含 accessToken）
+     */
+    LoginResp register(RegisterReq req, String ip);
 
     /**
      * 当前会话登出。

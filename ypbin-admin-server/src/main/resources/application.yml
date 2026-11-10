@@ -92,6 +92,7 @@ ypbin:
         ban-seconds: 600
     excludes:                   # 放行路径（无需登录）
       - /auth/login
+      - /auth/register
       - /auth/sms/send
       - /auth/sms/login
       - /auth/social/authorize/**

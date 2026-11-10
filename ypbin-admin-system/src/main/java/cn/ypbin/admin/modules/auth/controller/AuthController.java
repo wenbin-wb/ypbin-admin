@@ -10,6 +10,7 @@
 package cn.ypbin.admin.modules.auth.controller;
 
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
@@ -48,6 +49,19 @@ public class AuthController {
     @PostMapping("/auth/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
         return R.ok(authService.login(req, WebRequestUtils.clientIp(clientIpResolver)));
+    }
+
+    /**
+     * 用户自助注册（公开入口，开关见系统参数 {@code REGISTER_ENABLED}）。
+     *
+     * <p>与登录入口一致按 IP 限流：注册会落库并建立会话，是比登录更重的写操作，
+     * 不限流时脚本可批量灌入账号。</p>
+     */
+    @Log(value = "用户注册", module = "认证")
+    @RateLimit(count = 5, window = 60, message = "注册过于频繁，请稍后再试")
+    @PostMapping("/auth/register")
+    public R<LoginResp> register(@Valid @RequestBody RegisterReq req) {
+        return R.ok(authService.register(req, WebRequestUtils.ip()));
     }
 
     /**
