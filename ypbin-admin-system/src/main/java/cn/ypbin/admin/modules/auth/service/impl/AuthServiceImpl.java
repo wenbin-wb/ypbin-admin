@@ -13,9 +13,13 @@ import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.modules.auth.core.LoginSupport;
+import cn.ypbin.admin.modules.auth.service.EmailCodeService;
+import cn.ypbin.admin.modules.auth.service.SmsCodeService;
+import cn.ypbin.admin.modules.auth.support.RegisterVerifyMode;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
@@ -33,6 +37,7 @@ import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 认证服务实现。
@@ -51,6 +56,8 @@ public class AuthServiceImpl implements AuthService {
     private final LoginSupport loginSupport;
     private final CaptchaService captchaService;
     private final SysConfigService configService;
+    private final SmsCodeService smsCodeService;
+    private final EmailCodeService emailCodeService;
 
     @Override
     public LoginResp login(LoginReq req, String ip) {
@@ -97,11 +104,76 @@ public class AuthServiceImpl implements AuthService {
         if (configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false)) {
             requireCaptchaPassed(req.getCaptchaId(), req.getCaptchaTrack());
         }
+        verifyRegisterCode(req);
         SysUser user = userService.registerUser(req);
         if (user == null) {
             throw new BusinessException("注册失败，请稍后重试");
         }
         return loginSupport.completeLogin(user, AdminConstants.AUTH_TYPE_ACCOUNT);
+    }
+
+    /**
+     * 发送注册归属验证码（渠道由系统参数 {@code REGISTER_VERIFY_MODE} 决定）。
+     */
+    @Override
+    public void sendRegisterCode(RegisterCodeSendReq req) {
+        if (!configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
+            throw new BusinessException("注册功能未开启");
+        }
+        RegisterVerifyMode mode = currentVerifyMode();
+        if (mode == RegisterVerifyMode.SMS) {
+            smsCodeService.sendCode(requirePhone(req.getPhone()));
+            return;
+        }
+        if (mode == RegisterVerifyMode.EMAIL) {
+            emailCodeService.sendCode(requireEmail(req.getEmail()));
+            return;
+        }
+        throw new BusinessException("当前注册方式无需验证码");
+    }
+
+    /**
+     * 按当前模式校验注册归属验证码（通过后验证码即被消费，一次性）。
+     *
+     * @param req 注册请求
+     */
+    private void verifyRegisterCode(RegisterReq req) {
+        RegisterVerifyMode mode = currentVerifyMode();
+        if (mode == RegisterVerifyMode.NONE) {
+            return;
+        }
+        if (!StringUtils.hasText(req.getVerifyCode())) {
+            throw new BusinessException("请输入验证码");
+        }
+        if (mode == RegisterVerifyMode.SMS) {
+            smsCodeService.verify(requirePhone(req.getPhone()), req.getVerifyCode());
+            return;
+        }
+        emailCodeService.verify(requireEmail(req.getEmail()), req.getVerifyCode());
+    }
+
+    /**
+     * 读取当前注册验证方式（未知取值由枚举显式拒绝）。
+     *
+     * @return 验证方式
+     */
+    private RegisterVerifyMode currentVerifyMode() {
+        return RegisterVerifyMode.from(
+            configService.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"));
+    }
+
+    private static String requirePhone(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            throw new BusinessException("短信验证模式下手机号不能为空");
+        }
+        return phone.trim();
+    }
+
+    private static String requireEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            throw new BusinessException("邮箱验证模式下邮箱不能为空");
+        }
+        return email.trim();
     }
 
     /**

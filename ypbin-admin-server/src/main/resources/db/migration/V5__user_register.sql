@@ -28,3 +28,18 @@ INSERT INTO sys_config (id, config_group, name, config_key, config_value, built_
 SELECT COALESCE(MAX(id), 0) + 1, 'login', '注册用户默认角色标识', 'REGISTER_DEFAULT_ROLE_CODE', '', 1, 1, NOW(), 1, 0
 FROM sys_config
 WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'REGISTER_DEFAULT_ROLE_CODE');
+
+INSERT INTO sys_config (id, config_group, name, config_key, config_value, built_in, create_user, create_time, status, is_deleted)
+SELECT COALESCE(MAX(id), 0) + 1, 'login', '注册归属验证方式(NONE/SMS/EMAIL)', 'REGISTER_VERIFY_MODE', 'NONE', 1, 1, NOW(), 1, 0
+FROM sys_config
+WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'REGISTER_VERIFY_MODE');
+
+INSERT INTO sys_config (id, config_group, name, config_key, config_value, built_in, create_user, create_time, status, is_deleted)
+SELECT COALESCE(MAX(id), 0) + 1, 'mail', '邮箱注册验证码有效期(秒)', 'EMAIL_CODE_EXPIRE_SECONDS', '300', 1, 1, NOW(), 1, 0
+FROM sys_config
+WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'EMAIL_CODE_EXPIRE_SECONDS');
+
+INSERT INTO sys_config (id, config_group, name, config_key, config_value, built_in, create_user, create_time, status, is_deleted)
+SELECT COALESCE(MAX(id), 0) + 1, 'mail', '邮箱注册验证码发送冷却(秒)', 'EMAIL_CODE_COOLDOWN_SECONDS', '60', 1, 1, NOW(), 1, 0
+FROM sys_config
+WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'EMAIL_CODE_COOLDOWN_SECONDS');

@@ -31,4 +31,7 @@ public class RegisterReq extends UserRegisterReq {
 
     /** 行为验证码拖动轨迹（LOGIN_CAPTCHA_ENABLED 开启时必传） */
     private ImageCaptchaTrack captchaTrack;
+
+    /** 归属验证码（REGISTER_VERIFY_MODE=SMS 时为手机验证码，=EMAIL 时为邮箱验证码） */
+    private String verifyCode;
 }

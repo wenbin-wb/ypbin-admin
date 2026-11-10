@@ -10,6 +10,7 @@
 package cn.ypbin.admin.modules.auth.service;
 
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
@@ -44,6 +45,16 @@ public interface AuthService {
      * @return 登录结果（含 accessToken）
      */
     LoginResp register(RegisterReq req, String ip);
+
+    /**
+     * 发送注册归属验证码（渠道由系统参数 {@code REGISTER_VERIFY_MODE} 决定）。
+     *
+     * <p>未开启注册、或当前模式为 {@code NONE} 时直接拒绝；渠道由服务端决定，
+     * 不接受客户端指定（否则可自行选择更弱的渠道绕过配置）。</p>
+     *
+     * @param req 发送请求（按模式携带手机号或邮箱）
+     */
+    void sendRegisterCode(RegisterCodeSendReq req);
 
     /**
      * 当前会话登出。
