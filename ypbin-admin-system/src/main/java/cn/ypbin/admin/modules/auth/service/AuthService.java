@@ -13,6 +13,7 @@ import cn.ypbin.admin.modules.system.model.req.LoginReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
+import cn.ypbin.admin.modules.system.model.resp.RegisterOptionsResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import java.util.List;
@@ -55,6 +56,13 @@ public interface AuthService {
      * @param req 发送请求（按模式携带手机号或邮箱）
      */
     void sendRegisterCode(RegisterCodeSendReq req);
+
+    /**
+     * 注册入口的公开配置（是否开启 / 验证渠道 / 是否需要行为验证码）。
+     *
+     * @return 注册公开配置
+     */
+    RegisterOptionsResp registerOptions();
 
     /**
      * 当前会话登出。

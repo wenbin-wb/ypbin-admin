@@ -13,6 +13,7 @@ import cn.ypbin.admin.modules.system.model.req.LoginReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
+import cn.ypbin.admin.modules.system.model.resp.RegisterOptionsResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.modules.auth.service.AuthService;
@@ -58,6 +59,14 @@ public class AuthController {
      * <p>与登录入口一致按 IP 限流：注册会落库并建立会话，是比登录更重的写操作，
      * 不限流时脚本可批量灌入账号。</p>
      */
+    /**
+     * 注册入口的公开配置（是否开启 / 验证渠道 / 是否需要行为验证码）。
+     */
+    @GetMapping("/auth/register/options")
+    public R<RegisterOptionsResp> registerOptions() {
+        return R.ok(authService.registerOptions());
+    }
+
     /**
      * 发送注册验证码（手机/邮箱渠道由系统参数 REGISTER_VERIFY_MODE 决定）。
      */

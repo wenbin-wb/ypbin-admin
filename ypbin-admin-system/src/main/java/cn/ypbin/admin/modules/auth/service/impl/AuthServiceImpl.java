@@ -22,6 +22,7 @@ import cn.ypbin.admin.modules.system.model.req.LoginReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
 import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
+import cn.ypbin.admin.modules.system.model.resp.RegisterOptionsResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.modules.auth.service.AuthService;
@@ -110,6 +111,19 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("注册失败，请稍后重试");
         }
         return loginSupport.completeLogin(user, AdminConstants.AUTH_TYPE_ACCOUNT);
+    }
+
+    /**
+     * 注册入口的公开配置（注册页据此决定展示哪些字段）。
+     */
+    @Override
+    public RegisterOptionsResp registerOptions() {
+        RegisterOptionsResp options = new RegisterOptionsResp();
+        options.setEnabled(configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false));
+        // 未知/空配置由枚举显式拒绝，避免前端拿到一个「看起来是 NONE」的降级结果
+        options.setVerifyMode(currentVerifyMode().name());
+        options.setCaptchaEnabled(configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false));
+        return options;
     }
 
     /**
