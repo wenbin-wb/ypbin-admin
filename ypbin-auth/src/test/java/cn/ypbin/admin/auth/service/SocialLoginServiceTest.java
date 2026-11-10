@@ -21,23 +21,26 @@ import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
+import cn.ypbin.admin.system.model.req.SocialBindSaveReq;
 import cn.ypbin.admin.system.model.req.SocialCallbackReq;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
-import cn.ypbin.starter.security.identity.IdentityContext;
+import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.social.core.SocialService;
 import java.util.List;
+import java.util.Optional;
 import me.zhyd.oauth.model.AuthCallback;
 import me.zhyd.oauth.model.AuthUser;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
 /**
  * {@link SocialLoginService} 单元测试。
  *
- * <p>验证第三方登录/绑定/解绑流程（绑定数据走 SysCache，写操作经 Feign + 清缓存）。</p>
+ * <p>验证第三方登录/绑定/解绑流程（绑定数据走 SysCache，写操作经 Feign + 清缓存）。
+ * 当前用户从 auth 自己的 sa-token 会话（{@link UserContext}）取，不再依赖身份头上下文。</p>
  *
  * @author wenbin
  * @since 2026-09-01
@@ -56,11 +59,6 @@ class SocialLoginServiceTest {
         registryInitializer = org.mockito.Mockito.mock(SocialAuthRegistryInitializer.class);
         service = new SocialLoginService(socialService, systemClient,
             org.mockito.Mockito.mock(LoginSupport.class), registryInitializer);
-    }
-
-    @AfterEach
-    void tearDown() {
-        IdentityContext.clear();
     }
 
     private AuthUser authUser() {
@@ -100,17 +98,21 @@ class SocialLoginServiceTest {
     @Test
     void bindShouldSaveAndEvictCache() throws Exception {
         when(socialService.login(any(), any(AuthCallback.class))).thenReturn(authUser());
-        IdentityContext.setLoginUser(loginUser(42L));
 
-        try (MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+        try (MockedStatic<UserContext> userContext = mockStatic(UserContext.class);
+             MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+            userContext.when(UserContext::getUserIdSafely).thenReturn(Optional.of(42L));
             sysCache.when(() -> SysCache.isSocialUserBound(42L, "github")).thenReturn(false);
             sysCache.when(() -> SysCache.isSocialAccountBound("github", "openid-123")).thenReturn(false);
-            when(systemClient.saveSocialBinding(42L, "github", "openid-123", "github-user", null, null))
-                .thenReturn(R.ok());
+            when(systemClient.saveSocialBinding(any(SocialBindSaveReq.class))).thenReturn(R.ok());
 
             service.bind("github", callbackReq());
 
-            verify(systemClient).saveSocialBinding(42L, "github", "openid-123", "github-user", null, null);
+            ArgumentCaptor<SocialBindSaveReq> captor = ArgumentCaptor.forClass(SocialBindSaveReq.class);
+            verify(systemClient).saveSocialBinding(captor.capture());
+            assertThat(captor.getValue().getUserId()).isEqualTo(42L);
+            assertThat(captor.getValue().getPlatform()).isEqualTo("github");
+            assertThat(captor.getValue().getOpenId()).isEqualTo("openid-123");
             sysCache.verify(() -> SysCache.evictSocialBinding(42L, "github", "openid-123"));
         }
     }
@@ -118,9 +120,10 @@ class SocialLoginServiceTest {
     @Test
     void bindShouldThrowWhenPlatformAlreadyBound() throws Exception {
         when(socialService.login(any(), any(AuthCallback.class))).thenReturn(authUser());
-        IdentityContext.setLoginUser(loginUser(42L));
 
-        try (MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+        try (MockedStatic<UserContext> userContext = mockStatic(UserContext.class);
+             MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+            userContext.when(UserContext::getUserIdSafely).thenReturn(Optional.of(42L));
             sysCache.when(() -> SysCache.isSocialUserBound(42L, "github")).thenReturn(true);
 
             assertThatThrownBy(() -> service.bind("github", callbackReq()))
@@ -131,20 +134,14 @@ class SocialLoginServiceTest {
 
     @Test
     void boundPlatformsShouldReturnEmptyWhenNoBindings() {
-        IdentityContext.setLoginUser(loginUser(42L));
-
-        try (MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+        try (MockedStatic<UserContext> userContext = mockStatic(UserContext.class);
+             MockedStatic<SysCache> sysCache = mockStatic(SysCache.class)) {
+            userContext.when(UserContext::getUserIdSafely).thenReturn(Optional.of(42L));
             sysCache.when(() -> SysCache.listSocialBindings(42L)).thenReturn(List.of());
 
             List<String> platforms = service.boundPlatforms();
 
             assertThat(platforms).isEmpty();
         }
-    }
-
-    private cn.ypbin.starter.security.core.LoginUser loginUser(long id) {
-        cn.ypbin.starter.security.core.LoginUser user = new cn.ypbin.starter.security.core.LoginUser();
-        user.setId(id);
-        return user;
     }
 }

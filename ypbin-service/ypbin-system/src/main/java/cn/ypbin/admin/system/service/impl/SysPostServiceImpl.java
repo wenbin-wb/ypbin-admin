@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.admin.system.entity.SysPost;
 import cn.ypbin.admin.system.entity.SysUserPost;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
@@ -104,9 +105,8 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
         }
     }
 
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 
     private PostResp toResp(SysPost post) {

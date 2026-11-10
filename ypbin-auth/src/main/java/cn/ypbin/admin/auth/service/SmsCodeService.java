@@ -12,10 +12,12 @@ package cn.ypbin.admin.auth.service;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.common.util.CachedCounterReader;
 import cn.ypbin.admin.system.api.cache.SysCache;
+import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
+import cn.ypbin.admin.system.model.req.SmsSendReq;
 import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.core.exception.BusinessException;
-import cn.ypbin.starter.messaging.util.SmsUtils;
+import cn.ypbin.starter.core.model.R;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Map;
@@ -46,6 +48,7 @@ public class SmsCodeService {
 
     private final AuthConfigReader configReader;
     private final CacheService cacheService;
+    private final ISystemClient systemClient;
 
     /**
      * 发送验证码到指定手机。验证码随机 6 位数字，TTL 由 sys_config SMS_CODE_EXPIRE_SECONDS 控制。
@@ -70,11 +73,16 @@ public class SmsCodeService {
             cacheService.set(codeKey, code, Duration.ofSeconds(expireSeconds));
             // 新验证码 = 新的尝试预算：不清旧计数的话，用户按提示「重新获取」后仍会被旧计数锁死
             cacheService.delete(VERIFY_FAIL_PREFIX + normalizedPhone);
-            // 厂商返回 false 时必须失败：若当作成功，验证码留在缓存并设置了冷却，
-            // 用户永远收不到短信、且每次重试都「成功」，问题只能靠用户投诉才发现
-            boolean sent = SmsUtils.sendByTemplate(normalizedPhone, templateId, Map.of("code", code));
-            if (!sent) {
-                throw new BusinessException("短信发送失败，请检查短信厂商配置");
+            // 短信厂商配置只存在于 system；auth 经内部端点代发，且必须检查返回值——
+            // 厂商返回 false 时若当作成功，验证码会留在缓存而用户永远收不到短信
+            SmsSendReq sendReq = new SmsSendReq();
+            sendReq.setPhone(normalizedPhone);
+            sendReq.setTemplateId(templateId);
+            sendReq.setVariables(Map.of("code", code));
+            R<Void> sendResp = systemClient.sendSms(sendReq);
+            if (sendResp == null || !sendResp.isSuccess()) {
+                throw new BusinessException(sendResp == null
+                    ? "短信服务暂不可用，请稍后重试" : sendResp.getMessage());
             }
         } catch (RuntimeException e) {
             cacheService.compareAndDelete(codeKey, code);

@@ -43,10 +43,15 @@
 #   NACOS_AUTH_TOKEN= NACOS_AUTH_IDENTITY_KEY= NACOS_AUTH_IDENTITY_VALUE=
 #                                  Nacos 服务端鉴权凭据（自动随机生成，一般无需手传；
 #                                  NACOS_AUTH_TOKEN 需 Base64 且解码后 ≥32 字节）
+#   NACOS_USERNAME= NACOS_PASSWORD=
+#                                  Nacos 控制台管理员账号（服务端已开启鉴权；四个服务
+#                                  拉配置复用同一账号，自动随机生成口令，一般无需手传）
 #   INTERNAL_TOKEN=                /internal/** 服务间 Feign 调用凭证（守卫校验，自动随机生成，
 #                                  auth/system/ai 共享一致值，一般无需手传）
 #   GATEWAY_SIGN_TOKEN=            网关身份头签名标记（防伪造，自动随机生成；gateway 签发、
 #                                  auth/system/ai 校验，一般无需手传）
+#   SUPER_ADMIN_INIT_PASSWORD=     平台超管 admin 初始口令（自动随机生成并写入 .env；
+#                                  非空时由 system 启动写入种子账号，首次登录强制改密）
 #   XXL_JOB_ADMIN_PASSWORD=        XXL-Job 调度中心 admin 初始口令（自动随机生成并写入 .env，
 #                                  不复用 MYSQL_ROOT_PASSWORD；SQL 导入前按口令替换哈希占位符）
 #   REBUILD_FRONTEND=1             强制重新构建前端。默认：产物比源码新则复用、否则自动重建
@@ -874,8 +879,17 @@ export JAVA_HOME
 ok "环境就绪：$(java -version 2>&1 | head -1)，Maven $(mvn -v 2>/dev/null | head -1 | awk '{print $3}')"
 
 # --- Maven 阿里云镜像（国内服务器访问 Central 常 403/超时，与单体脚本一致）---
-if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null; then
-  info "配置 Maven 阿里云镜像（国内加速）"
+# 只镜像 central；另加 ypbin-central 直连仓库作为 cn.ypbin 的兜底：
+# 阿里云对刚发布的第三方制品同步有延迟（4.3.0 实测部分模块 404，Central 齐全），
+# 单一镜像会让构建报「依赖不存在」，难以判断是发布缺失还是镜像滞后。
+if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/settings.xml" 2>/dev/null \
+  || ! grep -q "ypbin-central" "$HOME/.m2/settings.xml" 2>/dev/null; then
+  if [ -f "$HOME/.m2/settings.xml" ] && ! grep -q "ypbin-central" "$HOME/.m2/settings.xml" 2>/dev/null; then
+    backup="$HOME/.m2/settings.xml.bak.$(date +%s)"
+    cp "$HOME/.m2/settings.xml" "$backup"
+    info "旧 settings.xml 已备份到 $backup"
+  fi
+  info "配置 Maven 阿里云镜像（国内加速）+ cn.ypbin 的 Central 兜底仓库"
   mkdir -p "$HOME/.m2"
   cat > "$HOME/.m2/settings.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -890,9 +904,35 @@ if [ ! -f "$HOME/.m2/settings.xml" ] || ! grep -q "maven.aliyun.com" "$HOME/.m2/
       <url>https://maven.aliyun.com/repository/public</url>
     </mirror>
   </mirrors>
+  <profiles>
+    <profile>
+      <id>ypbin-central</id>
+      <repositories>
+        <repository>
+          <id>ypbin-central</id>
+          <name>Maven Central (cn.ypbin fallback)</name>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>ypbin-central</id>
+          <name>Maven Central (cn.ypbin fallback)</name>
+          <url>https://repo1.maven.org/maven2</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>false</enabled></snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>ypbin-central</activeProfile>
+  </activeProfiles>
 </settings>
 EOF
-  ok "Maven 阿里云镜像已配置"
+  ok "Maven 阿里云镜像与 cn.ypbin 兜底仓库已配置"
 fi
 
 # ---------- [2/7] 拉取代码 ----------
@@ -1073,7 +1113,8 @@ rand_hex() { # $1=字节数，输出 2 倍长度小写十六进制
 }
 
 if [ ! -f "$ENV_FILE" ]; then
-  MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-YpbinRoot$(date +%s)}"
+  # 与其他凭据同口径随机生成：时间戳口令只有约 86400 量级熵，且 3306 一旦暴露即可被离线猜解
+  MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-$(rand_hex 16)}"
   # AI 模型密钥的加密密钥：不接受内置默认值——公开已知的默认值等同未加密。
   # 首次全新部署（.env 不存在、无旧密文）时自动随机生成并写入 .env，同时醒目提示妥善保存；
   # 复用旧 .env 时绝不自动生成（换值即旧密文永久不可解密），见下方 check_required_key 前置校验。
@@ -1089,6 +1130,10 @@ if [ ! -f "$ENV_FILE" ]; then
   NACOS_AUTH_TOKEN="${NACOS_AUTH_TOKEN:-$(rand_b64_48)}"
   NACOS_AUTH_IDENTITY_KEY="${NACOS_AUTH_IDENTITY_KEY:-serverIdentity}"
   NACOS_AUTH_IDENTITY_VALUE="${NACOS_AUTH_IDENTITY_VALUE:-$(rand_hex 32)}"
+  # Nacos 控制台管理员：随机口令（不再使用 nacos/nacos）。控制台能读改全部服务配置，
+  # 其中包含 MySQL root 口令与内部调用凭证，弱口令等同全环境失守。
+  NACOS_USERNAME="${NACOS_USERNAME:-nacos}"
+  NACOS_PASSWORD="${NACOS_PASSWORD:-$(rand_hex 16)}"
   # 内部 Feign 调用凭证（/internal/** 守卫，auth/system/ai 共享一致值），随机生成
   INTERNAL_TOKEN="${INTERNAL_TOKEN:-$(rand_hex 32)}"
   GATEWAY_SIGN_TOKEN="${GATEWAY_SIGN_TOKEN:-$(rand_hex 32)}"
@@ -1102,6 +1147,9 @@ if [ ! -f "$ENV_FILE" ]; then
   # XXL-JOB 调度中心初始口令：随机生成（不复用 MYSQL_ROOT_PASSWORD），登录时与库内 sha256 哈希比对。
   # 明文仅写入 .env（600）并在部署日志一次性提示；SQL 模板里的占位符由导入前 sed 替换为哈希（见 import_xxl_job_sql）。
   XXL_JOB_ADMIN_PASSWORD="${XXL_JOB_ADMIN_PASSWORD:-$(rand_hex 16)}"
+  # 平台超管初始口令：随机生成（不再使用仓库内公开的演示口令）。由 system 服务启动时
+  # 用 BCrypt 写入种子账号（SQL 模板保持占位哈希），并强制首登改密——明文不进 SQL。
+  SUPER_ADMIN_INIT_PASSWORD="${SUPER_ADMIN_INIT_PASSWORD:-$(rand_hex 16)}"
   cat > "$ENV_FILE" <<EOF
 # 由 install.sh 生成
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
@@ -1109,10 +1157,13 @@ AI_MODEL_SECRET_KEY=$AI_MODEL_SECRET_KEY
 NACOS_AUTH_TOKEN=$NACOS_AUTH_TOKEN
 NACOS_AUTH_IDENTITY_KEY=$NACOS_AUTH_IDENTITY_KEY
 NACOS_AUTH_IDENTITY_VALUE=$NACOS_AUTH_IDENTITY_VALUE
+NACOS_USERNAME=$NACOS_USERNAME
+NACOS_PASSWORD=$NACOS_PASSWORD
 INTERNAL_TOKEN=$INTERNAL_TOKEN
 GATEWAY_SIGN_TOKEN=$GATEWAY_SIGN_TOKEN
 REDIS_PASSWORD=$REDIS_PASSWORD
 XXL_JOB_ADMIN_PASSWORD=$XXL_JOB_ADMIN_PASSWORD
+SUPER_ADMIN_INIT_PASSWORD=$SUPER_ADMIN_INIT_PASSWORD
 # 留空：模板要求时 install.sh 会 fail-fast（值须与 xxl-job-admin 里 ypbin-system 执行器一致）
 XXL_JOB_ACCESS_TOKEN=
 NACOS_ADDR=${NACOS_ADDR:-nacos:8848}
@@ -1121,8 +1172,10 @@ ADMIN_UI_PORT=$ADMIN_UI_PORT
 ADMIN_UI_DIST_DIR=$ADMIN_UI_DIST_DIR
 EOF
   chmod 600 "$ENV_FILE"
-  ok "已生成 .env（MySQL 密码：$MYSQL_ROOT_PASSWORD，可改 $ENV_FILE）"
+  ok "已生成 .env（凭据已写入，见 $ENV_FILE；不再在日志回显 MySQL 密码）"
+  warn ">>> Nacos 控制台管理员口令已随机生成：$NACOS_USERNAME / $NACOS_PASSWORD（见 .env 的 NACOS_PASSWORD）"
   warn ">>> XXL-Job 控制台初始口令已生成：admin / $XXL_JOB_ADMIN_PASSWORD（已写入 $ENV_FILE 的 XXL_JOB_ADMIN_PASSWORD，请妥善保存）"
+  warn ">>> 平台超管初始口令已生成：admin / $SUPER_ADMIN_INIT_PASSWORD（已写入 $ENV_FILE 的 SUPER_ADMIN_INIT_PASSWORD；首次登录必须修改）"
 else
   warn "复用已有 .env"
   # 复用场景需把 .env 变量载入环境，供后续 Nacos 占位符替换 / compose 使用
@@ -1154,8 +1207,23 @@ env_key_backfill() { # $1=键名 $2=取值命令（仅缺键时才执行，命�
 env_key_backfill NACOS_AUTH_TOKEN 'rand_b64_48'
 env_key_backfill NACOS_AUTH_IDENTITY_KEY 'printf serverIdentity'
 env_key_backfill NACOS_AUTH_IDENTITY_VALUE 'rand_hex 32'
+# 旧 .env 升级：保留既有 nacos/nacos 行为可继续导入配置；仅提示改密，不能自动换（会与已存在管理员不匹配）
+env_key_backfill NACOS_USERNAME 'printf nacos'
+if ! grep -q "^NACOS_PASSWORD=" "$ENV_FILE"; then
+  env_key_backfill NACOS_PASSWORD 'printf nacos'
+  warn ">>> 检测到旧版 .env：Nacos 控制台仍使用默认口令 nacos/nacos，请尽快在控制台改密并同步 .env"
+fi
 env_key_backfill INTERNAL_TOKEN 'rand_hex 32'
 env_key_backfill GATEWAY_SIGN_TOKEN 'rand_hex 32'
+# 旧 .env 升级：补一个随机超管初始口令（仓库内演示口令不再用于安装脚本部署）。
+# 已有键（含显式留空）不覆盖：留空表示保留种子口令，仍强制首登改密。
+if ! grep -q "^SUPER_ADMIN_INIT_PASSWORD=" "$ENV_FILE"; then
+  SUPER_ADMIN_INIT_PASSWORD="$(rand_hex 16)"
+  printf 'SUPER_ADMIN_INIT_PASSWORD=%s\n' "$SUPER_ADMIN_INIT_PASSWORD" >> "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  export SUPER_ADMIN_INIT_PASSWORD
+  warn ">>> 已为旧 .env 补生成平台超管初始口令：admin / $SUPER_ADMIN_INIT_PASSWORD（首次登录必须修改）"
+fi
 if [ "$NO_DOCKER" = "1" ]; then
   env_key_backfill REDIS_PASSWORD 'printf ""'
 else
@@ -1243,7 +1311,13 @@ fi
 
 NACOS_CONSOLE_URL="${NACOS_CONSOLE_URL:-http://localhost:8080}"
 NACOS_USERNAME="${NACOS_USERNAME:-nacos}"
-NACOS_PASSWORD="${NACOS_PASSWORD:-nacos}"
+if [ "$NO_DOCKER" = "1" ]; then
+  # 外部 Nacos：管理员由运维维护，沿用旧默认值
+  NACOS_PASSWORD="${NACOS_PASSWORD:-nacos}"
+else
+  # 内置 Nacos：口令必须由 [5/7] 写入 .env；缺失即失败，禁止回退到 nacos/nacos
+  NACOS_PASSWORD="${NACOS_PASSWORD:?内置 Nacos 管理员口令缺失：请检查 .env 的 NACOS_PASSWORD}"
+fi
 
 # 等待 Nacos Console 就绪（v3 独立 Console 端口）
 NACOS_READY=0

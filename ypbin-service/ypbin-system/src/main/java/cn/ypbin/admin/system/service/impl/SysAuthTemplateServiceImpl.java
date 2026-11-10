@@ -28,8 +28,10 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.tenant.core.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -64,10 +66,25 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
 
     @Override
     public List<AuthTemplateResp> listTemplates() {
-        return list().stream().map(template -> {
+        List<SysAuthTemplate> templates = list();
+        if (templates.isEmpty()) {
+            return List.of();
+        }
+        // 三次查询完成组装：模板、全部关联、全部可用菜单；不再逐模板查两次（2N）
+        List<SysTemplateMenu> links = templateMenuMapper.selectAll();
+        Map<Long, Set<Long>> menuIdsByTemplate = new HashMap<>();
+        Set<Long> allMenuIds = new HashSet<>();
+        for (SysTemplateMenu link : links) {
+            menuIdsByTemplate.computeIfAbsent(link.getTemplateId(), key -> new HashSet<>())
+                .add(link.getMenuId());
+            allMenuIds.add(link.getMenuId());
+        }
+        Set<Long> availableMenuIds = resolveAvailableMenuIds(allMenuIds);
+        return templates.stream().map(template -> {
             AuthTemplateResp resp = new AuthTemplateResp();
             BeanUtils.copyProperties(template, resp);
-            resp.setMenuIds(List.copyOf(listMenuIds(template.getId())));
+            Set<Long> menuIds = menuIdsByTemplate.getOrDefault(template.getId(), Set.of());
+            resp.setMenuIds(menuIds.stream().filter(availableMenuIds::contains).toList());
             return resp;
         }).toList();
     }
@@ -88,7 +105,8 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateTemplate(Long id, AuthTemplateSaveReq req) {
-        if (getById(id) == null) {
+        SysAuthTemplate existing = getById(id);
+        if (existing == null) {
             throw new BusinessException("权限模板不存在");
         }
         validateMenuIds(req.getMenuIds());
@@ -96,6 +114,9 @@ public class SysAuthTemplateServiceImpl extends BaseServiceImpl<SysAuthTemplateM
         SysAuthTemplate template = new SysAuthTemplate();
         BeanUtils.copyProperties(req, template, "menuIds");
         template.setId(id);
+        // new 出来的实体带着 BaseEntity 的 status 默认值 1，必须显式保留库内状态，
+        // 否则编辑已停用的权限模板会把它重新启用（进而影响引用该模板的租户授权解析）
+        template.setStatus(existing.getStatus());
         if (!updateById(template)) {
             throw new BusinessException("修改权限模板失败");
         }

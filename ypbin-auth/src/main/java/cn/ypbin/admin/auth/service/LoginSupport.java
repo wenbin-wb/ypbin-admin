@@ -12,15 +12,20 @@ package cn.ypbin.admin.auth.service;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.http.useragent.UserAgent;
 import cn.ypbin.starter.core.util.UserAgentFormatter;
+import cn.ypbin.starter.log.core.IpLocationResolver;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.common.support.PwdChangeKeys;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.api.cache.SysCache;
+import cn.ypbin.admin.system.enums.UserStatusEnum;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.online.OnlineUserHelper;
+import cn.ypbin.starter.security.online.OnlineUserHelper.Terminal;
 import java.util.HashSet;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +61,9 @@ public class LoginSupport {
 
     private final LoginEventTracker loginEventTracker;
 
+    /** IP 归属地解析（ip2region 离线库，见 {@code IpLocationConfiguration}） */
+    private final IpLocationResolver ipLocationResolver;
+
     /**
      * 完成登录并返回令牌。
      *
@@ -66,6 +74,11 @@ public class LoginSupport {
      * @return 登录结果
      */
     public LoginResp completeLogin(SysUserDto user, String authType, String ip, @Nullable String userAgent) {
+        // 禁用校验放在唯一收尾处：账号/手机入口各自校验过，但新增登录入口（如社交登录）
+        // 很容易漏掉，导致被禁用用户换一条链路就能继续登录
+        if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
+            throw new BusinessException("账号已被禁用");
+        }
         LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, authType);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());
@@ -86,20 +99,24 @@ public class LoginSupport {
         }
         // 登录态写入 sa-token 会话（网关从会话读身份信息签发身份头）
         StpUtil.getSession().set(UserContext.KEY_LOGIN_USER, loginUser);
+        boolean mustChangePassword = Integer.valueOf(PwdChangeKeys.REQUIRED_YES)
+            .equals(user.getPwdChangeRequired());
+        StpUtil.getSession().set(PwdChangeKeys.REQUIRED, mustChangePassword);
         recordLoginTerminal(ip, userAgent);
         updateLastLoginTime(user.getId());
         // 先取令牌再上报：埋点真出问题时（如取令牌本身失败）不会先产出一条「登录成功」事件，
         // 事件与业务结果保持同源；上报侧自身已保证不抛（见 LoginEventTracker）
-        LoginResp resp = new LoginResp(LoginHelper.getTokenValue());
+        LoginResp resp = new LoginResp(LoginHelper.getTokenValue(), mustChangePassword);
         loginEventTracker.recordLogin(user, authType, ip, userAgent);
         return resp;
     }
 
     /**
-     * 记录登录终端信息（在线用户列表的 IP/浏览器/操作系统来源）。
+     * 记录登录终端信息（在线用户列表的 IP/归属地/浏览器/操作系统来源）。
      *
      * <p>与 {@link #updateLastLoginTime} 同策略：终端信息属展示型附加数据，写失败不应阻断登录成功，
-     * 但必须记录完整堆栈暴露问题（不静默吞掉）。归属地未接入离线 IP 库，交由读取侧留空，不在此臆造。</p>
+     * 但必须记录完整堆栈暴露问题（不静默吞掉）。归属地由 {@link IpLocationResolver}
+     * （ip2region 离线库）解析，解析失败时留空，与单体版同一口径。</p>
      *
      * @param ip        客户端 IP
      * @param userAgent 客户端 User-Agent 原始串，可空
@@ -107,11 +124,14 @@ public class LoginSupport {
     private void recordLoginTerminal(String ip, @Nullable String userAgent) {
         UserAgent ua = parseUserAgent(userAgent);
         try {
-            OnlineUserHelper.record(ip,
-                UserAgentFormatter.formatBrowser(ua),
-                ua == null || ua.getOs() == null ? null : ua.getOs().getName());
+            Terminal terminal = new Terminal();
+            terminal.setIp(ip);
+            terminal.setLocation(ipLocationResolver.resolve(ip));
+            terminal.setBrowser(UserAgentFormatter.formatBrowser(ua));
+            terminal.setOs(ua == null || ua.getOs() == null ? null : ua.getOs().getName());
+            OnlineUserHelper.record(terminal);
         } catch (RuntimeException e) {
-            log.error("登录后记录终端信息失败，在线用户的 IP/浏览器/操作系统将为空，ip={}", ip, e);
+            log.error("登录后记录终端信息失败，在线用户的 IP/归属地/浏览器/操作系统将为空，ip={}", ip, e);
         }
     }
 

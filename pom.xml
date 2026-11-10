@@ -24,13 +24,14 @@
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>4.1.1</spring-boot.version>
-        <ypbin-starter.version>4.2.1</ypbin-starter.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
+        <ypbin-starter.version>4.4.0</ypbin-starter.version>
         <sa-token.version>1.46.0</sa-token.version>
         <sms4j.version>3.3.5</sms4j.version>
+        <mica-ip2region.version>4.1.0</mica-ip2region.version>
         <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
         <lombok.version>1.18.48</lombok.version>
-        <maven-surefire-plugin.version>3.6.0</maven-surefire-plugin.version>
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -55,7 +56,7 @@
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
-                <version>2.0.1</version>
+                <version>2.0.2</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -64,6 +65,12 @@
                 <groupId>org.dromara.sms4j</groupId>
                 <artifactId>sms4j-spring-boot-starter</artifactId>
                 <version>${sms4j.version}</version>
+            </dependency>
+            <!-- IP 归属地离线库（实现 starter 的 IpLocationResolver；与单体版同版本） -->
+            <dependency>
+                <groupId>net.dreamlu</groupId>
+                <artifactId>mica-ip2region</artifactId>
+                <version>${mica-ip2region.version}</version>
             </dependency>
             <!-- 微服务内部模块 -->
             <dependency>

@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.admin.ai.entity.AiPromptTemplate;
 import cn.ypbin.admin.ai.mapper.AiPromptTemplateMapper;
@@ -69,10 +70,13 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateTemplate(Long id, AiPromptTemplateSaveReq req) {
-        requireTemplate(id);
+        AiPromptTemplate existing = requireTemplate(id);
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl, "id", "tenantId", "status");
         tpl.setId(id);
+        // new 出来的实体带着 BaseEntity 的 status 默认值 1，必须显式保留库内状态，
+        // 否则编辑已停用的模板会把它重新启用
+        tpl.setStatus(existing.getStatus());
         if (templateMapper.updateById(tpl) != 1) {
             throw new BusinessException("模板更新失败");
         }
@@ -125,7 +129,6 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
      * 当前登录用户的租户 ID；无登录上下文时明确失败，禁止静默回退默认租户。
      */
     private static Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
+        return TenantSupport.currentTenantId();
     }
 }

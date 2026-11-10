@@ -7,28 +7,35 @@
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
  */
-package cn.ypbin.admin.ai.model.resp;
+package cn.ypbin.admin.system.model.resp;
 
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * AI 消息响应 DTO。
+ * 访问黑名单规则响应。
  *
  * @author wenbin
- * @since 2026-08-15
+ * @since 2026-11-05
  */
 @Getter
 @Setter
-public class AiMessageResp {
+public class AccessBlocklistResp {
 
     private Long id;
 
-    private Long conversationId;
+    private String matchType;
 
-    private String role;
-    private String content;
-    private Integer tokens;
+    private String matchValue;
+
+    private String reason;
+
+    private LocalDateTime expireTime;
+
+    private Integer status;
+
     private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 }

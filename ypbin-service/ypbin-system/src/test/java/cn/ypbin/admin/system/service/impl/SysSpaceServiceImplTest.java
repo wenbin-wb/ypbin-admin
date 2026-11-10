@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -102,7 +103,8 @@ class SysSpaceServiceImplTest {
         spaceMapper = mock(SysSpaceMapper.class);
         relationMapper = mock(SysSpaceRelationMapper.class);
         dictItemMapper = mock(SysDictItemMapper.class);
-        service = new SysSpaceServiceImpl(relationMapper, dictItemMapper, new ObjectMapper());
+        service = new SysSpaceServiceImpl(relationMapper, dictItemMapper, new ObjectMapper(),
+            new SpaceImportExportComponent(spaceMapper));
         ReflectionTestUtils.setField(service, "baseMapper", spaceMapper);
         // 空间类型校验依赖字典（space_type），默认给一组内置类型
         when(dictItemMapper.selectByDictCode("space_type")).thenReturn(List.of(
@@ -602,6 +604,19 @@ class SysSpaceServiceImplTest {
         assertThat(result.getFailed()).isEqualTo(1);
         assertThat(result.getErrors().getFirst().getMessage())
             .contains("编码重复").contains("第 2 行");
+    }
+
+    @Test
+    @DisplayName("★ 导入：同一层多行合并为一次批量 INSERT（不逐行往返）")
+    void shouldInsertImportRowsInOneBatch() {
+        when(spaceMapper.selectList(any())).thenReturn(List.of());
+        String csv = "code,parentCode,name,spaceType\nA,,栋A,park\nB,,栋B,park\n";
+
+        SpaceImportResultResp result = withTenant(() -> service.importCsv(csv, null));
+
+        assertThat(result.getInserted()).isEqualTo(2);
+        verify(spaceMapper).insertBatch(anyList());
+        verify(spaceMapper, never()).insert(any(SysSpace.class));
     }
 
     @Test

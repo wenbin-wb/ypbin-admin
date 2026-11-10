@@ -103,7 +103,7 @@ class AuthServiceRegisterTest {
         when(configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)).thenReturn(true);
         when(systemClient.registerUser(any())).thenReturn(R.ok(user));
         when(loginSupport.completeLogin(user, "ACCOUNT", "10.0.0.8", null))
-            .thenReturn(new LoginResp("token-1"));
+            .thenReturn(new LoginResp("token-1", false));
 
         LoginResp resp = service().register(request(), "10.0.0.8", null);
 

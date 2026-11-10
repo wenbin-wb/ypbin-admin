@@ -10,14 +10,15 @@
 package cn.ypbin.admin.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.ypbin.admin.system.model.query.NoticeQuery;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.model.R;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,8 +44,17 @@ public class SysNoticeController {
 
     @GetMapping("/list")
     @SaCheckPermission("system:notice:list")
-    public R<List<NoticeResp>> list() {
-        return R.ok(noticeService.listNotices());
+    public R<PageResult<NoticeResp>> list(@Valid NoticeQuery query) {
+        return R.ok(noticeService.pageNotices(query));
+    }
+
+    /**
+     * 公告详情（含正文）：列表不返回 content，编辑/预览前先取详情。
+     */
+    @GetMapping("/{id}")
+    @SaCheckPermission("system:notice:list")
+    public R<NoticeResp> detail(@PathVariable Long id) {
+        return R.ok(noticeService.getNotice(id));
     }
 
     @Idempotent

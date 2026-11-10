@@ -28,20 +28,22 @@ VALUES (1, 1, 0, '长沙词云信息科技', 1, '张伟', '0731-88888888', 'hr@c
 
 -- 用户（平台用户：admin/approver 密码统一 pt5aQ5E6t8dkVkMp（与前端演示登录默认一致）；
 --      租户测试用户密码统一 123456）
+-- pwd_change_required=1：平台账号首次登录必须先改密（网关只放行改密/登出）；
+-- install.sh 部署时还会用 SUPER_ADMIN_INIT_PASSWORD 覆盖 admin 的这条演示口令。
 INSERT INTO sys_user (id, tenant_id, username, user_type, password, real_name, nickname, dept_id, phone, email, gender,
-                      remark, pwd_reset_time, create_user, create_time, status, is_deleted)
+                      remark, pwd_reset_time, pwd_change_required, create_user, create_time, status, is_deleted)
 VALUES (1, 1, 'admin', 'PLATFORM', '$2a$10$4Yo3GSCsw0TwHl9xYrvPyO0iEu97Fov2uX8hHz3Z1Izfb6ETFKyFO',
-        '超级管理员', '超级管理员', 1, NULL, NULL, 1, '系统内置超级管理员', NOW(), NULL, NOW(), 1, 0),
+        '超级管理员', '超级管理员', 1, NULL, NULL, 1, '系统内置超级管理员', NOW(), 1, NULL, NOW(), 1, 0),
        (6, 1, 'approver', 'PLATFORM', '$2a$10$4Yo3GSCsw0TwHl9xYrvPyO0iEu97Fov2uX8hHz3Z1Izfb6ETFKyFO',
-        '授权审批员', '审批员', 1, NULL, NULL, 1, '授权双人复核的第二审批人', NOW(), 1, NOW(), 1, 0),
+        '授权审批员', '审批员', 1, NULL, NULL, 1, '授权双人复核的第二审批人', NOW(), 1, 1, NOW(), 1, 0),
        (2, 1, 'lilei', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '李强', '强哥', 2, '13900000001', 'liqiang@ciyun.com', 1, '研发中心负责人', NOW(), 1, NOW(), 1, 0),
+        '李强', '强哥', 2, '13900000001', 'liqiang@ciyun.com', 1, '研发中心负责人', NOW(), 0, 1, NOW(), 1, 0),
        (3, 1, 'wangfang', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '王芳', '芳芳', 3, '13900000002', 'wangfang@ciyun.com', 2, '产品中心负责人', NOW(), 1, NOW(), 1, 0),
+        '王芳', '芳芳', 3, '13900000002', 'wangfang@ciyun.com', 2, '产品中心负责人', NOW(), 0, 1, NOW(), 1, 0),
        (4, 1, 'liuyang', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '刘洋', '洋洋', 6, '13900000003', 'liuyang@ciyun.com', 1, '后端组开发', NOW(), 1, NOW(), 1, 0),
+        '刘洋', '洋洋', 6, '13900000003', 'liuyang@ciyun.com', 1, '后端组开发', NOW(), 0, 1, NOW(), 1, 0),
        (5, 1, 'zhoutao', 'TENANT', '$2a$10$rFLonGqRDUGIA3EGtNzL4uJN1OHwdQeIwXXjCFpiBUJ0LlOa3kMPW',
-        '周涛', '涛哥', 8, '13900000004', 'zhoutao@ciyun.com', 1, '测试组', NOW(), 1, NOW(), 0, 0);
+        '周涛', '涛哥', 8, '13900000004', 'zhoutao@ciyun.com', 1, '测试组', NOW(), 0, 1, NOW(), 0, 0);
 
 -- 角色（平台超级管理员 super，其余为租户角色）
 INSERT INTO sys_role (id, tenant_id, name, code, role_type, data_scope, sort, remark, create_user, create_time, status, is_deleted)
@@ -91,6 +93,7 @@ VALUES (41, 4, '部门', 'dept', 'processing', 1, 1, NOW(), 1, 0),
        (42, 4, '人员', 'user', 'processing', 2, 1, NOW(), 1, 0),
        (43, 4, '设备', 'device', 'success', 3, 1, NOW(), 1, 0),
        (44, 4, '资产', 'asset', 'default', 4, 1, NOW(), 1, 0),
+       (46, 4, '岗位', 'post', 'processing', 5, 1, NOW(), 1, 0),
        (45, 4, '其他', 'other', 'default', 99, 1, NOW(), 1, 0);
 
 -- 默认 Web 管理后台客户端
@@ -418,6 +421,55 @@ VALUES
 (5062, 5060, 'AiRoleCreate',       'button', 0, 'ai:role:create',         'page.ai.role.title',         2, NOW(), 1, 0),
 (5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'page.ai.role.title',         3, NOW(), 1, 0),
 (5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'page.ai.role.title',         4, NOW(), 1, 0);
+
+-- =============================================================
+-- 安全防护 → 访问黑名单（平台专用）
+-- =============================================================
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort,
+                      create_time, status, is_deleted)
+VALUES (6000, 0, 'SecurityManage', 'catalog', 1, '/system/security', 'BasicLayout',
+        'system.blocklist.title', 'carbon:security-services', 8, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon,
+                      sort, create_time, status, is_deleted)
+VALUES (6001, 6000, 'SystemAccessBlocklist', 'menu', 1, '/system/security/blocklist',
+        '/system/security/blocklist/index', 'system:blocklist:list', 'system.blocklist.list',
+        'carbon:firewall', 1, NOW(), 1, 0);
+
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort,
+                      create_time, status, is_deleted)
+VALUES (600101, 6001, 'SystemAccessBlocklistAdd', 'button', 1, 'system:blocklist:add',
+        'common.create', 1, NOW(), 1, 0),
+       (600102, 6001, 'SystemAccessBlocklistEdit', 'button', 1, 'system:blocklist:edit',
+        'common.edit', 2, NOW(), 1, 0),
+       (600103, 6001, 'SystemAccessBlocklistDelete', 'button', 1, 'system:blocklist:delete',
+        'common.delete', 3, NOW(), 1, 0),
+       (600104, 6001, 'SystemAccessBlocklistBan', 'button', 1, 'system:blocklist:ban',
+        'system.blocklist.ban', 4, NOW(), 1, 0),
+       (600105, 6001, 'SystemAccessBlocklistUnban', 'button', 1, 'system:blocklist:unban',
+        'system.blocklist.unban', 5, NOW(), 1, 0);
+
+-- =============================================================
+-- 访问黑名单：常用规则种子
+-- 默认启用的是「明显恶意/探测」类规则；与业务路径冲突时可在管理端停用。
+-- =============================================================
+INSERT INTO sys_access_blocklist
+    (id, match_type, match_value, reason, expire_time, create_user, create_time, status, is_deleted)
+VALUES (7001, 'PATH', '/actuator/env', '探测 Spring Actuator 环境变量端点', NULL, 1, NOW(), 1, 0),
+       (7002, 'PATH', '/actuator/heapdump', '探测 Spring Actuator 堆转储端点', NULL, 1, NOW(), 1, 0),
+       (7003, 'PATH', '/actuator/configprops', '探测 Spring Actuator 配置属性端点', NULL, 1, NOW(), 1, 0),
+       (7004, 'PATH', '/actuator/beans', '探测 Spring Actuator Bean 列表端点', NULL, 1, NOW(), 1, 0),
+       (7005, 'PATH', '/.env', '探测 .env 环境变量文件', NULL, 1, NOW(), 1, 0),
+       (7006, 'PATH', '/.git/', '探测 Git 仓库目录', NULL, 1, NOW(), 1, 0),
+       (7007, 'PATH', '/wp-admin', '扫描 WordPress 后台', NULL, 1, NOW(), 1, 0),
+       (7008, 'PATH', '/phpmyadmin', '扫描 phpMyAdmin', NULL, 1, NOW(), 1, 0),
+       (7009, 'PATH', '/druid', '扫描 Druid 监控台', NULL, 1, NOW(), 1, 0),
+       (7010, 'USER_AGENT', 'sqlmap', 'SQL 注入扫描器', NULL, 1, NOW(), 1, 0),
+       (7011, 'USER_AGENT', 'nikto', 'Web 漏洞扫描器', NULL, 1, NOW(), 1, 0),
+       (7012, 'USER_AGENT', 'nmap', '端口/服务扫描器', NULL, 1, NOW(), 1, 0),
+       (7013, 'USER_AGENT', 'masscan', '高速端口扫描器', NULL, 1, NOW(), 1, 0),
+       (7014, 'USER_AGENT', 'acunetix', 'Web 漏洞扫描器', NULL, 1, NOW(), 1, 0),
+       (7015, 'USER_AGENT', 'gobuster', '目录爆破工具', NULL, 1, NOW(), 1, 0);
 
 -- =============================================================
 -- 菜单授权

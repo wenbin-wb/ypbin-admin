@@ -15,6 +15,7 @@ import cn.ypbin.admin.auth.service.SmsCodeService;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
 import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.starter.core.blocklist.ClientIpResolver;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
@@ -41,12 +42,13 @@ public class SmsLoginController {
     private final SmsCodeService smsCodeService;
     private final AuthConfigReader configReader;
     private final PhoneLoginStrategy phoneLoginStrategy;
+    private final ClientIpResolver clientIpResolver;
 
     /**
      * 发送验证码。每 IP 60 秒最多 5 次。
      */
     @PostMapping("/sms/send")
-    @RateLimit(count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
+    @RateLimit(key = "#phone", count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
     public R<Void> sendCode(@RequestParam String phone) {
         if (!configReader.getBoolean(LoginConfigKeys.LOGIN_SMS_ENABLED, false)) {
             throw new BusinessException("短信验证码登录未开启");
@@ -61,7 +63,7 @@ public class SmsLoginController {
     @Log(value = "手机验证码登录", module = "认证")
     @PostMapping("/sms/login")
     public R<LoginResp> smsLogin(@Valid @RequestBody PhoneLoginReq req) {
-        return R.ok(phoneLoginStrategy.login(req, WebRequestUtils.ip(),
+        return R.ok(phoneLoginStrategy.login(req, WebRequestUtils.clientIp(clientIpResolver),
             WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 }

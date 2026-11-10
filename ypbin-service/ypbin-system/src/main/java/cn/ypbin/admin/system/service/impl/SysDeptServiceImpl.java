@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.service.impl;
 
+import cn.ypbin.admin.common.support.TenantSupport;
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.system.entity.SysDept;
 import cn.ypbin.admin.system.entity.SysRoleDept;
@@ -170,9 +171,8 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
     }
 
     /** 当前租户 ID；递归 CTE 语句跳过租户插件，租户条件由本方法显式传入。 */
-    private Long currentTenantId() {
-        return UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+    private static Long currentTenantId() {
+        return TenantSupport.currentTenantId();
     }
 
     /** CTE 查询结果是 Map，JDBC 可能返回 Integer/Long，统一按 long 取值（null 视为根）。 */

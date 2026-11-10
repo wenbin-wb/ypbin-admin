@@ -106,4 +106,11 @@ public interface SysUserService extends BaseService<SysUser> {
      * @return 分页结果；页码越界时 {@code items} 为空列表，{@code total} 仍为真实总数
      */
     PageResult<OnlineUserResp> pageOnlineUsers(OnlineUserQuery query);
+
+    /**
+     * 按会话令牌指纹强制下线（列表不再回传 token 原文，踢人只能凭指纹反查）。
+     *
+     * @param tokenHash 会话令牌指纹
+     */
+    void kickoutByTokenHash(String tokenHash);
 }

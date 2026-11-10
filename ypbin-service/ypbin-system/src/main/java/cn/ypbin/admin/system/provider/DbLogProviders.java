@@ -50,7 +50,8 @@ import org.springframework.stereotype.Component;
  * 本仓实现是 {@code ypbin-common} 的 {@code SessionLogClientProvider}（读登录会话中的
  * {@code LoginUser}，不扩展网关身份头契约），auth/system/ai 三服务共用同一份实现；若某服务未装配
  * provider，starter 默认实现恒返回空，这三列即为空；③ {@code location} 依赖
- * {@code IpLocationResolver}，本仓未接入离线 IP 库，故留空而非臆造。</p>
+ * {@code IpLocationResolver}，由 {@code ypbin-common} 的 {@code IpLocationConfiguration}
+ * （ip2region 离线库）提供，auth/system/ai 三个启动类均已 {@code @Import}；解析失败时留空。</p>
  *
  * <p><strong>失败日志的职责边界：</strong>{@code LogEventListener} 落库失败时记 WARN 并传完整堆栈
  * （{@code log.warn(..., e.getMessage(), e)}）；但「完整堆栈」的最终保障在本类与上报侧

@@ -16,7 +16,6 @@ import cn.ypbin.admin.system.service.SysUserService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.log.annotation.Log;
-import cn.ypbin.starter.security.online.OnlineUserService;
 import cn.ypbin.starter.security.platform.PlatformAccess;
 import cn.ypbin.starter.tools.idempotent.Idempotent;
 import jakarta.validation.Valid;
@@ -39,7 +38,6 @@ import org.springframework.web.bind.annotation.RestController;
 @PlatformAccess
 public class OnlineUserController {
 
-    private final OnlineUserService onlineUserService;
     private final SysUserService userService;
 
     /**
@@ -58,11 +56,11 @@ public class OnlineUserController {
     }
 
     @Idempotent
-    @DeleteMapping("/{token}")
+    @DeleteMapping("/{tokenHash}")
     @SaCheckPermission("system:online-user:kickout")
     @Log(value = "强制下线用户", module = "会话管理")
-    public R<Void> kickout(@PathVariable String token) {
-        onlineUserService.kickoutByToken(token);
+    public R<Void> kickout(@PathVariable String tokenHash) {
+        userService.kickoutByTokenHash(tokenHash);
         return R.ok();
     }
 }

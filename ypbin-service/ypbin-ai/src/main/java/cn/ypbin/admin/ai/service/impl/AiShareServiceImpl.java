@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -148,7 +149,10 @@ public class AiShareServiceImpl implements AiShareService {
     @Override
     public String ask(String token, String question, String password, String clientIp) {
         AiKnowledgeBase kb = requireValidShare(token, password, clientIp);
-        return publicAccessSupport.answer(kb, "share-" + kb.getId(), question, "分享");
+        // 每次访问使用独立 conversationId：固定成 share-{kbId} 会让所有匿名访客共享一份
+        // Memory 历史（A 的提问会进入 B 的上下文）。该接口是单轮问答，无需跨请求记忆。
+        String conversationId = "share-" + kb.getId() + "-" + UUID.randomUUID();
+        return publicAccessSupport.answer(kb, conversationId, question, "分享");
     }
 
     /**

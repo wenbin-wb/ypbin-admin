@@ -25,6 +25,29 @@ ypbin:
     identity:
       enabled: false
     interceptor: true
+    # ---------- 访问黑名单（登录失败计数入口）----------
+    # 必须显式开启：starter 的 BlocklistProperties.enabled 默认 false，未开启时
+    # PasswordAttemptLimiter 仍会调用记录器，但记录器第一行就短路，IP 计数恒为 0，
+    # 网关侧只剩 429 一条自动封禁触发路径。
+    # trusted-proxies：auth 只被网关调用（compose 固定 172.20.0.20），故只信任网关这一个地址。
+    # 配了它之后 ClientIpResolver 才会从右往左跳过可信代理、取到真实客户端 IP——登录失败计数、
+    # 审计/埋点 IP 与日志（starter 4.4.0 起统一走 ClientIpResolver）都靠这一项，未配会退化成网关地址。
+    # 刻意不用 10.0.0.0/8 之类大网段：那会把内网调用方也当成可信代理，转发头可被内网伪造。
+    # 自定义 Docker 网络/网关地址时按实际值调整。
+    blocklist:
+      enabled: true
+      trusted-proxies:
+        - 172.20.0.20/32
+      # 纵深防御：即使解析退化回直连地址（网关），也不会因 429 计数把网关自己写进封禁表
+      exclude-ips:
+        - 172.16.0.0/12
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+      auto-ban:
+        enabled: true
+        threshold: 20
+        window-seconds: 60
+        ban-seconds: 600
     excludes:
       - /login
       # 自助注册：默认关闭（REGISTER_ENABLED），但入口本身必须免登录——
@@ -39,14 +62,6 @@ ypbin:
       - /captcha
       - /captcha/verify
       - /actuator/**
-
-# ---------- 限流 ----------
-# auth 位于网关之后：按 IP 限流若不信任转发头，所有请求会共用「网关地址」这一个桶，
-# 匿名方 5 次请求即可让全站注册/登录限流恒 429。与 system 同口径开启
-# （前提：入口 nginx/网关必须**覆盖** X-Forwarded-For，不能追加）。
-  tools:
-    rate-limit:
-      trust-forwarded: true
 
 # ---------- Feign 身份来源校验（与 system/ai 同口径）----------
   cloud:
@@ -74,7 +89,7 @@ ypbin:
 # 订阅线程，并暴露 /ypbin/sse/subscribe 与 /ypbin/sse/ticket 两个 HTTP 端点
 # （SseAutoConfiguration 的两个 @Bean 在 register-endpoint 默认 true 且容器存在 SseUserIdResolver 时注册；
 # auth 引入 starter-security 后该条件实际满足）。保持默认 false 即不装配。
-# 注意：auth 依赖 ypbin-starter-messaging 的真实原因只是 SmsUtils（见 pom 注释），与 SSE 无关。
+# 注意：auth 已不依赖 ypbin-starter-messaging——短信改为经 system 内部端点代发，SSE 保持默认 false。
 
 # ---------- 埋点（ypbin-starter-tracking）----------
 # 登录/登出事件（auth.user.login / auth.user.logout）由本服务产出——三个登录入口都在 auth，
@@ -86,3 +101,17 @@ ypbin:
   tracking:
     enabled: true
     app-id: ypbin-admin-auth
+    # 部署在网关之后：记录真实客户端 IP（否则记到的是网关地址），需与下面的限流开关一起开
+    trust-forwarded: true
+
+  # ---------- 限流 ----------
+  # 与 system 同口径：按 IP 限流若不信任转发头，所有请求共用「网关地址」这一个桶，
+  # 单个脚本即可把短信发送额度刷满并让全站 429。两个 trust-forwarded 必须一起开。
+  # 前提：入口（nginx/网关）必须**覆盖** X-Forwarded-For，不能追加，否则客户端可伪造来源。
+  tools:
+    # 与 blocklist.trusted-proxies 同值：限流取 IP 也走 ClientIpResolver（starter 4.4.0），
+    # 保证「限流按谁计数」与「黑名单封谁」是同一个地址，避免两套口径分叉
+    trusted-proxies:
+      - 172.20.0.20/32
+    rate-limit:
+      trust-forwarded: true

@@ -78,6 +78,9 @@ ypbin:
   # 同样在网关之后：按 IP 限流若不信任转发头，所有请求会共用「网关地址」这一个桶，
   # 匿名方可低成本让正常上报全部 429。两个 trust-forwarded 必须一起开（装配期有错配告警）。
   tools:
+    # 与 blocklist.trusted-proxies 同值：限流取 IP 走 ClientIpResolver，与黑名单/日志同口径
+    trusted-proxies:
+      - 172.20.0.20/32
     rate-limit:
       trust-forwarded: true
   # 本应用是授权签发端，不启用 starter License 自保护
@@ -93,6 +96,21 @@ ypbin:
   downstream:
     security-interceptor-disabled: true
   security:
+    # 访问黑名单：本服务负责把数据库规则下发到 Redis；实际拦截在网关。
+    # 本地过滤器保留纵深防御，但不按 IP 自动计数（登录失败计数在 auth 侧由 starter 处理）。
+    blocklist:
+      enabled: true
+      # 只信网关（compose 固定 172.20.0.20）。未配时 ClientIpResolver 返回直连地址=网关地址，
+      # 每个请求都会拿网关 IP 查封禁表，一旦该 IP 进表 system 整体 403（issue #125）。
+      trusted-proxies:
+        - 172.20.0.20/32
+      # 纵深防御：解析退化回直连地址时也不会把网关写进封禁表
+      exclude-ips:
+        - 172.16.0.0/12
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+      auto-ban:
+        enabled: false
     excludes:
       - /open/license/**
       - /open-api/**

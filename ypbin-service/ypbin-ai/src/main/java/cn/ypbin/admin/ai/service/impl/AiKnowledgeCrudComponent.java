@@ -156,10 +156,13 @@ public class AiKnowledgeCrudComponent {
 
         String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
         if (filePath != null) {
-            AiDocument pathUpdate = new AiDocument();
-            pathUpdate.setId(doc.getId());
-            pathUpdate.setFilePath(filePath);
-            if (documentMapper.updateById(pathUpdate) != 1) {
+            // 只 set 目标列：new AiDocument() + updateById 会带上 BaseEntity 的 status 默认值 1，
+            // 把仍在向量化的文档提前写成「就绪」
+            int pathUpdated = documentMapper.update(null, new LambdaUpdateWrapper<AiDocument>()
+                .eq(AiDocument::getId, doc.getId())
+                .set(AiDocument::getFilePath, filePath)
+                .set(AiDocument::getUpdateTime, LocalDateTime.now()));
+            if (pathUpdated != 1) {
                 // 原文已落盘但路径没写回：向量化仍可完成，但「重试/查看原文」会不可用，必须留痕
                 log.error("[ypbin-ai] 文档路径回写失败: docId={}, filePath={}", doc.getId(), filePath);
             } else {
@@ -348,10 +351,13 @@ public class AiKnowledgeCrudComponent {
 
         String filePath = persistOriginalFile(knowledgeBaseId, doc.getId(), filename, bytes);
         if (filePath != null) {
-            AiDocument pathUpdate = new AiDocument();
-            pathUpdate.setId(doc.getId());
-            pathUpdate.setFilePath(filePath);
-            if (documentMapper.updateById(pathUpdate) != 1) {
+            // 只 set 目标列：new AiDocument() + updateById 会带上 BaseEntity 的 status 默认值 1，
+            // 把仍在向量化的文档提前写成「就绪」
+            int pathUpdated = documentMapper.update(null, new LambdaUpdateWrapper<AiDocument>()
+                .eq(AiDocument::getId, doc.getId())
+                .set(AiDocument::getFilePath, filePath)
+                .set(AiDocument::getUpdateTime, LocalDateTime.now()));
+            if (pathUpdated != 1) {
                 log.error("[ypbin-ai] 导入文档路径回写失败: docId={}, filePath={}",
                     doc.getId(), filePath);
             } else {

@@ -80,6 +80,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-log</artifactId>
         </dependency>
+        <!-- IP 归属地（离线库，实现 starter 的 IpLocationResolver 扩展点；登录终端与操作日志共用） -->
+        <dependency>
+            <groupId>net.dreamlu</groupId>
+            <artifactId>mica-ip2region</artifactId>
+        </dependency>
         <!-- 异步执行（@EnableAsync 自动装配 + 统一线程池）：登录日志经 /internal/log-ingest 上报 system，
              属阻塞式 RPC；不引入本模块时 LogEventListener 的 @Async 被静默忽略，Feign 调用会占用登录请求线程 -->
         <dependency>
@@ -102,13 +107,8 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-tracking</artifactId>
         </dependency>
-        <!-- 短信（SmsUtils 发验证码）。仅为 SmsUtils，不启用 SSE：
-             ypbin.sse.enabled 保持默认 false（见 deploy/nacos/ypbin-auth.yaml 的 SSE 段注释），
-             因此本依赖不会装配 SseEmitterManager / Redis 扇出订阅线程 / SSE 端点。 -->
-        <dependency>
-            <groupId>cn.ypbin</groupId>
-            <artifactId>ypbin-starter-messaging</artifactId>
-        </dependency>
+        <!-- 短信不再由 auth 直发：sms4j 是 starter 的可选依赖，厂商配置只存在 system 进程内。
+             auth 经 ISystemClient#sendSms 走 system 的内部端点，故本模块不再依赖 starter-messaging。 -->
         <!-- 第三方登录（JustAuth 封装） -->
         <dependency>
             <groupId>cn.ypbin</groupId>

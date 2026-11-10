@@ -12,11 +12,13 @@ package cn.ypbin.admin.system.service.impl;
 import cn.ypbin.admin.system.entity.SysNotice;
 import cn.ypbin.admin.system.enums.NoticePublishStatusEnum;
 import cn.ypbin.admin.system.mapper.SysNoticeMapper;
+import cn.ypbin.admin.system.model.query.NoticeQuery;
 import cn.ypbin.admin.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.admin.system.service.NoticePublishService;
 import cn.ypbin.admin.system.service.SysNoticeService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -27,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 公告服务实现。
@@ -45,8 +48,23 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     private final NoticePublishService noticePublishService;
 
     @Override
-    public List<NoticeResp> listNotices() {
-        return list().stream().map(this::toResp).toList();
+    public PageResult<NoticeResp> pageNotices(NoticeQuery query) {
+        PageResult<SysNotice> source = page(query, new LambdaQueryWrapper<SysNotice>()
+            // 列表不取正文（MEDIUMTEXT），正文由详情接口单独读取
+            .select(SysNotice.class, info -> !"content".equals(info.getColumn()))
+            .like(StringUtils.hasText(query.getTitle()), SysNotice::getTitle, query.getTitle())
+            .eq(query.getNoticeType() != null, SysNotice::getNoticeType, query.getNoticeType())
+            .eq(query.getPublishStatus() != null,
+                SysNotice::getPublishStatus, query.getPublishStatus())
+            .orderByDesc(SysNotice::getCreateTime));
+        List<NoticeResp> items = source.getItems().stream().map(this::toResp).toList();
+        return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
+    }
+
+    @Override
+    public NoticeResp getNotice(Long id) {
+        // 详情必须带正文：列表查询已排除 content，编辑/预览依赖这里补齐
+        return toResp(requireNotice(id));
     }
 
     @Override
@@ -249,9 +267,11 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     }
 
     private void updateRequired(SysNotice notice, SysNotice current, String message) {
+        // 历史行的 publish_status 可能为 NULL（requireNotice 在内存里归一为草稿 0）；
+        // 直接 eq(0) 永远匹配不到 NULL，必须与删除/发布/撤回同口径用 COALESCE
         boolean updated = update(notice, new LambdaUpdateWrapper<SysNotice>()
             .eq(SysNotice::getId, current.getId())
-            .eq(SysNotice::getPublishStatus, current.getPublishStatus())
+            .apply("COALESCE(publish_status, 0) = {0}", current.getPublishStatus())
             .eq(SysNotice::getPublishVersion, current.getPublishVersion()));
         if (!updated) {
             throw new BusinessException(message);

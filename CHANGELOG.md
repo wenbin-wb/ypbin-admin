@@ -6,6 +6,45 @@
 
 ## [未发布]
 
+## [1.1.0] - 2026-11-10
+
+### 新增（2026-11-05）· 访问黑名单（平台级）
+
+- **规则维度**：支持 `IP` / `CIDR` / `USER_AGENT`（关键字）/ `PATH`（前缀）四类匹配。
+  规则写库后全量下发到 Redis，由 starter 的网关 / Servlet 过滤器统一执行；不参与租户隔离
+  （封禁对象是 IP，按租户隔离会导致同一 IP 在不同租户行为不一致）。
+- **管理端**：规则增删改查、临时封禁 / 解除封禁、自动封禁记录、规则重新下发；
+  权限码 `system:blocklist:list/add/edit/delete/ban/unban`，并下发到菜单种子。
+- **自动封禁**：auth 按登录失败计数触发；网关地址不参与自动封禁，避免把入口自身封掉。
+- **初始规则（2026-11-10）**：`002-data.sql` 内置 15 条常用规则——Actuator 敏感端点、
+  `.env`、`.git/`、wp-admin、phpmyadmin、druid，以及 sqlmap / nikto / nmap / masscan /
+  acunetix / gobuster 扫描器 UA；默认启用，可在管理端停用。
+- **升级**：已有库执行 `deploy/sql/migration/2026-11-05-access-blocklist.sql`（幂等）；
+  全新安装已包含在 `001-schema.sql` / `002-data.sql`。
+
+### 新增（2026-11-08）· IP 归属地（ip2region 离线库）
+
+- 接入 `ip2region` 离线库补齐 IP 归属地查询，不依赖外部 API。
+- 登录与分享入口统一客户端 IP 解析，并补齐可信代理配置（2026-11-07）——
+  仅信任受控代理传入的转发头，避免伪造 `X-Forwarded-For` 绕过黑名单与审计。
+
+### 修复（2026-11-09）· 空间关联对象类型补充「岗位」
+
+- 字典 `space_target_type` 增加 `post`（岗位）：岗位管理复用空间关联面板时
+  `targetType=post` 不再返回 409。字典是取值单一来源，空间侧零代码。
+- **已有库升级需执行** `deploy/sql/migration/2026-11-09-space-target-type-post.sql`（幂等）；
+  全新安装已包含在 `002-data.sql`。
+
+### 变更（2026-11-02）· 平台超管初始口令与强制首登改密
+
+- **种子超管口令不再直接用于安装脚本部署**：`install.sh` 随机生成 `SUPER_ADMIN_INIT_PASSWORD`
+  写入 `.env`（600），system 启动时用 BCrypt 写入种子账号；SQL 仍保留演示哈希供手工/开发部署，
+  两种路径都要求首登改密。
+- **新增 `sys_user.pwd_change_required`**：登录响应新增 `mustChangePassword`，网关在标记为真时
+  只放行改密/登出/身份查询；自助改密后清零，管理员重置口令后置 1。
+- **已有库升级需执行** `deploy/sql/migration/2026-11-02-user-pwd-change-required.sql`（幂等）——
+  实体已包含新列，未执行会使用户查询 SQL 报 `Unknown column`。
+
 ### 变更（2026-10-18）· 跟随 ypbin-starter 4.0.0 下沉（issue #82/#83）
 
 - **内部调用凭证改为 starter 官方守卫 + 官方 Feign 携带**：删除 `ypbin-system` 的

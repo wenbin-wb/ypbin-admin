@@ -38,8 +38,8 @@ public class OnlineUserResp {
     /** 租户 ID */
     private Long tenantId;
 
-    /** 会话 token */
-    private String token;
+    /** 会话令牌指纹（SHA-256，用于强制下线；不回传 token 原文） */
+    private String tokenHash;
 
     /** 登录客户端 ID */
     private String clientId;

@@ -35,10 +35,15 @@ public class AiChatSession extends TenantBaseEntity {
     /** 绑定角色 ID（NULL 为默认助手） */
     private Long roleId;
 
-    /** 使用的模型配置 ID */
+    /** 使用的模型配置 ID（当前只可能是租户默认对话模型） */
     private Long modelId;
 
-    /** 上下文窗口大小（保留最近 N 轮对话） */
+    /**
+     * 上下文窗口大小（预留列）。
+     *
+     * <p>starter 的记忆窗口由全局配置控制、无法按会话调整，本列当前不参与对话；
+     * 表默认值 10 仅作数据留存，服务端不再写入「看起来生效」的常量。</p>
+     */
     private Integer contextWindow;
 
     /** 累计消耗 token 数 */
