@@ -21,11 +21,14 @@ import static org.mockito.Mockito.verify;
 
 import cn.ypbin.admin.system.mapper.SysPostMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
+import cn.ypbin.admin.system.mapper.SysRoleMenuMapper;
+import cn.ypbin.admin.system.mapper.SysTenantMapper;
 import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.provider.AdminDataScopeHandler;
+import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -77,7 +80,10 @@ class SysUserServiceImplDeptScopeTest {
             mock(OnlineUserService.class),
             mock(UserExcelComponent.class),
             accountSupport,
-            dataScopeHandler));
+            dataScopeHandler,
+            mock(SysConfigService.class),
+            mock(SysTenantMapper.class),
+            mock(SysRoleMenuMapper.class)));
     }
 
     @Test

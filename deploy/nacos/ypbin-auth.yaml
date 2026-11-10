@@ -27,6 +27,9 @@ ypbin:
     interceptor: true
     excludes:
       - /login
+      # 自助注册：默认关闭（REGISTER_ENABLED），但入口本身必须免登录——
+      # 网关白名单 /auth/register 只决定「放行到 auth」，auth 自己的全局拦截器同样会拦。
+      - /register
       - /sms/send
       - /sms/login
       - /social/authorize/**
@@ -35,6 +38,14 @@ ypbin:
       - /captcha
       - /captcha/verify
       - /actuator/**
+
+# ---------- 限流 ----------
+# auth 位于网关之后：按 IP 限流若不信任转发头，所有请求会共用「网关地址」这一个桶，
+# 匿名方 5 次请求即可让全站注册/登录限流恒 429。与 system 同口径开启
+# （前提：入口 nginx/网关必须**覆盖** X-Forwarded-For，不能追加）。
+  tools:
+    rate-limit:
+      trust-forwarded: true
 
 # ---------- Feign 身份来源校验（与 system/ai 同口径）----------
   cloud:

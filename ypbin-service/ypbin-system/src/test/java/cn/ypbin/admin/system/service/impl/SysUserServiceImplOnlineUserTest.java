@@ -29,12 +29,15 @@ import static org.mockito.Mockito.when;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
+import cn.ypbin.admin.system.mapper.SysRoleMenuMapper;
+import cn.ypbin.admin.system.mapper.SysTenantMapper;
 import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.provider.AdminDataScopeHandler;
+import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -81,7 +84,10 @@ class SysUserServiceImplOnlineUserTest {
             onlineUserService,
             mock(UserExcelComponent.class),
             mock(UserAccountSupport.class),
-            mock(AdminDataScopeHandler.class)));
+            mock(AdminDataScopeHandler.class),
+            mock(SysConfigService.class),
+            mock(SysTenantMapper.class),
+            mock(SysRoleMenuMapper.class)));
         // 真实姓名补充来自基类 listByIds（批量 IN），测试里替换为可控数据
         doReturn(List.of()).when(userService).listByIds(anyList());
     }

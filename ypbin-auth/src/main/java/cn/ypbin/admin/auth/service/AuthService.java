@@ -9,9 +9,12 @@
  */
 package cn.ypbin.admin.auth.service;
 
+import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import cn.ypbin.admin.auth.dto.LoginReq;
+import cn.ypbin.admin.auth.dto.RegisterReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
+import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
@@ -69,7 +72,7 @@ public class AuthService {
     public LoginResp login(LoginReq req, String ip, String userAgent) {
         // 开关开启时强制行为验证码（一次性消费，校验失败即拒绝），防脚本爆破
         if (configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false)) {
-            requireCaptchaPassed(req);
+            requireCaptchaPassed(req.getCaptchaId(), req.getCaptchaTrack());
         }
         // 账号维度错误尝试锁定（与手机验证码入口一致：账号 + IP 维度）
         attemptLimiter.checkLocked(req.getUsername(), ip);
@@ -99,16 +102,54 @@ public class AuthService {
     }
 
     /**
-     * 强制校验登录请求携带的行为验证码（开关开启时调用）。
+     * 用户自助注册：校验开关与验证码后，由 system 完成全部落库校验并自动登录。
      *
-     * @param req 登录请求
+     * <p><b>为什么落库校验不在这里做</b>：用户名/手机号全局唯一、密码策略、默认租户与默认角色
+     * 都只有 system 有数据源与唯一口径（auth 不直连共享库）。本入口只负责匿名链路的
+     * 开关、验证码与限频，避免同一规则在两个服务各写一份而漂移。</p>
+     *
+     * <p><b>失败提示必须透传</b>：system 的业务校验失败（如「用户名已存在」）返回失败 {@code R}
+     * 且 message 是用户可读文案，这里原样上抛；只有系统服务不可达或返回空数据才换成通用提示，
+     * 不能把「用户名已存在」吞成「注册失败，请稍后重试」。</p>
+     *
+     * @param req       注册请求
+     * @param ip        客户端 IP
+     * @param userAgent 客户端 User-Agent 原始串，可空
+     * @return 登录结果（注册成功即建立会话，与登录接口同一响应契约）
      */
-    private void requireCaptchaPassed(LoginReq req) {
-        if (req.getCaptchaId() == null || req.getCaptchaId().isBlank()
-            || req.getCaptchaTrack() == null) {
+    public LoginResp register(RegisterReq req, String ip, @Nullable String userAgent) {
+        if (!configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
+            throw new BusinessException("注册功能未开启");
+        }
+        if (configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false)) {
+            requireCaptchaPassed(req.getCaptchaId(), req.getCaptchaTrack());
+        }
+        R<SysUserDto> resp = permissionFeignClient.registerUser(req);
+        if (resp == null) {
+            throw new BusinessException("系统服务暂不可用，请稍后重试");
+        }
+        if (!resp.isSuccess()) {
+            throw new BusinessException(resp.getMessage());
+        }
+        SysUserDto user = resp.getData();
+        if (user == null) {
+            throw new BusinessException("注册失败，请稍后重试");
+        }
+        return loginSupport.completeLogin(user, "ACCOUNT", ip, userAgent);
+    }
+
+    /**
+     * 强制校验请求携带的行为验证码（开关开启时登录/注册共用）。
+     *
+     * @param captchaId    验证码 id
+     * @param captchaTrack 拖动轨迹
+     */
+    private void requireCaptchaPassed(@Nullable String captchaId,
+        @Nullable ImageCaptchaTrack captchaTrack) {
+        if (captchaId == null || captchaId.isBlank() || captchaTrack == null) {
             throw new BusinessException("请先完成行为验证码");
         }
-        boolean ok = captchaService.verify(req.getCaptchaId(), req.getCaptchaTrack());
+        boolean ok = captchaService.verify(captchaId, captchaTrack);
         if (!ok) {
             throw new BusinessException("验证码校验失败，请重试");
         }

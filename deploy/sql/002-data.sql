@@ -125,6 +125,11 @@ VALUES (1, 'site', '系统名称', 'SITE_NAME', 'ypbin-admin', 1, 1, NOW(), 1, 0
        (2, 'site', '版权信息', 'SITE_COPYRIGHT', 'ypbin', 1, 1, NOW(), 1, 0),
        (10, 'login', '是否开启登录验证码', 'LOGIN_CAPTCHA_ENABLED', 'false', 1, 1, NOW(), 1, 0),
        (11, 'login', '是否开启短信验证码登录', 'LOGIN_SMS_ENABLED', 'false', 1, 1, NOW(), 1, 0),
+       (12, 'login', '是否开启用户自助注册', 'REGISTER_ENABLED', 'false', 1, 1, NOW(), 1, 0),
+       (13, 'login', '注册用户默认租户 ID', 'REGISTER_DEFAULT_TENANT_ID', '1', 1, 1, NOW(), 1, 0),
+       -- 默认角色留空：必须由管理员显式指定一个已分配菜单权限的租户角色后再开启注册，
+       -- 避免「注册成功但没有任何菜单」的静默空系统（内置角色在种子数据里没有菜单授权）
+       (14, 'login', '注册用户默认角色标识', 'REGISTER_DEFAULT_ROLE_CODE', '', 1, 1, NOW(), 1, 0),
        (20, 'password', '密码最小长度', 'PASSWORD_MIN_LENGTH', '8', 1, 1, NOW(), 1, 0),
        (21, 'password', '是否必须含数字', 'PASSWORD_REQUIRE_DIGIT', 'true', 1, 1, NOW(), 1, 0),
        (22, 'password', '是否必须含字母', 'PASSWORD_REQUIRE_LETTER', 'true', 1, 1, NOW(), 1, 0),

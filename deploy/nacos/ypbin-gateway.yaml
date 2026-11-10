@@ -59,6 +59,7 @@ ypbin:
       # 白名单路径（无需登录即可访问）
       exclude-paths:
         - /auth/login
+        - /auth/register
         - /auth/sms/send
         - /auth/sms/login
         - /auth/social/authorize/**

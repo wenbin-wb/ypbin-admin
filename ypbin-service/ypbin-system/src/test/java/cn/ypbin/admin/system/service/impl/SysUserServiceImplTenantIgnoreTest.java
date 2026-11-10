@@ -18,10 +18,13 @@ import static org.mockito.Mockito.spy;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.mapper.SysPostMapper;
 import cn.ypbin.admin.system.mapper.SysRoleMapper;
+import cn.ypbin.admin.system.mapper.SysRoleMenuMapper;
+import cn.ypbin.admin.system.mapper.SysTenantMapper;
 import cn.ypbin.admin.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.system.mapper.SysUserRoleMapper;
 import cn.ypbin.admin.system.mapper.SysUserSocialMapper;
 import cn.ypbin.admin.system.provider.AdminDataScopeHandler;
+import cn.ypbin.admin.system.service.SysConfigService;
 import cn.ypbin.admin.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -78,7 +81,10 @@ class SysUserServiceImplTenantIgnoreTest {
             mock(OnlineUserService.class),
             mock(UserExcelComponent.class),
             mock(UserAccountSupport.class),
-            mock(AdminDataScopeHandler.class)));
+            mock(AdminDataScopeHandler.class),
+            mock(SysConfigService.class),
+            mock(SysTenantMapper.class),
+            mock(SysRoleMenuMapper.class)));
         // 与 deploy/nacos/ypbin-system.yaml 同口径：fail-closed，且 sys_user 不在 ignore-tables
         TenantProperties properties = new TenantProperties();
         properties.setFailOnMissingTenant(true);

@@ -10,12 +10,14 @@
 package cn.ypbin.admin.auth.controller;
 
 import cn.ypbin.admin.auth.dto.LoginReq;
+import cn.ypbin.admin.auth.dto.RegisterReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.auth.service.AuthService;
 import cn.ypbin.starter.core.model.R;
 import cn.ypbin.starter.log.annotation.Log;
+import cn.ypbin.starter.tools.limiter.RateLimit;
 import cn.ypbin.starter.web.util.WebRequestUtils;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -49,6 +51,20 @@ public class AuthController {
     @PostMapping("/login")
     public R<LoginResp> login(@Valid @RequestBody LoginReq req) {
         return R.ok(authService.login(req, WebRequestUtils.ip(),
+            WebRequestUtils.header(HttpHeaders.USER_AGENT)));
+    }
+
+    /**
+     * 用户自助注册（公开入口，开关见系统参数 {@code REGISTER_ENABLED}）。
+     *
+     * <p>与登录入口一致按 IP 限流：注册会落库并自动建立会话，是比登录更重的写操作，
+     * 不限流时脚本可批量灌入账号。</p>
+     */
+    @Log(value = "用户注册", module = "认证")
+    @RateLimit(count = 5, window = 60, message = "注册过于频繁，请稍后再试")
+    @PostMapping("/register")
+    public R<LoginResp> register(@Valid @RequestBody RegisterReq req) {
+        return R.ok(authService.register(req, WebRequestUtils.ip(),
             WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 

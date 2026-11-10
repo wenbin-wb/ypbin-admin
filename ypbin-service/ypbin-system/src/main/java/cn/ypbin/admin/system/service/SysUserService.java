@@ -12,6 +12,7 @@ package cn.ypbin.admin.system.service;
 import cn.ypbin.admin.system.entity.SysUser;
 import cn.ypbin.admin.system.model.query.OnlineUserQuery;
 import cn.ypbin.admin.system.model.query.UserQuery;
+import cn.ypbin.admin.system.model.req.UserRegisterReq;
 import cn.ypbin.admin.system.model.req.UserSaveReq;
 import cn.ypbin.admin.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.system.model.resp.UserResp;
@@ -61,6 +62,22 @@ public interface SysUserService extends BaseService<SysUser> {
     UserResp getUserDetail(Long id);
 
     void createUser(UserSaveReq req);
+
+    /**
+     * 用户自助注册：按系统参数确定归属租户与默认角色后落库。
+     *
+     * <p><b>与 {@link #createUser(UserSaveReq)} 的区别</b>：后者面向管理端，租户来自当前登录身份头、
+     * 角色由管理员显式分配；本方法面向匿名入口，没有身份头，归属租户与默认角色只能来自系统参数
+     * （{@code REGISTER_DEFAULT_TENANT_ID} / {@code REGISTER_DEFAULT_ROLE_CODE}），且开关
+     * {@code REGISTER_ENABLED} 未开启时一律拒绝。</p>
+     *
+     * <p>失败语义：开关未开启、参数缺失/非法、租户或角色不可用、用户名/手机号重复、密码不符合策略
+     * 均抛业务异常，不做任何静默降级。</p>
+     *
+     * @param req 注册请求（不含租户字段）
+     * @return 新建用户
+     */
+    SysUser registerUser(UserRegisterReq req);
 
     void updateUser(Long id, UserSaveReq req);
 

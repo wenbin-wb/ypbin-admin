@@ -18,6 +18,7 @@ import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
 import cn.ypbin.admin.system.model.req.MailSendReq;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
+import cn.ypbin.admin.system.model.req.UserRegisterReq;
 import jakarta.validation.Valid;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.starter.core.model.R;
@@ -235,6 +236,22 @@ public interface ISystemClient {
      */
     @PostMapping("/track-ingest")
     R<Void> ingestTrackEvents(@RequestBody List<TrackEvent> events);
+
+    /**
+     * 用户自助注册（auth 匿名入口转交落库）。
+     *
+     * <p><b>开关与归属由 system 单点判定</b>：系统参数 {@code REGISTER_ENABLED} 未开启时直接拒绝，
+     * 归属租户取 {@code REGISTER_DEFAULT_TENANT_ID}、默认角色取 {@code REGISTER_DEFAULT_ROLE_CODE}。
+     * auth 端只做验证码与限流，不重复决定落库语义。</p>
+     *
+     * <p>失败语义：用户名/手机号重复、密码不符合策略、默认租户/角色未配置或不可用等业务校验失败
+     * 返回失败 {@code R}（message 即用户可读提示），调用方必须原样上抛、不得吞成成功。</p>
+     *
+     * @param req 注册请求（不含租户字段）
+     * @return 新用户只读视图（不含密码）
+     */
+    @PostMapping("/user-register")
+    R<SysUserDto> registerUser(@Valid @RequestBody UserRegisterReq req);
 
     /**
      * 按用户名查询用户，不存在则创建（各端侧登录通用，不绑定具体端侧）。

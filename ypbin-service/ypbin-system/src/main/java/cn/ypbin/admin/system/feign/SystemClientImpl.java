@@ -35,6 +35,7 @@ import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.query.SpaceRelationQuery;
 import cn.ypbin.admin.system.model.req.SpaceBindReq;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
+import cn.ypbin.admin.system.model.req.UserRegisterReq;
 import cn.ypbin.admin.system.model.resp.RouteResp;
 import cn.ypbin.admin.system.model.resp.SpaceRelationResp;
 import cn.ypbin.admin.system.model.resp.SpaceResp;
@@ -56,6 +57,7 @@ import cn.ypbin.starter.security.password.PasswordEncoderUtil;
 import cn.ypbin.starter.tracking.core.TrackEvent;
 import cn.ypbin.starter.tracking.core.TrackRecorder;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.UUID;
 import org.springframework.util.StringUtils;
@@ -368,6 +370,12 @@ public class SystemClientImpl implements ISystemClient {
         }
         recorder.record(events);
         return R.ok();
+    }
+
+    @Override
+    @PostMapping("/user-register")
+    public R<SysUserDto> registerUser(@Valid @RequestBody UserRegisterReq req) {
+        return R.ok(UserViewConverter.toDto(userService.registerUser(req)));
     }
 
     @Override

@@ -15,6 +15,7 @@ import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.dto.SysUserSocialDto;
 import cn.ypbin.admin.system.model.req.InboxMessageSendReq;
 import cn.ypbin.admin.system.model.req.MailSendReq;
+import cn.ypbin.admin.system.model.req.UserRegisterReq;
 import cn.ypbin.admin.system.model.dto.ConfigValue;
 import cn.ypbin.admin.system.model.dto.SocialAuthConfig;
 import cn.ypbin.admin.system.model.req.SpaceSyncReq;
@@ -170,6 +171,11 @@ public class ISystemClientFallback implements ISystemClient {
      */
     @Override
     public R<Void> ingestTrackEvents(List<TrackEvent> events) {
+        return unavailable();
+    }
+
+    @Override
+    public R<SysUserDto> registerUser(UserRegisterReq req) {
         return unavailable();
     }
 
