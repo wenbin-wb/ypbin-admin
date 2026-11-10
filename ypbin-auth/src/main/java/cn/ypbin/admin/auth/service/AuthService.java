@@ -12,6 +12,7 @@ package cn.ypbin.admin.auth.service;
 import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import cn.ypbin.admin.auth.dto.LoginReq;
 import cn.ypbin.admin.auth.dto.RegisterCodeSendReq;
+import cn.ypbin.admin.auth.dto.RegisterOptionsResp;
 import cn.ypbin.admin.auth.dto.RegisterReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
@@ -146,6 +147,24 @@ public class AuthService {
             throw new BusinessException("注册失败，请稍后重试");
         }
         return loginSupport.completeLogin(user, "ACCOUNT", ip, userAgent);
+    }
+
+    /**
+     * 注册入口的公开配置（注册页据此决定展示哪些字段）。
+     *
+     * <p>开关/渠道/行为验证码都来自 {@code sys_config}，前端无法自行读取；本方法只返回这三项，
+     * 不暴露默认租户、默认角色等内部配置。</p>
+     *
+     * @return 注册公开配置
+     */
+    public RegisterOptionsResp registerOptions() {
+        RegisterOptionsResp options = new RegisterOptionsResp();
+        options.setEnabled(configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false));
+        // 未知/空配置由枚举显式拒绝，避免前端拿到一个「看起来是 NONE」的降级结果
+        options.setVerifyMode(currentVerifyMode().name());
+        options.setCaptchaEnabled(
+            configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false));
+        return options;
     }
 
     /**
