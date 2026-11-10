@@ -6,6 +6,28 @@
 
 ## [未发布]
 
+## [1.1.0] - 2026-11-10
+
+### 新增（2026-11-05）· 访问黑名单（平台级）
+
+- **规则维度**：支持 `IP` / `CIDR` / `USER_AGENT`（关键字）/ `PATH`（前缀）四类匹配。
+  规则写库后全量下发到 Redis，由 starter 的网关 / Servlet 过滤器统一执行；不参与租户隔离
+  （封禁对象是 IP，按租户隔离会导致同一 IP 在不同租户行为不一致）。
+- **管理端**：规则增删改查、临时封禁 / 解除封禁、自动封禁记录、规则重新下发；
+  权限码 `system:blocklist:list/add/edit/delete/ban/unban`，并下发到菜单种子。
+- **自动封禁**：auth 按登录失败计数触发；网关地址不参与自动封禁，避免把入口自身封掉。
+- **初始规则（2026-11-10）**：`002-data.sql` 内置 15 条常用规则——Actuator 敏感端点、
+  `.env`、`.git/`、wp-admin、phpmyadmin、druid，以及 sqlmap / nikto / nmap / masscan /
+  acunetix / gobuster 扫描器 UA；默认启用，可在管理端停用。
+- **升级**：已有库执行 `deploy/sql/migration/2026-11-05-access-blocklist.sql`（幂等）；
+  全新安装已包含在 `001-schema.sql` / `002-data.sql`。
+
+### 新增（2026-11-08）· IP 归属地（ip2region 离线库）
+
+- 接入 `ip2region` 离线库补齐 IP 归属地查询，不依赖外部 API。
+- 登录与分享入口统一客户端 IP 解析，并补齐可信代理配置（2026-11-07）——
+  仅信任受控代理传入的转发头，避免伪造 `X-Forwarded-For` 绕过黑名单与审计。
+
 ### 修复（2026-11-09）· 空间关联对象类型补充「岗位」
 
 - 字典 `space_target_type` 增加 `post`（岗位）：岗位管理复用空间关联面板时
