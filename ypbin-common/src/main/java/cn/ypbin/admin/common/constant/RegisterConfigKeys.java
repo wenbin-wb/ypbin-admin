@@ -34,6 +34,20 @@ public final class RegisterConfigKeys {
     /** 注册用户自动绑定的默认角色标识（必填；须为该租户下的启用租户角色） */
     public static final String REGISTER_DEFAULT_ROLE_CODE = "REGISTER_DEFAULT_ROLE_CODE";
 
+    /**
+     * 注册归属验证方式：{@code NONE} / {@code SMS} / {@code EMAIL}（默认 {@code NONE}）。
+     *
+     * <p>开启后注册请求必须携带对应渠道收到的验证码：短信复用登录验证码服务，
+     * 邮箱走注册专用验证码链路。未知取值一律拒绝（fail-closed），不做静默降级。</p>
+     */
+    public static final String REGISTER_VERIFY_MODE = "REGISTER_VERIFY_MODE";
+
+    /** 邮箱注册验证码有效期（秒） */
+    public static final String EMAIL_CODE_EXPIRE_SECONDS = "EMAIL_CODE_EXPIRE_SECONDS";
+
+    /** 邮箱注册验证码发送冷却（秒） */
+    public static final String EMAIL_CODE_COOLDOWN_SECONDS = "EMAIL_CODE_COOLDOWN_SECONDS";
+
     private RegisterConfigKeys() {
     }
 }

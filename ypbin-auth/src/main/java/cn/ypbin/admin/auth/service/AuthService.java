@@ -11,9 +11,11 @@ package cn.ypbin.admin.auth.service;
 
 import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import cn.ypbin.admin.auth.dto.LoginReq;
+import cn.ypbin.admin.auth.dto.RegisterCodeSendReq;
 import cn.ypbin.admin.auth.dto.RegisterReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
+import cn.ypbin.admin.auth.support.RegisterVerifyMode;
 import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -36,6 +38,7 @@ import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 认证服务（微服务版）。
@@ -60,6 +63,8 @@ public class AuthService {
     private final CaptchaService captchaService;
     private final PasswordAttemptLimiter attemptLimiter;
     private final LoginEventTracker loginEventTracker;
+    private final SmsCodeService smsCodeService;
+    private final EmailCodeService emailCodeService;
 
     /**
      * 账号密码登录。
@@ -124,6 +129,7 @@ public class AuthService {
         if (configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false)) {
             requireCaptchaPassed(req.getCaptchaId(), req.getCaptchaTrack());
         }
+        verifyRegisterCode(req);
         R<SysUserDto> resp = permissionFeignClient.registerUser(req);
         if (resp == null) {
             throw new BusinessException("系统服务暂不可用，请稍后重试");
@@ -136,6 +142,74 @@ public class AuthService {
             throw new BusinessException("注册失败，请稍后重试");
         }
         return loginSupport.completeLogin(user, "ACCOUNT", ip, userAgent);
+    }
+
+    /**
+     * 发送注册归属验证码（渠道由系统参数 {@code REGISTER_VERIFY_MODE} 决定）。
+     *
+     * <p><b>渠道由服务端决定，不由请求参数决定</b>：否则客户端可自行选择更弱的渠道绕过配置。
+     * 未开启注册或当前模式为 {@code NONE} 时直接拒绝。</p>
+     *
+     * @param req 发送请求（按模式携带手机号或邮箱）
+     */
+    public void sendRegisterCode(RegisterCodeSendReq req) {
+        if (!configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
+            throw new BusinessException("注册功能未开启");
+        }
+        RegisterVerifyMode mode = currentVerifyMode();
+        if (mode == RegisterVerifyMode.SMS) {
+            smsCodeService.sendCode(requirePhone(req.getPhone()));
+            return;
+        }
+        if (mode == RegisterVerifyMode.EMAIL) {
+            emailCodeService.sendCode(requireEmail(req.getEmail()));
+            return;
+        }
+        throw new BusinessException("当前注册方式无需验证码");
+    }
+
+    /**
+     * 按当前模式校验注册归属验证码（通过后验证码即被消费，一次性）。
+     *
+     * @param req 注册请求
+     */
+    private void verifyRegisterCode(RegisterReq req) {
+        RegisterVerifyMode mode = currentVerifyMode();
+        if (mode == RegisterVerifyMode.NONE) {
+            return;
+        }
+        if (!StringUtils.hasText(req.getVerifyCode())) {
+            throw new BusinessException("请输入验证码");
+        }
+        if (mode == RegisterVerifyMode.SMS) {
+            smsCodeService.verify(requirePhone(req.getPhone()), req.getVerifyCode());
+            return;
+        }
+        emailCodeService.verify(requireEmail(req.getEmail()), req.getVerifyCode());
+    }
+
+    /**
+     * 读取当前注册验证方式（未知取值由枚举显式拒绝）。
+     *
+     * @return 验证方式
+     */
+    private RegisterVerifyMode currentVerifyMode() {
+        return RegisterVerifyMode.from(
+            configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"));
+    }
+
+    private static String requirePhone(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            throw new BusinessException("短信验证模式下手机号不能为空");
+        }
+        return phone.trim();
+    }
+
+    private static String requireEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            throw new BusinessException("邮箱验证模式下邮箱不能为空");
+        }
+        return email.trim();
     }
 
     /**

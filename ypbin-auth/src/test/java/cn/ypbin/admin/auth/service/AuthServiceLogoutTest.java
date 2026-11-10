@@ -48,7 +48,8 @@ class AuthServiceLogoutTest {
     private AuthService buildService(LoginEventTracker tracker) {
         return new AuthService(mock(ISystemClient.class), mock(LoginSupport.class),
             mock(AuthConfigReader.class), mock(CaptchaService.class),
-            mock(PasswordAttemptLimiter.class), tracker);
+            mock(PasswordAttemptLimiter.class), tracker,
+            mock(SmsCodeService.class), mock(EmailCodeService.class));
     }
 
     private LoginEventTracker trackerWith(TrackRecorder recorder) {

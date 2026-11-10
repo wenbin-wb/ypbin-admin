@@ -16,8 +16,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import cn.ypbin.admin.auth.dto.RegisterCodeSendReq;
 import cn.ypbin.admin.auth.dto.RegisterReq;
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.auth.support.LoginConfigKeys;
@@ -51,9 +53,14 @@ class AuthServiceRegisterTest {
 
     private final CaptchaService captchaService = mock(CaptchaService.class);
 
+    private final SmsCodeService smsCodeService = mock(SmsCodeService.class);
+
+    private final EmailCodeService emailCodeService = mock(EmailCodeService.class);
+
     private AuthService service() {
         return new AuthService(systemClient, loginSupport, configReader, captchaService,
-            mock(PasswordAttemptLimiter.class), mock(LoginEventTracker.class));
+            mock(PasswordAttemptLimiter.class), mock(LoginEventTracker.class),
+            smsCodeService, emailCodeService);
     }
 
     private RegisterReq request() {
@@ -114,6 +121,83 @@ class AuthServiceRegisterTest {
             .isInstanceOf(BusinessException.class)
             .hasMessage("请先完成行为验证码");
         verify(systemClient, never()).registerUser(any());
+    }
+
+    @Test
+    @DisplayName("短信验证模式：校验手机验证码后才调用 system")
+    void shouldVerifySmsCodeWhenModeSms() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("SMS");
+        SysUserDto created = new SysUserDto();
+        created.setId(99L);
+        when(systemClient.registerUser(any())).thenReturn(R.ok(created));
+        RegisterReq req = request();
+        req.setPhone("13800000000");
+        req.setVerifyCode("123456");
+
+        service().register(req, "10.0.0.8", null);
+
+        verify(smsCodeService).verify("13800000000", "123456");
+        verify(systemClient).registerUser(req);
+    }
+
+    @Test
+    @DisplayName("短信验证模式：缺手机号/验证码直接拒绝，不调用 system 与短信服务")
+    void shouldRejectSmsModeWithoutPhoneOrCode() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("SMS");
+
+        assertThatThrownBy(() -> service().register(request(), "10.0.0.8", null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("请输入验证码");
+        verify(smsCodeService, never()).verify(any(), any());
+        verify(systemClient, never()).registerUser(any());
+    }
+
+    @Test
+    @DisplayName("邮箱验证模式：校验邮箱验证码后才调用 system")
+    void shouldVerifyEmailCodeWhenModeEmail() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("EMAIL");
+        SysUserDto created = new SysUserDto();
+        created.setId(99L);
+        when(systemClient.registerUser(any())).thenReturn(R.ok(created));
+        RegisterReq req = request();
+        req.setEmail("alice@example.com");
+        req.setVerifyCode("654321");
+
+        service().register(req, "10.0.0.8", null);
+
+        verify(emailCodeService).verify("alice@example.com", "654321");
+        verify(systemClient).registerUser(req);
+    }
+
+    @Test
+    @DisplayName("发送注册验证码：渠道由配置决定，NONE 模式拒绝发送")
+    void shouldSendRegisterCodeByConfiguredChannel() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("SMS");
+        RegisterCodeSendReq smsReq = new RegisterCodeSendReq();
+        smsReq.setPhone("13800000000");
+
+        service().sendRegisterCode(smsReq);
+        verify(smsCodeService).sendCode("13800000000");
+
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("NONE");
+        assertThatThrownBy(() -> service().sendRegisterCode(smsReq))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("当前注册方式无需验证码");
+        verifyNoInteractions(emailCodeService);
+    }
+
+    private void stubEnabled() {
+        when(configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)).thenReturn(true);
+        when(configReader.getBoolean(LoginConfigKeys.LOGIN_CAPTCHA_ENABLED, false)).thenReturn(false);
     }
 
     @Test

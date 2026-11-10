@@ -130,6 +130,9 @@ VALUES (1, 'site', '系统名称', 'SITE_NAME', 'ypbin-admin', 1, 1, NOW(), 1, 0
        -- 默认角色留空：必须由管理员显式指定一个已分配菜单权限的租户角色后再开启注册，
        -- 避免「注册成功但没有任何菜单」的静默空系统（内置角色在种子数据里没有菜单授权）
        (14, 'login', '注册用户默认角色标识', 'REGISTER_DEFAULT_ROLE_CODE', '', 1, 1, NOW(), 1, 0),
+       (15, 'login', '注册归属验证方式(NONE/SMS/EMAIL)', 'REGISTER_VERIFY_MODE', 'NONE', 1, 1, NOW(), 1, 0),
+       (16, 'mail', '邮箱注册验证码有效期(秒)', 'EMAIL_CODE_EXPIRE_SECONDS', '300', 1, 1, NOW(), 1, 0),
+       (17, 'mail', '邮箱注册验证码发送冷却(秒)', 'EMAIL_CODE_COOLDOWN_SECONDS', '60', 1, 1, NOW(), 1, 0),
        (20, 'password', '密码最小长度', 'PASSWORD_MIN_LENGTH', '8', 1, 1, NOW(), 1, 0),
        (21, 'password', '是否必须含数字', 'PASSWORD_REQUIRE_DIGIT', 'true', 1, 1, NOW(), 1, 0),
        (22, 'password', '是否必须含字母', 'PASSWORD_REQUIRE_LETTER', 'true', 1, 1, NOW(), 1, 0),

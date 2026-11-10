@@ -10,6 +10,7 @@
 package cn.ypbin.admin.auth.controller;
 
 import cn.ypbin.admin.auth.dto.LoginReq;
+import cn.ypbin.admin.auth.dto.RegisterCodeSendReq;
 import cn.ypbin.admin.auth.dto.RegisterReq;
 import cn.ypbin.admin.system.model.resp.LoginResp;
 import cn.ypbin.admin.system.model.resp.RouteResp;
@@ -60,6 +61,17 @@ public class AuthController {
      * <p>与登录入口一致按 IP 限流：注册会落库并自动建立会话，是比登录更重的写操作，
      * 不限流时脚本可批量灌入账号。</p>
      */
+    /**
+     * 发送注册验证码（手机/邮箱渠道由系统参数 REGISTER_VERIFY_MODE 决定）。
+     */
+    @Log(value = "发送注册验证码", module = "认证")
+    @RateLimit(count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
+    @PostMapping("/register/code/send")
+    public R<Void> sendRegisterCode(@Valid @RequestBody RegisterCodeSendReq req) {
+        authService.sendRegisterCode(req);
+        return R.ok();
+    }
+
     @Log(value = "用户注册", module = "认证")
     @RateLimit(count = 5, window = 60, message = "注册过于频繁，请稍后再试")
     @PostMapping("/register")

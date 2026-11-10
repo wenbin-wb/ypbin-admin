@@ -60,6 +60,7 @@ ypbin:
       exclude-paths:
         - /auth/login
         - /auth/register
+        - /auth/register/**
         - /auth/sms/send
         - /auth/sms/login
         - /auth/social/authorize/**
