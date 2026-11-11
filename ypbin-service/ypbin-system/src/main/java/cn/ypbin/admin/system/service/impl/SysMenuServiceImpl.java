@@ -108,6 +108,12 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
     }
 
     @Override
+    public List<MenuResp> assignableTree() {
+        List<SysMenu> menus = list(enabledMenusOrdered());
+        return buildMenuTree(applyTenantMenuFilter(menus), AdminConstants.ROOT_PARENT_ID);
+    }
+
+    @Override
     public boolean isNameExists(String name, Long excludeId) {
         return exists(new LambdaQueryWrapper<SysMenu>()
             .eq(SysMenu::getName, name)

@@ -41,6 +41,17 @@ public interface SysMenuService extends BaseService<SysMenu> {
     List<MenuResp> tree();
 
     /**
+     * 构建当前租户可授权的菜单树（供角色授权弹窗使用）。
+     *
+     * <p>只保留租户权限模板内的菜单及其祖先，剔除平台专用等模板外菜单：
+     * 角色管理只能维护租户角色，授予模板外菜单会被保存校验拒绝，
+     * 因此树里不应出现这些选项。</p>
+     *
+     * @return 可授权菜单树
+     */
+    List<MenuResp> assignableTree();
+
+    /**
      * 校验菜单名称是否已存在。
      *
      * @param name      菜单名称
