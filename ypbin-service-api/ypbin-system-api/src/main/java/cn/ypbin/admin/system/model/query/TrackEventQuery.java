@@ -40,6 +40,14 @@ public class TrackEventQuery extends PageQuery {
     /** 链路 ID（精确匹配，便于按一次请求串起多个事件） */
     private String traceId;
 
+    /**
+     * 关键词（模糊匹配事件 ID / 链路 ID / 会话 ID / 页面地址 / 事件属性）。
+     *
+     * <p>用于列表页的统一搜索框：排查时往往手头只有一个片段（traceId 后几位、
+     * 页面路径、属性里的错误信息），逐字段挑筛选器不现实。</p>
+     */
+    private String keyword;
+
     /** 结果：1 成功、0 失败 */
     private Integer success;
 

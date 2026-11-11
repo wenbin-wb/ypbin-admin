@@ -137,6 +137,16 @@ public class TrackEventServiceImpl extends BaseServiceImpl<SysTrackEventMapper, 
             .eq(query.getUserId() != null, SysTrackEvent::getUserId, query.getUserId())
             .eq(StringUtils.hasText(query.getSessionId()), SysTrackEvent::getSessionId, query.getSessionId())
             .eq(StringUtils.hasText(query.getTraceId()), SysTrackEvent::getTraceId, query.getTraceId())
+            .and(StringUtils.hasText(query.getKeyword()), wrapper -> {
+                String keyword = query.getKeyword();
+                wrapper.like(SysTrackEvent::getEventCode, keyword)
+                    .or().like(SysTrackEvent::getEventId, keyword)
+                    .or().like(SysTrackEvent::getTraceId, keyword)
+                    .or().like(SysTrackEvent::getSessionId, keyword)
+                    .or().like(SysTrackEvent::getPageUrl, keyword)
+                    // payload 是 JSON 列：显式 CAST 成字符串再 LIKE，避免依赖 JSON 与字符串的隐式比较语义
+                    .or().apply("CAST(payload AS CHAR) LIKE CONCAT('%', {0}, '%')", keyword);
+            })
             .eq(query.getSuccess() != null, SysTrackEvent::getSuccess, query.getSuccess())
             .ge(StringUtils.hasText(query.getStartTime()), SysTrackEvent::getReceivedTime, query.getStartTime())
             .le(StringUtils.hasText(query.getEndTime()), SysTrackEvent::getReceivedTime, query.getEndTime())
