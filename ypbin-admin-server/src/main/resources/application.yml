@@ -81,8 +81,13 @@ ypbin:
     # 访问黑名单：IP/CIDR、User-Agent、路径前缀；管理端「安全防护 → 访问黑名单」
     blocklist:
       enabled: true
-      # 直连地址命中可信代理时才采信 X-Forwarded-For；部署在 nginx/LB 后按实际网段配置
-      trusted-proxies: []
+      # 直连地址命中可信代理时才采信 X-Forwarded-For / X-Real-IP。
+      # 单体部署：请求经宿主机 nginx → 127.0.0.1:18080 → docker 端口映射进容器，
+      # 容器看到的对端是网桥网关 192.168.32.1；127.0.0.1 覆盖容器内自调用。
+      # 与 ypbin.tools.trusted-proxies 必须同值（登录限流/黑名单/操作日志/在线用户同一口径）。
+      trusted-proxies:
+        - 127.0.0.1
+        - 192.168.32.0/24
       # 登录失败由 PasswordAttemptLimiter 在业务失败点按客户端 IP 计数（登录失败为 HTTP 200 + R.code=401，
       # 过滤器看不到 401）；过滤器默认只把真实 429 计入自动封禁，401/403 需显式配置 status-codes 才会计数
       auto-ban:
@@ -141,10 +146,21 @@ ypbin:
       - sys_track_user_daily
       - sys_track_session
 
+  # ---------- 客户端 IP（可信代理） ----------
+  tools:
+    # 与 ypbin.security.blocklist.trusted-proxies 同值：RequestUtils.getClientIp(true)
+    # 与 ClientIpResolver 共用同一套「从右往左跳过可信代理」的解析口径。
+    trusted-proxies:
+      - 127.0.0.1
+      - 192.168.32.0/24
+    rate-limit:
+      trust-forwarded: true     # 限流按真实客户端 IP 分桶，避免所有人共用 nginx 一个桶
+
   # ---------- 埋点采集 ----------
   tracking:
     enabled: true               # 装配埋点内核（TrackRecorder/Sink）
     ingest-enabled: true        # 开放 POST /tracking/ingest（单体应用只有一个入口）
+    trust-forwarded: true       # 与日志/在线用户/限流同一取 IP 口径
     app-id: ypbin-admin-ui
 
   # ---------- 接口签名 ----------
