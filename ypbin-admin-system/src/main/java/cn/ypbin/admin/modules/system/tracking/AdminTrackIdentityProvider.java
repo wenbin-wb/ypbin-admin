@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.modules.system.tracking;
 
+import cn.ypbin.starter.security.core.UserContext;
 import cn.ypbin.starter.security.identity.IdentityContext;
 import cn.ypbin.starter.tracking.core.TrackIdentityProvider;
 import java.util.Optional;
@@ -19,6 +20,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * 埋点登录身份提供者（starter 的 {@link TrackIdentityProvider} 扩展点实现）。
+ *
+ * <p><strong>取值顺序</strong>：微服务由网关校验 token 后签发身份头，{@link IdentityContext}
+ * 读取该身份；单体没有网关，登录态在 Sa-Token 会话里，回退 {@link UserContext} 读取。
+ * 两种部署共用本实现，采集端点即使在登录拦截豁免路径上，只要请求带了 token 仍能取到身份。</p>
  *
  * <p><strong>为什么只能在请求线程上取值</strong>：身份由网关校验 token 后签发可信身份头注入，
  * starter 的 {@link IdentityContext} 再把这份身份写入<b>请求线程</b>的 ThreadLocal；
@@ -47,12 +52,15 @@ public class AdminTrackIdentityProvider implements TrackIdentityProvider {
 
     @Override
     public @Nullable Long userId() {
-        return resolve(DIMENSION_USER, IdentityContext::getUserId);
+        // 单体没有网关身份头，登录态在 Sa-Token 会话里；UserContext 自身会优先身份头、回退会话
+        Long fromIdentity = resolve(DIMENSION_USER, IdentityContext::getUserId);
+        return fromIdentity != null ? fromIdentity : resolve(DIMENSION_USER, UserContext::getUserIdSafely);
     }
 
     @Override
     public @Nullable Long tenantId() {
-        return resolve(DIMENSION_TENANT, IdentityContext::getTenantId);
+        Long fromIdentity = resolve(DIMENSION_TENANT, IdentityContext::getTenantId);
+        return fromIdentity != null ? fromIdentity : resolve(DIMENSION_TENANT, UserContext::getTenantId);
     }
 
     /**
