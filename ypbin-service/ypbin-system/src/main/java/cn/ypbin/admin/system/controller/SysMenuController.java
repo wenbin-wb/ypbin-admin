@@ -50,17 +50,6 @@ public class SysMenuController {
         return R.ok(menuService.tree());
     }
 
-    /**
-     * 当前租户可授权的菜单树（角色授权弹窗使用）。
-     *
-     * @return 可授权菜单树
-     */
-    @GetMapping("/assignable")
-    @SaCheckPermission("system:role:list")
-    public R<List<MenuResp>> assignable() {
-        return R.ok(menuService.assignableTree());
-    }
-
     @GetMapping("/name-exists")
     @SaCheckPermission("system:menu:list")
     public R<Boolean> nameExists(@RequestParam String name, @RequestParam(required = false) Long id) {

@@ -80,9 +80,20 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
     }
 
     private List<SysMenu> applyTenantMenuFilter(List<SysMenu> menus) {
+        return filterByAllowed(menus, tenantMenuIds());
+    }
+
+    private Set<Long> tenantMenuIds() {
         Long tenantId = UserContext.getLoginUser().map(user -> user.getTenantId())
             .orElseThrow(() -> new BusinessException("无法获取当前租户上下文"));
-        Set<Long> allowedIds = authTemplateService.resolveTenantMenuIds(tenantId);
+        return authTemplateService.resolveTenantMenuIds(tenantId);
+    }
+
+    /**
+     * 只保留可授权菜单及其祖先后，再按入参顺序返回：祖先可能不在可授权集合内，
+     * 仅是保持树结构所需（由 {@link #markAssignable} 标记为不可选）。
+     */
+    private List<SysMenu> filterByAllowed(List<SysMenu> menus, Set<Long> allowedIds) {
         Map<Long, SysMenu> byId = menus.stream()
             .collect(Collectors.toMap(SysMenu::getId, menu -> menu, (first, ignored) -> first));
         Set<Long> keptIds = new HashSet<>();
@@ -109,8 +120,24 @@ public class SysMenuServiceImpl extends BaseServiceImpl<SysMenuMapper, SysMenu> 
 
     @Override
     public List<MenuResp> assignableTree() {
-        List<SysMenu> menus = list(enabledMenusOrdered());
-        return buildMenuTree(applyTenantMenuFilter(menus), AdminConstants.ROOT_PARENT_ID);
+        Set<Long> allowedIds = tenantMenuIds();
+        // 不按状态过滤：父菜单被禁用时仍需保留其结构位置，否则合法子孙会从树中消失
+        List<SysMenu> menus = list(new LambdaQueryWrapper<SysMenu>()
+            .orderByAsc(SysMenu::getSort)
+            .orderByAsc(SysMenu::getId));
+        List<MenuResp> tree = buildMenuTree(filterByAllowed(menus, allowedIds),
+            AdminConstants.ROOT_PARENT_ID);
+        markAssignable(tree, allowedIds);
+        return tree;
+    }
+
+    private void markAssignable(List<MenuResp> nodes, Set<Long> allowedIds) {
+        for (MenuResp node : nodes) {
+            node.setAssignable(allowedIds.contains(node.getId()));
+            if (node.getChildren() != null) {
+                markAssignable(node.getChildren(), allowedIds);
+            }
+        }
     }
 
     @Override
