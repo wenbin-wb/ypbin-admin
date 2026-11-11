@@ -400,10 +400,10 @@ VALUES
 INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
 VALUES
 (5011, 5001, 'AiChatSend',         'button', 0, 'ai:chat:send',           'page.ai.chat.send',          1, NOW(), 1, 0),
-(5012, 5001, 'AiChatList',         'button', 0, 'ai:chat:list',           'page.ai.chat.title',         2, NOW(), 1, 0),
-(5013, 5001, 'AiChatCreate',       'button', 0, 'ai:chat:create',         'page.ai.chat.title',         3, NOW(), 1, 0),
-(5014, 5001, 'AiChatDelete',       'button', 0, 'ai:chat:delete',         'page.ai.chat.title',         4, NOW(), 1, 0),
-(5015, 5001, 'AiChatEdit',         'button', 0, 'ai:chat:edit',           'page.ai.chat.title',         5, NOW(), 1, 0),
+(5012, 5001, 'AiChatList',         'button', 0, 'ai:chat:list',           'page.ai.chat.list',          2, NOW(), 1, 0),
+(5013, 5001, 'AiChatCreate',       'button', 0, 'ai:chat:create',         'common.create',              3, NOW(), 1, 0),
+(5014, 5001, 'AiChatDelete',       'button', 0, 'ai:chat:delete',         'common.delete',              4, NOW(), 1, 0),
+(5015, 5001, 'AiChatEdit',         'button', 0, 'ai:chat:edit',           'common.edit',                5, NOW(), 1, 0),
 (5021, 5002, 'AiKnowledgeList',    'button', 0, 'ai:knowledge:list',      'page.ai.knowledge.list',     1, NOW(), 1, 0),
 (5022, 5002, 'AiKnowledgeCreate',  'button', 0, 'ai:knowledge:create',    'page.ai.knowledge.create',   2, NOW(), 1, 0),
 (5023, 5002, 'AiKnowledgeDelete',  'button', 0, 'ai:knowledge:delete',    'page.ai.knowledge.delete',   3, NOW(), 1, 0),
@@ -419,10 +419,10 @@ VALUES
 (5044, 5040, 'AiPromptDelete',     'button', 0, 'ai:prompt:delete',       'page.ai.prompt.delete',      4, NOW(), 1, 0),
 (5051, 5050, 'AiUsageView',        'button', 1, 'ai:usage:view',          'page.ai.usage.view',         1, NOW(), 1, 0),
 (5071, 5007, 'AiWikiView',         'button', 0, 'ai:knowledge:list',      'page.ai.wiki.view',          1, NOW(), 1, 0),
-(5061, 5060, 'AiRoleList',         'button', 0, 'ai:role:list',           'page.ai.role.title',         1, NOW(), 1, 0),
-(5062, 5060, 'AiRoleCreate',       'button', 0, 'ai:role:create',         'page.ai.role.title',         2, NOW(), 1, 0),
-(5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'page.ai.role.title',         3, NOW(), 1, 0),
-(5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'page.ai.role.title',         4, NOW(), 1, 0);
+(5061, 5060, 'AiRoleList',         'button', 0, 'ai:role:list',           'page.ai.role.list',          1, NOW(), 1, 0),
+(5062, 5060, 'AiRoleCreate',       'button', 0, 'ai:role:create',         'common.create',              2, NOW(), 1, 0),
+(5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'common.edit',                3, NOW(), 1, 0),
+(5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'common.delete',              4, NOW(), 1, 0);
 
 -- =============================================================
 -- 安全防护 → 访问黑名单（平台专用）
