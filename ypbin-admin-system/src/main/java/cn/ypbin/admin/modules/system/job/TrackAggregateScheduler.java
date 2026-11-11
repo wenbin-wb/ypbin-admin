@@ -42,9 +42,12 @@ public class TrackAggregateScheduler {
     private final TrackAggregateService trackAggregateService;
 
     /**
-     * 每小时第 5 分钟重算聚合窗口（避开整点的其它定时任务）。
+     * 每 5 分钟重算一次聚合窗口。
+     *
+     * <p>单体测试环境事件量小，5 分钟足够新鲜；窗口只有 2 天，单次重算成本很低。
+     * 需要降频时改这里即可（微服务版仍是 XXL-JOB 按小时触发）。</p>
      */
-    @Scheduled(cron = "0 5 * * * ?")
+    @Scheduled(cron = "0 */5 * * * ?")
     public void aggregate() {
         LocalDate today = LocalDate.now();
         for (int offset = 0; offset < TrackAggregateWindows.DEFAULT_WINDOW_DAYS; offset++) {
