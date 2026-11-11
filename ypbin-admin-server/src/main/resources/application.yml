@@ -102,6 +102,7 @@ ypbin:
       - /auth/social/platforms
       - /auth/captcha
       - /auth/captcha/verify
+      - /tracking/ingest
       - /open/license/**
       - /actuator/health        # 健康检查放行（仅此低危端点，不放 env/beans 等）
       - /error
@@ -135,6 +136,16 @@ ypbin:
       - sys_template_menu
       - sys_license
       - sys_access_blocklist
+      - sys_track_event
+      - sys_track_event_daily
+      - sys_track_user_daily
+      - sys_track_session
+
+  # ---------- 埋点采集 ----------
+  tracking:
+    enabled: true               # 装配埋点内核（TrackRecorder/Sink）
+    ingest-enabled: true        # 开放 POST /tracking/ingest（单体应用只有一个入口）
+    app-id: ypbin-admin-ui
 
   # ---------- 接口签名 ----------
   sign:

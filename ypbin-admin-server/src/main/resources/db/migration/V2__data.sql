@@ -363,6 +363,18 @@ VALUES
 (5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'common.edit',                3, NOW(), 1, 0),
 (5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'common.delete',              4, NOW(), 1, 0);
 
+-- 埋点管理（平台专用）：目录 + 事件/目录/分析/漏斗/留存页面 + 导出按钮
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES (3016, 0, 'TrackingManage', 'catalog', 1, '/tracking', 'BasicLayout', 'tracking.title', 'carbon:chart-line-data', 10, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (3017, 3016, 'TrackingEventList', 'menu', 1, '/tracking/events', '/tracking/events/list', 'system:track:list', 'tracking.events.title', 'carbon:document', 1, NOW(), 1, 0),
+       (3018, 3016, 'TrackingEventCatalog', 'menu', 1, '/tracking/catalog', '/tracking/catalog/list', 'system:track:list', 'tracking.catalog.title', 'carbon:catalog', 2, NOW(), 1, 0),
+       (3019, 3016, 'TrackingAnalysis', 'menu', 1, '/tracking/analysis', '/tracking/analysis/list', 'system:track:list', 'tracking.analysis.title', 'carbon:analytics', 3, NOW(), 1, 0),
+       (3020, 3016, 'TrackingFunnel', 'menu', 1, '/tracking/funnel', '/tracking/funnel/list', 'system:track:list', 'tracking.funnel.title', 'carbon:activity', 4, NOW(), 1, 0),
+       (3021, 3016, 'TrackingRetention', 'menu', 1, '/tracking/retention', '/tracking/retention/list', 'system:track:list', 'tracking.retention.title', 'carbon:chart-line-data', 5, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (3022, 3016, 'TrackingEventExport', 'button', 1, 'system:track:export', 'tracking.event.export', 6, NOW(), 1, 0);
+
 -- =============================================================
 -- 菜单授权
 -- =============================================================

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "description": "ypbin-admin 宿主项目埋点事件目录（project 层）。与 ypbin-starter 自带的 base 目录同在类路径位置 META-INF/ypbin/tracking-events.json，运行时由 classpath*: 全部读入后合并：同一事件码以本文件为准（覆盖差异会在启动时以 WARN 逐字段打印），本文件新增的事件码直接并入目录。本文件只登记 admin 自己的业务事件；平台通用事件（web 行为 / API / 错误 / 性能 / 认证）留在 starter 的 base，不要在此重复登记。",
+  "events": [
+    {
+      "code": "system.user.export",
+      "description": "用户数据导出（业务事件示例）",
+      "source": "backend",
+      "since": "3.2.0",
+      "properties": [
+        { "name": "rowCount", "type": "integer", "description": "导出行数" }
+      ]
+    }
+  ]
+}

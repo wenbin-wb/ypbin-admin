@@ -50,6 +50,11 @@
             <groupId>cn.ypbin</groupId>
             <artifactId>ypbin-starter-messaging</artifactId>
         </dependency>
+        <!-- 埋点采集与事件目录 -->
+        <dependency>
+            <groupId>cn.ypbin</groupId>
+            <artifactId>ypbin-starter-tracking</artifactId>
+        </dependency>
         <!-- 文件存储 -->
         <dependency>
             <groupId>cn.ypbin</groupId>
