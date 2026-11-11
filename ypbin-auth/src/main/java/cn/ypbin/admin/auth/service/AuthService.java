@@ -29,7 +29,10 @@ import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.starter.captcha.core.CaptchaService;
 import cn.ypbin.starter.cloud.feign.support.FeignResponses;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.core.model.R;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,6 +61,15 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AuthService {
 
+    /** 注册验证码每 IP 每分钟发送上限默认值 */
+    private static final int DEFAULT_CODE_SEND_MAX_PER_MINUTE = 5;
+
+    /** 注册验证码发送频控硬上限（注解兜底同样使用该量级） */
+    private static final int MAX_CODE_SEND_PER_MINUTE_CAP = 60;
+
+    /** 注册验证码发送频控缓存键前缀（按 IP + 分钟窗口） */
+    private static final String CODE_SEND_LIMIT_PREFIX = "register:code:send:";
+
     /** 登录行为验证码开关参数键 */
     private final ISystemClient permissionFeignClient;
     private final LoginSupport loginSupport;
@@ -67,6 +79,7 @@ public class AuthService {
     private final LoginEventTracker loginEventTracker;
     private final SmsCodeService smsCodeService;
     private final EmailCodeService emailCodeService;
+    private final CacheService cacheService;
 
     /**
      * 账号密码登录。
@@ -175,10 +188,11 @@ public class AuthService {
      *
      * @param req 发送请求（按模式携带手机号或邮箱）
      */
-    public void sendRegisterCode(RegisterCodeSendReq req) {
+    public void sendRegisterCode(RegisterCodeSendReq req, String ip) {
         if (!configReader.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
             throw new BusinessException("注册功能未开启");
         }
+        requireSendNotExceeded(ip);
         RegisterVerifyMode mode = currentVerifyMode();
         if (mode == RegisterVerifyMode.SMS) {
             smsCodeService.sendCode(requirePhone(req.getPhone()));
@@ -189,6 +203,33 @@ public class AuthService {
             return;
         }
         throw new BusinessException("当前注册方式无需验证码");
+    }
+
+    /**
+     * 注册验证码发送频控：按 IP 每分钟计数，上限来自 {@code REGISTER_CODE_SEND_MAX_PER_MINUTE}
+     * （默认 5，硬上限 60）。
+     *
+     * <p><b>为什么不用注解值直接配置</b>：{@code @RateLimit} 的参数是编译期常量，无法读 {@code sys_config}。
+     * 注解保留 60/分钟作为兜底上限，业务层再按配置做更严格的计数；两个上限都必须存在，
+     * 避免把配置误调成极大值后失去防刷能力。</p>
+     *
+     * @param ip 客户端 IP
+     */
+    private void requireSendNotExceeded(String ip) {
+        int configured = configReader.getInt(
+            RegisterConfigKeys.REGISTER_CODE_SEND_MAX_PER_MINUTE,
+            DEFAULT_CODE_SEND_MAX_PER_MINUTE);
+        int limit = configured <= 0
+            ? DEFAULT_CODE_SEND_MAX_PER_MINUTE
+            : Math.min(configured, MAX_CODE_SEND_PER_MINUTE_CAP);
+        String key = CODE_SEND_LIMIT_PREFIX + ip + ":" + (Instant.now().getEpochSecond() / 60);
+        long count = cacheService.increment(key, 1);
+        if (count == 1) {
+            cacheService.expire(key, Duration.ofSeconds(70));
+        }
+        if (count > limit) {
+            throw new BusinessException("验证码发送过于频繁，请稍后再试");
+        }
     }
 
     /**

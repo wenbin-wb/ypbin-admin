@@ -76,10 +76,11 @@ public class AuthController {
      * 发送注册验证码（手机/邮箱渠道由系统参数 REGISTER_VERIFY_MODE 决定）。
      */
     @Log(value = "发送注册验证码", module = "认证")
-    @RateLimit(count = 5, window = 60, message = "验证码发送过于频繁，请稍后再试")
+    // 兜底上限 60/分钟；实际阈值由 REGISTER_CODE_SEND_MAX_PER_MINUTE 决定（业务层计数）
+    @RateLimit(count = 60, window = 60, message = "验证码发送过于频繁，请稍后再试")
     @PostMapping("/register/code/send")
     public R<Void> sendRegisterCode(@Valid @RequestBody RegisterCodeSendReq req) {
-        authService.sendRegisterCode(req);
+        authService.sendRegisterCode(req, WebRequestUtils.ip());
         return R.ok();
     }
 

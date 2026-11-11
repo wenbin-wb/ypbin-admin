@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.auth.support.AuthConfigReader;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
+import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.captcha.core.CaptchaService;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
@@ -49,7 +50,8 @@ class AuthServiceLogoutTest {
         return new AuthService(mock(ISystemClient.class), mock(LoginSupport.class),
             mock(AuthConfigReader.class), mock(CaptchaService.class),
             mock(PasswordAttemptLimiter.class), tracker,
-            mock(SmsCodeService.class), mock(EmailCodeService.class));
+            mock(SmsCodeService.class), mock(EmailCodeService.class),
+            mock(CacheService.class));
     }
 
     private LoginEventTracker trackerWith(TrackRecorder recorder) {

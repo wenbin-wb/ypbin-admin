@@ -10,6 +10,7 @@
 package cn.ypbin.admin.auth.service;
 
 import cn.ypbin.admin.auth.support.AuthConfigReader;
+import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.common.util.CachedCounterReader;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
@@ -42,8 +43,11 @@ public class SmsCodeService {
     private static final String COOLDOWN_PREFIX = "sms:cooldown:";
     /** 校验失败计数前缀（按手机号） */
     private static final String VERIFY_FAIL_PREFIX = "sms:verify:fail:";
-    /** 同一验证码允许的最大错误次数，超过即作废并要求重新获取 */
-    private static final int MAX_VERIFY_ATTEMPTS = 5;
+    /** 同一验证码允许的最大错误次数默认值（可由 CODE_VERIFY_MAX_ATTEMPTS 覆盖） */
+    private static final int DEFAULT_MAX_VERIFY_ATTEMPTS = 5;
+
+    /** 错误次数硬上限：配置再大也不允许无限试错 */
+    private static final int MAX_VERIFY_ATTEMPTS_CAP = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final AuthConfigReader configReader;
@@ -98,7 +102,8 @@ public class SmsCodeService {
         String normalizedPhone = normalizePhone(phone);
         String key = CODE_PREFIX + normalizedPhone;
         String failKey = VERIFY_FAIL_PREFIX + normalizedPhone;
-        if (readFailures(failKey) >= MAX_VERIFY_ATTEMPTS) {
+        int maxAttempts = maxVerifyAttempts();
+        if (readFailures(failKey) >= maxAttempts) {
             // 达到上限后直接作废验证码：避免一次发码被用于长期逐位枚举
             cacheService.delete(key);
             throw new BusinessException("验证码错误次数过多，请重新获取");
@@ -115,7 +120,7 @@ public class SmsCodeService {
             cacheService.expire(failKey, Duration.ofSeconds(
                 configReader.getInt("SMS_CODE_EXPIRE_SECONDS", 300)));
         }
-        if (failures >= MAX_VERIFY_ATTEMPTS) {
+        if (failures >= maxAttempts) {
             cacheService.delete(key);
             throw new BusinessException("验证码错误次数过多，请重新获取");
         }
@@ -130,6 +135,20 @@ public class SmsCodeService {
      */
     private long readFailures(String key) {
         return CachedCounterReader.read(cacheService.get(key, Object.class));
+    }
+
+    /**
+     * 读取允许的错误次数：默认 5，配置非法/未配置按默认，最大 10。
+     *
+     * @return 允许的错误次数
+     */
+    private int maxVerifyAttempts() {
+        int configured = configReader.getInt(
+            RegisterConfigKeys.CODE_VERIFY_MAX_ATTEMPTS, DEFAULT_MAX_VERIFY_ATTEMPTS);
+        if (configured <= 0) {
+            return DEFAULT_MAX_VERIFY_ATTEMPTS;
+        }
+        return Math.min(configured, MAX_VERIFY_ATTEMPTS_CAP);
     }
 
     /**

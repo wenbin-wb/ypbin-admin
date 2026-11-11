@@ -12,6 +12,8 @@ package cn.ypbin.admin.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -27,6 +29,7 @@ import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.dto.SysUserDto;
 import cn.ypbin.admin.system.model.resp.LoginResp;
+import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.captcha.core.CaptchaService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.model.R;
@@ -57,10 +60,12 @@ class AuthServiceRegisterTest {
 
     private final EmailCodeService emailCodeService = mock(EmailCodeService.class);
 
+    private final CacheService cacheService = mock(CacheService.class);
+
     private AuthService service() {
         return new AuthService(systemClient, loginSupport, configReader, captchaService,
             mock(PasswordAttemptLimiter.class), mock(LoginEventTracker.class),
-            smsCodeService, emailCodeService);
+            smsCodeService, emailCodeService, cacheService);
     }
 
     private RegisterReq request() {
@@ -184,12 +189,12 @@ class AuthServiceRegisterTest {
         RegisterCodeSendReq smsReq = new RegisterCodeSendReq();
         smsReq.setPhone("13800000000");
 
-        service().sendRegisterCode(smsReq);
+        service().sendRegisterCode(smsReq, "10.0.0.8");
         verify(smsCodeService).sendCode("13800000000");
 
         when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
             .thenReturn("NONE");
-        assertThatThrownBy(() -> service().sendRegisterCode(smsReq))
+        assertThatThrownBy(() -> service().sendRegisterCode(smsReq, "10.0.0.8"))
             .isInstanceOf(BusinessException.class)
             .hasMessage("当前注册方式无需验证码");
         verifyNoInteractions(emailCodeService);
@@ -253,6 +258,22 @@ class AuthServiceRegisterTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("REGISTER_VERIFY_MODE 不能为空");
         verify(systemClient, never()).registerUser(any());
+    }
+
+    @Test
+    @DisplayName("发送频控：超过每分钟上限直接拒绝，不触发实际发送")
+    void shouldRejectWhenSendLimitExceeded() {
+        stubEnabled();
+        when(configReader.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"))
+            .thenReturn("SMS");
+        when(cacheService.increment(anyString(), anyLong())).thenReturn(6L);
+        RegisterCodeSendReq req = new RegisterCodeSendReq();
+        req.setPhone("13800000000");
+
+        assertThatThrownBy(() -> service().sendRegisterCode(req, "10.0.0.8"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("验证码发送过于频繁，请稍后再试");
+        verify(smsCodeService, never()).sendCode(any());
     }
 
     private void stubEnabled() {
