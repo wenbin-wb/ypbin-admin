@@ -31,10 +31,13 @@ import cn.ypbin.admin.modules.system.service.SysMenuService;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.captcha.core.CaptchaService;
+import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -50,6 +53,15 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
+    /** 注册验证码每 IP 每分钟发送上限默认值 */
+    private static final int DEFAULT_CODE_SEND_MAX_PER_MINUTE = 5;
+
+    /** 注册验证码发送频控硬上限（注解兜底同样使用该量级） */
+    private static final int MAX_CODE_SEND_PER_MINUTE_CAP = 60;
+
+    /** 注册验证码发送频控缓存键前缀（按 IP + 分钟窗口） */
+    private static final String CODE_SEND_LIMIT_PREFIX = "register:code:send:";
+
     private final SysUserService userService;
     private final SysPermissionService permissionService;
     private final SysMenuService menuService;
@@ -59,6 +71,7 @@ public class AuthServiceImpl implements AuthService {
     private final SysConfigService configService;
     private final SmsCodeService smsCodeService;
     private final EmailCodeService emailCodeService;
+    private final CacheService cacheService;
 
     @Override
     public LoginResp login(LoginReq req, String ip) {
@@ -130,10 +143,11 @@ public class AuthServiceImpl implements AuthService {
      * 发送注册归属验证码（渠道由系统参数 {@code REGISTER_VERIFY_MODE} 决定）。
      */
     @Override
-    public void sendRegisterCode(RegisterCodeSendReq req) {
+    public void sendRegisterCode(RegisterCodeSendReq req, String ip) {
         if (!configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
             throw new BusinessException("注册功能未开启");
         }
+        requireSendNotExceeded(ip);
         RegisterVerifyMode mode = currentVerifyMode();
         if (mode == RegisterVerifyMode.SMS) {
             smsCodeService.sendCode(requirePhone(req.getPhone()));
@@ -144,6 +158,29 @@ public class AuthServiceImpl implements AuthService {
             return;
         }
         throw new BusinessException("当前注册方式无需验证码");
+    }
+
+    /**
+     * 注册验证码发送频控：按 IP 每分钟计数，上限来自 {@code REGISTER_CODE_SEND_MAX_PER_MINUTE}
+     * （默认 5，硬上限 60）。注解保留 60/分钟作为兜底上限，业务层再按配置做更严格的计数。
+     *
+     * @param ip 客户端 IP
+     */
+    private void requireSendNotExceeded(String ip) {
+        int configured = configService.getInt(
+            RegisterConfigKeys.REGISTER_CODE_SEND_MAX_PER_MINUTE,
+            DEFAULT_CODE_SEND_MAX_PER_MINUTE);
+        int limit = configured <= 0
+            ? DEFAULT_CODE_SEND_MAX_PER_MINUTE
+            : Math.min(configured, MAX_CODE_SEND_PER_MINUTE_CAP);
+        String key = CODE_SEND_LIMIT_PREFIX + ip + ":" + (Instant.now().getEpochSecond() / 60);
+        long count = cacheService.increment(key, 1);
+        if (count == 1) {
+            cacheService.expire(key, Duration.ofSeconds(70));
+        }
+        if (count > limit) {
+            throw new BusinessException("验证码发送过于频繁，请稍后再试");
+        }
     }
 
     /**

@@ -55,7 +55,7 @@ public interface AuthService {
      *
      * @param req 发送请求（按模式携带手机号或邮箱）
      */
-    void sendRegisterCode(RegisterCodeSendReq req);
+    void sendRegisterCode(RegisterCodeSendReq req, String ip);
 
     /**
      * 注册入口的公开配置（是否开启 / 验证渠道 / 是否需要行为验证码）。

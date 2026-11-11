@@ -47,6 +47,13 @@ public final class RegisterConfigKeys {
     /** 邮箱注册验证码发送冷却（秒） */
     public static final String EMAIL_CODE_COOLDOWN_SECONDS = "EMAIL_CODE_COOLDOWN_SECONDS";
 
+    /** 注册验证码每 IP 每分钟发送上限（默认 5，硬上限 60） */
+    public static final String REGISTER_CODE_SEND_MAX_PER_MINUTE =
+        "REGISTER_CODE_SEND_MAX_PER_MINUTE";
+
+    /** 单个验证码允许的最大错误次数（默认 5，硬上限 10；短信/邮箱验证码共用） */
+    public static final String CODE_VERIFY_MAX_ATTEMPTS = "CODE_VERIFY_MAX_ATTEMPTS";
+
     private RegisterConfigKeys() {
     }
 }
