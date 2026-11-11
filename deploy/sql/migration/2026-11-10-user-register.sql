@@ -33,7 +33,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'REG
 
 SET @ypbin_next_id := (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_config);
 INSERT INTO sys_config (id, config_group, name, config_key, config_value, built_in, create_user, create_time, status, is_deleted)
-SELECT @ypbin_next_id, 'login', '注册用户默认租户 ID', 'REGISTER_DEFAULT_TENANT_ID', '1', 1, 1, NOW(), 1, 0
+SELECT @ypbin_next_id, 'login', '注册用户默认租户', 'REGISTER_DEFAULT_TENANT_ID', '1', 1, 1, NOW(), 1, 0
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'REGISTER_DEFAULT_TENANT_ID');
 
 SET @ypbin_next_id := (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_config);
@@ -43,7 +43,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'REG
 
 SET @ypbin_next_id := (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_config);
 INSERT INTO sys_config (id, config_group, name, config_key, config_value, built_in, create_user, create_time, status, is_deleted)
-SELECT @ypbin_next_id, 'login', '注册归属验证方式(NONE/SMS/EMAIL)', 'REGISTER_VERIFY_MODE', 'NONE', 1, 1, NOW(), 1, 0
+SELECT @ypbin_next_id, 'login', '注册归属验证方式', 'REGISTER_VERIFY_MODE', 'NONE', 1, 1, NOW(), 1, 0
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM sys_config c WHERE c.config_key = 'REGISTER_VERIFY_MODE');
 
 SET @ypbin_next_id := (SELECT COALESCE(MAX(id), 0) + 1 FROM sys_config);
