@@ -161,6 +161,9 @@ ypbin:
     enabled: true               # 装配埋点内核（TrackRecorder/Sink）
     ingest-enabled: true        # 开放 POST /tracking/ingest（单体应用只有一个入口）
     trust-forwarded: true       # 与日志/在线用户/限流同一取 IP 口径
+    # 与操作日志/在线用户保持一致：存完整 IP（默认 true 会把 IPv4 截断成 /24，
+    # 表现为 192.168.32.0、127.0.0.0 这类网段地址，无法与日志逐条对照）
+    anonymize-ip: false
     app-id: ypbin-admin-ui
 
   # ---------- 接口签名 ----------
