@@ -58,10 +58,8 @@ public class AiPromptTemplateServiceImpl implements AiPromptTemplateService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createTemplate(AiPromptTemplateSaveReq req) {
-        Long tenantId = currentTenantId();
         AiPromptTemplate tpl = new AiPromptTemplate();
         BeanUtils.copyProperties(req, tpl);
-        tpl.setTenantId(tenantId);
         if (templateMapper.insert(tpl) != 1) {
             throw new BusinessException("模板创建失败");
         }

@@ -102,7 +102,6 @@ public class NoticePublishServiceImpl implements NoticePublishService {
             for (String channel : channels) {
                 SysNoticeDelivery delivery = new SysNoticeDelivery();
                 delivery.setId(IdWorker.getId());
-                delivery.setTenantId(notice.getTenantId());
                 delivery.setNoticeId(notice.getId());
                 delivery.setPublishVersion(publishVersion);
                 delivery.setReceiverUserId(user.getId());
@@ -192,7 +191,6 @@ public class NoticePublishServiceImpl implements NoticePublishService {
     private void deliverSite(SysNoticeDelivery delivery, SysNotice notice) {
         SysMessage message = new SysMessage();
         message.setId(IdWorker.getId());
-        message.setTenantId(delivery.getTenantId());
         message.setNoticeId(delivery.getNoticeId());
         message.setPublishVersion(delivery.getPublishVersion());
         message.setReceiverUserId(delivery.getReceiverUserId());

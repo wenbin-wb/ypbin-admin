@@ -117,7 +117,6 @@ public class AiModelConfigServiceImpl implements AiModelConfigService {
     public void createModel(AiModelConfigSaveReq req) {
         AiModelConfig config = new AiModelConfig();
         BeanUtils.copyProperties(req, config);
-        config.setTenantId(currentTenantId());
         // 类型缺省按对话模型处理，兼容存量调用
         if (config.getModelType() == null || config.getModelType().isBlank()) {
             config.setModelType(MODEL_TYPE_CHAT);

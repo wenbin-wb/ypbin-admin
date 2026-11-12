@@ -76,7 +76,6 @@ public class AiKnowledgeCrudComponent {
     @Transactional(rollbackFor = Exception.class)
     public AiKnowledgeBaseResp createKnowledgeBase(AiKnowledgeBaseSaveReq req) {
         AiKnowledgeBase kb = new AiKnowledgeBase();
-        kb.setTenantId(currentTenantId());
         kb.setName(req.getName());
         kb.setDescription(req.getDescription());
         kb.setIcon(req.getIcon());
@@ -131,7 +130,6 @@ public class AiKnowledgeCrudComponent {
 
         AiDocument doc = new AiDocument();
         doc.setKnowledgeBaseId(knowledgeBaseId);
-        doc.setTenantId(currentTenantId());
         doc.setFilename(filename);
         doc.setFileSize(file.getSize());
         doc.setChunkCount(0);
@@ -337,7 +335,6 @@ public class AiKnowledgeCrudComponent {
             String sourceUrl, String sourceType, byte[] bytes) {
         AiDocument doc = new AiDocument();
         doc.setKnowledgeBaseId(knowledgeBaseId);
-        doc.setTenantId(currentTenantId());
         doc.setFilename(filename);
         doc.setFileSize((long) bytes.length);
         doc.setChunkCount(0);
