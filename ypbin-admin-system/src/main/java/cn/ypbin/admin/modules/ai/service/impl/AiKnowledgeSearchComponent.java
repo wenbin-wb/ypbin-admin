@@ -146,7 +146,6 @@ public class AiKnowledgeSearchComponent {
         }
         try {
             AiQueryLog logEntry = new AiQueryLog();
-            logEntry.setTenantId(crudComponent.currentTenantId());
             logEntry.setKnowledgeBaseId(knowledgeBaseId);
             logEntry.setQuery(query.trim());
             logEntry.setSource(source);

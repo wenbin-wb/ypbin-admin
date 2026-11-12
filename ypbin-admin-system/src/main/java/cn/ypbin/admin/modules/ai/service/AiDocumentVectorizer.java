@@ -103,13 +103,10 @@ public class AiDocumentVectorizer {
         try {
             chunkMapper.delete(new LambdaUpdateWrapper<AiDocumentChunk>()
                 .eq(AiDocumentChunk::getDocumentId, docId));
-            // 向量化线程内无请求上下文，租户 ID 只查一次供全部分块复用，避免循环内查库
-            Long tenantId = tenantIdOf(knowledgeBaseId);
             for (int i = 0; i < chunks.size(); i++) {
                 Document chunk = chunks.get(i);
                 String text = chunk.getText() == null ? "" : chunk.getText();
                 AiDocumentChunk row = new AiDocumentChunk();
-                row.setTenantId(tenantId);
                 row.setKnowledgeBaseId(knowledgeBaseId);
                 row.setDocumentId(docId);
                 row.setChunkIndex(i);
@@ -124,11 +121,6 @@ public class AiDocumentVectorizer {
         }
     }
 
-    /** 从知识库实体取租户 ID（向量化线程内无请求上下文） */
-    private Long tenantIdOf(Long knowledgeBaseId) {
-        AiKnowledgeBase kb = kbMapper.selectById(knowledgeBaseId);
-        return kb != null && kb.getTenantId() != null ? kb.getTenantId() : 0L;
-    }
 
     private void markDocFailed(Long docId, String errorMsg) {
         AiDocument update = new AiDocument();
