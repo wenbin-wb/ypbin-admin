@@ -239,13 +239,18 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         BeanUtils.copyProperties(req, user, "roleIds", "postIds", "password", "phone");
         user.setPhone(phone);
         user.setUserType(AdminConstants.USER_TYPE_TENANT);
-        user.setTenantId(UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户")));
+        Long tenantId = UserContext.getTenantId()
+            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+        // 校验角色/岗位归属需要租户值
+        user.setTenantId(tenantId);
         String encoded = PasswordEncoderUtil.encode(req.getPassword());
         user.setPassword(encoded);
         user.setPwdResetTime(LocalDateTime.now());
         validateAssignments(user, req.getRoleIds(), req.getPostIds());
+        // 插入前沿用租户插件补列：实体上再带 tenant_id 会让 INSERT 出现同名列
+        user.setTenantId(null);
         save(user);
+        user.setTenantId(tenantId);
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
@@ -358,7 +363,6 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         user.setEmail(StringUtils.hasText(req.getEmail())
             ? req.getEmail().trim().toLowerCase(Locale.ROOT) : null);
         user.setUserType(AdminConstants.USER_TYPE_TENANT);
-        user.setTenantId(tenantId);
         String encoded = PasswordEncoderUtil.encode(req.getPassword());
         user.setPassword(encoded);
         user.setPwdResetTime(LocalDateTime.now());
@@ -372,6 +376,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             // 数据库原始异常不能透给匿名调用方，转成与查重一致的可读提示
             throw new BusinessException("用户名或手机号已存在，请更换后重试");
         }
+        // 租户列由租户插件在显式租户作用域内补写；落库后回填内存对象，供后续会话使用
+        user.setTenantId(tenantId);
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), List.of(role.getId()));
         // 同名/同手机号的历史已删用户可能留有旧快照，注册成功后主动失效，避免登录读到旧数据
