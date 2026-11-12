@@ -149,7 +149,6 @@ public class AiChatServiceImpl implements AiChatSessionService {
         }
         AiChatSession session = new AiChatSession();
         session.setUserId(userId);
-        session.setTenantId(tenantId);
         session.setTitle(req.getTitle() != null ? req.getTitle() : DEFAULT_TITLE);
         session.setRoleId(req.getRoleId());
         session.setModelId(req.getModelId());
@@ -256,7 +255,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
         }
 
         // 落库用户消息
-        insertMessage(finalSessionId, userId, tenantId, ROLE_USER, req.getContent(), null);
+        insertMessage(finalSessionId, userId, ROLE_USER, req.getContent(), null);
 
         // 构造对话流：优先 RAG > 角色人设 > 默认
         String convId = String.valueOf(finalSessionId);
@@ -316,7 +315,7 @@ public class AiChatServiceImpl implements AiChatSessionService {
                 // 落库助手回复 + 更新会话统计
                 String assistantContent = contentBuffer.get().toString();
                 int tokens = tokenCount.get();
-                insertMessage(finalSessionId, userId, tenantId, ROLE_ASSISTANT,
+                insertMessage(finalSessionId, userId, ROLE_ASSISTANT,
                     assistantContent, modelName());
                 updateSessionStats(finalSessionId, tokens, MESSAGES_PER_TURN);
                 // 首条消息自动生成标题
@@ -375,8 +374,6 @@ public class AiChatServiceImpl implements AiChatSessionService {
         }
         final AiChatMessage assistantToReplace = lastAssistant;
         final Long userId = LoginHelper.getUserId();
-        final Long tenantId = UserContext.getTenantId().orElseThrow(
-            () -> new BusinessException("无法获取当前租户上下文"));
         String convId = String.valueOf(sessionId);
         String rolePrompt = resolveRoleSystemPrompt(sessionId);
         final String input = lastUserContent;
@@ -396,7 +393,6 @@ public class AiChatServiceImpl implements AiChatSessionService {
             AiChatMessage newReply = new AiChatMessage();
             newReply.setSessionId(sessionId);
             newReply.setUserId(userId);
-            newReply.setTenantId(tenantId);
             newReply.setRole(ROLE_ASSISTANT);
             newReply.setContent(reply);
             newReply.setModelName(modelName());
@@ -439,12 +435,11 @@ public class AiChatServiceImpl implements AiChatSessionService {
         return session;
     }
 
-    private void insertMessage(Long sessionId, Long userId, Long tenantId,
+    private void insertMessage(Long sessionId, Long userId,
             String role, String content, String modelName) {
         AiChatMessage msg = new AiChatMessage();
         msg.setSessionId(sessionId);
         msg.setUserId(userId);
-        msg.setTenantId(tenantId);
         msg.setRole(role);
         msg.setContent(content);
         msg.setModelName(modelName);
@@ -575,3 +570,4 @@ public class AiChatServiceImpl implements AiChatSessionService {
         return AiChatSseSupport.rootMessage(e);
     }
 }
+

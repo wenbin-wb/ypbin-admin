@@ -47,7 +47,6 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
         checkCodeUnique(req.getCode(), null);
         SysPost post = new SysPost();
         BeanUtils.copyProperties(req, post);
-        post.setTenantId(currentTenantId());
         if (!save(post)) {
             throw new BusinessException("岗位创建失败");
         }
@@ -108,3 +107,4 @@ public class SysPostServiceImpl extends BaseServiceImpl<SysPostMapper, SysPost> 
         return resp;
     }
 }
+

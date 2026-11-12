@@ -108,7 +108,6 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         SysNotice update = new SysNotice();
         BeanUtils.copyProperties(req, update);
         update.setId(id);
-        update.setTenantId(current.getTenantId());
         update.setPublishVersion(current.getPublishVersion());
         update.setPublishTime(current.getPublishTime());
         if (isDraft(req)) {
@@ -276,3 +275,4 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         return Integer.valueOf(DRAFT).equals(req.getPublishStatus());
     }
 }
+
