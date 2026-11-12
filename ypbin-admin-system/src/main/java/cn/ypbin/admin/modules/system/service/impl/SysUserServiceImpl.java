@@ -130,6 +130,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (!StringUtils.hasText(username)) {
             throw new BusinessException("小程序用户名不能为空");
         }
+        // 归属租户与注册链路共用同一组系统参数（REGISTER_DEFAULT_TENANT_ID），
+        // 未配置时回落到平台默认租户；不接受端侧指定，避免任意租户开户。
+        Long tenantId = resolveMiniappTenantId();
         // 登录时尚无租户上下文：按用户名全局定位（用户名全局唯一）。
         // 必须包含逻辑删除行：否则已删除的小程序用户再次登录会走 insert 并撞 uk_username。
         SysUser user = TenantContext.executeIgnore(() ->
@@ -144,12 +147,17 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             // 小程序用户不设登录密码，随机占位以满足非空约束
             created.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
             created.setStatus(EntityStatus.ENABLED.getCode());
-            created.setTenantId(AdminConstants.DEFAULT_TENANT_ID);
-            Boolean saved = TenantContext.executeWithTenant(AdminConstants.DEFAULT_TENANT_ID,
-                () -> save(created));
+            // 租户列由租户插件在显式租户作用域内统一补写：这里再 set 会让 INSERT 出现两遍 tenant_id
+            Boolean saved = TenantContext.executeWithTenant(tenantId, () -> save(created));
             if (!Boolean.TRUE.equals(saved)) {
                 throw new BusinessException("创建小程序用户失败");
             }
+            // 落库后再回填到内存对象：登录会话需要 tenantId
+            created.setTenantId(tenantId);
+            TenantContext.executeWithTenant(tenantId, () -> {
+                bindMiniappDefaultRole(created.getId(), tenantId);
+                return null;
+            });
             return created;
         }
         if (Integer.valueOf(1).equals(user.getIsDeleted())) {
@@ -165,7 +173,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (user.getTenantId() == null) {
             // 兼容历史数据：旧版小程序服务未启用租户，落库的 tenant_id 为空。
             // 单体开启租户隔离后，登录态需要租户上下文，故在登录时补默认租户。
-            user.setTenantId(AdminConstants.DEFAULT_TENANT_ID);
+            user.setTenantId(tenantId);
             updated = true;
         }
         if (StringUtils.hasText(nickname) && !nickname.equals(user.getNickname())) {
@@ -181,7 +189,73 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             // 已按全局唯一的用户名定位到具体用户，按主键更新；忽略租户条件以兼容 tenant_id 为空的旧数据
             TenantContext.runIgnore(() -> updateById(user));
         }
+        if (tenantId.equals(user.getTenantId())) {
+            // 历史用户可能没有默认角色：登录时幂等补齐，避免以后接入权限校验时出现"老用户没有角色"
+            TenantContext.executeWithTenant(tenantId, () -> {
+                bindMiniappDefaultRole(user.getId(), tenantId);
+                return null;
+            });
+        }
         return user;
+    }
+
+    /**
+     * 解析小程序用户的归属租户。
+     *
+     * <p>与自助注册共用 {@code REGISTER_DEFAULT_TENANT_ID}：新用户默认落到哪个租户是企业级配置，
+     * 不应该在小程序和后台各写一套。未配置时回落到平台默认租户，但租户必须存在且启用。</p>
+     *
+     * @return 归属租户 ID
+     */
+    private Long resolveMiniappTenantId() {
+        String raw = configService.getString(RegisterConfigKeys.REGISTER_DEFAULT_TENANT_ID, "");
+        long tenantId;
+        if (StringUtils.hasText(raw)) {
+            try {
+                tenantId = Long.parseLong(raw.trim());
+            } catch (NumberFormatException e) {
+                throw new BusinessException("系统参数 " + RegisterConfigKeys.REGISTER_DEFAULT_TENANT_ID
+                    + " 必须为整数");
+            }
+        } else {
+            tenantId = AdminConstants.DEFAULT_TENANT_ID;
+        }
+        SysTenant tenant = tenantMapper.selectById(tenantId);
+        if (tenant == null || !EntityStatus.ENABLED.getCode().equals(tenant.getStatus())) {
+            throw new BusinessException("小程序默认租户不存在或已停用：" + tenantId);
+        }
+        return tenantId;
+    }
+
+    /**
+     * 绑定小程序默认角色（幂等）。
+     *
+     * <p>角色与注册链路共用 {@code REGISTER_DEFAULT_ROLE_CODE}；小程序接口不依赖菜单权限，
+     * 因此这里只校验角色存在、启用且属于该租户，不要求角色已授权菜单。
+     * 未配置默认角色时保持"无角色"（小程序功能不依赖角色）。</p>
+     *
+     * @param userId   用户 ID
+     * @param tenantId 归属租户（调用方已进入该租户作用域）
+     */
+    private void bindMiniappDefaultRole(Long userId, Long tenantId) {
+        String roleCode = configService.getString(RegisterConfigKeys.REGISTER_DEFAULT_ROLE_CODE, "");
+        if (!StringUtils.hasText(roleCode)) {
+            return;
+        }
+        SysRole role = roleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
+            .eq(SysRole::getCode, roleCode.trim())
+            .eq(SysRole::getRoleType, AdminConstants.ROLE_TYPE_TENANT)
+            .eq(SysRole::getStatus, EntityStatus.ENABLED.getCode()), false);
+        if (role == null || !tenantId.equals(role.getTenantId())) {
+            throw new BusinessException(
+                "小程序默认角色不存在、已停用或不属于默认租户：" + roleCode.trim());
+        }
+        long bound = userRoleMapper.selectCount(new LambdaQueryWrapper<SysUserRole>()
+            .eq(SysUserRole::getUserId, userId)
+            .eq(SysUserRole::getRoleId, role.getId()));
+        if (bound == 0) {
+            userRoleMapper.insert(new SysUserRole(userId, role.getId()));
+        }
     }
 
     @Override
@@ -253,13 +327,18 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         BeanUtils.copyProperties(req, user, "roleIds", "postIds", "password", "phone");
         user.setPhone(phone);
         user.setUserType(AdminConstants.USER_TYPE_TENANT);
-        user.setTenantId(UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户")));
+        Long tenantId = UserContext.getTenantId()
+            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
+        // 校验角色/岗位归属需要租户值
+        user.setTenantId(tenantId);
         String encoded = PasswordEncoderUtil.encode(req.getPassword());
         user.setPassword(encoded);
         user.setPwdResetTime(LocalDateTime.now());
         validateAssignments(user, req.getRoleIds(), req.getPostIds());
+        // 插入前沿用租户插件补列：实体上再带 tenant_id 会让 INSERT 出现同名列
+        user.setTenantId(null);
         save(user);
+        user.setTenantId(tenantId);
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
@@ -375,7 +454,6 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         user.setEmail(StringUtils.hasText(req.getEmail())
             ? req.getEmail().trim().toLowerCase(Locale.ROOT) : null);
         user.setUserType(AdminConstants.USER_TYPE_TENANT);
-        user.setTenantId(tenantId);
         String encoded = PasswordEncoderUtil.encode(req.getPassword());
         user.setPassword(encoded);
         user.setPwdResetTime(LocalDateTime.now());
@@ -389,6 +467,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             // 数据库原始异常不能透给匿名调用方，转成与查重一致的可读提示
             throw new BusinessException("用户名或手机号已存在，请更换后重试");
         }
+        // 租户列由租户插件在显式租户作用域内补写；落库后回填内存对象，供后续会话使用
+        user.setTenantId(tenantId);
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), List.of(role.getId()));
         return user;

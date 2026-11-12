@@ -144,8 +144,6 @@ public class UserExcelComponent {
         result.setTotalCount(list.size());
 
         int rowNum = 1;
-        Long currentTenantId = UserContext.getTenantId()
-            .orElseThrow(() -> new BusinessException("无法确定当前租户"));
 
         // 预加载库中已有用户名/手机号到内存判重，避免逐行查库（用户名/手机号全局唯一）
         Set<String> existingUsernames = TenantContext.executeIgnore(() ->
@@ -199,7 +197,7 @@ public class UserExcelComponent {
             user.setNickname(vo.getRealName().trim());
             user.setPassword(PasswordEncoderUtil.encode(rawPassword));
             user.setUserType(AdminConstants.USER_TYPE_TENANT);
-            user.setTenantId(currentTenantId);
+            // 租户列由租户插件按当前上下文补写；实体再带一列会让 INSERT 出现同名列
             user.setStatus(UserStatusEnum.ENABLED.getCode());
             user.setPhone(phone);
             if (StringUtils.hasText(vo.getEmail())) {
