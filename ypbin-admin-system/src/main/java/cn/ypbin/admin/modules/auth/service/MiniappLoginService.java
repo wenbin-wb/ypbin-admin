@@ -61,6 +61,15 @@ public class MiniappLoginService {
     /** Mock 场景 openid 前缀（仅 mock-enabled=true 时使用，便于线上排查误开）。 */
     private static final String MOCK_OPENID_PREFIX = "mock_";
 
+    /** 微信错误码：code 无效 */
+    private static final int ERRCODE_INVALID_CODE = 40029;
+
+    /** 微信错误码：code 已被使用 */
+    private static final int ERRCODE_CODE_USED = 40163;
+
+    /** 微信错误码：调用频率超限 */
+    private static final int ERRCODE_FREQUENCY_LIMIT = 45011;
+
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
@@ -139,11 +148,33 @@ public class MiniappLoginService {
         }
         JsonNode openidNode = node.get("openid");
         if (openidNode == null || !StringUtils.hasText(openidNode.asText())) {
-            // 微信侧失败原因（errcode/errmsg）必须落日志：不然线上只看到一句「登录失败」
-            log.error("微信 code2Session 换取 openid 失败: {}", resBody);
-            throw new BusinessException("获取微信用户身份失败");
+            throw toWechatFailure(node, resBody);
         }
         return openidNode.asText();
+    }
+
+    /**
+     * 把微信侧失败响应转成可操作的业务异常。
+     *
+     * <p>code 一次性且有效期很短：端侧拿到「凭证失效」后换一个新 code 重试就能恢复，
+     * 而频控/配置类错误重试只会继续失败。两种情况的提示必须区分，否则端侧无法决定是否重试。</p>
+     *
+     * @param node    微信响应 JSON
+     * @param resBody 响应原文（仅用于日志）
+     * @return 带可操作提示的业务异常
+     */
+    private BusinessException toWechatFailure(JsonNode node, String resBody) {
+        JsonNode errcodeNode = node.get("errcode");
+        int errcode = errcodeNode == null ? 0 : errcodeNode.asInt(0);
+        // 微信侧失败原因（errcode/errmsg）必须落日志：不然线上只看到一句「登录失败」
+        log.error("微信 code2Session 换取 openid 失败: errcode={}, body={}", errcode, resBody);
+        if (errcode == ERRCODE_INVALID_CODE || errcode == ERRCODE_CODE_USED) {
+            return new BusinessException("微信登录凭证已失效，请重新授权");
+        }
+        if (errcode == ERRCODE_FREQUENCY_LIMIT) {
+            return new BusinessException("微信登录过于频繁，请稍后重试");
+        }
+        return new BusinessException("获取微信用户身份失败");
     }
 
     /**

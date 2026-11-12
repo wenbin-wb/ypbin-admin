@@ -159,7 +159,7 @@ class MiniappLoginServiceTest {
     }
 
     @Test
-    @DisplayName("微信返回错误码（无 openid）：抛业务异常，不落 Mock 身份")
+    @DisplayName("微信返回 code 失效：提示可重新授权（端侧可换新 code 重试）")
     void wechatErrorResponseShouldThrow() {
         properties.setAppid("wx-app");
         properties.setSecret("wx-secret");
@@ -168,8 +168,21 @@ class MiniappLoginServiceTest {
 
         assertThatThrownBy(() -> stub.login(req("bad-code")))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("获取微信用户身份失败");
+            .hasMessageContaining("微信登录凭证已失效");
         verify(userService, never()).getOrCreateMiniappUser(anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("微信频控错误：提示稍后重试，不引导端侧立刻重试")
+    void wechatFrequencyLimitShouldNotEncourageRetry() {
+        properties.setAppid("wx-app");
+        properties.setSecret("wx-secret");
+        MiniappLoginService stub = serviceWithWechatResponse(
+            "{\"errcode\":45011,\"errmsg\":\"api minute-quota reach limit\"}");
+
+        assertThatThrownBy(() -> stub.login(req("busy-code")))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("过于频繁");
     }
 
     @Test
