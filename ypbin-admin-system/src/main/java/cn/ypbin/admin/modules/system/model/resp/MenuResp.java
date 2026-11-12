@@ -37,6 +37,12 @@ public class MenuResp {
 
     private Boolean platformOnly;
 
+    /**
+     * 是否可授予租户角色：仅 {@code /system/role/assignable-menus} 返回。
+     * 仅作为祖先保留的节点为 false（前端置灰，避免提交后被模板校验拒绝）。
+     */
+    private Boolean assignable;
+
     private String path;
 
     private String component;

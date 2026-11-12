@@ -100,6 +100,16 @@ VALUES (1, 'site', '系统名称', 'SITE_NAME', 'ypbin-admin', 1, 1, NOW(), 1, 0
        (2, 'site', '版权信息', 'SITE_COPYRIGHT', 'ypbin', 1, 1, NOW(), 1, 0),
        (10, 'login', '是否开启登录验证码', 'LOGIN_CAPTCHA_ENABLED', 'false', 1, 1, NOW(), 1, 0),
        (11, 'login', '是否开启短信验证码登录', 'LOGIN_SMS_ENABLED', 'false', 1, 1, NOW(), 1, 0),
+       (12, 'login', '是否开启用户自助注册', 'REGISTER_ENABLED', 'false', 1, 1, NOW(), 1, 0),
+       (13, 'login', '注册用户默认租户', 'REGISTER_DEFAULT_TENANT_ID', '1', 1, 1, NOW(), 1, 0),
+       -- 默认角色留空：必须由管理员显式指定一个已分配菜单权限的租户角色后再开启注册，
+       -- 避免「注册成功但没有任何菜单」的静默空系统（内置角色在种子数据里没有菜单授权）
+       (14, 'login', '注册用户默认角色标识', 'REGISTER_DEFAULT_ROLE_CODE', '', 1, 1, NOW(), 1, 0),
+       (15, 'login', '注册归属验证方式', 'REGISTER_VERIFY_MODE', 'NONE', 1, 1, NOW(), 1, 0),
+       (16, 'mail', '邮箱注册验证码有效期(秒)', 'EMAIL_CODE_EXPIRE_SECONDS', '300', 1, 1, NOW(), 1, 0),
+       (17, 'mail', '邮箱注册验证码发送冷却(秒)', 'EMAIL_CODE_COOLDOWN_SECONDS', '60', 1, 1, NOW(), 1, 0),
+       (18, 'login', '注册验证码每IP每分钟上限', 'REGISTER_CODE_SEND_MAX_PER_MINUTE', '5', 1, 1, NOW(), 1, 0),
+       (19, 'login', '验证码最大错误次数', 'CODE_VERIFY_MAX_ATTEMPTS', '5', 1, 1, NOW(), 1, 0),
        (20, 'password', '密码最小长度', 'PASSWORD_MIN_LENGTH', '8', 1, 1, NOW(), 1, 0),
        (21, 'password', '是否必须含数字', 'PASSWORD_REQUIRE_DIGIT', 'true', 1, 1, NOW(), 1, 0),
        (22, 'password', '是否必须含字母', 'PASSWORD_REQUIRE_LETTER', 'true', 1, 1, NOW(), 1, 0),
@@ -329,10 +339,10 @@ VALUES
 INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
 VALUES
 (5011, 5001, 'AiChatSend',         'button', 0, 'ai:chat:send',           'page.ai.chat.send',          1, NOW(), 1, 0),
-(5012, 5001, 'AiChatList',         'button', 0, 'ai:chat:list',           'page.ai.chat.title',         2, NOW(), 1, 0),
-(5013, 5001, 'AiChatCreate',       'button', 0, 'ai:chat:create',         'page.ai.chat.title',         3, NOW(), 1, 0),
-(5014, 5001, 'AiChatDelete',       'button', 0, 'ai:chat:delete',         'page.ai.chat.title',         4, NOW(), 1, 0),
-(5015, 5001, 'AiChatEdit',         'button', 0, 'ai:chat:edit',           'page.ai.chat.title',         5, NOW(), 1, 0),
+(5012, 5001, 'AiChatList',         'button', 0, 'ai:chat:list',           'page.ai.chat.list',          2, NOW(), 1, 0),
+(5013, 5001, 'AiChatCreate',       'button', 0, 'ai:chat:create',         'common.create',              3, NOW(), 1, 0),
+(5014, 5001, 'AiChatDelete',       'button', 0, 'ai:chat:delete',         'common.delete',              4, NOW(), 1, 0),
+(5015, 5001, 'AiChatEdit',         'button', 0, 'ai:chat:edit',           'common.edit',                5, NOW(), 1, 0),
 (5021, 5002, 'AiKnowledgeList',    'button', 0, 'ai:knowledge:list',      'page.ai.knowledge.list',     1, NOW(), 1, 0),
 (5022, 5002, 'AiKnowledgeCreate',  'button', 0, 'ai:knowledge:create',    'page.ai.knowledge.create',   2, NOW(), 1, 0),
 (5023, 5002, 'AiKnowledgeDelete',  'button', 0, 'ai:knowledge:delete',    'page.ai.knowledge.delete',   3, NOW(), 1, 0),
@@ -348,10 +358,22 @@ VALUES
 (5044, 5040, 'AiPromptDelete',     'button', 0, 'ai:prompt:delete',       'page.ai.prompt.delete',      4, NOW(), 1, 0),
 (5051, 5050, 'AiUsageView',        'button', 1, 'ai:usage:view',          'page.ai.usage.view',         1, NOW(), 1, 0),
 (5071, 5007, 'AiWikiView',         'button', 0, 'ai:knowledge:list',      'page.ai.wiki.view',          1, NOW(), 1, 0),
-(5061, 5060, 'AiRoleList',         'button', 0, 'ai:role:list',           'page.ai.role.title',         1, NOW(), 1, 0),
-(5062, 5060, 'AiRoleCreate',       'button', 0, 'ai:role:create',         'page.ai.role.title',         2, NOW(), 1, 0),
-(5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'page.ai.role.title',         3, NOW(), 1, 0),
-(5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'page.ai.role.title',         4, NOW(), 1, 0);
+(5061, 5060, 'AiRoleList',         'button', 0, 'ai:role:list',           'page.ai.role.list',          1, NOW(), 1, 0),
+(5062, 5060, 'AiRoleCreate',       'button', 0, 'ai:role:create',         'common.create',              2, NOW(), 1, 0),
+(5063, 5060, 'AiRoleEdit',         'button', 0, 'ai:role:edit',           'common.edit',                3, NOW(), 1, 0),
+(5064, 5060, 'AiRoleDelete',       'button', 0, 'ai:role:delete',         'common.delete',              4, NOW(), 1, 0);
+
+-- 埋点管理（平台专用）：目录 + 事件/目录/分析/漏斗/留存页面 + 导出按钮
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, title, icon, sort, create_time, status, is_deleted)
+VALUES (3016, 0, 'TrackingManage', 'catalog', 1, '/tracking', 'BasicLayout', 'tracking.title', 'carbon:chart-line-data', 10, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (3017, 3016, 'TrackingEventList', 'menu', 1, '/tracking/events', '/tracking/events/list', 'system:track:list', 'tracking.events.title', 'carbon:document', 1, NOW(), 1, 0),
+       (3018, 3016, 'TrackingEventCatalog', 'menu', 1, '/tracking/catalog', '/tracking/catalog/list', 'system:track:list', 'tracking.catalog.title', 'carbon:catalog', 2, NOW(), 1, 0),
+       (3019, 3016, 'TrackingAnalysis', 'menu', 1, '/tracking/analysis', '/tracking/analysis/list', 'system:track:list', 'tracking.analysis.title', 'carbon:analytics', 3, NOW(), 1, 0),
+       (3020, 3016, 'TrackingFunnel', 'menu', 1, '/tracking/funnel', '/tracking/funnel/list', 'system:track:list', 'tracking.funnel.title', 'carbon:activity', 4, NOW(), 1, 0),
+       (3021, 3016, 'TrackingRetention', 'menu', 1, '/tracking/retention', '/tracking/retention/list', 'system:track:list', 'tracking.retention.title', 'carbon:chart-line-data', 5, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (3022, 3016, 'TrackingEventExport', 'button', 1, 'system:track:export', 'tracking.event.export', 6, NOW(), 1, 0);
 
 -- =============================================================
 -- 菜单授权
@@ -444,6 +466,28 @@ VALUES (320005, 3200, 'SystemAccessBlocklistBan', 'button', 1, 'system:blocklist
 
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id)
 VALUES (1, 320005);
+
+-- =============================================================
+-- 访问黑名单：常用规则种子
+-- 默认启用的是「明显恶意/探测」类规则；与业务路径冲突时可在管理端停用。
+-- =============================================================
+INSERT IGNORE INTO sys_access_blocklist
+    (id, match_type, match_value, reason, expire_time, create_user, create_time, status, is_deleted)
+VALUES (7001, 'PATH', '/actuator/env', '探测 Spring Actuator 环境变量端点', NULL, 1, NOW(), 1, 0),
+       (7002, 'PATH', '/actuator/heapdump', '探测 Spring Actuator 堆转储端点', NULL, 1, NOW(), 1, 0),
+       (7003, 'PATH', '/actuator/configprops', '探测 Spring Actuator 配置属性端点', NULL, 1, NOW(), 1, 0),
+       (7004, 'PATH', '/actuator/beans', '探测 Spring Actuator Bean 列表端点', NULL, 1, NOW(), 1, 0),
+       (7005, 'PATH', '/.env', '探测 .env 环境变量文件', NULL, 1, NOW(), 1, 0),
+       (7006, 'PATH', '/.git/', '探测 Git 仓库目录', NULL, 1, NOW(), 1, 0),
+       (7007, 'PATH', '/wp-admin', '扫描 WordPress 后台', NULL, 1, NOW(), 1, 0),
+       (7008, 'PATH', '/phpmyadmin', '扫描 phpMyAdmin', NULL, 1, NOW(), 1, 0),
+       (7009, 'PATH', '/druid', '扫描 Druid 监控台', NULL, 1, NOW(), 1, 0),
+       (7010, 'USER_AGENT', 'sqlmap', 'SQL 注入扫描器', NULL, 1, NOW(), 1, 0),
+       (7011, 'USER_AGENT', 'nikto', 'Web 漏洞扫描器', NULL, 1, NOW(), 1, 0),
+       (7012, 'USER_AGENT', 'nmap', '端口/服务扫描器', NULL, 1, NOW(), 1, 0),
+       (7013, 'USER_AGENT', 'masscan', '高速端口扫描器', NULL, 1, NOW(), 1, 0),
+       (7014, 'USER_AGENT', 'acunetix', 'Web 漏洞扫描器', NULL, 1, NOW(), 1, 0),
+       (7015, 'USER_AGENT', 'gobuster', '目录爆破工具', NULL, 1, NOW(), 1, 0);
 
 
 -- =============================================================

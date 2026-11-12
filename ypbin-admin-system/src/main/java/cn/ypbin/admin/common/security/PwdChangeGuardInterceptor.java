@@ -12,6 +12,7 @@ package cn.ypbin.admin.common.security;
 import cn.dev33.satoken.stp.StpUtil;
 import cn.ypbin.admin.common.constant.PwdChangeKeys;
 import cn.ypbin.starter.core.exception.BusinessException;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Set;
@@ -41,6 +42,11 @@ public class PwdChangeGuardInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(@NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response, @NonNull Object handler) {
+        if (request.getDispatcherType() == DispatcherType.ERROR) {
+            // 容器错误派发（如 404 转发到 /error）不在 Sa-Token 上下文内，
+            // 继续调用 StpUtil 会抛 SaTokenContextException 覆盖原始错误
+            return true;
+        }
         if (!StpUtil.isLogin()) {
             // 未登录请求交给原有鉴权链路处理，避免把 401 改写成业务错误
             return true;

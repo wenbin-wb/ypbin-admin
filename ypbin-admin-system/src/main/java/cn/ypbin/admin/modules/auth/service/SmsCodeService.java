@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.modules.auth.service;
 
+import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.admin.common.util.CachedCounterReader;
@@ -40,7 +41,9 @@ public class SmsCodeService {
     /** 验证码校验失败计数键前缀（按手机号，防一次发码被用于逐位枚举）。 */
     private static final String VERIFY_FAIL_PREFIX = "sms:verify:fail:";
     /** 单个验证码允许的最大校验失败次数。 */
-    private static final int MAX_VERIFY_ATTEMPTS = 5;
+    private static final int DEFAULT_MAX_VERIFY_ATTEMPTS = 5;
+
+    private static final int MAX_VERIFY_ATTEMPTS_CAP = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final SysConfigService configService;
@@ -90,7 +93,8 @@ public class SmsCodeService {
         String normalizedPhone = normalizePhone(phone);
         String key = CODE_PREFIX + normalizedPhone;
         String failKey = VERIFY_FAIL_PREFIX + normalizedPhone;
-        if (readFailures(failKey) >= MAX_VERIFY_ATTEMPTS) {
+        int maxAttempts = maxVerifyAttempts();
+        if (readFailures(failKey) >= maxAttempts) {
             // 达到上限后直接作废验证码：避免一次发码被用于长期逐位枚举
             cacheService.delete(key);
             throw new BusinessException("验证码错误次数过多，请重新获取");
@@ -107,7 +111,7 @@ public class SmsCodeService {
             cacheService.expire(failKey, Duration.ofSeconds(
                 configService.getInt("SMS_CODE_EXPIRE_SECONDS", 300)));
         }
-        if (failures >= MAX_VERIFY_ATTEMPTS) {
+        if (failures >= maxAttempts) {
             cacheService.delete(key);
             throw new BusinessException("验证码错误次数过多，请重新获取");
         }
@@ -122,6 +126,20 @@ public class SmsCodeService {
      */
     private long readFailures(String key) {
         return CachedCounterReader.read(cacheService.get(key, Object.class));
+    }
+
+    /**
+     * 读取允许的错误次数：默认 5，配置非法/未配置按默认，最大 10。
+     *
+     * @return 允许的错误次数
+     */
+    private int maxVerifyAttempts() {
+        int configured = configService.getInt(
+            RegisterConfigKeys.CODE_VERIFY_MAX_ATTEMPTS, DEFAULT_MAX_VERIFY_ATTEMPTS);
+        if (configured <= 0) {
+            return DEFAULT_MAX_VERIFY_ATTEMPTS;
+        }
+        return Math.min(configured, MAX_VERIFY_ATTEMPTS_CAP);
     }
 
     private String normalizePhone(String phone) {

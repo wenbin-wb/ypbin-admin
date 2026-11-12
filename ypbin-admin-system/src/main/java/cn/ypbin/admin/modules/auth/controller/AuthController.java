@@ -13,7 +13,10 @@ import cn.ypbin.admin.modules.auth.core.MiniappLoginReq;
 import cn.ypbin.admin.modules.auth.model.resp.MiniappLoginResp;
 import cn.ypbin.admin.modules.auth.service.MiniappLoginService;
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
+import cn.ypbin.admin.modules.system.model.resp.RegisterOptionsResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.modules.auth.service.AuthService;
@@ -62,6 +65,39 @@ public class AuthController {
     @PostMapping("/auth/miniapp/login")
     public R<MiniappLoginResp> miniappLogin(@RequestBody MiniappLoginReq req) {
         return R.ok(miniappLoginService.login(req));
+    }
+
+    /**
+     * 注册入口的公开配置（是否开启 / 验证渠道 / 是否需要行为验证码）。
+     */
+    @GetMapping("/auth/register/options")
+    public R<RegisterOptionsResp> registerOptions() {
+        return R.ok(authService.registerOptions());
+    }
+
+    /**
+     * 发送注册验证码（手机/邮箱渠道由系统参数 REGISTER_VERIFY_MODE 决定）。
+     */
+    @Log(value = "发送注册验证码", module = "认证")
+    // 兜底上限 60/分钟；实际阈值由 REGISTER_CODE_SEND_MAX_PER_MINUTE 决定（业务层计数）
+    @RateLimit(count = 60, window = 60, message = "验证码发送过于频繁，请稍后再试")
+    @PostMapping("/auth/register/code/send")
+    public R<Void> sendRegisterCode(@Valid @RequestBody RegisterCodeSendReq req) {
+        authService.sendRegisterCode(req, WebRequestUtils.clientIp(clientIpResolver));
+        return R.ok();
+    }
+
+    /**
+     * 用户自助注册（公开入口，开关见系统参数 {@code REGISTER_ENABLED}）。
+     *
+     * <p>与登录入口一致按 IP 限流：注册会落库并建立会话，是比登录更重的写操作，
+     * 不限流时脚本可批量灌入账号。</p>
+     */
+    @Log(value = "用户注册", module = "认证")
+    @RateLimit(count = 5, window = 60, message = "注册过于频繁，请稍后再试")
+    @PostMapping("/auth/register")
+    public R<LoginResp> register(@Valid @RequestBody RegisterReq req) {
+        return R.ok(authService.register(req, WebRequestUtils.clientIp(clientIpResolver)));
     }
 
     /**

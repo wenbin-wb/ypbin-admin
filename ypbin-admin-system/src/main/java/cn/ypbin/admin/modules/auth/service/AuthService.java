@@ -10,7 +10,10 @@
 package cn.ypbin.admin.modules.auth.service;
 
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
+import cn.ypbin.admin.modules.system.model.resp.RegisterOptionsResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import java.util.List;
@@ -31,6 +34,35 @@ public interface AuthService {
      * @return 登录结果（含 accessToken）
      */
     LoginResp login(LoginReq req, String ip);
+
+    /**
+     * 用户自助注册（公开入口，开关见系统参数 {@code REGISTER_ENABLED}）。
+     *
+     * <p>注册成功即建立登录态并返回令牌，与登录接口同一响应契约。开关关闭、验证码未通过、
+     * 用户名/手机号重复、密码不符合策略、默认租户或默认角色不可用时均返回明确的业务错误。</p>
+     *
+     * @param req 注册请求
+     * @param ip  客户端 IP（限频维度）
+     * @return 登录结果（含 accessToken）
+     */
+    LoginResp register(RegisterReq req, String ip);
+
+    /**
+     * 发送注册归属验证码（渠道由系统参数 {@code REGISTER_VERIFY_MODE} 决定）。
+     *
+     * <p>未开启注册、或当前模式为 {@code NONE} 时直接拒绝；渠道由服务端决定，
+     * 不接受客户端指定（否则可自行选择更弱的渠道绕过配置）。</p>
+     *
+     * @param req 发送请求（按模式携带手机号或邮箱）
+     */
+    void sendRegisterCode(RegisterCodeSendReq req, String ip);
+
+    /**
+     * 注册入口的公开配置（是否开启 / 验证渠道 / 是否需要行为验证码）。
+     *
+     * @return 注册公开配置
+     */
+    RegisterOptionsResp registerOptions();
 
     /**
      * 当前会话登出。

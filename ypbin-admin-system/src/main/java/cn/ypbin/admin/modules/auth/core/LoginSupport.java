@@ -84,7 +84,9 @@ public class LoginSupport {
      * 记录在线用户终端信息（IP/归属地/浏览器/OS），供在线用户列表展示。
      */
     private void recordTerminal() {
-        String ip = RequestUtils.getClientIp();
+        // 与操作日志、限流、埋点同一口径：走可信代理解析，取真实客户端 IP。
+        // 原先 getClientIp() 只取 TCP 对端，部署在 nginx 后记录的是容器网桥地址。
+        String ip = RequestUtils.getClientIp(true);
         Terminal terminal = new Terminal();
         terminal.setIp(ip);
         terminal.setLocation(locationResolver.resolve(ip));

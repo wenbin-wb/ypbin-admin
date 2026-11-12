@@ -11,23 +11,30 @@ package cn.ypbin.admin.modules.system.service.impl;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
 import cn.ypbin.admin.common.constant.PwdChangeKeys;
+import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.modules.system.entity.SysPost;
 import cn.ypbin.admin.modules.system.entity.SysRole;
+import cn.ypbin.admin.modules.system.entity.SysRoleMenu;
+import cn.ypbin.admin.modules.system.entity.SysTenant;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.entity.SysUserPost;
 import cn.ypbin.admin.modules.system.entity.SysUserRole;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.mapper.SysPostMapper;
 import cn.ypbin.admin.modules.system.mapper.SysRoleMapper;
+import cn.ypbin.admin.modules.system.mapper.SysRoleMenuMapper;
+import cn.ypbin.admin.modules.system.mapper.SysTenantMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserPostMapper;
 import cn.ypbin.admin.modules.system.mapper.SysUserRoleMapper;
-import cn.ypbin.admin.modules.system.model.query.UserQuery;
 import cn.ypbin.admin.modules.system.model.query.OnlineUserQuery;
+import cn.ypbin.admin.modules.system.model.query.UserQuery;
+import cn.ypbin.admin.modules.system.model.req.UserRegisterReq;
 import cn.ypbin.admin.modules.system.model.req.UserSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
+import cn.ypbin.admin.modules.system.service.SysConfigService;
 import cn.ypbin.admin.modules.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.admin.modules.system.service.support.OnlineTokenFingerprint;
@@ -49,6 +56,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -56,6 +64,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -88,6 +97,15 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     private final UserAccountSupport accountSupport;
     /** 用户删除时清理空间关联，避免留下指向已删用户的孤儿关联。 */
     private final SysSpaceRelationService spaceRelationService;
+
+    /** 系统参数（注册开关/默认租户/默认角色）读取 */
+    private final SysConfigService configService;
+
+    /** 租户存在性与启用状态校验（匿名注册没有登录身份，租户只能由系统参数指定） */
+    private final SysTenantMapper tenantMapper;
+
+    /** 默认角色的菜单授权校验（无授权的角色登录后是空系统，必须拒绝而不是静默放行） */
+    private final SysRoleMenuMapper roleMenuMapper;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -245,6 +263,135 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         accountSupport.recordPasswordHistory(user.getId(), encoded);
         assignRolesInternal(user.getId(), req.getRoleIds());
         assignPosts(user.getId(), req.getPostIds());
+    }
+
+    /**
+     * 用户自助注册。
+     *
+     * <p><b>为什么必须显式绑定租户作用域</b>：匿名注册链路没有登录身份（{@code UserContext} 为空），
+     * 而 {@code sys_user} 不在租户忽略表内（fail-closed），直接读写会抛「缺少租户上下文」。
+     * 归属租户只取系统参数 {@code REGISTER_DEFAULT_TENANT_ID} 并校验其存在且启用——
+     * 不接受调用方指定租户，否则任何人都能对任意租户自助开户。</p>
+     *
+     * <p><b>默认角色是硬约束，不是可选项</b>：注册用户若没有角色则登录后看不到任何菜单，
+     * 表现为「注册成功但系统空白」。故 {@code REGISTER_DEFAULT_ROLE_CODE} 未配置、角色不存在、
+     * 已停用或不属于该租户时一律拒绝注册，不静默创建无角色用户。</p>
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SysUser registerUser(UserRegisterReq req) {
+        if (!configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
+            throw new BusinessException("注册功能未开启");
+        }
+        Long tenantId = resolveRegisterTenantId();
+        // 角色查询受租户插件约束，必须与用户写入处在同一个显式租户作用域
+        return TenantContext.executeWithTenant(tenantId, () -> {
+            SysRole role = resolveRegisterRole(tenantId);
+            return createRegisteredUser(req, tenantId, role);
+        });
+    }
+
+    /**
+     * 解析注册归属租户：取系统参数并校验租户存在且启用。
+     *
+     * @return 租户 ID
+     */
+    private Long resolveRegisterTenantId() {
+        String raw = configService.getString(RegisterConfigKeys.REGISTER_DEFAULT_TENANT_ID, "");
+        if (!StringUtils.hasText(raw)) {
+            throw new BusinessException("注册未配置默认租户，请联系管理员");
+        }
+        long tenantId;
+        try {
+            tenantId = Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            throw new BusinessException("系统参数 " + RegisterConfigKeys.REGISTER_DEFAULT_TENANT_ID
+                + " 必须为整数");
+        }
+        SysTenant tenant = tenantMapper.selectById(tenantId);
+        if (tenant == null || !EntityStatus.ENABLED.getCode().equals(tenant.getStatus())) {
+            throw new BusinessException("注册默认租户不存在或已停用");
+        }
+        return tenantId;
+    }
+
+    /**
+     * 解析注册默认角色：必须是该租户下启用的租户角色。
+     *
+     * @param tenantId 归属租户 ID（调用方已进入该租户作用域）
+     * @return 默认角色
+     */
+    private SysRole resolveRegisterRole(Long tenantId) {
+        String roleCode = configService.getString(RegisterConfigKeys.REGISTER_DEFAULT_ROLE_CODE, "");
+        if (!StringUtils.hasText(roleCode)) {
+            throw new BusinessException("注册未配置默认角色，请联系管理员");
+        }
+        SysRole role = roleMapper.selectOne(new LambdaQueryWrapper<SysRole>()
+            .eq(SysRole::getCode, roleCode.trim())
+            .eq(SysRole::getRoleType, AdminConstants.ROLE_TYPE_TENANT)
+            .eq(SysRole::getStatus, EntityStatus.ENABLED.getCode()), false);
+        if (role == null || !tenantId.equals(role.getTenantId())) {
+            throw new BusinessException(
+                "注册默认角色不存在、已停用或不属于默认租户：" + roleCode.trim());
+        }
+        // 角色存在≠可用：权限码/路由来自「角色的菜单授权 ∩ 租户模板」，没有菜单授权的角色
+        // 登录后是空系统。必须在注册前拒绝，否则问题要等用户登录才暴露，且没有任何报错。
+        long menuCount = roleMenuMapper.selectCount(new LambdaQueryWrapper<SysRoleMenu>()
+            .eq(SysRoleMenu::getRoleId, role.getId()));
+        if (menuCount == 0) {
+            throw new BusinessException(
+                "注册默认角色未分配菜单权限，请联系管理员为角色授权：" + roleCode.trim());
+        }
+        return role;
+    }
+
+    /**
+     * 落库一个新注册用户（用户名/手机号查重、密码策略、密码历史、默认角色）。
+     *
+     * @param req      注册请求
+     * @param tenantId 归属租户 ID
+     * @param role     默认角色
+     * @return 新建用户
+     */
+    private SysUser createRegisteredUser(UserRegisterReq req, Long tenantId, SysRole role) {
+        String username = req.getUsername().trim();
+        String realName = req.getRealName().trim();
+        String phone = accountSupport.normalizePhone(req.getPhone());
+        // 用户名是跨租户全局唯一键：必须忽略租户过滤查重，否则跨租户重名会落到数据库唯一键报原始 SQL 错误
+        boolean usernameExists = TenantContext.executeIgnore(() -> exists(
+            new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, username)));
+        if (usernameExists) {
+            throw new BusinessException("用户名已存在：" + username);
+        }
+        accountSupport.checkPhoneUnique(phone, null);
+        accountSupport.validatePassword(req.getPassword(), username);
+
+        SysUser user = new SysUser();
+        user.setUsername(username);
+        user.setRealName(realName);
+        user.setNickname(StringUtils.hasText(req.getNickname()) ? req.getNickname().trim() : realName);
+        user.setPhone(phone);
+        // 邮箱统一小写落库：验证码按小写归一校验，若存原文会出现「验证的是 a@x、账号记的是 A@x」
+        user.setEmail(StringUtils.hasText(req.getEmail())
+            ? req.getEmail().trim().toLowerCase(Locale.ROOT) : null);
+        user.setUserType(AdminConstants.USER_TYPE_TENANT);
+        user.setTenantId(tenantId);
+        String encoded = PasswordEncoderUtil.encode(req.getPassword());
+        user.setPassword(encoded);
+        user.setPwdResetTime(LocalDateTime.now());
+        user.setStatus(EntityStatus.ENABLED.getCode());
+        try {
+            if (!save(user)) {
+                throw new BusinessException("注册失败，请稍后重试");
+            }
+        } catch (DuplicateKeyException e) {
+            // 并发注册或「逻辑删除后用户名仍占用唯一键」都可能走到这里：
+            // 数据库原始异常不能透给匿名调用方，转成与查重一致的可读提示
+            throw new BusinessException("用户名或手机号已存在，请更换后重试");
+        }
+        accountSupport.recordPasswordHistory(user.getId(), encoded);
+        assignRolesInternal(user.getId(), List.of(role.getId()));
+        return user;
     }
 
     @Override

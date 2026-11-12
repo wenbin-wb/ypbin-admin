@@ -9,12 +9,20 @@
  */
 package cn.ypbin.admin.modules.auth.service.impl;
 
+import cloud.tianai.captcha.validator.common.model.dto.ImageCaptchaTrack;
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.admin.common.constant.RegisterConfigKeys;
 import cn.ypbin.admin.modules.auth.core.LoginSupport;
+import cn.ypbin.admin.modules.auth.service.EmailCodeService;
+import cn.ypbin.admin.modules.auth.service.SmsCodeService;
+import cn.ypbin.admin.modules.auth.support.RegisterVerifyMode;
 import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.req.LoginReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterCodeSendReq;
+import cn.ypbin.admin.modules.system.model.req.RegisterReq;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
+import cn.ypbin.admin.modules.system.model.resp.RegisterOptionsResp;
 import cn.ypbin.admin.modules.system.model.resp.RouteResp;
 import cn.ypbin.admin.modules.system.model.resp.UserInfoResp;
 import cn.ypbin.admin.modules.auth.service.AuthService;
@@ -23,13 +31,17 @@ import cn.ypbin.admin.modules.system.service.SysMenuService;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.captcha.core.CaptchaService;
+import cn.ypbin.starter.cache.core.CacheService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.password.lock.PasswordAttemptLimiter;
 import cn.ypbin.starter.security.password.PasswordEncoderUtil;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 认证服务实现。
@@ -41,6 +53,15 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
+    /** 注册验证码每 IP 每分钟发送上限默认值 */
+    private static final int DEFAULT_CODE_SEND_MAX_PER_MINUTE = 5;
+
+    /** 注册验证码发送频控硬上限（注解兜底同样使用该量级） */
+    private static final int MAX_CODE_SEND_PER_MINUTE_CAP = 60;
+
+    /** 注册验证码发送频控缓存键前缀（按 IP + 分钟窗口） */
+    private static final String CODE_SEND_LIMIT_PREFIX = "register:code:send:";
+
     private final SysUserService userService;
     private final SysPermissionService permissionService;
     private final SysMenuService menuService;
@@ -48,17 +69,15 @@ public class AuthServiceImpl implements AuthService {
     private final LoginSupport loginSupport;
     private final CaptchaService captchaService;
     private final SysConfigService configService;
+    private final SmsCodeService smsCodeService;
+    private final EmailCodeService emailCodeService;
+    private final CacheService cacheService;
 
     @Override
     public LoginResp login(LoginReq req, String ip) {
         // 0. 开启登录验证码时，先校验行为验证码再查账号，防止撞库
         if (configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false)) {
-            if (req.getCaptchaId() == null || req.getCaptchaTrack() == null) {
-                throw new BusinessException("请先完成验证码校验");
-            }
-            if (!captchaService.verify(req.getCaptchaId(), req.getCaptchaTrack())) {
-                throw new BusinessException("验证码校验失败");
-            }
+            requireCaptchaPassed(req.getCaptchaId(), req.getCaptchaTrack());
         }
         String username = req.getUsername();
         // 1. 登录前判断账号是否已被错误锁定（已锁定抛 AccountLockedException）
@@ -80,6 +99,147 @@ public class AuthServiceImpl implements AuthService {
 
         // 5. 统一登录收尾：写入上下文（含客户端信息）+ 记录登录时间 + 返回令牌
         return loginSupport.completeLogin(user, AdminConstants.AUTH_TYPE_ACCOUNT);
+    }
+
+    /**
+     * 用户自助注册：校验开关与验证码后落库，并直接建立登录态。
+     *
+     * <p><b>落库语义由 {@code SysUserService#registerUser} 单点决定</b>：归属租户、默认角色、
+     * 用户名/手机号查重与密码策略都只有 system 用户服务有数据源与唯一口径。本类只负责
+     * 匿名入口的开关、验证码与登录收尾，避免同一规则在两层各写一份而漂移。</p>
+     *
+     * <p>失败提示原样抛给调用方：用户名重复等业务错误必须让用户看到具体原因，不能吞成通用失败。</p>
+     */
+    @Override
+    public LoginResp register(RegisterReq req, String ip) {
+        if (!configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
+            throw new BusinessException("注册功能未开启");
+        }
+        if (configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false)) {
+            requireCaptchaPassed(req.getCaptchaId(), req.getCaptchaTrack());
+        }
+        verifyRegisterCode(req);
+        SysUser user = userService.registerUser(req);
+        if (user == null) {
+            throw new BusinessException("注册失败，请稍后重试");
+        }
+        return loginSupport.completeLogin(user, AdminConstants.AUTH_TYPE_ACCOUNT);
+    }
+
+    /**
+     * 注册入口的公开配置（注册页据此决定展示哪些字段）。
+     */
+    @Override
+    public RegisterOptionsResp registerOptions() {
+        RegisterOptionsResp options = new RegisterOptionsResp();
+        options.setEnabled(configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false));
+        // 未知/空配置由枚举显式拒绝，避免前端拿到一个「看起来是 NONE」的降级结果
+        options.setVerifyMode(currentVerifyMode().name());
+        options.setCaptchaEnabled(configService.getBoolean("LOGIN_CAPTCHA_ENABLED", false));
+        return options;
+    }
+
+    /**
+     * 发送注册归属验证码（渠道由系统参数 {@code REGISTER_VERIFY_MODE} 决定）。
+     */
+    @Override
+    public void sendRegisterCode(RegisterCodeSendReq req, String ip) {
+        if (!configService.getBoolean(RegisterConfigKeys.REGISTER_ENABLED, false)) {
+            throw new BusinessException("注册功能未开启");
+        }
+        requireSendNotExceeded(ip);
+        RegisterVerifyMode mode = currentVerifyMode();
+        if (mode == RegisterVerifyMode.SMS) {
+            smsCodeService.sendCode(requirePhone(req.getPhone()));
+            return;
+        }
+        if (mode == RegisterVerifyMode.EMAIL) {
+            emailCodeService.sendCode(requireEmail(req.getEmail()));
+            return;
+        }
+        throw new BusinessException("当前注册方式无需验证码");
+    }
+
+    /**
+     * 注册验证码发送频控：按 IP 每分钟计数，上限来自 {@code REGISTER_CODE_SEND_MAX_PER_MINUTE}
+     * （默认 5，硬上限 60）。注解保留 60/分钟作为兜底上限，业务层再按配置做更严格的计数。
+     *
+     * @param ip 客户端 IP
+     */
+    private void requireSendNotExceeded(String ip) {
+        int configured = configService.getInt(
+            RegisterConfigKeys.REGISTER_CODE_SEND_MAX_PER_MINUTE,
+            DEFAULT_CODE_SEND_MAX_PER_MINUTE);
+        int limit = configured <= 0
+            ? DEFAULT_CODE_SEND_MAX_PER_MINUTE
+            : Math.min(configured, MAX_CODE_SEND_PER_MINUTE_CAP);
+        String key = CODE_SEND_LIMIT_PREFIX + ip + ":" + (Instant.now().getEpochSecond() / 60);
+        long count = cacheService.increment(key, 1);
+        if (count == 1) {
+            cacheService.expire(key, Duration.ofSeconds(70));
+        }
+        if (count > limit) {
+            throw new BusinessException("验证码发送过于频繁，请稍后再试");
+        }
+    }
+
+    /**
+     * 按当前模式校验注册归属验证码（通过后验证码即被消费，一次性）。
+     *
+     * @param req 注册请求
+     */
+    private void verifyRegisterCode(RegisterReq req) {
+        RegisterVerifyMode mode = currentVerifyMode();
+        if (mode == RegisterVerifyMode.NONE) {
+            return;
+        }
+        if (!StringUtils.hasText(req.getVerifyCode())) {
+            throw new BusinessException("请输入验证码");
+        }
+        if (mode == RegisterVerifyMode.SMS) {
+            smsCodeService.verify(requirePhone(req.getPhone()), req.getVerifyCode());
+            return;
+        }
+        emailCodeService.verify(requireEmail(req.getEmail()), req.getVerifyCode());
+    }
+
+    /**
+     * 读取当前注册验证方式（未知取值由枚举显式拒绝）。
+     *
+     * @return 验证方式
+     */
+    private RegisterVerifyMode currentVerifyMode() {
+        return RegisterVerifyMode.from(
+            configService.getString(RegisterConfigKeys.REGISTER_VERIFY_MODE, "NONE"));
+    }
+
+    private static String requirePhone(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            throw new BusinessException("短信验证模式下手机号不能为空");
+        }
+        return phone.trim();
+    }
+
+    private static String requireEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            throw new BusinessException("邮箱验证模式下邮箱不能为空");
+        }
+        return email.trim();
+    }
+
+    /**
+     * 强制校验请求携带的行为验证码（登录/注册共用）。
+     *
+     * @param captchaId    验证码 id
+     * @param captchaTrack 拖动轨迹
+     */
+    private void requireCaptchaPassed(String captchaId, ImageCaptchaTrack captchaTrack) {
+        if (captchaId == null || captchaTrack == null) {
+            throw new BusinessException("请先完成验证码校验");
+        }
+        if (!captchaService.verify(captchaId, captchaTrack)) {
+            throw new BusinessException("验证码校验失败");
+        }
     }
 
     @Override

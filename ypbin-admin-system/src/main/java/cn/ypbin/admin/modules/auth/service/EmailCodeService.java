@@ -1,0 +1,203 @@
+/*
+ * Copyright (c) 2026-present ypbin-admin authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ */
+package cn.ypbin.admin.modules.auth.service;
+
+import cn.ypbin.admin.common.constant.RegisterConfigKeys;
+import cn.ypbin.admin.common.util.CachedCounterReader;
+import cn.ypbin.admin.modules.system.service.SysConfigService;
+import cn.ypbin.starter.cache.core.CacheService;
+import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.messaging.mail.MailService;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Locale;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+/**
+ * 邮箱注册验证码服务：发码 → Redis 存码带 TTL → 校验消费（一次性）。
+ *
+ * <p><b>与短信验证码同一套安全语义</b>：发送冷却、过期、一次性消费、同一验证码最多允许 5 次错误
+ * （超过即作废，防止逐位枚举）。区别只在投递通道：本服务用 starter 的 JavaMail 能力。</p>
+ *
+ * <p><b>为什么单独一套缓存键</b>：短信与邮箱是两条独立通道，同一用户可能同时持有两种验证码；
+ * 共用键会把后发的码覆盖先发的码，且错误计数互相污染。</p>
+ *
+ * @author wenbin
+ * @since 2026-11-10
+ */
+@Service
+@RequiredArgsConstructor
+public class EmailCodeService {
+
+    /** 验证码缓存键前缀（按邮箱） */
+    private static final String CODE_PREFIX = "email:register:code:";
+
+    /** 发送冷却键前缀（按邮箱） */
+    private static final String COOLDOWN_PREFIX = "email:register:cooldown:";
+
+    /** 校验失败计数前缀（按邮箱） */
+    private static final String VERIFY_FAIL_PREFIX = "email:register:verify:fail:";
+
+    /** 同一验证码允许的最大错误次数，超过即作废并要求重新获取 */
+    private static final int DEFAULT_MAX_VERIFY_ATTEMPTS = 5;
+
+    private static final int MAX_VERIFY_ATTEMPTS_CAP = 10;
+
+    /** 验证码上界（6 位数字） */
+    private static final int CODE_BOUND = 1_000_000;
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private static final Logger log = LoggerFactory.getLogger(EmailCodeService.class);
+
+    private final SysConfigService configService;
+    private final CacheService cacheService;
+    private final MailService mailService;
+
+    /**
+     * 发送邮箱验证码。验证码随机 6 位数字，TTL 由 {@code EMAIL_CODE_EXPIRE_SECONDS} 控制。
+     *
+     * @param email 收件邮箱
+     */
+    public void sendCode(String email) {
+        String target = normalizeEmail(email);
+        int cooldownSeconds = configService.getInt(
+            RegisterConfigKeys.EMAIL_CODE_COOLDOWN_SECONDS, 60);
+        int expireSeconds = configService.getInt(
+            RegisterConfigKeys.EMAIL_CODE_EXPIRE_SECONDS, 300);
+        if (cooldownSeconds <= 0 || expireSeconds <= 0) {
+            throw new BusinessException("邮箱验证码有效期和发送冷却必须大于 0 秒");
+        }
+        if (!mailService.isConfigured()) {
+            throw new BusinessException("邮件服务未配置，请联系管理员");
+        }
+        String cooldownKey = COOLDOWN_PREFIX + target;
+        String cooldownOwner = UUID.randomUUID().toString();
+        if (!cacheService.setIfAbsent(cooldownKey, cooldownOwner,
+            Duration.ofSeconds(cooldownSeconds))) {
+            throw new BusinessException("验证码发送过于频繁，请稍后再试");
+        }
+        String code = String.format("%06d", RANDOM.nextInt(CODE_BOUND));
+        String codeKey = CODE_PREFIX + target;
+        try {
+            cacheService.set(codeKey, code, Duration.ofSeconds(expireSeconds));
+            try {
+                mailService.sendText(target, "注册验证码",
+                    "您的注册验证码为：" + code + "，" + (expireSeconds / 60)
+                        + " 分钟内有效。如非本人操作，请忽略本邮件。");
+            } catch (RuntimeException e) {
+                // SMTP 异常可能带主机/端口/认证细节，不能原样回给匿名调用方
+                log.error("注册验证码邮件发送失败，email={}", maskEmail(target), e);
+                throw new BusinessException("验证码邮件发送失败，请稍后重试");
+            }
+            // 发送成功后才重置尝试预算：发送失败时保留旧计数，避免失败重试期间被无限重置
+            cacheService.delete(VERIFY_FAIL_PREFIX + target);
+        } catch (RuntimeException e) {
+            // 发送失败不能留下一个用户永远收不到的验证码（否则冷却期内无法重发）
+            cacheService.compareAndDelete(codeKey, code);
+            cacheService.compareAndDelete(cooldownKey, cooldownOwner);
+            throw e;
+        }
+    }
+
+    /**
+     * 校验邮箱验证码，通过后消费（删除缓存），不通过抛业务异常。
+     *
+     * @param email 收件邮箱
+     * @param code  用户提交的验证码
+     */
+    public void verify(String email, String code) {
+        String target = normalizeEmail(email);
+        String key = CODE_PREFIX + target;
+        String failKey = VERIFY_FAIL_PREFIX + target;
+        int maxAttempts = maxVerifyAttempts();
+        if (readFailures(failKey) >= maxAttempts) {
+            // 达到上限后直接作废验证码：避免一次发码被用于长期逐位枚举
+            cacheService.delete(key);
+            throw new BusinessException("验证码错误次数过多，请重新获取");
+        }
+        if (!StringUtils.hasText(code)) {
+            throw new BusinessException("请输入邮箱验证码");
+        }
+        if (cacheService.compareAndDelete(key, code.trim())) {
+            cacheService.delete(failKey);
+            return;
+        }
+        if (!cacheService.exists(key)) {
+            throw new BusinessException("验证码已过期或已使用");
+        }
+        long failures = cacheService.increment(failKey, 1);
+        if (failures == 1) {
+            cacheService.expire(failKey, Duration.ofSeconds(
+                configService.getInt(RegisterConfigKeys.EMAIL_CODE_EXPIRE_SECONDS, 300)));
+        }
+        if (failures >= maxAttempts) {
+            cacheService.delete(key);
+            throw new BusinessException("验证码错误次数过多，请重新获取");
+        }
+        throw new BusinessException("验证码错误");
+    }
+
+    /**
+     * 读取失败计数（缓存反序列化类型不稳定，统一走公共解析）。
+     *
+     * @param key 计数键
+     * @return 当前失败次数
+     */
+    private long readFailures(String key) {
+        return CachedCounterReader.read(cacheService.get(key, Object.class));
+    }
+
+    /**
+     * 读取允许的错误次数：默认 5，配置非法/未配置按默认，最大 10。
+     *
+     * @return 允许的错误次数
+     */
+    private int maxVerifyAttempts() {
+        int configured = configService.getInt(
+            RegisterConfigKeys.CODE_VERIFY_MAX_ATTEMPTS, DEFAULT_MAX_VERIFY_ATTEMPTS);
+        if (configured <= 0) {
+            return DEFAULT_MAX_VERIFY_ATTEMPTS;
+        }
+        return Math.min(configured, MAX_VERIFY_ATTEMPTS_CAP);
+    }
+
+    /**
+     * 邮箱归一：去空白 + 小写（缓存键与校验口径一致，避免大小写差异导致「码不对」）。
+     *
+     * @param email 原始邮箱
+     * @return 归一后的邮箱
+     */
+    private String normalizeEmail(String email) {
+        if (!StringUtils.hasText(email)) {
+            throw new BusinessException("邮箱不能为空");
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 日志脱敏：保留首字符与域名。
+     *
+     * @param email 邮箱
+     * @return 脱敏后的邮箱
+     */
+    private static String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return "****";
+        }
+        return email.charAt(0) + "****" + email.substring(at);
+    }
+}

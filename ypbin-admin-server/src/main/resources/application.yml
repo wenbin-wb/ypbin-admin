@@ -92,8 +92,13 @@ ypbin:
     # 访问黑名单：IP/CIDR、User-Agent、路径前缀；管理端「安全防护 → 访问黑名单」
     blocklist:
       enabled: true
-      # 直连地址命中可信代理时才采信 X-Forwarded-For；部署在 nginx/LB 后按实际网段配置
-      trusted-proxies: []
+      # 直连地址命中可信代理时才采信 X-Forwarded-For / X-Real-IP。
+      # 单体部署：请求经宿主机 nginx → 127.0.0.1:18080 → docker 端口映射进容器，
+      # 容器看到的对端是网桥网关 192.168.32.1；127.0.0.1 覆盖容器内自调用。
+      # 与 ypbin.tools.trusted-proxies 必须同值（登录限流/黑名单/操作日志/在线用户同一口径）。
+      trusted-proxies:
+        - 127.0.0.1
+        - 192.168.32.0/24
       # 登录失败由 PasswordAttemptLimiter 在业务失败点按客户端 IP 计数（登录失败为 HTTP 200 + R.code=401，
       # 过滤器看不到 401）；过滤器默认只把真实 429 计入自动封禁，401/403 需显式配置 status-codes 才会计数
       auto-ban:
@@ -103,6 +108,9 @@ ypbin:
         ban-seconds: 600
     excludes:                   # 放行路径（无需登录）
       - /auth/login
+      - /auth/register
+      - /auth/register/options
+      - /auth/register/code/send
       - /auth/sms/send
       - /auth/sms/login
       - /auth/miniapp/login     # 小程序登录（匿名入口）
@@ -111,6 +119,7 @@ ypbin:
       - /auth/social/platforms
       - /auth/captcha
       - /auth/captcha/verify
+      - /tracking/ingest
       - /open/license/**
       - /miniapp/cardtab/rooms/code/**        # 小程序按口令查房间（只返回预览视图）
       - /miniapp/familymenu/preset-dish/list  # 全局预设菜字典（不隶属任何餐厅）
@@ -149,6 +158,7 @@ ypbin:
       - sys_template_menu
       - sys_license
       - sys_access_blocklist
+
       # 小程序业务表不带 tenant_id（用户归属由登录建号时写入 sys_user 的 tenant_id 决定）
       - cardtab_room
       - cardtab_room_member
@@ -164,6 +174,32 @@ ypbin:
       - familymenu_wishlist
       - familymenu_order
       - familymenu_order_detail
+
+      - sys_track_event
+      - sys_track_event_daily
+      - sys_track_user_daily
+      - sys_track_session
+
+  # ---------- 客户端 IP（可信代理） ----------
+  tools:
+    # 与 ypbin.security.blocklist.trusted-proxies 同值：RequestUtils.getClientIp(true)
+    # 与 ClientIpResolver 共用同一套「从右往左跳过可信代理」的解析口径。
+    trusted-proxies:
+      - 127.0.0.1
+      - 192.168.32.0/24
+    rate-limit:
+      trust-forwarded: true     # 限流按真实客户端 IP 分桶，避免所有人共用 nginx 一个桶
+
+  # ---------- 埋点采集 ----------
+  tracking:
+    enabled: true               # 装配埋点内核（TrackRecorder/Sink）
+    ingest-enabled: true        # 开放 POST /tracking/ingest（单体应用只有一个入口）
+    trust-forwarded: true       # 与日志/在线用户/限流同一取 IP 口径
+    # 与操作日志/在线用户保持一致：存完整 IP（默认 true 会把 IPv4 截断成 /24，
+    # 表现为 192.168.32.0、127.0.0.0 这类网段地址，无法与日志逐条对照）
+    anonymize-ip: false
+    app-id: ypbin-admin-ui
+
 
   # ---------- 接口签名 ----------
   sign:
