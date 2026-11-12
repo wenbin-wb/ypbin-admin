@@ -33,6 +33,18 @@ public class CardtabEventResp {
     /** 事件类型 */
     private String eventType;
 
+    /** 触发事件的成员 ID（支出流水中即支出人） */
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long memberId;
+
+    /** 记录人（操作者）的用户 ID：多人可记模式下可能与支出人不同，用于判断撤销权限 */
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long recorderUserId;
+
+    /** 关联业务主键（支出流水即支出记录 ID），撤销时回传给撤销接口 */
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long refId;
+
     /** 标题 */
     private String title;
 

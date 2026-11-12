@@ -45,6 +45,9 @@ public class CardtabRoomMemberResp {
     /** 角色：OWNER/MEMBER */
     private String role;
 
+    /** 是否为当前登录用户本人：前端据此高亮自己、避免给自己记账 */
+    private Boolean self;
+
     /** 状态：IN_ROOM/LEFT */
     private String memberStatus;
 

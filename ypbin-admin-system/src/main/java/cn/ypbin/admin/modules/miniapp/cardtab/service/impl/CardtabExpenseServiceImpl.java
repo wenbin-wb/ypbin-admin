@@ -15,6 +15,7 @@ import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoomEvent;
 import cn.ypbin.admin.modules.miniapp.cardtab.entity.CardtabRoomMember;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabEventTypeEnum;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabExpenseStatusEnum;
+import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabMemberStatusEnum;
 import cn.ypbin.admin.modules.miniapp.cardtab.enums.CardtabRoomStatusEnum;
 import cn.ypbin.admin.modules.miniapp.cardtab.mapper.CardtabExpenseMapper;
 import cn.ypbin.admin.modules.miniapp.cardtab.mapper.CardtabRoomEventMapper;
@@ -37,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 牌账清-支出记录服务实现。
  *
  * <p>记账与撤销都会改动成员积分，属房间级写操作：一律先经 {@link CardtabRoomAccessSupport}
- * 校验调用者是该房间成员（撤销不额外限制发起人，房内任何成员均可纠错，但必须留流水）。</p>
+ * 校验调用者是该房间成员；撤销额外限制为「支出人本人、记录人本人或房主」，且必须留流水。</p>
  *
  * @author wenbin
  * @since 2026-09-08
@@ -46,6 +47,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMapper, CardtabExpense>
     implements CardtabExpenseService {
+
+    /** 多人可记模式：允许代替房间内其他成员作为支出人记账 */
+    private static final String MODE_MULTI_MEMBER = "MULTI_MEMBER_RECORD";
 
     private final CardtabRoomMemberMapper memberMapper;
     private final CardtabRoomEventMapper eventMapper;
@@ -61,14 +65,16 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
             throw new BusinessException("房间不存在或已结算，无法记账");
         }
         // 成员身份 + 未退出，由守卫统一校验（此前各方法各写一遍，容易漏）
-        CardtabRoomMember fromMember = accessSupport.requireMember(roomId);
+        CardtabRoomMember caller = accessSupport.requireMember(roomId);
+        CardtabRoomMember fromMember = resolveFromMember(room, caller, req.getFromMemberId());
 
         if (fromMember.getId().equals(req.getToMemberId())) {
             throw new BusinessException("不能给自己记支出");
         }
 
         CardtabRoomMember toMember = memberMapper.selectById(req.getToMemberId());
-        if (toMember == null || !toMember.getRoomId().equals(roomId)) {
+        if (toMember == null || !toMember.getRoomId().equals(roomId)
+            || CardtabMemberStatusEnum.LEFT.is(toMember.getMemberStatus())) {
             throw new BusinessException("收款成员不存在或不在本房间内");
         }
 
@@ -116,6 +122,27 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         return res;
     }
 
+    /**
+     * 解析本笔支出的支出人。
+     *
+     * <p>默认是调用者本人；只有「多人可记」模式允许代替房间内其他成员记账，
+     * 且被指定人必须仍在本房间内——否则会给已退出的成员加减分，形成对不上人的幽灵账目。</p>
+     */
+    private CardtabRoomMember resolveFromMember(CardtabRoom room, CardtabRoomMember caller, Long fromMemberId) {
+        if (fromMemberId == null || fromMemberId.equals(caller.getId())) {
+            return caller;
+        }
+        if (!MODE_MULTI_MEMBER.equals(room.getBookkeepingMode())) {
+            throw new BusinessException("当前房间不允许代替他人记账");
+        }
+        CardtabRoomMember fromMember = memberMapper.selectById(fromMemberId);
+        if (fromMember == null || !fromMember.getRoomId().equals(room.getId())
+            || CardtabMemberStatusEnum.LEFT.is(fromMember.getMemberStatus())) {
+            throw new BusinessException("支出人不存在或不在本房间内");
+        }
+        return fromMember;
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void revokeExpense(Long roomId, Long expenseId) {
@@ -125,7 +152,7 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
             throw new BusinessException("房间已结算或关闭，无法撤销支出");
         }
         // 撤销会反向调整双方积分，必须确认调用者属于该房间
-        accessSupport.requireMember(roomId);
+        CardtabRoomMember caller = accessSupport.requireMember(roomId);
 
         CardtabExpense expense = getById(expenseId);
         if (expense == null || !expense.getRoomId().equals(roomId)) {
@@ -133,6 +160,13 @@ public class CardtabExpenseServiceImpl extends BaseServiceImpl<CardtabExpenseMap
         }
         if (CardtabExpenseStatusEnum.REVOKED.is(expense.getExpenseStatus())) {
             throw new BusinessException("该笔支出已撤销");
+        }
+        // 只有「支出人本人」「记录人本人」或房主可以撤销：否则任何成员都能改他人账目。
+        // 多人可记模式下支出人与记录人可能不同（A 代 B 记账）：createUser 记录的是操作者的用户 ID。
+        boolean isPayer = caller.getId().equals(expense.getFromMemberId());
+        boolean isRecorder = expense.getCreateUser() != null && expense.getCreateUser().equals(caller.getUserId());
+        if (!isPayer && !isRecorder && !accessSupport.isOwnerRole(caller.getRole())) {
+            throw new BusinessException("只能撤销自己记的支出，或由房主撤销");
         }
 
         CardtabRoomMember fromMember = memberMapper.selectById(expense.getFromMemberId());

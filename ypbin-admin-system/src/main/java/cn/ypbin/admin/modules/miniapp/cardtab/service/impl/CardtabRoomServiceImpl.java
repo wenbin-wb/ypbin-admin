@@ -487,7 +487,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
             return resp;
         }
 
-        resp.setMembers(members.stream().map(this::toMemberResp).toList());
+        resp.setMembers(members.stream().map(m -> toMemberResp(m, currentUserId)).toList());
 
         Page<CardtabRoomEvent> eventPage = new Page<>(1, ROOM_DETAIL_EVENT_LIMIT);
         Page<CardtabRoomEvent> events = eventMapper.selectPage(eventPage,
@@ -590,12 +590,15 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         resp.setAllowPasscodeJoin(r.getAllowPasscodeJoin() != null && r.getAllowPasscodeJoin() == 1);
         resp.setRoomStatus(r.getRoomStatus());
         resp.setOwnerUserId(r.getOwnerUserId());
+        resp.setOwner(accessSupport.currentUserIdOrEmpty()
+            .map(id -> id.equals(r.getOwnerUserId()))
+            .orElse(false));
         resp.setCreateTime(r.getCreateTime());
         resp.setExpenseCount(expenseCount);
         return resp;
     }
 
-    private CardtabRoomMemberResp toMemberResp(CardtabRoomMember m) {
+    private CardtabRoomMemberResp toMemberResp(CardtabRoomMember m, Long currentUserId) {
         CardtabRoomMemberResp resp = new CardtabRoomMemberResp();
         resp.setId(m.getId());
         resp.setUserId(m.getUserId());
@@ -603,6 +606,7 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         resp.setAvatarUrl(m.getAvatarUrl());
         resp.setAvatarText(m.getAvatarText());
         resp.setRole(m.getRole());
+        resp.setSelf(currentUserId != null && currentUserId.equals(m.getUserId()));
         resp.setMemberStatus(m.getMemberStatus());
         resp.setTotalScore(m.getTotalScore() != null ? m.getTotalScore() : BigDecimal.ZERO);
         return resp;
@@ -612,6 +616,9 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         CardtabEventResp resp = new CardtabEventResp();
         resp.setId(e.getId());
         resp.setEventType(e.getEventType());
+        resp.setMemberId(e.getMemberId());
+        resp.setRecorderUserId(e.getCreateUser());
+        resp.setRefId(e.getRefId());
         resp.setTitle(e.getTitle());
         resp.setContent(e.getContent());
         resp.setAmount(e.getAmount());

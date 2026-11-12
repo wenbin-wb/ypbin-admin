@@ -29,6 +29,9 @@ public class CardtabExpenseReq {
     @NotNull(message = "收款成员不能为空")
     private Long toMemberId;
 
+    /** 支出人成员 ID：仅「多人可记」模式可指定；为空时取当前登录用户 */
+    private Long fromMemberId;
+
     /** 支出金额/积分 */
     @NotNull(message = "金额不能为空")
     @DecimalMin(value = "0.01", message = "金额必须大于0")

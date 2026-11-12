@@ -56,6 +56,9 @@ public class CardtabRoomDetailResp {
     @JsonSerialize(using = ToStringSerializer.class)
     private Long ownerUserId;
 
+    /** 当前登录用户是否为本房间房主：前端据此显示房间设置/结束本场入口 */
+    private Boolean owner;
+
     /** 房间人数 */
     private Integer memberCount;
 
