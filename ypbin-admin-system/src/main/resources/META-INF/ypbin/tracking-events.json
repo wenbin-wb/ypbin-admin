@@ -10,6 +10,101 @@
       "properties": [
         { "name": "rowCount", "type": "integer", "description": "导出行数" }
       ]
+    },
+    {
+      "code": "cardtab.room.create",
+      "description": "牌账清：创建房间",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "gameType", "type": "string", "maxLength": 32, "description": "玩法类型" },
+        { "name": "unit", "type": "string", "maxLength": 16, "description": "计分单位" },
+        { "name": "bookkeepingMode", "type": "string", "maxLength": 32, "description": "记账模式" },
+        { "name": "allowPasscodeJoin", "type": "boolean", "description": "是否允许口令加入" }
+      ]
+    },
+    {
+      "code": "cardtab.room.join",
+      "description": "牌账清：加入房间",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "joinType", "type": "string", "maxLength": 16, "description": "加入方式（PASSCODE / QRCODE）" },
+        { "name": "hasRoomCode", "type": "boolean", "description": "是否携带房间号" }
+      ]
+    },
+    {
+      "code": "cardtab.room.leave",
+      "description": "牌账清：退出房间",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "memberCount", "type": "integer", "description": "退出时房间成员数" }
+      ]
+    },
+    {
+      "code": "cardtab.room.settle",
+      "description": "牌账清：结束并保存结算",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "expenseCount", "type": "integer", "description": "本场支出笔数" },
+        { "name": "memberCount", "type": "integer", "description": "参与结算的成员数" }
+      ]
+    },
+    {
+      "code": "cardtab.room.share",
+      "description": "牌账清：发起分享房间（用户点击分享即计数，不保证分享成功）",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "channel", "type": "string", "maxLength": 16, "description": "分享渠道" }
+      ]
+    },
+    {
+      "code": "cardtab.expense.create",
+      "description": "牌账清：记一笔支出",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "amountBucket", "type": "string", "maxLength": 16, "description": "金额区间（不采集精确金额）" },
+        { "name": "multiMode", "type": "boolean", "description": "是否多人可记模式" },
+        { "name": "fromQuickAmount", "type": "boolean", "description": "是否使用快捷金额" }
+      ]
+    },
+    {
+      "code": "cardtab.expense.revoke",
+      "description": "牌账清：撤销支出",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": []
+    },
+    {
+      "code": "cardtab.template.save",
+      "description": "牌账清：保存玩法模板",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "gameType", "type": "string", "maxLength": 32, "description": "玩法类型" }
+      ]
+    },
+    {
+      "code": "cardtab.template.use",
+      "description": "牌账清：使用玩法模板",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "gameType", "type": "string", "maxLength": 32, "description": "玩法类型" }
+      ]
+    },
+    {
+      "code": "cardtab.ws.fallback",
+      "description": "牌账清：实时通道降级为轮询",
+      "source": "web",
+      "since": "3.3.0",
+      "properties": [
+        { "name": "reason", "type": "string", "maxLength": 32, "description": "降级原因" }
+      ]
     }
   ]
 }

@@ -164,6 +164,24 @@ location /miniapp/ {
 微信后台需把 `wss://<你的域名>` 配为 socket 合法域名。小程序登录还需配置
 `WECHAT_MINIAPP_APPID` / `WECHAT_MINIAPP_SECRET`(未配置且未开 Mock 时登录会直接失败)。
 
+### 埋点采集端点(单体部署必配)
+
+前端(Web 与小程序)统一请求 `/api/system/tracking/ingest`;微服务由网关按 `/system/**` 路由,
+单体后端实际端点是 `/tracking/ingest`(`ypbin.security.excludes` 也只放行这个路径)。
+**单体部署必须补一条精确匹配**,否则埋点整体 404:
+
+```nginx
+location = /api/system/tracking/ingest {
+    proxy_pass http://127.0.0.1:8080/tracking/ingest;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+> `location =` 精确匹配优先于 `location /api/`,无需改动其它 location。
+
 ## 常见坑排查
 
 | 现象 | 原因 | 解决 |
