@@ -13,6 +13,7 @@ import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomCreateReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomJoinReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomSettingsReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabEventResp;
+import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabHistorySummaryResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabRoomDetailResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.service.CardtabRoomService;
 import cn.ypbin.starter.core.model.R;
@@ -115,6 +116,16 @@ public class CardtabRoomController {
         @RequestParam(defaultValue = "1") int current,
         @RequestParam(defaultValue = "10") int size) {
         return R.ok(roomService.getHistoryRooms(current, size));
+    }
+
+    /**
+     * 历史房间的月度统计：按自然月聚合，不受列表分页上限影响。
+     *
+     * @param month 统计月份 yyyy-MM，缺省为当前月
+     */
+    @GetMapping("/history/summary")
+    public R<CardtabHistorySummaryResp> historySummary(@RequestParam(required = false) String month) {
+        return R.ok(roomService.historySummary(month));
     }
 
     /**

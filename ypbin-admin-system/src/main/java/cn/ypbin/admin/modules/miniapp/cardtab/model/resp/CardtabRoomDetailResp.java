@@ -71,7 +71,7 @@ public class CardtabRoomDetailResp {
     /** 已记支出笔数（统计值，无对应落库列） */
     private Integer expenseCount;
 
-    /** 我在本房间的积分（统计值，非成员时为 0） */
+    /** 我在本房间的积分（统计值）：无成员记录或积分缺失时为 0；已退出成员返回退出时的终值 */
     private BigDecimal myScore;
 
     /** 创建时间（与 {@code create_time} 列同名） */

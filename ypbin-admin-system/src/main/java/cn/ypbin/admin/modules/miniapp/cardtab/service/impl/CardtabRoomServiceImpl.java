@@ -26,6 +26,8 @@ import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomCreateReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomJoinReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomSettingsReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabEventResp;
+import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabFrequentPlayerResp;
+import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabHistorySummaryResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabHomeSummaryResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabRoomDetailResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabRoomMemberResp;
@@ -44,8 +46,12 @@ import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -436,10 +442,96 @@ public class CardtabRoomServiceImpl extends BaseServiceImpl<CardtabRoomMapper, C
         List<CardtabRoom> rooms = listByIds(roomIds);
         // 批量取支出笔数，避免逐房间查库
         Map<Long, Integer> expenseCountMap = countExpensesByRoom(roomIds);
-        List<CardtabRoomDetailResp> list = rooms.stream()
-            .map(r -> toSimpleRoomResp(r, expenseCountMap.getOrDefault(r.getId(), 0)))
-            .toList();
+        // 我在这批房间里的积分：历史列表要显示「我这场输赢多少」
+        Map<Long, CardtabRoomMember> myMemberByRoom = memberPage.getRecords().stream()
+            .collect(Collectors.toMap(CardtabRoomMember::getRoomId, m -> m, (a, b) -> a));
+        List<CardtabRoomDetailResp> list = rooms.stream().map(r -> {
+            CardtabRoomDetailResp resp = toSimpleRoomResp(r, expenseCountMap.getOrDefault(r.getId(), 0));
+            CardtabRoomMember mine = myMemberByRoom.get(r.getId());
+            BigDecimal score = mine == null ? null : mine.getTotalScore();
+            resp.setMyScore(score == null ? BigDecimal.ZERO : score);
+            return resp;
+        }).toList();
         return PageResult.of(list, memberPage.getTotal(), current, size);
+    }
+
+    @Override
+    public CardtabHistorySummaryResp historySummary(String month) {
+        Long userId = accessSupport.currentUserId();
+        YearMonth target = parseMonth(month);
+        CardtabHistorySummaryResp resp = new CardtabHistorySummaryResp();
+        resp.setMonth(target.toString());
+        List<CardtabRoomMember> mine = memberMapper.selectList(new LambdaQueryWrapper<CardtabRoomMember>()
+            .eq(CardtabRoomMember::getUserId, userId));
+        List<Long> roomIds = mine.stream().map(CardtabRoomMember::getRoomId).distinct().toList();
+        if (roomIds.isEmpty()) {
+            resp.setRoomCount(0);
+            resp.setExpenseCount(0);
+            return resp;
+        }
+        List<Long> monthRoomIds = listByIds(roomIds).stream()
+            .filter(room -> room.getCreateTime() != null && YearMonth.from(room.getCreateTime()).equals(target))
+            .map(CardtabRoom::getId)
+            .toList();
+        Map<Long, Integer> expenseCountMap = countExpensesByRoom(monthRoomIds);
+        resp.setRoomCount(monthRoomIds.size());
+        resp.setExpenseCount(expenseCountMap.values().stream().mapToInt(Integer::intValue).sum());
+        return resp;
+    }
+
+    @Override
+    public List<CardtabFrequentPlayerResp> frequentPlayers(int limit) {
+        Long userId = accessSupport.currentUserId();
+        int capped = Math.max(1, Math.min(limit, 20));
+        // 只统计最近 200 场：更早的牌友对「常用」没有参考价值，同时避免全表扫描
+        Page<CardtabRoomMember> minePage = memberMapper.selectPage(new Page<>(1, 200),
+            new LambdaQueryWrapper<CardtabRoomMember>()
+                .eq(CardtabRoomMember::getUserId, userId)
+                .orderByDesc(CardtabRoomMember::getCreateTime));
+        List<Long> roomIds = minePage.getRecords().stream().map(CardtabRoomMember::getRoomId).distinct().toList();
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
+        // 按加入时间升序遍历，后写入的即最近一次同房时的昵称/头像
+        List<CardtabRoomMember> others = memberMapper.selectList(new LambdaQueryWrapper<CardtabRoomMember>()
+            .in(CardtabRoomMember::getRoomId, roomIds)
+            .ne(CardtabRoomMember::getUserId, userId)
+            .ne(CardtabRoomMember::getMemberStatus, CardtabMemberStatusEnum.LEFT.getCode())
+            .orderByAsc(CardtabRoomMember::getCreateTime));
+        Map<Long, CardtabFrequentPlayerResp> byUser = new LinkedHashMap<>();
+        for (CardtabRoomMember m : others) {
+            CardtabFrequentPlayerResp item = byUser.get(m.getUserId());
+            if (item == null) {
+                item = new CardtabFrequentPlayerResp();
+                item.setUserId(m.getUserId());
+                item.setCount(1);
+                byUser.put(m.getUserId(), item);
+            } else {
+                item.setCount(item.getCount() + 1);
+            }
+            // 按加入时间升序，后写入的即最近一次同房时的昵称/头像
+            item.setNickname(m.getNickname());
+            item.setAvatarUrl(m.getAvatarUrl());
+            item.setAvatarText(m.getAvatarText());
+        }
+        return byUser.values().stream()
+            .sorted(Comparator.comparing(CardtabFrequentPlayerResp::getCount).reversed())
+            .limit(capped)
+            .toList();
+    }
+
+    /**
+     * 解析 yyyy-MM；为空取当前月，格式非法直接报错而不是静默用当前月。
+     */
+    private YearMonth parseMonth(String month) {
+        if (!StringUtils.hasText(month)) {
+            return YearMonth.now();
+        }
+        try {
+            return YearMonth.parse(month.trim());
+        } catch (DateTimeParseException e) {
+            throw new BusinessException("月份格式应为 yyyy-MM");
+        }
     }
 
     @Override

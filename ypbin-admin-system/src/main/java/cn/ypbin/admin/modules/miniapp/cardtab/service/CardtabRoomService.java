@@ -14,10 +14,13 @@ import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomCreateReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomJoinReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.req.CardtabRoomSettingsReq;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabEventResp;
+import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabFrequentPlayerResp;
+import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabHistorySummaryResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabHomeSummaryResp;
 import cn.ypbin.admin.modules.miniapp.cardtab.model.resp.CardtabRoomDetailResp;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,6 +50,22 @@ public interface CardtabRoomService extends BaseService<CardtabRoom> {
      * 按口令查询房间基础信息。
      */
     CardtabRoomDetailResp getRoomByCode(String roomCode);
+
+    /**
+     * 历史房间的月度统计（按自然月聚合，不受列表分页上限影响）。
+     *
+     * @param month 统计月份 yyyy-MM；为空时取当前月
+     * @return 本月房间数与支出笔数
+     */
+    CardtabHistorySummaryResp historySummary(String month);
+
+    /**
+     * 常用玩家：与我同房次数最多的对家。
+     *
+     * @param limit 返回条数上限
+     * @return 按同房次数降序
+     */
+    List<CardtabFrequentPlayerResp> frequentPlayers(int limit);
 
     /**
      * 加入房间。
