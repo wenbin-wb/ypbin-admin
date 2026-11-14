@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.provider;
 
 import cn.ypbin.admin.modules.system.entity.SysClient;
 import cn.ypbin.admin.modules.system.mapper.SysClientMapper;
+import cn.ypbin.starter.data.core.EntityStatus;
 import cn.ypbin.starter.security.client.LoginClient;
 import cn.ypbin.starter.security.client.LoginClientProvider;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -44,6 +45,9 @@ public class DbLoginClientProvider implements LoginClientProvider {
         LoginClient client = new LoginClient();
         client.setClientId(entity.getClientId());
         client.setClientSecret(entity.getClientSecret());
+        // status 是后台的启停开关：0 时 starter 会直接拒绝登录；为空按启用处理（与列默认值一致）
+        client.setEnabled(entity.getStatus() == null
+            || EntityStatus.ENABLED.getCode().equals(entity.getStatus()));
         client.setClientType(entity.getClientType());
         client.setAuthTypes(parseAuthTypes(entity.getAuthTypes()));
         client.setTimeout(entity.getTimeout());

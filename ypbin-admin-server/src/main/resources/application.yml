@@ -233,6 +233,11 @@ ypbin:
       - OS
     access:
       enabled: true             # 全量访问日志（打印到应用日志，非落库），与 @Log 操作日志互补
+      mask-headers:             # 访问日志里脱敏的请求头（子串匹配，大小写不敏感）
+        - authorization
+        - cookie
+        - token
+        - secret                # 覆盖 X-Client-Secret，避免客户端密钥进日志
       exclude-path-patterns:    # 不记流水的路径：健康检查、接口文档、静态资源
         - /actuator/**
         - /doc.html

@@ -12,6 +12,7 @@ package cn.ypbin.admin.modules.auth.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import cn.ypbin.admin.common.constant.AdminConstants;
+import cn.ypbin.starter.security.client.LoginClientRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -47,5 +48,44 @@ class LoginSupportTest {
 
         // 无 Web 上下文（定时任务等）同样按未声明处理
         assertThat(LoginSupport.resolveClientId(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("客户端密钥：配置了密钥的端带头才生效，未配置的端不带头")
+    void shouldResolveClientSecret() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(AdminConstants.CLIENT_SECRET_HEADER, "  s3cret  ");
+        assertThat(LoginSupport.resolveClientSecret(request)).isEqualTo("s3cret");
+
+        MockHttpServletRequest blank = new MockHttpServletRequest();
+        blank.addHeader(AdminConstants.CLIENT_SECRET_HEADER, "   ");
+        assertThat(LoginSupport.resolveClientSecret(blank)).isNull();
+        assertThat(LoginSupport.resolveClientSecret(null)).isNull();
+        // 客户端 ID 与密钥互不串用
+        assertThat(LoginSupport.resolveClientId(request)).isNull();
+    }
+
+    @Test
+    @DisplayName("组装客户端请求：ID、认证方式与密钥分别取自对应来源")
+    void shouldBuildClientRequestFromHeaders() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(AdminConstants.CLIENT_ID_HEADER, "miniapp");
+        request.addHeader(AdminConstants.CLIENT_SECRET_HEADER, "s3cret");
+
+        LoginClientRequest clientRequest = LoginSupport.buildClientRequest("MINIAPP", request);
+
+        assertThat(clientRequest.getClientId()).isEqualTo("miniapp");
+        assertThat(clientRequest.getAuthType()).isEqualTo("MINIAPP");
+        assertThat(clientRequest.getClientSecret()).isEqualTo("s3cret");
+    }
+
+    @Test
+    @DisplayName("未声明客户端与密钥：两者都为空，由 starter 回落默认客户端且不做密钥校验")
+    void shouldBuildEmptyClientRequestWithoutHeaders() {
+        LoginClientRequest clientRequest = LoginSupport.buildClientRequest("ACCOUNT", null);
+
+        assertThat(clientRequest.getClientId()).isNull();
+        assertThat(clientRequest.getClientSecret()).isNull();
+        assertThat(clientRequest.getAuthType()).isEqualTo("ACCOUNT");
     }
 }

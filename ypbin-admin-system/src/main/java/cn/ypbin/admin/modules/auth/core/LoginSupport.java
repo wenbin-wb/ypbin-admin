@@ -20,6 +20,7 @@ import cn.ypbin.admin.modules.system.service.SysPermissionService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.security.client.LoginClient;
+import cn.ypbin.starter.security.client.LoginClientRequest;
 import cn.ypbin.starter.security.core.LoginHelper;
 import cn.ypbin.starter.security.core.LoginUser;
 import cn.ypbin.starter.security.core.UserContext;
@@ -41,7 +42,8 @@ import org.springframework.util.StringUtils;
  *
  * <p>账号密码、手机验证码、第三方登录、微信小程序四种入口共用本方法，避免各自构建 LoginUser 时字段遗漏
  * （如漏填 clientType 导致操作日志取不到客户端信息）。客户端身份由请求头声明（见
- * {@code AdminConstants.CLIENT_ID_HEADER}），未声明时回落到配置的默认客户端——新增应用不需要改后端代码。</p>
+ * {@code AdminConstants.CLIENT_ID_HEADER}），未声明时回落到配置的默认客户端——新增应用不需要改后端代码；
+ * 配置了客户端密钥的端还需带 {@code AdminConstants.CLIENT_SECRET_HEADER}，未配置密钥的端不需要。</p>
  *
  * @author wenbin
  * @since 2026-08-02
@@ -66,7 +68,8 @@ public class LoginSupport {
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
-        LoginClient client = LoginHelper.login(user.getId(), resolveClientId(RequestUtils.getRequest()), authType);
+        LoginClientRequest clientRequest = buildClientRequest(authType, RequestUtils.getRequest());
+        LoginClient client = LoginHelper.login(user.getId(), clientRequest);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());
         loginUser.setTenantId(user.getTenantId());
@@ -95,11 +98,52 @@ public class LoginSupport {
      */
     @Nullable
     static String resolveClientId(@Nullable HttpServletRequest request) {
+        return resolveHeader(request, AdminConstants.CLIENT_ID_HEADER);
+    }
+
+    /**
+     * 组装登录客户端请求：身份与密钥都取自请求头。
+     *
+     * <p>客户端 ID 缺失时由 starter 回落默认客户端；密钥只在客户端配置了密钥时才由 starter 校验，
+     * 未配置的端不传该头。</p>
+     *
+     * @param authType 认证方式
+     * @param request  当前请求；无 Web 上下文时为 {@code null}
+     * @return 登录客户端请求
+     */
+    static LoginClientRequest buildClientRequest(String authType, @Nullable HttpServletRequest request) {
+        LoginClientRequest clientRequest = new LoginClientRequest(resolveClientId(request), authType);
+        clientRequest.setClientSecret(resolveClientSecret(request));
+        return clientRequest;
+    }
+
+    /**
+     * 从请求头解析客户端密钥。
+     *
+     * <p>只有配置了密钥的客户端才需要提供；浏览器、小程序等无法保管密钥的端应保持客户端密钥为空。</p>
+     *
+     * @param request 当前请求；无 Web 上下文时为 {@code null}
+     * @return 客户端密钥；未声明时为空
+     */
+    @Nullable
+    static String resolveClientSecret(@Nullable HttpServletRequest request) {
+        return resolveHeader(request, AdminConstants.CLIENT_SECRET_HEADER);
+    }
+
+    /**
+     * 读取请求头并去掉首尾空白。
+     *
+     * @param request 当前请求；无 Web 上下文时为 {@code null}
+     * @param name    头名称
+     * @return 头值；缺失或空白时为空
+     */
+    @Nullable
+    private static String resolveHeader(@Nullable HttpServletRequest request, String name) {
         if (request == null) {
             return null;
         }
-        String clientId = request.getHeader(AdminConstants.CLIENT_ID_HEADER);
-        return StringUtils.hasText(clientId) ? clientId.trim() : null;
+        String value = request.getHeader(name);
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     /**
