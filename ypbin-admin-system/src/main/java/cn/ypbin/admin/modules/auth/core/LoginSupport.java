@@ -28,16 +28,20 @@ import cn.ypbin.starter.security.online.OnlineUserHelper.Terminal;
 import cn.ypbin.starter.core.util.UserAgentFormatter;
 import cn.ypbin.starter.tools.support.RequestUtils;
 import cn.hutool.http.useragent.UserAgent;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashSet;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * 登录收尾统一处理：按客户端策略登录 → 构建并写入 LoginUser 上下文（含 clientId/clientType/authType）
  * → 记录最后登录时间与在线终端信息（IP/归属地/浏览器/OS）→ 返回令牌。
  *
- * <p>账号密码、手机验证码、第三方登录三种入口共用本方法，避免各自构建 LoginUser 时字段遗漏（如漏填
- * clientType 导致操作日志取不到客户端信息）。</p>
+ * <p>账号密码、手机验证码、第三方登录、微信小程序四种入口共用本方法，避免各自构建 LoginUser 时字段遗漏
+ * （如漏填 clientType 导致操作日志取不到客户端信息）。客户端身份由请求头声明（见
+ * {@code AdminConstants.CLIENT_ID_HEADER}），未声明时回落到配置的默认客户端——新增应用不需要改后端代码。</p>
  *
  * @author wenbin
  * @since 2026-08-02
@@ -54,7 +58,7 @@ public class LoginSupport {
      * 完成登录并返回令牌。
      *
      * @param user     已校验通过的用户
-     * @param authType 认证方式（ACCOUNT/PHONE/EMAIL/SOCIAL）
+     * @param authType 认证方式（ACCOUNT/PHONE/EMAIL/SOCIAL/MINIAPP）
      * @return 登录结果
      */
     public LoginResp completeLogin(SysUser user, String authType) {
@@ -62,7 +66,7 @@ public class LoginSupport {
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
-        LoginClient client = LoginHelper.login(user.getId(), AdminConstants.CLIENT_WEB_ADMIN, authType);
+        LoginClient client = LoginHelper.login(user.getId(), resolveClientId(RequestUtils.getRequest()), authType);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());
         loginUser.setTenantId(user.getTenantId());
@@ -78,6 +82,24 @@ public class LoginSupport {
         userService.updateLastLoginTime(user.getId());
         recordTerminal();
         return new LoginResp(LoginHelper.getTokenValue(), mustChangePassword);
+    }
+
+    /**
+     * 从请求头解析客户端 ID。
+     *
+     * <p>客户端只声明「我是谁」，具体策略（Token 有效期、多端登录、认证方式白名单）仍由服务端
+     * {@code sys_client} 决定。未声明时返回 {@code null}，由 starter 回落到配置的默认客户端。</p>
+     *
+     * @param request 当前请求；无 Web 上下文时为 {@code null}
+     * @return 客户端 ID；未声明时为空
+     */
+    @Nullable
+    static String resolveClientId(@Nullable HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String clientId = request.getHeader(AdminConstants.CLIENT_ID_HEADER);
+        return StringUtils.hasText(clientId) ? clientId.trim() : null;
     }
 
     /**

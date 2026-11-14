@@ -41,8 +41,13 @@ public final class AdminConstants {
     /** 通配权限码：拥有该权限视为拥有全部权限 */
     public static final String ALL_PERMISSION = "*:*:*";
 
-    /** 后台管理登录客户端 ID */
-    public static final String CLIENT_WEB_ADMIN = "web-admin";
+    /**
+     * 登录请求头：客户端声明自己是谁，服务端据此选择 sys_client 中的策略。
+     *
+     * <p>不在这里枚举各端 ID：新增应用只需在「客户端管理」里登记一行并让客户端带上该头，
+     * 后端不需要改代码；未声明时回落到配置的默认客户端。</p>
+     */
+    public static final String CLIENT_ID_HEADER = "X-Client-Id";
 
     /** 账号密码认证方式 */
     public static final String AUTH_TYPE_ACCOUNT = "ACCOUNT";
