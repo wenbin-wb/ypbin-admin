@@ -32,12 +32,15 @@ public interface SysClientService extends BaseService<SysClient> {
     List<ClientResp> listClients();
 
     /**
-     * 新增客户端（自动生成 clientSecret）。
+     * 新增客户端。
+     *
+     * <p>默认不生成密钥：浏览器、小程序等端无法保管密钥，无密钥即可正常登录；
+     * 需要密钥的端由管理员通过「重置密钥」显式开启。</p>
      *
      * @param req 请求
-     * @return 仅此次返回的客户端凭据
+     * @return 新建的客户端（不含密钥）
      */
-    ClientCredentialResp createClient(SysClientSaveReq req);
+    ClientResp createClient(SysClientSaveReq req);
 
     /**
      * 编辑客户端（保留 clientSecret，不重新生成）。
@@ -54,6 +57,21 @@ public interface SysClientService extends BaseService<SysClient> {
      * @return 新的明文密钥
      */
     ClientCredentialResp resetSecret(Long id);
+
+    /**
+     * 清除客户端密钥（恢复为免密钥登录）。
+     *
+     * @param id 客户端 ID
+     */
+    void clearSecret(Long id);
+
+    /**
+     * 修改客户端启停状态。
+     *
+     * @param id     客户端 ID
+     * @param status 1 启用、0 禁用
+     */
+    void updateStatus(Long id, Integer status);
 
     /**
      * 删除登录客户端（校验存在性后逻辑删除）。

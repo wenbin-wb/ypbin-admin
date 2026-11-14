@@ -39,6 +39,15 @@ public class ClientResp {
 
     private Integer maxLoginCount;
 
+    /** 状态：1 启用、0 禁用 */
+    private Integer status;
+
+    /** 是否已配置客户端密钥（只返回标志，不返回密钥本身） */
+    private Boolean secretConfigured;
+
+    /** 是否为配置的默认客户端（未声明客户端身份的请求会回落到它，禁止停用/改 ID/删除/配密钥） */
+    private Boolean defaultClient;
+
     private String remark;
 
     private LocalDateTime createTime;

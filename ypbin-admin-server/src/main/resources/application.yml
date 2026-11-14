@@ -238,7 +238,18 @@ ypbin:
         - cookie
         - token
         - secret                # 覆盖 X-Client-Secret，避免客户端密钥进日志
-      exclude-path-patterns:    # 不记流水的路径：健康检查、接口文档、静态资源
+        - password
+      exclude-path-patterns:    # 不记流水的路径：健康检查、接口文档、静态资源、认证入口
+        # 以下入口的入参/响应含口令、微信 code、accessToken 或客户端密钥，访问日志会整段打印；
+        # 对应的写操作都有 @Log 操作日志落库，访问流水不再重复记录。
+        - /auth/**
+        - /share/**               # 分享口令走请求头/参数，不记流水
+        - /system/user
+        - /system/user/*
+        - /system/user/profile/password
+        - /system/user/*/reset-password
+        - /system/client/*/reset-secret
+        - /system/license/generate-key
         - /actuator/**
         - /doc.html
         - /swagger-ui/**

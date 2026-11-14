@@ -17,13 +17,17 @@ import cn.ypbin.admin.modules.system.model.resp.ClientResp;
 import cn.ypbin.admin.modules.system.service.SysClientService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
+import cn.ypbin.starter.data.core.EntityStatus;
+import cn.ypbin.starter.security.autoconfigure.SecurityProperties;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 登录客户端服务实现。
@@ -32,8 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
  * @since 2026-08-01
  */
 @Service
+@RequiredArgsConstructor
 public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysClient>
     implements SysClientService {
+
+    /** 默认客户端配置：未声明客户端身份的请求会回落到它 */
+    private final SecurityProperties securityProperties;
 
     @Override
     public List<ClientResp> listClients() {
@@ -42,14 +50,13 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ClientCredentialResp createClient(SysClientSaveReq req) {
+    public ClientResp createClient(SysClientSaveReq req) {
         checkClientIdUnique(req.getClientId(), null);
         SysClient client = new SysClient();
         BeanUtils.copyProperties(req, client);
-        String secret = generateSecret();
-        client.setClientSecret(secret);
+        // 默认不生成密钥：无密钥即可登录；需要密钥的端由「重置密钥」显式开启
         save(client);
-        return new ClientCredentialResp(client.getClientId(), secret);
+        return toResp(client);
     }
 
     @Override
@@ -59,6 +66,7 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
         if (client == null) {
             throw new BusinessException("客户端不存在");
         }
+        rejectDefaultClient(client, "配置密钥");
         String secret = generateSecret();
         // 只 set 目标列：new SysClient() + updateById 会带上 BaseEntity 的 status 默认值
         update(new LambdaUpdateWrapper<SysClient>()
@@ -75,6 +83,9 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
             throw new BusinessException("客户端不存在");
         }
         checkClientIdUnique(req.getClientId(), id);
+        if (isDefaultClient(existing) && !req.getClientId().equals(existing.getClientId())) {
+            throw new BusinessException("默认客户端不允许修改客户端 ID");
+        }
         SysClient client = new SysClient();
         BeanUtils.copyProperties(req, client);
         client.setId(id);
@@ -99,16 +110,61 @@ public class SysClientServiceImpl extends BaseServiceImpl<SysClientMapper, SysCl
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void deleteClient(Long id) {
+    public void clearSecret(Long id) {
         if (getById(id) == null) {
             throw new BusinessException("客户端不存在");
         }
+        // 只 set 目标列：new SysClient() + updateById 会带上 BaseEntity 的 status 默认值
+        update(new LambdaUpdateWrapper<SysClient>()
+            .eq(SysClient::getId, id)
+            .set(SysClient::getClientSecret, null));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateStatus(Long id, Integer status) {
+        SysClient client = getById(id);
+        if (client == null) {
+            throw new BusinessException("客户端不存在");
+        }
+        if (EntityStatus.DISABLED.getCode().equals(status)) {
+            rejectDefaultClient(client, "停用");
+        }
+        update(new LambdaUpdateWrapper<SysClient>()
+            .eq(SysClient::getId, id)
+            .set(SysClient::getStatus, status));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteClient(Long id) {
+        SysClient client = getById(id);
+        if (client == null) {
+            throw new BusinessException("客户端不存在");
+        }
+        rejectDefaultClient(client, "删除");
         removeById(id);
+    }
+
+    /**
+     * 是否为配置的默认客户端。它承接所有未声明身份的登录，改动或停用会导致全站无法登录。
+     */
+    private boolean isDefaultClient(SysClient client) {
+        return client.getClientId() != null
+            && client.getClientId().equals(securityProperties.getDefaultClientId());
+    }
+
+    private void rejectDefaultClient(SysClient client, String action) {
+        if (isDefaultClient(client)) {
+            throw new BusinessException("默认客户端不允许" + action);
+        }
     }
 
     private ClientResp toResp(SysClient client) {
         ClientResp resp = new ClientResp();
         BeanUtils.copyProperties(client, resp);
+        resp.setSecretConfigured(StringUtils.hasText(client.getClientSecret()));
+        resp.setDefaultClient(isDefaultClient(client));
         return resp;
     }
 

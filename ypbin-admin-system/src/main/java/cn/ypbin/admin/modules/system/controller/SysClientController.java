@@ -11,6 +11,7 @@ package cn.ypbin.admin.modules.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.ypbin.starter.security.platform.PlatformAccess;
+import cn.ypbin.admin.modules.system.model.req.StatusReq;
 import cn.ypbin.admin.modules.system.model.req.SysClientSaveReq;
 import cn.ypbin.admin.modules.system.model.resp.ClientCredentialResp;
 import cn.ypbin.admin.modules.system.model.resp.ClientResp;
@@ -54,7 +55,7 @@ public class SysClientController {
     @Log(value = "新增客户端", module = "客户端管理")
     @PostMapping
     @SaCheckPermission("system:client:add")
-    public R<ClientCredentialResp> create(@Valid @RequestBody SysClientSaveReq req) {
+    public R<ClientResp> create(@Valid @RequestBody SysClientSaveReq req) {
         return R.ok(clientService.createClient(req));
     }
 
@@ -64,6 +65,24 @@ public class SysClientController {
     @SaCheckPermission("system:client:reset-secret")
     public R<ClientCredentialResp> resetSecret(@PathVariable Long id) {
         return R.ok(clientService.resetSecret(id));
+    }
+
+    @Idempotent
+    @Log(value = "清除客户端密钥", module = "客户端管理")
+    @PutMapping("/{id}/clear-secret")
+    @SaCheckPermission("system:client:reset-secret")
+    public R<Void> clearSecret(@PathVariable Long id) {
+        clientService.clearSecret(id);
+        return R.ok();
+    }
+
+    @Idempotent
+    @Log(value = "修改客户端状态", module = "客户端管理")
+    @PutMapping("/{id}/status")
+    @SaCheckPermission("system:client:edit")
+    public R<Void> updateStatus(@PathVariable Long id, @Valid @RequestBody StatusReq req) {
+        clientService.updateStatus(id, req.getStatus());
+        return R.ok();
     }
 
     @Idempotent
