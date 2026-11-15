@@ -88,6 +88,16 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
      * <p>生效时间未到的不排除：定时发布由发布任务在到点后置为已发布，故「已发布」本身即代表可读。
      * 置顶优先、发布时间倒序（publishTime 为空时回落 createTime，避免排序抖动）。</p>
      */
+    /**
+     * 客户端 ID 归一化：null/空白统一为空串。
+     *
+     * <p>空串非 null，才能让「编辑时清空客户端」在 {@code update-strategy: not_null} 下真正写入；
+     * 同时避免带空白的 ID 与查询条件不匹配。</p>
+     */
+    private void normalizeClientId(SysNotice notice) {
+        notice.setClientId(notice.getClientId() == null ? "" : notice.getClientId().trim());
+    }
+
     private LambdaQueryWrapper<SysNotice> publishedWrapper(@Nullable String clientId) {
         LambdaQueryWrapper<SysNotice> wrapper = new LambdaQueryWrapper<SysNotice>()
             .eq(SysNotice::getPublishStatus, PUBLISHED)
@@ -116,6 +126,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     public void createNotice(NoticeSaveReq req) {
         SysNotice notice = new SysNotice();
         BeanUtils.copyProperties(req, notice);
+        normalizeClientId(notice);
         notice.setPublishVersion(0L);
         notice.setPublishTime(null);
         if (isDraft(req)) {
@@ -147,6 +158,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
         SysNotice update = new SysNotice();
         BeanUtils.copyProperties(req, update);
+        normalizeClientId(update);
         update.setId(id);
         update.setPublishVersion(current.getPublishVersion());
         update.setPublishTime(current.getPublishTime());

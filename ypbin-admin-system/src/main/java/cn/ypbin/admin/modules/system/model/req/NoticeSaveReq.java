@@ -43,6 +43,7 @@ public class NoticeSaveReq {
     private String cover;
 
     /** 投放客户端 ID（sys_client.client_id）；空表示全部客户端 */
+    @Size(max = 64, message = "客户端 ID 长度不能超过 64")
     private String clientId;
 
     @NotNull(message = "公告类型不能为空")
