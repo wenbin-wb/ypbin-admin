@@ -70,7 +70,7 @@ VALUES (11, 1, '正常', '1', 'success', 1, 1, NOW(), 1, 0),
 
 -- 默认 Web 管理后台客户端
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
-VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL', 86400, 1800, 1, 1, NOW(), 1, 0);
+VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL,SOCIAL', 86400, 1800, 1, 1, NOW(), 1, 0);
 
 -- 岗位
 INSERT INTO sys_post (id, tenant_id, name, code, category, sort, remark, create_user, create_time, status, is_deleted)

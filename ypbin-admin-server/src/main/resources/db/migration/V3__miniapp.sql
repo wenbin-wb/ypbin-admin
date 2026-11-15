@@ -1,6 +1,6 @@
 -- =============================================================
 -- ypbin-admin 小程序（牌账清 CardTab & 家庭菜单 FamilyMenu）单独脚本
--- 内容：建表 + 预设菜种子 + MINIAPP 客户端认证方式 + 旧库契约幂等对齐
+-- 内容：小程序业务表 + 预设菜种子 + 小程序登录客户端
 -- 遵循 BaseEntity 规范：id / create_user / create_time / update_user / update_time / status / is_deleted
 -- 状态：开发阶段合并为单文件；后续小程序增量迁移再从 V4 起编号。
 -- =============================================================
@@ -411,48 +411,14 @@ INSERT INTO familymenu_preset_dish (id, name, category, image_url, tags, is_dele
 (10100, '鸡蛋煎饼', '甜点小吃', '', '小吃,快手', 0, 1)
 ON DUPLICATE KEY UPDATE name=VALUES(name), category=VALUES(category), tags=VALUES(tags);
 -- =============================================================
--- 小程序登录认证方式注册
+-- 小程序登录客户端
 --
--- 小程序登录复用 web-admin 客户端（与服务端既有登录会话/会话策略一致），
--- 认证方式为 MINIAPP。DbLoginClientProvider 会按 sys_client.auth_types 校验认证方式，
--- 未登记 MINIAPP 时登录会被拒绝（客户端不支持当前认证方式）。
---
--- 幂等：仅在 web-admin 未包含 MINIAPP 时追加。
+-- 小程序使用独立客户端：Token 有效期、多端登录限制可与后台分别配置。
+-- 登录入口由应用配置绑定（ypbin.admin.login-client.routes），本行只提供策略。
 -- =============================================================
 
-UPDATE sys_client
-SET auth_types = CASE
-        WHEN auth_types IS NULL OR auth_types = '' THEN 'MINIAPP'
-        ELSE CONCAT(auth_types, ',MINIAPP')
-    END
-WHERE client_id = 'web-admin'
-  AND (auth_types IS NULL OR auth_types NOT LIKE '%MINIAPP%');
--- =============================================================
--- 小程序端侧契约对齐（幂等）
---
--- 适用对象：已由旧版 deploy/sql/006 建表、尚未执行 2026-10-16 增量脚本的库。
--- 全新库的建表段已包含最终结构，本段对其无副作用。
---
--- 内容：
---   1) familymenu_order.meal_time → order_type：端侧提交 orderType，旧列名会导致
---      传值被静默忽略（午餐单落库成默认晚餐单）。仅旧列存在时改名。
---   2) 订单状态取值 PICKING/WAITING → ORDERING/SHOPPING，并对齐默认值。
--- =============================================================
-
-SET @has_meal_time := (
-    SELECT COUNT(1) FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'familymenu_order' AND COLUMN_NAME = 'meal_time'
-);
-SET @sql := IF(@has_meal_time > 0,
-    'ALTER TABLE familymenu_order CHANGE meal_time order_type VARCHAR(16) NOT NULL DEFAULT ''DINNER'' COMMENT ''就餐时段：BREAKFAST 早餐 LUNCH 午餐 DINNER 晚餐''',
-    'SELECT ''skip: meal_time 不存在或已改名'' AS result');
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-UPDATE familymenu_order SET order_status = 'ORDERING' WHERE order_status = 'PICKING';
-UPDATE familymenu_order SET order_status = 'SHOPPING' WHERE order_status = 'WAITING';
-
-ALTER TABLE familymenu_order
-    MODIFY COLUMN order_status VARCHAR(16) NOT NULL DEFAULT 'ORDERING'
-    COMMENT '状态：ORDERING 点单中 SHOPPING 买菜中 COOKING 烹饪中 DONE 已上桌（与小程序端状态机一致）';
+INSERT INTO sys_client
+    (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled,
+     remark, create_user, create_time, status, is_deleted)
+VALUES (2, 'miniapp', 'MINI', 'MINIAPP', 86400, 1800, 1,
+        '微信小程序登录客户端', 1, NOW(), 1, 0);
