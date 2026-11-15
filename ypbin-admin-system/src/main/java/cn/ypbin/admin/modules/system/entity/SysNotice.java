@@ -39,8 +39,8 @@ public class SysNotice extends TenantBaseEntity {
     /** 封面图 URL（可选） */
     private String cover;
 
-    /** 投放客户端 ID（sys_client.client_id）；空表示全部客户端可见 */
-    private String clientId;
+    /** 投放客户端 ID 集合（逗号分隔，sys_client.client_id）；空表示全部客户端可见 */
+    private String clientIds;
 
     /** 公告类型：1 通知、2 公告 */
     private Integer noticeType;

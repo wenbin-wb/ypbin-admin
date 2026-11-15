@@ -351,7 +351,7 @@ CREATE TABLE sys_notice
     title            VARCHAR(255)  NOT NULL COMMENT '标题',
     content          MEDIUMTEXT    NULL COMMENT '公告内容（富文本）',
     cover            VARCHAR(512)  NULL COMMENT '封面图 URL',
-    client_id        VARCHAR(64)   NULL COMMENT '投放客户端（sys_client.client_id）；空=全部',
+    client_ids       VARCHAR(255)  NULL COMMENT '投放客户端 ID 集合（逗号分隔）；空=全部',
     notice_type      TINYINT       NULL COMMENT '类型：1 通知 2 公告',
     notice_scope     TINYINT       NULL DEFAULT 1 COMMENT '通知范围：1 全体 2 指定角色 3 指定部门 4 指定用户',
     scope_target_ids VARCHAR(1024) NULL COMMENT '范围目标 ID 集合（逗号分隔）',

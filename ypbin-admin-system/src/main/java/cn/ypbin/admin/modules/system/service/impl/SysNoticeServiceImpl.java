@@ -23,7 +23,9 @@ import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.BeanUtils;
@@ -60,7 +62,8 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
             .eq(query.getNoticeType() != null, SysNotice::getNoticeType, query.getNoticeType())
             .eq(query.getPublishStatus() != null,
                 SysNotice::getPublishStatus, query.getPublishStatus())
-            .eq(StringUtils.hasText(query.getClientId()), SysNotice::getClientId, query.getClientId())
+            .apply(StringUtils.hasText(query.getClientId()), "FIND_IN_SET({0}, client_ids)",
+                query.getClientId())
             .orderByDesc(SysNotice::getCreateTime));
         List<NoticeResp> items = source.getItems().stream().map(this::toResp).toList();
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
@@ -94,8 +97,18 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
      * <p>空串非 null，才能让「编辑时清空客户端」在 {@code update-strategy: not_null} 下真正写入；
      * 同时避免带空白的 ID 与查询条件不匹配。</p>
      */
-    private void normalizeClientId(SysNotice notice) {
-        notice.setClientId(notice.getClientId() == null ? "" : notice.getClientId().trim());
+    private void normalizeClientIds(SysNotice notice) {
+        String raw = notice.getClientIds();
+        if (!StringUtils.hasText(raw)) {
+            notice.setClientIds("");
+            return;
+        }
+        String normalized = Arrays.stream(raw.split(","))
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .distinct()
+            .collect(Collectors.joining(","));
+        notice.setClientIds(normalized);
     }
 
     private LambdaQueryWrapper<SysNotice> publishedWrapper(@Nullable String clientId) {
@@ -104,10 +117,10 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
             .and(w -> w.isNull(SysNotice::getExpireTime)
                 .or().gt(SysNotice::getExpireTime, LocalDateTime.now()));
         if (StringUtils.hasText(clientId)) {
-            // 未指定客户端（NULL/空串）的公告对所有客户端可见
-            wrapper.and(w -> w.isNull(SysNotice::getClientId)
-                .or().eq(SysNotice::getClientId, "")
-                .or().eq(SysNotice::getClientId, clientId));
+            // 未指定客户端（NULL/空串）的公告对所有客户端可见；否则按逗号集合精确匹配
+            wrapper.and(w -> w.isNull(SysNotice::getClientIds)
+                .or().eq(SysNotice::getClientIds, "")
+                .or().apply("FIND_IN_SET({0}, client_ids)", clientId));
         }
         return wrapper.orderByDesc(SysNotice::getIsTop)
             .orderByDesc(SysNotice::getPublishTime)
@@ -126,7 +139,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     public void createNotice(NoticeSaveReq req) {
         SysNotice notice = new SysNotice();
         BeanUtils.copyProperties(req, notice);
-        normalizeClientId(notice);
+        normalizeClientIds(notice);
         notice.setPublishVersion(0L);
         notice.setPublishTime(null);
         if (isDraft(req)) {
@@ -158,7 +171,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
         SysNotice update = new SysNotice();
         BeanUtils.copyProperties(req, update);
-        normalizeClientId(update);
+        normalizeClientIds(update);
         update.setId(id);
         update.setPublishVersion(current.getPublishVersion());
         update.setPublishTime(current.getPublishTime());
