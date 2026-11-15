@@ -44,6 +44,9 @@ public class LogResp {
 
     private String os;
 
+    /** 登录客户端 ID（web-admin / miniapp） */
+    private String clientId;
+
     private String clientType;
 
     @RefText("user")
