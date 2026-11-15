@@ -62,6 +62,21 @@ ypbin:
       password: ${ADMIN_BOOTSTRAP_PASSWORD:}       # 初始管理员密码
       real-name: ${ADMIN_BOOTSTRAP_REAL_NAME:平台管理员}  # 初始管理员真实姓名
       tenant-id: ${ADMIN_BOOTSTRAP_TENANT_ID:1}    # 初始管理员归属租户
+    login-client:
+      # 登录入口 → 客户端 ID：由服务端按请求路径绑定，客户端无法通过请求头改选策略。
+      # 未命中的入口回落到 ypbin.security.client.default-client-id（默认 web-admin）。
+      # 用列表而不是 Map：路径里的 / 不是合法配置属性名，Map 键会绑不上。
+      routes:
+        - path: /auth/login
+          client-id: web-admin
+        - path: /auth/register
+          client-id: web-admin
+        - path: /auth/sms/login
+          client-id: web-admin
+        - path: /auth/social/callback/*
+          client-id: web-admin
+        - path: /auth/miniapp/login
+          client-id: miniapp
     job:
       reconcile-delay: ${ADMIN_JOB_RECONCILE_DELAY:30000}  # 通知投递对账延迟（毫秒）
 

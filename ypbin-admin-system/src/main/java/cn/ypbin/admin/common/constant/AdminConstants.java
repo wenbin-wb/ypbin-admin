@@ -42,18 +42,11 @@ public final class AdminConstants {
     public static final String ALL_PERMISSION = "*:*:*";
 
     /**
-     * 登录请求头：客户端声明自己是谁，服务端据此选择 sys_client 中的策略。
-     *
-     * <p>不在这里枚举各端 ID：新增应用只需在「客户端管理」里登记一行并让客户端带上该头，
-     * 后端不需要改代码；未声明时回落到配置的默认客户端。</p>
-     */
-    public static final String CLIENT_ID_HEADER = "X-Client-Id";
-
-    /**
      * 登录请求头：客户端密钥。仅对在「客户端管理」里配置了密钥的客户端生效；
      * 浏览器、小程序这类无法保管密钥的端应保持客户端密钥为空，不要下发该头。
      *
-     * <p>它校验的是「自报身份」的客户端，不构成身份认证，也不能阻止调用方改报另一个客户端 ID。</p>
+     * <p>客户端身份由登录入口绑定（{@code ypbin.admin.login-client.routes}），该头只用于证明
+     * 「确实是这个客户端」，不能用于改选客户端。</p>
      */
     public static final String CLIENT_SECRET_HEADER = "X-Client-Secret";
 

@@ -17,8 +17,10 @@ import cn.ypbin.admin.modules.system.entity.SysUser;
 import cn.ypbin.admin.modules.system.enums.UserStatusEnum;
 import cn.ypbin.admin.modules.system.model.resp.LoginResp;
 import cn.ypbin.admin.modules.system.service.SysPermissionService;
+import cn.ypbin.admin.modules.auth.config.LoginClientRouteProperties;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.starter.core.exception.BusinessException;
+import cn.ypbin.starter.security.autoconfigure.SecurityProperties;
 import cn.ypbin.starter.security.client.LoginClient;
 import cn.ypbin.starter.security.client.LoginClientRequest;
 import cn.ypbin.starter.security.core.LoginHelper;
@@ -31,9 +33,11 @@ import cn.ypbin.starter.tools.support.RequestUtils;
 import cn.hutool.http.useragent.UserAgent;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashSet;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
 
 /**
@@ -41,9 +45,9 @@ import org.springframework.util.StringUtils;
  * → 记录最后登录时间与在线终端信息（IP/归属地/浏览器/OS）→ 返回令牌。
  *
  * <p>账号密码、手机验证码、第三方登录、微信小程序四种入口共用本方法，避免各自构建 LoginUser 时字段遗漏
- * （如漏填 clientType 导致操作日志取不到客户端信息）。客户端身份由请求头声明（见
- * {@code AdminConstants.CLIENT_ID_HEADER}），未声明时回落到配置的默认客户端——新增应用不需要改后端代码；
- * 配置了客户端密钥的端还需带 {@code AdminConstants.CLIENT_SECRET_HEADER}，未配置密钥的端不需要。</p>
+ * （如漏填 clientType 导致操作日志取不到客户端信息）。<strong>客户端身份由服务端按登录入口绑定</strong>
+ * （{@link LoginClientRouteProperties}），不采信客户端自报的标识；未命中的入口回落到配置的默认客户端。
+ * 配置了客户端密钥的端仍需带 {@code AdminConstants.CLIENT_SECRET_HEADER}，未配置密钥的端不需要。</p>
  *
  * @author wenbin
  * @since 2026-08-02
@@ -52,9 +56,14 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class LoginSupport {
 
+    /** 登录入口 URI 匹配器（Ant 风格，支持 {@code /auth/social/callback/*} 这类通配） */
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+
     private final SysUserService userService;
     private final SysPermissionService permissionService;
     private final Ip2regionLocationResolver locationResolver;
+    private final LoginClientRouteProperties loginClientRoutes;
+    private final SecurityProperties securityProperties;
 
     /**
      * 完成登录并返回令牌。
@@ -68,7 +77,7 @@ public class LoginSupport {
         if (UserStatusEnum.DISABLED.getCode().equals(user.getStatus())) {
             throw new BusinessException("账号已被禁用");
         }
-        LoginClientRequest clientRequest = buildClientRequest(authType, RequestUtils.getRequest());
+        LoginClientRequest clientRequest = buildClientRequest(authType);
         LoginClient client = LoginHelper.login(user.getId(), clientRequest);
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername());
         loginUser.setNickname(user.getRealName());
@@ -88,32 +97,41 @@ public class LoginSupport {
     }
 
     /**
-     * 从请求头解析客户端 ID。
+     * 按登录入口解析客户端 ID。
      *
-     * <p>客户端只声明「我是谁」，具体策略（Token 有效期、多端登录、认证方式白名单）仍由服务端
-     * {@code sys_client} 决定。未声明时返回 {@code null}，由 starter 回落到配置的默认客户端。</p>
+     * <p>身份由服务端绑定：请求路径命中 {@code ypbin.admin.login-client.routes} 时取对应客户端，
+     * 否则回落到配置的默认客户端。客户端无法通过请求头改选策略。</p>
      *
-     * @param request 当前请求；无 Web 上下文时为 {@code null}
-     * @return 客户端 ID；未声明时为空
+     * @param requestUri      当前请求路径；无 Web 上下文时为 {@code null}
+     * @param routes          入口规则（按声明顺序匹配）
+     * @param defaultClientId 默认客户端 ID
+     * @return 客户端 ID（非空）
      */
-    @Nullable
-    static String resolveClientId(@Nullable HttpServletRequest request) {
-        return resolveHeader(request, AdminConstants.CLIENT_ID_HEADER);
+    static String resolveClientId(@Nullable String requestUri, List<LoginClientRouteProperties.Route> routes,
+                                  String defaultClientId) {
+        if (requestUri != null) {
+            for (LoginClientRouteProperties.Route route : routes) {
+                if (PATH_MATCHER.match(route.getPath(), requestUri)) {
+                    return route.getClientId();
+                }
+            }
+        }
+        return defaultClientId;
     }
 
     /**
-     * 组装登录客户端请求：身份与密钥都取自请求头。
+     * 组装登录客户端请求：客户端 ID 由请求入口绑定，密钥仍取自请求头。
      *
-     * <p>客户端 ID 缺失时由 starter 回落默认客户端；密钥只在客户端配置了密钥时才由 starter 校验，
-     * 未配置的端不传该头。</p>
+     * <p>密钥只在客户端配置了密钥时才由 starter 校验，未配置的端不传该头。</p>
      *
      * @param authType 认证方式
-     * @param request  当前请求；无 Web 上下文时为 {@code null}
      * @return 登录客户端请求
      */
-    static LoginClientRequest buildClientRequest(String authType, @Nullable HttpServletRequest request) {
-        LoginClientRequest clientRequest = new LoginClientRequest(resolveClientId(request), authType);
-        clientRequest.setClientSecret(resolveClientSecret(request));
+    LoginClientRequest buildClientRequest(String authType) {
+        String clientId = resolveClientId(RequestUtils.getRequestUri(), loginClientRoutes.getRoutes(),
+            securityProperties.getDefaultClientId());
+        LoginClientRequest clientRequest = new LoginClientRequest(clientId, authType);
+        clientRequest.setClientSecret(resolveClientSecret(RequestUtils.getRequest()));
         return clientRequest;
     }
 
