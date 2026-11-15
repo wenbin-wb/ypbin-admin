@@ -99,6 +99,10 @@ VALUES (41, 4, '部门', 'dept', 'processing', 1, 1, NOW(), 1, 0),
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
 VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL', 86400, 1800, 1, 1, NOW(), 1, 0);
 
+-- 微信小程序客户端（公告按客户端投放时使用）
+INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
+VALUES (2, 'miniapp', 'MINI', 'MINIAPP', 86400, 1800, 1, 1, NOW(), 1, 0);
+
 -- 岗位
 INSERT INTO sys_post (id, tenant_id, name, code, category, sort, remark, create_user, create_time, status, is_deleted)
 VALUES (11, 1, '总经理', 'CEO', '管理', 1, NULL, 1, NOW(), 1, 0),
