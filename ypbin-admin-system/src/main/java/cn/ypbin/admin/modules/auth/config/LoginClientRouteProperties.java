@@ -9,11 +9,14 @@
  */
 package cn.ypbin.admin.modules.auth.config;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * 登录入口与客户端的绑定关系。
@@ -29,10 +32,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @Getter
 @Setter
+@Validated
 @ConfigurationProperties(prefix = "ypbin.admin.login-client")
 public class LoginClientRouteProperties {
 
     /** 登录入口规则，按声明顺序匹配 */
+    @Valid
     private List<Route> routes = new ArrayList<>();
 
     /**
@@ -43,9 +48,11 @@ public class LoginClientRouteProperties {
     public static class Route {
 
         /** 登录入口 URI 模式（Ant 风格，如 {@code /auth/social/callback/*}） */
+        @NotBlank(message = "登录入口路径不能为空")
         private String path;
 
         /** 绑定的客户端 ID */
+        @NotBlank(message = "登录入口必须绑定客户端 ID")
         private String clientId;
     }
 }

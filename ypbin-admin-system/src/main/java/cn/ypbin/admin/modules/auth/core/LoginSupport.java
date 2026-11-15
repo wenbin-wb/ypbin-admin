@@ -39,6 +39,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.UrlPathHelper;
 
 /**
  * 登录收尾统一处理：按客户端策略登录 → 构建并写入 LoginUser 上下文（含 clientId/clientType/authType）
@@ -128,11 +129,27 @@ public class LoginSupport {
      * @return 登录客户端请求
      */
     LoginClientRequest buildClientRequest(String authType) {
-        String clientId = resolveClientId(RequestUtils.getRequestUri(), loginClientRoutes.getRoutes(),
+        HttpServletRequest request = RequestUtils.getRequest();
+        String clientId = resolveClientId(requestPath(request), loginClientRoutes.getRoutes(),
             securityProperties.getDefaultClientId());
         LoginClientRequest clientRequest = new LoginClientRequest(clientId, authType);
-        clientRequest.setClientSecret(resolveClientSecret(RequestUtils.getRequest()));
+        clientRequest.setClientSecret(resolveClientSecret(request));
         return clientRequest;
+    }
+
+    /**
+     * 取与 Spring MVC 匹配口径一致的请求路径。
+     *
+     * <p>不能直接用 {@code request.getRequestURI()}：它保留 context path、百分号编码与矩阵参数
+     * （{@code ;x=1}），会出现「MVC 命中了控制器、这里却没匹配到路由」的情况，从而静默回落到默认客户端。
+     * {@link UrlPathHelper#getPathWithinApplication} 会去掉 context path、解码并剥离矩阵参数。</p>
+     *
+     * @param request 当前请求；无 Web 上下文时为 {@code null}
+     * @return 应用内路径；无上下文时为空
+     */
+    @Nullable
+    static String requestPath(@Nullable HttpServletRequest request) {
+        return request == null ? null : UrlPathHelper.defaultInstance.getPathWithinApplication(request);
     }
 
     /**

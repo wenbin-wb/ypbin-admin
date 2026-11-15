@@ -65,6 +65,20 @@ class LoginSupportTest {
     }
 
     @Test
+    @DisplayName("路径归一化：矩阵参数与百分号编码按 MVC 口径处理，避免被伪造路径挤到默认客户端")
+    void shouldNormalizeRequestPathLikeMvc() {
+        MockHttpServletRequest withMatrix = new MockHttpServletRequest();
+        withMatrix.setRequestURI("/auth/miniapp/login;x=1");
+        assertThat(LoginSupport.requestPath(withMatrix)).isEqualTo("/auth/miniapp/login");
+
+        MockHttpServletRequest encoded = new MockHttpServletRequest();
+        encoded.setRequestURI("/auth/miniapp/%6Cogin");
+        assertThat(LoginSupport.requestPath(encoded)).isEqualTo("/auth/miniapp/login");
+
+        assertThat(LoginSupport.requestPath(null)).isNull();
+    }
+
+    @Test
     @DisplayName("客户端密钥：配置了密钥的端带头才生效，未配置的端不带头")
     void shouldResolveClientSecret() {
         MockHttpServletRequest request = new MockHttpServletRequest();
