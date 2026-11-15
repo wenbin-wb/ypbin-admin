@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -312,17 +313,18 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
     }
 
     @Override
-    public List<NoticeResp> listPublishedNotices() {
-        return list(publishedWrapper()).stream().map(this::toResp).toList();
+    public List<NoticeResp> listPublishedNotices(@Nullable String clientId) {
+        return list(publishedWrapper(clientId)).stream().map(this::toResp).toList();
     }
 
     @Override
-    public NoticeResp getPublishedNotice(Long id) {
+    public NoticeResp getPublishedNotice(Long id, @Nullable String clientId) {
         if (id == null) {
             return null;
         }
-        // 单条读取同样套用「已发布 + 在生效期内」口径：否则可凭 id 直接读到草稿/已撤回公告
-        SysNotice notice = getOne(publishedWrapper().eq(SysNotice::getId, id), false);
+        // 单条读取同样套用「已发布 + 在生效期内 + 对该客户端可见」口径：
+        // 否则可凭 id 直接读到草稿、已撤回或投放给其他客户端的公告
+        SysNotice notice = getOne(publishedWrapper(clientId).eq(SysNotice::getId, id), false);
         return notice == null ? null : toResp(notice);
     }
 
@@ -331,13 +333,21 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
      *
      * <p>生效时间未到的不排除：定时发布由发布任务在到点后置为已发布，故「已发布」本身即代表可读。
      * 置顶优先、发布时间倒序（publishTime 为空时回落 createTime，避免排序抖动）。</p>
+     *
+     * @param clientId 消费端客户端 ID；为空时不做客户端过滤
      */
-    private LambdaQueryWrapper<SysNotice> publishedWrapper() {
-        return new LambdaQueryWrapper<SysNotice>()
+    private LambdaQueryWrapper<SysNotice> publishedWrapper(@Nullable String clientId) {
+        LambdaQueryWrapper<SysNotice> wrapper = new LambdaQueryWrapper<SysNotice>()
             .eq(SysNotice::getPublishStatus, NoticePublishStatusEnum.PUBLISHED.getCode())
             .and(w -> w.isNull(SysNotice::getExpireTime)
-                .or().gt(SysNotice::getExpireTime, LocalDateTime.now()))
-            .orderByDesc(SysNotice::getIsTop)
+                .or().gt(SysNotice::getExpireTime, LocalDateTime.now()));
+        if (StringUtils.hasText(clientId)) {
+            // 未指定客户端（NULL/空串）的公告对所有客户端可见；否则按逗号集合精确匹配
+            wrapper.and(w -> w.isNull(SysNotice::getClientIds)
+                .or().eq(SysNotice::getClientIds, "")
+                .or().apply("FIND_IN_SET({0}, client_ids)", clientId));
+        }
+        return wrapper.orderByDesc(SysNotice::getIsTop)
             .orderByDesc(SysNotice::getPublishTime)
             .orderByDesc(SysNotice::getId);
     }

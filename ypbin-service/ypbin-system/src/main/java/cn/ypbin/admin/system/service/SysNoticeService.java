@@ -16,6 +16,7 @@ import cn.ypbin.admin.system.model.resp.NoticeResp;
 import java.util.List;
 import cn.ypbin.starter.crud.model.PageResult;
 import cn.ypbin.starter.crud.service.BaseService;
+import org.jspecify.annotations.Nullable;
 
 /**
  * 公告服务。
@@ -56,15 +57,17 @@ public interface SysNoticeService extends BaseService<SysNotice> {
      * <p>供端侧（小程序）经内部端点读取：只回「已发布 + 未过期」的公告，草稿/待发布/已撤回一律不可见。
      * 端侧服务禁止直连 system 的表，故查询与筛选口径都收口在本方法一处。</p>
      *
+     * @param clientId 消费端客户端 ID；只返回「未指定客户端」或「指定给该客户端」的公告
      * @return 有效公告列表
      */
-    List<NoticeResp> listPublishedNotices();
+    List<NoticeResp> listPublishedNotices(@Nullable String clientId);
 
     /**
      * 按 ID 查询单条有效公告（已发布且在生效期内）。
      *
-     * @param id 公告 ID
+     * @param id       公告 ID
+     * @param clientId 消费端客户端 ID；只允许读取「未指定客户端」或「指定给该客户端」的公告
      * @return 有效公告，不可见时返回 null
      */
-    NoticeResp getPublishedNotice(Long id);
+    NoticeResp getPublishedNotice(Long id, @Nullable String clientId);
 }

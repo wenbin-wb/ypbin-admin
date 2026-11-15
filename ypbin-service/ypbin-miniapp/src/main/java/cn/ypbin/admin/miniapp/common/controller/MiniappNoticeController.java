@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.miniapp.common.controller;
 
+import cn.ypbin.admin.miniapp.common.config.MiniappNoticeProperties;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.model.resp.NoticeResp;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -27,9 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link ISystemClient} 的内部端点读取；「哪些公告对外可见」的口径收口在 system 侧，
  * 本层只做转发与错误暴露。</p>
  *
- * <p><b>参数说明</b>：端侧历史调用带 {@code targetType}/{@code targetCode}（老后端按投放目标
- * 筛选）。当前 system 的公告模型没有投放目标列，故这两个参数仅作兼容接收、不参与筛选——
- * 显式忽略而非假装支持，避免端侧以为「定向投放」生效。</p>
+ * <p><b>客户端归属</b>：公告按投放客户端筛选，本入口固定按配置的小程序客户端
+ * （{@code ypbin.miniapp.notice.client-id}）取公告，端侧不再自报客户端。
+ * {@code targetType}/{@code targetCode} 为历史兼容参数，不参与筛选。</p>
  *
  * @author wenbin
  * @since 2026-10-16
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MiniappNoticeController {
 
     private final ISystemClient systemClient;
+    private final MiniappNoticeProperties noticeProperties;
 
     /**
      * 最新一条公告（无公告时 data 为 null）。
@@ -48,7 +50,7 @@ public class MiniappNoticeController {
     public R<NoticeResp> latest(
         @RequestParam(value = "targetType", required = false) String targetType,
         @RequestParam(value = "targetCode", required = false) String targetCode) {
-        R<List<NoticeResp>> res = systemClient.listPublishedNotices();
+        R<List<NoticeResp>> res = systemClient.listPublishedNotices(noticeProperties.getClientId());
         if (res == null || !res.isSuccess()) {
             throw new BusinessException("获取公告失败: "
                 + (res != null ? res.getMessage() : "系统服务无响应"));
@@ -65,7 +67,7 @@ public class MiniappNoticeController {
      */
     @GetMapping("/detail")
     public R<NoticeResp> detail(@RequestParam("id") Long id) {
-        R<NoticeResp> res = systemClient.getPublishedNotice(id);
+        R<NoticeResp> res = systemClient.getPublishedNotice(id, noticeProperties.getClientId());
         if (res == null || !res.isSuccess()) {
             throw new BusinessException("获取公告详情失败: "
                 + (res != null ? res.getMessage() : "系统服务无响应"));

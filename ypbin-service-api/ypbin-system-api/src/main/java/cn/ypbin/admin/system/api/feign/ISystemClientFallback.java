@@ -263,12 +263,12 @@ public class ISystemClientFallback implements ISystemClient {
     }
 
     @Override
-    public R<List<NoticeResp>> listPublishedNotices() {
+    public R<List<NoticeResp>> listPublishedNotices(String clientId) {
         return unavailable();
     }
 
     @Override
-    public R<NoticeResp> getPublishedNotice(Long id) {
+    public R<NoticeResp> getPublishedNotice(Long id, String clientId) {
         return unavailable();
     }
 }

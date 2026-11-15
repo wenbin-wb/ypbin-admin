@@ -9,9 +9,11 @@
  */
 package cn.ypbin.admin.miniapp;
 
+import cn.ypbin.admin.miniapp.common.config.MiniappNoticeProperties;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
@@ -23,6 +25,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "cn.ypbin.admin")
+@EnableConfigurationProperties(MiniappNoticeProperties.class)
 @SpringBootApplication(scanBasePackages = "cn.ypbin")
 @MapperScan("cn.ypbin.admin.miniapp.**.mapper")
 public class MiniappServiceApplication {

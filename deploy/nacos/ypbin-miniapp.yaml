@@ -13,4 +13,8 @@ ypbin:
     interceptor: false
     excludes:
       - /actuator/**
+  # 公告按客户端投放：小程序在 sys_client 中的客户端 ID
+  miniapp:
+    notice:
+      client-id: ${WECHAT_MINIAPP_CLIENT_ID:miniapp}
 

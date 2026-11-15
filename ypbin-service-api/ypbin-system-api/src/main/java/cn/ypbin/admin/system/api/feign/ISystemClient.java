@@ -459,17 +459,21 @@ public interface ISystemClient {
      * <p>端侧服务禁止直连 system 的表，故小程序侧展示公告一律经本端点读取；
      * 「哪些公告对外可见」的口径收口在 system 的公告服务一处，不在调用方重写筛选条件。</p>
      *
+     * @param clientId 消费端客户端 ID；为空不限
      * @return 有效公告列表（置顶优先、发布时间倒序）
      */
     @GetMapping("/notice-published-list")
-    R<List<NoticeResp>> listPublishedNotices();
+    R<List<NoticeResp>> listPublishedNotices(
+        @RequestParam(value = "clientId", required = false) String clientId);
 
     /**
      * 按 ID 查询单条对外可见公告（已发布且未过期）。
      *
-     * @param id 公告 ID
-     * @return 公告；不可见（草稿/已撤回/已过期/不存在）时 data 为 null
+     * @param id       公告 ID
+     * @param clientId 消费端客户端 ID；为空不限
+     * @return 公告；不可见（草稿/已撤回/已过期/投放其他客户端/不存在）时 data 为 null
      */
     @GetMapping("/notice-published-detail")
-    R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id);
+    R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id,
+        @RequestParam(value = "clientId", required = false) String clientId);
 }

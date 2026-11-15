@@ -724,14 +724,16 @@ public class SystemClientImpl implements ISystemClient {
 
     @Override
     @GetMapping("/notice-published-list")
-    public R<List<NoticeResp>> listPublishedNotices() {
-        // 可见性口径（已发布 + 未过期）收口在 SysNoticeService，本端点只做路由，不重写筛选条件
-        return R.ok(noticeService.listPublishedNotices());
+    public R<List<NoticeResp>> listPublishedNotices(
+        @RequestParam(value = "clientId", required = false) String clientId) {
+        // 可见性口径（已发布 + 未过期 + 客户端投放）收口在 SysNoticeService，本端点只做路由
+        return R.ok(noticeService.listPublishedNotices(clientId));
     }
 
     @Override
     @GetMapping("/notice-published-detail")
-    public R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id) {
-        return R.ok(noticeService.getPublishedNotice(id));
+    public R<NoticeResp> getPublishedNotice(@RequestParam("id") Long id,
+        @RequestParam(value = "clientId", required = false) String clientId) {
+        return R.ok(noticeService.getPublishedNotice(id, clientId));
     }
 }
