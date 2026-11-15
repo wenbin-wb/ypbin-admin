@@ -24,7 +24,9 @@ import cn.ypbin.starter.sensitivewords.annotation.SensitiveWordFilter;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -56,6 +58,8 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
             .eq(query.getNoticeType() != null, SysNotice::getNoticeType, query.getNoticeType())
             .eq(query.getPublishStatus() != null,
                 SysNotice::getPublishStatus, query.getPublishStatus())
+            .apply(StringUtils.hasText(query.getClientId()), "FIND_IN_SET({0}, client_ids)",
+                query.getClientId())
             .orderByDesc(SysNotice::getCreateTime));
         List<NoticeResp> items = source.getItems().stream().map(this::toResp).toList();
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
@@ -67,12 +71,34 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         return toResp(requireNotice(id));
     }
 
+    /**
+     * 客户端 ID 集合归一化：null/空白统一为空串，其余 trim、去空、去重后逗号连接。
+     *
+     * <p>空串非 null，才能让「编辑时清空客户端」在 {@code update-strategy: not_null} 下真正写入；
+     * 同时避免带空白或重复的 ID 与查询条件不匹配。</p>
+     *
+     * @param notice 公告
+     */
+    private void normalizeClientIds(SysNotice notice) {
+        String raw = notice.getClientIds();
+        if (!StringUtils.hasText(raw)) {
+            notice.setClientIds("");
+            return;
+        }
+        notice.setClientIds(Arrays.stream(raw.split(","))
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .distinct()
+            .collect(Collectors.joining(",")));
+    }
+
     @Override
     @SensitiveWordFilter
     @Transactional(rollbackFor = Exception.class)
     public void createNotice(NoticeSaveReq req) {
         SysNotice notice = new SysNotice();
         BeanUtils.copyProperties(req, notice);
+        normalizeClientIds(notice);
         notice.setPublishVersion(0L);
         notice.setPublishTime(null);
         if (isDraft(req)) {
@@ -104,6 +130,7 @@ public class SysNoticeServiceImpl extends BaseServiceImpl<SysNoticeMapper, SysNo
         }
         SysNotice update = new SysNotice();
         BeanUtils.copyProperties(req, update);
+        normalizeClientIds(update);
         update.setId(id);
         update.setTenantId(current.getTenantId());
         update.setPublishVersion(current.getPublishVersion());
