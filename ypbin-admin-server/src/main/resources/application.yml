@@ -88,6 +88,7 @@ ypbin:
       appid: ${WECHAT_MINIAPP_APPID:}
       secret: ${WECHAT_MINIAPP_SECRET:}
       mock-enabled: ${WECHAT_MINIAPP_MOCK_ENABLED:false}
+      client-id: ${WECHAT_MINIAPP_CLIENT_ID:miniapp}  # 公告等按客户端投放时使用
 
   # ---------- Web 层 ----------
   web:

@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.modules.miniapp.common.controller;
 
+import cn.ypbin.admin.modules.auth.config.WechatMiniappProperties;
 import cn.ypbin.admin.modules.system.model.resp.NoticeResp;
 import cn.ypbin.admin.modules.system.service.SysNoticeService;
 import cn.ypbin.starter.core.exception.BusinessException;
@@ -26,9 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>公告数据在 system 域（{@code sys_notice}）；「哪些公告对外可见」的口径收口在
  * {@link SysNoticeService}，本层只做转发与错误暴露。</p>
  *
- * <p><b>参数说明</b>：端侧历史调用带 {@code targetType}/{@code targetCode}（老后端按投放目标
- * 筛选）。当前 system 的公告模型没有投放目标列，故这两个参数仅作兼容接收、不参与筛选——
- * 显式忽略而非假装支持，避免端侧以为「定向投放」生效。</p>
+ * <p><b>客户端归属</b>：公告按投放客户端筛选，本入口固定按配置的小程序客户端
+ * （{@code ypbin.wechat.miniapp.client-id}）取公告，端侧不再自报客户端。
+ * {@code targetType}/{@code targetCode} 为历史兼容参数，不参与筛选。</p>
  *
  * @author wenbin
  * @since 2026-10-16
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MiniappNoticeController {
 
     private final SysNoticeService noticeService;
+    private final WechatMiniappProperties wechatMiniappProperties;
 
     /**
      * 最新一条公告（无公告时 data 为 null）。
@@ -47,7 +49,7 @@ public class MiniappNoticeController {
     public R<NoticeResp> latest(
         @RequestParam(value = "targetType", required = false) String targetType,
         @RequestParam(value = "targetCode", required = false) String targetCode) {
-        List<NoticeResp> list = noticeService.listPublishedNotices();
+        List<NoticeResp> list = noticeService.listPublishedNotices(wechatMiniappProperties.getClientId());
         if (list.isEmpty()) {
             return R.ok(null);
         }
@@ -59,7 +61,7 @@ public class MiniappNoticeController {
      */
     @GetMapping("/detail")
     public R<NoticeResp> detail(@RequestParam("id") Long id) {
-        NoticeResp notice = noticeService.getPublishedNotice(id);
+        NoticeResp notice = noticeService.getPublishedNotice(id, wechatMiniappProperties.getClientId());
         if (notice == null) {
             throw new BusinessException("公告不存在或已下架");
         }

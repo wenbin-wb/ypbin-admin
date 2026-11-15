@@ -46,6 +46,9 @@ public class WechatMiniappProperties {
     /** 是否允许本地 Mock 登录：默认关闭；生产环境必须保持关闭 */
     private boolean mockEnabled;
 
+    /** 小程序对应的登录客户端 ID（公告等按客户端投放时使用） */
+    private String clientId = "miniapp";
+
     /**
      * 凭据是否齐备。
      *
