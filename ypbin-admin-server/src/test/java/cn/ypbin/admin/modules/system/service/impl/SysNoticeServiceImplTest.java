@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.modules.system.service.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -19,10 +20,12 @@ import static org.mockito.Mockito.when;
 
 import cn.ypbin.admin.modules.system.entity.SysNotice;
 import cn.ypbin.admin.modules.system.mapper.SysNoticeMapper;
+import cn.ypbin.admin.modules.system.model.req.NoticeSaveReq;
 import cn.ypbin.admin.modules.system.service.NoticePublishService;
 import cn.ypbin.starter.core.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -84,6 +87,41 @@ class SysNoticeServiceImplTest {
             .hasMessage("公告状态已变化，发布失败");
 
         verify(publishService, never()).freezeDeliveries(notice, 4L);
+    }
+
+    @Test
+    void createDraftNormalizesClientIds() {
+        NoticeSaveReq req = draft();
+        req.setClientIds(" miniapp , web-admin ,, miniapp ");
+        when(noticeMapper.insert(any(SysNotice.class))).thenReturn(1);
+
+        service.createNotice(req);
+
+        ArgumentCaptor<SysNotice> captor = ArgumentCaptor.forClass(SysNotice.class);
+        verify(noticeMapper).insert(captor.capture());
+        assertThat(captor.getValue().getClientIds()).isEqualTo("miniapp,web-admin");
+    }
+
+    @Test
+    void blankClientIdsBecomesEmptyString() {
+        NoticeSaveReq req = draft();
+        req.setClientIds("   ");
+        when(noticeMapper.insert(any(SysNotice.class))).thenReturn(1);
+
+        service.createNotice(req);
+
+        ArgumentCaptor<SysNotice> captor = ArgumentCaptor.forClass(SysNotice.class);
+        verify(noticeMapper).insert(captor.capture());
+        // 空串非 null：edit 时才能在 update-strategy=not_null 下真正清空投放客户端
+        assertThat(captor.getValue().getClientIds()).isEmpty();
+    }
+
+    private NoticeSaveReq draft() {
+        NoticeSaveReq req = new NoticeSaveReq();
+        req.setTitle("公告");
+        req.setContent("内容");
+        req.setPublishStatus(0);
+        return req;
     }
 
     private SysNotice notice(int publishStatus, long publishVersion) {

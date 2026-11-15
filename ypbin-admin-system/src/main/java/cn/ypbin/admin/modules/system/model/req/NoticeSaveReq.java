@@ -42,6 +42,10 @@ public class NoticeSaveReq {
     @Size(max = 512, message = "封面地址不能超过 512 个字符")
     private String cover;
 
+    /** 投放客户端 ID 集合（逗号分隔）；空表示全部客户端 */
+    @Size(max = 255, message = "客户端 ID 集合长度不能超过 255")
+    private String clientIds;
+
     @NotNull(message = "公告类型不能为空")
     @Min(value = 1, message = "公告类型不合法")
     @Max(value = 2, message = "公告类型不合法")

@@ -39,6 +39,9 @@ public class ClientResp {
 
     private Integer maxLoginCount;
 
+    /** 状态：1 启用、0 禁用 */
+    private Integer status;
+
     private String remark;
 
     private LocalDateTime createTime;
