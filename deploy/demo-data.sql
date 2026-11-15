@@ -217,18 +217,18 @@ INSERT INTO sys_message (id, tenant_id, notice_id, publish_version, receiver_use
 
 -- ============ 11. 操作日志（sys_log 无 create_user/status/is_deleted 字段） ============
 INSERT INTO sys_log (id, description, module, request_method, request_uri, request_param, request_body, response_body, status_code, ip, location, browser, os, client_id, client_type, auth_type, operate_user_id, operate_time, time_taken, success, error_msg) VALUES
-(1000, '用户登录', 'auth', 'POST', '/auth/login', '{"username":"lilei"}', NULL, NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web', 'WEB', 'password', 2, DATE_SUB(NOW(), INTERVAL 2 HOUR), 156, 1, NULL),
-(1001, '查询用户列表', 'system', 'GET', '/system/user/list', 'page=1&pageSize=10', NULL, NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 2 HOUR), 23, 1, NULL),
-(1002, '新增用户', 'system', 'POST', '/system/user', NULL, '{"username":"demo01","realName":"演示用户"}', NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 3 HOUR), 45, 1, NULL),
-(1003, '修改角色', 'system', 'PUT', '/system/role/100', NULL, '{"id":100,"name":"研发工程师"}', NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 5 HOUR), 32, 1, NULL),
-(1004, '发布公告', 'notice', 'POST', '/system/notice/publish', NULL, '{"id":1000,"publishStatus":2}', NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 1 DAY), 67, 1, NULL),
-(1005, '登录失败', 'auth', 'POST', '/auth/login', '{"username":"unknown"}', NULL, NULL, 200, '218.76.45.120', '湖南株洲', 'Chrome 147', 'Windows 10', 'web', 'WEB', 'password', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), 89, 0, '用户名或密码错误'),
-(1006, '导出用户', 'system', 'GET', '/system/user/export', 'page=1&pageSize=1000', NULL, NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 2 DAY), 1240, 1, NULL),
-(1007, '重置密码', 'system', 'PUT', '/system/user/1005/password', NULL, '{"userId":1005}', NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 3 DAY), 78, 1, NULL),
-(1008, 'AI 对话', 'ai', 'POST', '/ai/chat', NULL, '{"message":"介绍一下平台功能"}', NULL, 200, '183.212.10.88', '江苏南京', 'Chrome 148', 'macOS 15', 'web', 'WEB', NULL, 1007, DATE_SUB(NOW(), INTERVAL 4 HOUR), 3200, 1, NULL),
-(1009, '更新系统参数', 'system', 'PUT', '/system/config/1000', NULL, '{"id":1000,"configValue":"ypbin 企业管理平台"}', NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 4 DAY), 41, 1, NULL),
-(1010, '新增部门', 'system', 'POST', '/system/dept', NULL, '{"name":"行政部"}', NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 5 DAY), 36, 1, NULL),
-(1011, '查询操作日志', 'monitor', 'GET', '/system/log/list', 'page=1&pageSize=10', NULL, NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 1 HOUR), 18, 1, NULL);
+(1000, '用户登录', 'auth', 'POST', '/auth/login', '{"username":"lilei"}', NULL, NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web-admin', 'WEB', 'password', 2, DATE_SUB(NOW(), INTERVAL 2 HOUR), 156, 1, NULL),
+(1001, '查询用户列表', 'system', 'GET', '/system/user/list', 'page=1&pageSize=10', NULL, NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web-admin', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 2 HOUR), 23, 1, NULL),
+(1002, '新增用户', 'system', 'POST', '/system/user', NULL, '{"username":"demo01","realName":"演示用户"}', NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web-admin', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 3 HOUR), 45, 1, NULL),
+(1003, '修改角色', 'system', 'PUT', '/system/role/100', NULL, '{"id":100,"name":"研发工程师"}', NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web-admin', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 5 HOUR), 32, 1, NULL),
+(1004, '发布公告', 'notice', 'POST', '/system/notice/publish', NULL, '{"id":1000,"publishStatus":2}', NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web-admin', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 1 DAY), 67, 1, NULL),
+(1005, '登录失败', 'auth', 'POST', '/auth/login', '{"username":"unknown"}', NULL, NULL, 200, '218.76.45.120', '湖南株洲', 'Chrome 147', 'Windows 10', 'web-admin', 'WEB', 'password', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), 89, 0, '用户名或密码错误'),
+(1006, '导出用户', 'system', 'GET', '/system/user/export', 'page=1&pageSize=1000', NULL, NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web-admin', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 2 DAY), 1240, 1, NULL),
+(1007, '重置密码', 'system', 'PUT', '/system/user/1005/password', NULL, '{"userId":1005}', NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web-admin', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 3 DAY), 78, 1, NULL),
+(1008, 'AI 对话', 'ai', 'POST', '/ai/chat', NULL, '{"message":"介绍一下平台功能"}', NULL, 200, '183.212.10.88', '江苏南京', 'Chrome 148', 'macOS 15', 'web-admin', 'WEB', NULL, 1007, DATE_SUB(NOW(), INTERVAL 4 HOUR), 3200, 1, NULL),
+(1009, '更新系统参数', 'system', 'PUT', '/system/config/1000', NULL, '{"id":1000,"configValue":"ypbin 企业管理平台"}', NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web-admin', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 4 DAY), 41, 1, NULL),
+(1010, '新增部门', 'system', 'POST', '/system/dept', NULL, '{"name":"行政部"}', NULL, 200, '183.212.10.88', '江苏南京', 'Edge 148', 'Windows 11', 'web-admin', 'WEB', NULL, 1000, DATE_SUB(NOW(), INTERVAL 5 DAY), 36, 1, NULL),
+(1011, '查询操作日志', 'monitor', 'GET', '/system/log/list', 'page=1&pageSize=10', NULL, NULL, 200, '113.240.32.15', '湖南长沙', 'Chrome 148', 'Windows 11', 'web-admin', 'WEB', NULL, 2, DATE_SUB(NOW(), INTERVAL 1 HOUR), 18, 1, NULL);
 
 -- ============ 12. 文件记录 ============
 INSERT INTO sys_file (id, platform, bucket, url, original_name, file_name, path, size, content_type, extension, hash, upload_user_id, module, storage_status, error_message, create_user, create_time, status, is_deleted) VALUES

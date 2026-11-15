@@ -84,6 +84,8 @@ public class SysLogServiceImpl extends BaseServiceImpl<SysLogMapper, SysLog> imp
             vo.setModule(l.getModule());
             vo.setValue(l.getDescription());
             vo.setOperatorName(l.getOperateUserId() != null ? String.valueOf(l.getOperateUserId()) : "");
+            vo.setClientId(l.getClientId());
+            vo.setClientType(l.getClientType());
             vo.setIp(l.getIp());
             vo.setLocation(l.getLocation());
             vo.setStatus(Integer.valueOf(SUCCESS_FLAG).equals(l.getSuccess())

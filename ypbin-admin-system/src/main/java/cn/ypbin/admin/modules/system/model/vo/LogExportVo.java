@@ -38,6 +38,14 @@ public class LogExportVo implements Serializable {
     private String operatorName;
 
     @ColumnWidth(20)
+    @ExcelProperty("客户端")
+    private String clientId;
+
+    @ColumnWidth(20)
+    @ExcelProperty("客户端类型")
+    private String clientType;
+
+    @ColumnWidth(20)
     @ExcelProperty("IP 地址")
     private String ip;
 
