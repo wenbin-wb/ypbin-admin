@@ -26,6 +26,21 @@ public final class AdminConstants {
     /** 租户用户类型 */
     public static final String USER_TYPE_TENANT = "TENANT";
 
+    /** 小程序用户类型（微信登录自动创建） */
+    public static final String USER_TYPE_MINIAPP = "MINIAPP";
+
+    /**
+     * 用户列表可查询的类型：只放行小程序用户，其余一律按后台用户处理。
+     *
+     * <p>平台账号（{@link #USER_TYPE_PLATFORM}）不提供列表查询入口，避免越权查看平台管理员。</p>
+     *
+     * @param userType 请求传入的用户类型
+     * @return 实际生效的查询类型
+     */
+    public static String resolveQueryUserType(String userType) {
+        return USER_TYPE_MINIAPP.equals(userType) ? USER_TYPE_MINIAPP : USER_TYPE_TENANT;
+    }
+
     /** 平台超级管理员角色类型 */
     public static final String ROLE_TYPE_PLATFORM_SUPER = "PLATFORM_SUPER";
 

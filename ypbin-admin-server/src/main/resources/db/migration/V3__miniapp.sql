@@ -420,5 +420,5 @@ ON DUPLICATE KEY UPDATE name=VALUES(name), category=VALUES(category), tags=VALUE
 INSERT INTO sys_client
     (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled,
      remark, create_user, create_time, status, is_deleted)
-VALUES (2, 'miniapp', 'MINI', 'MINIAPP', 86400, 1800, 1,
+VALUES (2, 'miniapp', 'MINI', 'MINIAPP', 2592000, -1, 1,
         '微信小程序登录客户端', 1, NOW(), 1, 0);

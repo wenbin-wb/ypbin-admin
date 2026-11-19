@@ -21,6 +21,7 @@ import cn.ypbin.admin.modules.system.model.query.UserQuery;
 import cn.ypbin.admin.modules.system.model.vo.UserExportVo;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
 import cn.ypbin.admin.modules.system.model.vo.UserImportVo;
+import cn.ypbin.admin.modules.system.service.SysDeptService;
 import cn.ypbin.admin.modules.system.service.support.UserAccountSupport;
 import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.datapermission.annotation.DataPermission;
@@ -72,17 +73,29 @@ public class UserExcelComponent {
 
     private final SysUserMapper userMapper;
     private final SysDeptMapper deptMapper;
+    private final SysDeptService deptService;
     private final UserAccountSupport accountSupport;
 
     @DataPermission
     public void exportUsers(UserQuery query, HttpServletResponse response) {
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getUserType, AdminConstants.USER_TYPE_TENANT)
+            // 与列表同一口径：小程序用户需显式筛选才导出，平台账号不开放导出
+            .eq(SysUser::getUserType, AdminConstants.resolveQueryUserType(query.getUserType()))
             .like(StringUtils.hasText(query.getUsername()), SysUser::getUsername, query.getUsername())
             .like(StringUtils.hasText(query.getRealName()), SysUser::getRealName, query.getRealName())
             .like(StringUtils.hasText(query.getPhone()), SysUser::getPhone, query.getPhone())
-            .eq(query.getStatus() != null, SysUser::getStatus, query.getStatus())
-            .eq(query.getDeptId() != null, SysUser::getDeptId, query.getDeptId());
+            .eq(query.getStatus() != null, SysUser::getStatus, query.getStatus());
+
+        if (query.getDeptId() != null) {
+            // 与列表同一口径：选中部门要带出全部下级部门的用户
+            List<Long> subtreeIds = deptService.listSelfAndDescendantIds(query.getDeptId());
+            if (subtreeIds.isEmpty()) {
+                // 部门不存在或已删除：导出空表，不能退化成导出全部用户
+                ExcelUtils.export(response, "用户列表", UserExportVo.class, List.of());
+                return;
+            }
+            wrapper.in(SysUser::getDeptId, subtreeIds);
+        }
 
         long total = userMapper.selectCount(wrapper);
         if (total > EXPORT_LIMIT) {

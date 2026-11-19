@@ -39,4 +39,7 @@ public class UserQuery extends PageQuery {
 
     /** 部门 ID */
     private Long deptId;
+
+    /** 用户类型；为空按后台用户（TENANT）查询 */
+    private String userType;
 }

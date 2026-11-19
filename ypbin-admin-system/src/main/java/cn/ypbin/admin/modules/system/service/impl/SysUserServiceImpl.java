@@ -35,6 +35,7 @@ import cn.ypbin.admin.modules.system.model.resp.OnlineUserResp;
 import cn.ypbin.admin.modules.system.model.resp.UserResp;
 import cn.ypbin.admin.modules.system.model.vo.UserImportResult;
 import cn.ypbin.admin.modules.system.service.SysConfigService;
+import cn.ypbin.admin.modules.system.service.SysDeptService;
 import cn.ypbin.admin.modules.system.service.SysSpaceRelationService;
 import cn.ypbin.admin.modules.system.service.SysUserService;
 import cn.ypbin.admin.modules.system.service.support.OnlineTokenFingerprint;
@@ -80,9 +81,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> implements SysUserService {
 
-    /** 小程序用户类型标识 */
-    private static final String USER_TYPE_MINIAPP = "MINIAPP";
-
     /** 小程序用户首次登录且未带昵称时的默认展示名 */
     private static final String DEFAULT_MINIAPP_NICKNAME = "微信用户";
     /** 空间关联的目标类型：用户。 */
@@ -106,6 +104,9 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
 
     /** 默认角色的菜单授权校验（无授权的角色登录后是空系统，必须拒绝而不是静默放行） */
     private final SysRoleMenuMapper roleMenuMapper;
+
+    /** 按部门筛选时展开「当前部门 + 全部下级部门」 */
+    private final SysDeptService deptService;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -143,7 +144,7 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
             created.setRealName(StringUtils.hasText(nickname) ? nickname : DEFAULT_MINIAPP_NICKNAME);
             created.setNickname(nickname);
             created.setAvatar(avatar);
-            created.setUserType(USER_TYPE_MINIAPP);
+            created.setUserType(AdminConstants.USER_TYPE_MINIAPP);
             // 小程序用户不设登录密码，随机占位以满足非空约束
             created.setPassword(PasswordEncoderUtil.encode(UUID.randomUUID().toString()));
             created.setStatus(EntityStatus.ENABLED.getCode());
@@ -163,7 +164,8 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
         if (Integer.valueOf(1).equals(user.getIsDeleted())) {
             // 小程序账号由微信身份自动开立：删除后再次登录应恢复同一账号。
             // 仅恢复小程序用户，避免把被删除的管理员账号复活。
-            if (user.getUserType() != null && !USER_TYPE_MINIAPP.equals(user.getUserType())) {
+            if (user.getUserType() != null
+                && !AdminConstants.USER_TYPE_MINIAPP.equals(user.getUserType())) {
                 throw new BusinessException("账号已注销，请联系管理员");
             }
             TenantContext.runIgnore(() -> baseMapper.restoreDeletedByUsername(username));
@@ -291,14 +293,25 @@ public class SysUserServiceImpl extends BaseServiceImpl<SysUserMapper, SysUser> 
     @Override
     @DataPermission
     public PageResult<UserResp> pageUsers(UserQuery query) {
-        PageResult<SysUser> source = page(query, new LambdaQueryWrapper<SysUser>()
-            .eq(SysUser::getUserType, AdminConstants.USER_TYPE_TENANT)
+        // 默认只查后台用户：小程序用户（MINIAPP）通常没有部门、角色由登录链路维护，
+        // 混排会干扰管理操作；需要查看时由查询条件显式指定，只放行已知类型，避免越权查询平台账号
+        LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
+            .eq(SysUser::getUserType, AdminConstants.resolveQueryUserType(query.getUserType()))
             .like(StringUtils.hasText(query.getUsername()), SysUser::getUsername, query.getUsername())
             .like(StringUtils.hasText(query.getRealName()), SysUser::getRealName, query.getRealName())
             .like(StringUtils.hasText(query.getPhone()), SysUser::getPhone, query.getPhone())
             .eq(query.getStatus() != null, SysUser::getStatus, query.getStatus())
-            .eq(query.getDeptId() != null, SysUser::getDeptId, query.getDeptId())
-            .orderByDesc(SysUser::getCreateTime));
+            .orderByDesc(SysUser::getCreateTime);
+        if (query.getDeptId() != null) {
+            // 选中某部门时要带出它的全部下级部门用户，而不只是本级
+            List<Long> deptIds = deptService.listSelfAndDescendantIds(query.getDeptId());
+            if (deptIds.isEmpty()) {
+                // 部门不存在或已删除：返回空页，不能忽略条件退化成查全部
+                return PageResult.of(List.of(), 0, query.getPage(), query.getPageSize());
+            }
+            wrapper.in(SysUser::getDeptId, deptIds);
+        }
+        PageResult<SysUser> source = page(query, wrapper);
         List<UserResp> items = source.getItems().stream().map(this::toResp).toList();
         return PageResult.of(items, source.getTotal(), source.getPage(), source.getPageSize());
     }

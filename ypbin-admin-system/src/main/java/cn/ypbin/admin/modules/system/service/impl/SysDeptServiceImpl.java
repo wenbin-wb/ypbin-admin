@@ -21,8 +21,13 @@ import cn.ypbin.starter.core.exception.BusinessException;
 import cn.ypbin.starter.core.tree.TreeUtils;
 import cn.ypbin.starter.crud.service.BaseServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -66,6 +71,47 @@ public class SysDeptServiceImpl extends BaseServiceImpl<SysDeptMapper, SysDept> 
             }
         });
         return roots;
+    }
+
+    @Override
+    public List<Long> listSelfAndDescendantIds(Long deptId) {
+        return collectSubtreeIds(list(), deptId);
+    }
+
+    /**
+     * 在给定部门集合中展开某部门的子树（含自身）。
+     *
+     * <p>部门总量小（单租户几十条），一次全量取回在内存里按 pid 分组展开，
+     * 比递归 SQL 更简单，也避免逐层查库。</p>
+     *
+     * @param depts  部门集合
+     * @param deptId 目标部门 ID
+     * @return 部门 ID 集合；目标部门不在集合中时返回空集合
+     */
+    static List<Long> collectSubtreeIds(List<SysDept> depts, Long deptId) {
+        if (deptId == null) {
+            return List.of();
+        }
+        boolean exists = depts.stream().anyMatch(dept -> deptId.equals(dept.getId()));
+        if (!exists) {
+            return List.of();
+        }
+        Map<Long, List<Long>> childrenByParent = depts.stream()
+            .filter(dept -> dept.getPid() != null)
+            .collect(Collectors.groupingBy(SysDept::getPid,
+                Collectors.mapping(SysDept::getId, Collectors.toList())));
+        // 用 Set 做已访问标记：List.add 恒返回 true，拿它做去重判断会让成环数据死循环
+        Set<Long> ids = new LinkedHashSet<>();
+        Deque<Long> pending = new ArrayDeque<>();
+        pending.add(deptId);
+        while (!pending.isEmpty()) {
+            Long current = pending.poll();
+            if (!ids.add(current)) {
+                continue;
+            }
+            pending.addAll(childrenByParent.getOrDefault(current, List.of()));
+        }
+        return List.copyOf(ids);
     }
 
     @Override

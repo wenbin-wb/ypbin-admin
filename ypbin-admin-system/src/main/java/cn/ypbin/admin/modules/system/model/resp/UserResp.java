@@ -36,6 +36,9 @@ public class UserResp {
 
     private String nickname;
 
+    /** 用户类型：TENANT 后台用户 / MINIAPP 小程序用户 */
+    private String userType;
+
     @RefText("dept")
     private Long deptId;
 

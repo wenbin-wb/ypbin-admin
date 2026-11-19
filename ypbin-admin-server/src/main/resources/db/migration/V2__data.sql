@@ -70,7 +70,7 @@ VALUES (11, 1, '正常', '1', 'success', 1, 1, NOW(), 1, 0),
 
 -- 默认 Web 管理后台客户端
 INSERT INTO sys_client (id, client_id, client_type, auth_types, timeout, active_timeout, concurrent_enabled, create_user, create_time, status, is_deleted)
-VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL,SOCIAL', 86400, 1800, 1, 1, NOW(), 1, 0);
+VALUES (1, 'web-admin', 'WEB', 'ACCOUNT,PHONE,EMAIL,SOCIAL', 2592000, -1, 1, 1, NOW(), 1, 0);
 
 -- 岗位
 INSERT INTO sys_post (id, tenant_id, name, code, category, sort, remark, create_user, create_time, status, is_deleted)
@@ -226,6 +226,14 @@ INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort
 VALUES (250001, 2500, 'SystemPostAdd', 'button', 0, 'system:post:add', 'common.create', 1, NOW(), 1, 0),
        (250002, 2500, 'SystemPostEdit', 'button', 0, 'system:post:edit', 'common.edit', 2, NOW(), 1, 0),
        (250003, 2500, 'SystemPostDelete', 'button', 0, 'system:post:delete', 'common.delete', 3, NOW(), 1, 0);
+
+-- 平台账号（平台专用）：只提供查看与「重置密码 / 启停」两个安全操作，
+-- 平台账号由启动引导按配置创建，后台不开放新增、删除与角色分配
+INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)
+VALUES (2110, 3001, 'SystemPlatformUser', 'menu', 1, '/system/platform-user', '/system/platform-user/list', 'system:platform-user:list', 'system.platformUser.title', 'carbon:user-admin', 5, NOW(), 1, 0);
+INSERT INTO sys_menu (id, pid, name, type, platform_only, auth_code, title, sort, create_time, status, is_deleted)
+VALUES (211001, 2110, 'SystemPlatformUserEdit', 'button', 1, 'system:platform-user:edit', 'common.edit', 1, NOW(), 1, 0),
+       (211002, 2110, 'SystemPlatformUserResetPassword', 'button', 1, 'system:platform-user:reset-password', 'system.user.resetPassword', 2, NOW(), 1, 0);
 
 -- 权限管理（3002，共享目录）：角色（租户可见）/ 菜单、客户端（平台专用）
 INSERT INTO sys_menu (id, pid, name, type, platform_only, path, component, auth_code, title, icon, sort, create_time, status, is_deleted)

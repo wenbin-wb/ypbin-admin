@@ -31,6 +31,16 @@ public interface SysDeptService extends BaseService<SysDept> {
     List<DeptResp> tree();
 
     /**
+     * 查询部门自身及其全部下级部门 ID。
+     *
+     * <p>用户列表按部门筛选时要求「含下级」，这里统一提供展开结果，避免各处各写一遍递归。</p>
+     *
+     * @param deptId 部门 ID
+     * @return 部门 ID 集合（含自身）；部门不存在时返回空集合
+     */
+    List<Long> listSelfAndDescendantIds(Long deptId);
+
+    /**
      * 新增部门。
      *
      * @param req 请求
