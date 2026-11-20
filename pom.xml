@@ -29,7 +29,7 @@
         <sa-token.version>1.46.0</sa-token.version>
         <sms4j.version>3.3.5</sms4j.version>
         <mica-ip2region.version>4.1.0</mica-ip2region.version>
-        <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
+        <flatten-maven-plugin.version>1.9.0</flatten-maven-plugin.version>
         <lombok.version>1.18.48</lombok.version>
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
     </properties>
