@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.ai.service.impl;
 
-import cn.ypbin.admin.common.util.LogValues;
+import cn.ypbin.starter.core.util.LogSanitizer;
 import cn.ypbin.admin.ai.enums.AiDocumentStatusEnum;
 import cn.ypbin.admin.ai.entity.AiDocument;
 import cn.ypbin.admin.ai.entity.AiDocumentChunk;
@@ -164,7 +164,7 @@ public class AiKnowledgeCrudComponent {
             if (pathUpdated != 1) {
                 // 原文已落盘但路径没写回：向量化仍可完成，但「重试/查看原文」会不可用，必须留痕
                 log.error("[ypbin-ai] 文档路径回写失败: docId={}, filePath={}",
-                    doc.getId(), LogValues.oneLine(filePath));
+                    doc.getId(), LogSanitizer.sanitize(filePath));
             } else {
                 doc.setFilePath(filePath);
             }
@@ -358,7 +358,7 @@ public class AiKnowledgeCrudComponent {
                 .set(AiDocument::getUpdateTime, LocalDateTime.now()));
             if (pathUpdated != 1) {
                 log.error("[ypbin-ai] 导入文档路径回写失败: docId={}, filePath={}",
-                    doc.getId(), LogValues.oneLine(filePath));
+                    doc.getId(), LogSanitizer.sanitize(filePath));
             } else {
                 doc.setFilePath(filePath);
             }

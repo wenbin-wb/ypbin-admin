@@ -9,7 +9,7 @@
  */
 package cn.ypbin.admin.common.web;
 
-import cn.ypbin.admin.common.util.LogValues;
+import cn.ypbin.starter.core.util.LogSanitizer;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +53,6 @@ public class AsyncDisconnectExceptionHandler {
         // 生产上「为什么断开」无从定位；架构门禁 SourceConventionTest#logsMustNotSwallowThrowableStackTrace
         // 正是按「取了 getMessage() 就必须同时传异常对象」这一判据阻断。
         log.debug("客户端已断开异步连接，停止推送：uri={}",
-            LogValues.oneLine(request.getRequestURI()), ex);
+            LogSanitizer.sanitize(request.getRequestURI()), ex);
     }
 }
