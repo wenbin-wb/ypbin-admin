@@ -33,6 +33,18 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # 🔴 2026-11-22 加：清掉 Maven 缓存里的「外来仓库标记」，否则本地 install starter 必然失败。
+      # 根因同 ci.yml：setup-java 的 cache: maven 把开发机 ~/.m2/repository 的 _remote.repositories
+      # （记录来源 repo id，本机为 aliyun=）带到 runner，runner 只有 central ⇒ Resolver 判
+      # 「present, but unavailable」且失败被缓存 ⇒ 静态扫描连库都建不起来（假红，非漏洞）。
+      - name: 清理 Maven 缓存里的外来仓库标记（防「present, but unavailable」假红）
+        run: |
+          set -euo pipefail
+          find "$HOME/.m2/repository" -name '_remote.repositories' -type f -delete 2>/dev/null || true
+          find "$HOME/.m2/repository" -name '*.lastUpdated' -type f -delete 2>/dev/null || true
+          echo "已清理 _remote.repositories 与 *.lastUpdated"
+
+
       - name: 检出 ypbin-starter（提供依赖）
         uses: actions/checkout@v4
         with:
