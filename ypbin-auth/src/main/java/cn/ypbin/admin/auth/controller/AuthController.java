@@ -80,7 +80,7 @@ public class AuthController {
     @RateLimit(count = 60, window = 60, message = "验证码发送过于频繁，请稍后再试")
     @PostMapping("/register/code/send")
     public R<Void> sendRegisterCode(@Valid @RequestBody RegisterCodeSendReq req) {
-        authService.sendRegisterCode(req, WebRequestUtils.ip());
+        authService.sendRegisterCode(req, WebRequestUtils.clientIp(clientIpResolver));
         return R.ok();
     }
 
@@ -88,7 +88,7 @@ public class AuthController {
     @RateLimit(count = 5, window = 60, message = "注册过于频繁，请稍后再试")
     @PostMapping("/register")
     public R<LoginResp> register(@Valid @RequestBody RegisterReq req) {
-        return R.ok(authService.register(req, WebRequestUtils.ip(),
+        return R.ok(authService.register(req, WebRequestUtils.clientIp(clientIpResolver),
             WebRequestUtils.header(HttpHeaders.USER_AGENT)));
     }
 

@@ -21,7 +21,6 @@ import cn.ypbin.admin.system.entity.SysAccessBlocklist;
 import cn.ypbin.admin.system.mapper.SysAccessBlocklistMapper;
 import cn.ypbin.admin.system.model.req.AccessBlocklistBanReq;
 import cn.ypbin.admin.system.model.req.AccessBlocklistSaveReq;
-import cn.ypbin.admin.system.service.event.BlocklistRulesChangedEvent;
 import cn.ypbin.starter.core.blocklist.BlocklistMatchType;
 import cn.ypbin.starter.core.blocklist.BlocklistRule;
 import cn.ypbin.starter.core.blocklist.BlocklistStore;
@@ -198,8 +197,7 @@ class SysAccessBlocklistServiceImplTest {
     @Test
     @DisplayName("下发监听器固定在事务提交后执行，且失败不反抛")
     void publishesAfterCommitAndSwallowsFailure() throws Exception {
-        var method = SysAccessBlocklistServiceImpl.class
-            .getMethod("onRulesChanged", BlocklistRulesChangedEvent.class);
+        var method = SysAccessBlocklistServiceImpl.class.getMethod("onRulesChanged");
         var annotation = method.getAnnotation(TransactionalEventListener.class);
         assertThat(annotation).isNotNull();
         assertThat(annotation.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
@@ -208,7 +206,7 @@ class SysAccessBlocklistServiceImplTest {
         doThrow(new IllegalStateException("redis down"))
             .when(blocklistStore).replaceRules(any());
 
-        service.onRulesChanged(new BlocklistRulesChangedEvent());
+        service.onRulesChanged();
 
         verify(blocklistStore).replaceRules(any());
     }

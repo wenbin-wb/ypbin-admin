@@ -342,23 +342,6 @@ public interface ISystemClient {
     R<List<SysSpaceDto>> listSpaces();
 
     /**
-     * 按业务对象反查其所在空间。
-     *
-     * @param targetType 关联对象类型（dept/user/device/asset…）
-     * @param targetId   关联对象 ID
-     * @return 关联列表（含空间完整路径）
-     */
-    /**
-     * **批量**反查：一次取多个业务对象各自的空间关联（列表页展示「所在空间」用）。
-     *
-     * <p><b>为什么必须批量</b>：列表一页几十条设备，逐条调单对象反查就是 N 次跨服务 HTTP。
-     * 本端点一次返回，调用方按 targetId 取值。</p>
-     *
-     * @param targetType 关联对象类型
-     * @param targetIds  关联对象 ID 列表
-     * @return 对象 ID → 空间关联列表（无关联的对象不出现在结果里）
-     */
-    /**
      * 整体设置某业务对象的空间集合（**单事务语义**：算差集后批量增删）。
      *
      * <p><b>为什么需要它而不是让调用方 bind+unbind</b>：设备换位置时若由调用方自己做
@@ -371,11 +354,28 @@ public interface ISystemClient {
     @PostMapping("/space-relations-sync")
     R<Integer> syncSpaceRelations(@RequestBody SpaceSyncReq req);
 
+    /**
+     * **批量**反查：一次取多个业务对象各自的空间关联（列表页展示「所在空间」用）。
+     *
+     * <p><b>为什么必须批量</b>：列表一页几十条设备，逐条调单对象反查就是 N 次跨服务 HTTP。
+     * 本端点一次返回，调用方按 targetId 取值。</p>
+     *
+     * @param targetType 关联对象类型
+     * @param targetIds  关联对象 ID 列表
+     * @return 对象 ID → 空间关联列表（无关联的对象不出现在结果里）
+     */
     @PostMapping("/space-relations-batch")
     R<Map<Long, List<SysSpaceRelationDto>>> listSpaceRelationsByTargets(
         @RequestParam("targetType") String targetType,
         @RequestBody List<Long> targetIds);
 
+    /**
+     * 按业务对象反查其所在空间。
+     *
+     * @param targetType 关联对象类型（dept/user/device/asset…）
+     * @param targetId   关联对象 ID
+     * @return 关联列表（含空间完整路径）
+     */
     @GetMapping("/space-relations-by-target")
     R<List<SysSpaceRelationDto>> listSpaceRelationsByTarget(
         @RequestParam("targetType") String targetType,

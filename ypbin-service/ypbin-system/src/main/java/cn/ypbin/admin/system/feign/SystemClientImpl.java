@@ -9,6 +9,7 @@
  */
 package cn.ypbin.admin.system.feign;
 
+import cn.ypbin.admin.common.util.LogValues;
 import cn.ypbin.admin.system.api.cache.SysCache;
 import cn.ypbin.admin.system.api.feign.ISystemClient;
 import cn.ypbin.admin.system.entity.SysConfig;
@@ -242,7 +243,8 @@ public class SystemClientImpl implements ISystemClient {
         if (config == null) {
             // 参数缺失是合法的读侧默认值（调用方据此走缺省），但配置键写错时表现完全相同，
             // 留一条 debug 便于定位「开关怎么都不生效」
-            log.debug("内部读取系统参数不存在，按空值返回：configKey={}", configKey);
+            log.debug("内部读取系统参数不存在，按空值返回：configKey={}",
+                LogValues.oneLine(configKey));
         }
         String rawValue = config == null ? "" : config.getConfigValue();
         // 密钥/口令类参数禁止经 internal 出网（纵深防御：即使凭证被泄露，密钥也不得明文返回）。
@@ -604,7 +606,7 @@ public class SystemClientImpl implements ISystemClient {
         } catch (RuntimeException ex) {
             // 记完整堆栈：否则「站内信一直收不到」只能靠猜
             log.error("站内信写入失败：tenantId={} receiverUserId={} title={}",
-                req.getTenantId(), req.getReceiverUserId(), req.getTitle(), ex);
+                req.getTenantId(), req.getReceiverUserId(), LogValues.oneLine(req.getTitle()), ex);
             return R.fail("站内信写入失败：" + ex.getMessage());
         }
         return R.ok();
@@ -617,7 +619,8 @@ public class SystemClientImpl implements ISystemClient {
         } catch (RuntimeException ex) {
             // 邮件网关 500 / SMTP 超时等：原样把原因带回给调用方（它是唯一知道重试策略的一方），
             // 这里仍记完整堆栈——两处都要留痕，否则排障时只能看到「投递失败了」而不知道为什么
-            log.error("邮件发送失败：to={} subject={}", req.getTo(), req.getSubject(), ex);
+            log.error("邮件发送失败：to={} subject={}",
+                LogValues.oneLine(req.getTo()), LogValues.oneLine(req.getSubject()), ex);
             return R.fail("邮件发送失败：" + ex.getMessage());
         }
         return R.ok();
@@ -660,14 +663,14 @@ public class SystemClientImpl implements ISystemClient {
         if (smsService == null) {
             // 厂商依赖/配置缺失必须暴露：返回成功会让调用方把验证码留在缓存，用户永远收不到短信
             log.error("短信服务未配置（sms4j 未引入或厂商未配置），拒绝发送：phone={}",
-                maskPhone(req.getPhone()));
+                LogValues.oneLine(maskPhone(req.getPhone())));
             return R.fail("短信服务未配置，请先完成短信厂商配置");
         }
         Map<String, String> variables = req.getVariables() == null ? Map.of() : req.getVariables();
         boolean sent = smsService.sendByTemplate(req.getPhone(), req.getTemplateId(), variables);
         if (!sent) {
             log.error("短信发送失败（厂商返回 false）：phone={}, templateId={}",
-                maskPhone(req.getPhone()), req.getTemplateId());
+                LogValues.oneLine(maskPhone(req.getPhone())), LogValues.oneLine(req.getTemplateId()));
             return R.fail("短信发送失败，请检查短信厂商配置");
         }
         return R.ok();

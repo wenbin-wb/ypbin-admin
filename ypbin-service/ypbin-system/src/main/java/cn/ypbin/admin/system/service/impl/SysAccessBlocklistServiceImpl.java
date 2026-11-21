@@ -170,10 +170,11 @@ public class SysAccessBlocklistServiceImpl extends BaseServiceImpl<SysAccessBloc
     /**
      * 规则写事务提交后再下发，避免「Redis 已生效、数据库回滚」的窗口。
      *
-     * @param event 规则变更事件
+     * <p>本方法**不消费事件载荷**：下发的是「当前已提交的整份规则」（与启动同步同一路径），
+     * 而非事件里携带的增量；因此不声明形参（CodeQL java/unused-parameter 报的正是这个未用参数）。</p>
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onRulesChanged(BlocklistRulesChangedEvent event) {
+    public void onRulesChanged() {
         publishSafely("规则已提交但下发失败，等待手动重新下发或下次保存自愈");
     }
 
