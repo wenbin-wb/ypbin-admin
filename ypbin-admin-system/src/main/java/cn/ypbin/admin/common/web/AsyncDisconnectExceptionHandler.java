@@ -48,7 +48,10 @@ public class AsyncDisconnectExceptionHandler {
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException ex,
             HttpServletRequest request) {
-        log.debug("客户端已断开异步连接，停止推送：uri={}, reason={}",
-            request.getRequestURI(), ex.getMessage());
+        // 异常对象必须作为最后一个参数传入。只写 ex.getMessage() 会丢掉异常类型与调用栈。
+        // 注意：本线**没有** ypbin-architecture-tests 模块 ⇒ 那条 SourceConventionTest 门禁不生效，
+        // 所以这个缺陷在本线一直是「绿的」（main 线 6bba3e1 / boot 线 bb72633 已修，本线同源补上）。
+        log.debug("客户端已断开异步连接，停止推送：uri={}",
+            request.getRequestURI(), ex);
     }
 }
