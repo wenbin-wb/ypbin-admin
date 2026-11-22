@@ -30,13 +30,16 @@ jobs:
       # 与 fork ypbin-iot 的同一处修复（该仓 IoT Integration Tests 已因此转绿）。
       - name: 清理 Maven 缓存里的外来仓库标记（防「present, but unavailable」假红）
         run: |
-          set -euo pipefail
-          n=$(find "$HOME/.m2/repository" -name '_remote.repositories' -type f 2>/dev/null | wc -l)
-          echo "命中 _remote.repositories 标记文件：$n 个"
-          find "$HOME/.m2/repository" -name '_remote.repositories' -type f -delete 2>/dev/null || true
-          m=$(find "$HOME/.m2/repository" -name '*.lastUpdated' -type f 2>/dev/null | wc -l)
-          echo "命中 *.lastUpdated 失败缓存：$m 个"
-          find "$HOME/.m2/repository" -name '*.lastUpdated' -type f -delete 2>/dev/null || true
+          set -uo pipefail
+          repo="$HOME/.m2/repository"
+          # 冷缓存时该目录可能不存在：find 会以非零退出，配 set -e 会让整步失败（2026-11-22 实测）。
+          mkdir -p "$repo"
+          n=$(find "$repo" -name '_remote.repositories' -type f 2>/dev/null | wc -l || true)
+          echo "命中 _remote.repositories 标记文件：${n:-0} 个"
+          find "$repo" -name '_remote.repositories' -type f -delete 2>/dev/null || true
+          m=$(find "$repo" -name '*.lastUpdated' -type f 2>/dev/null | wc -l || true)
+          echo "命中 *.lastUpdated 失败缓存：${m:-0} 个"
+          find "$repo" -name '*.lastUpdated' -type f -delete 2>/dev/null || true
           echo "清理完成"
 
       - name: 校验 starter 依赖版本为最新 Release（防版本漂移）

@@ -39,10 +39,17 @@ jobs:
       # 「present, but unavailable」且失败被缓存 ⇒ 静态扫描连库都建不起来（假红，非漏洞）。
       - name: 清理 Maven 缓存里的外来仓库标记（防「present, but unavailable」假红）
         run: |
-          set -euo pipefail
-          find "$HOME/.m2/repository" -name '_remote.repositories' -type f -delete 2>/dev/null || true
-          find "$HOME/.m2/repository" -name '*.lastUpdated' -type f -delete 2>/dev/null || true
-          echo "已清理 _remote.repositories 与 *.lastUpdated"
+          set -uo pipefail
+          repo="$HOME/.m2/repository"
+          # 冷缓存时该目录可能不存在：find 会以非零退出，配 set -e 会让整步失败（2026-11-22 实测 run #557）。
+          mkdir -p "$repo"
+          n=$(find "$repo" -name '_remote.repositories' -type f 2>/dev/null | wc -l || true)
+          echo "命中 _remote.repositories 标记文件：${n:-0} 个"
+          find "$repo" -name '_remote.repositories' -type f -delete 2>/dev/null || true
+          m=$(find "$repo" -name '*.lastUpdated' -type f 2>/dev/null | wc -l || true)
+          echo "命中 *.lastUpdated 失败缓存：${m:-0} 个"
+          find "$repo" -name '*.lastUpdated' -type f -delete 2>/dev/null || true
+          echo "清理完成"
 
 
       - name: 检出 ypbin-starter（提供依赖）
