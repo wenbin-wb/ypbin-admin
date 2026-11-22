@@ -22,9 +22,15 @@ jobs:
           cache: maven
 
       - name: 校验 starter 依赖版本为最新 Release（防版本漂移）
+        # ⚠️ 必须带认证头：GitHub REST API 的**未认证**额度是 60 次/小时/IP，而托管 runner 的
+        # 出口 IP 是共享的 ⇒ 实测 `curl: (22) ... 403`（2026-11-19 run #548 本线实测，
+        # main 线 2026-10-13 也踩过同一坑并用同一修法解决）。随机红比没有门禁更坏。
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           REQ=$(grep -oP '(?<=<ypbin-starter.version>)[^<]+' pom.xml)
-          LATEST=$(curl -fsSL https://api.github.com/repos/wenbin-wb/ypbin-starter/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')
+          LATEST=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/wenbin-wb/ypbin-starter/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+')
           echo "admin 依赖 starter ${REQ}，最新 Release v${LATEST}"
           [ "$REQ" = "$LATEST" ] || { echo "依赖版本落后，请升级至最新 Release"; exit 1; }
 
